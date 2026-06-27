@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.2.0"
+SCRIPT_VERSION="0.2.1"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -19,6 +19,7 @@ BENCH_PARENT="${BENCH_PARENT:-${FRAPPE_HOME}/frappe}"
 BENCH_NAME="${BENCH_NAME:-frappe-bench}"
 BENCH_DIR="${BENCH_PARENT}/${BENCH_NAME}"
 SITE_NAME="${SITE_NAME:-erp.test}"
+AUTO_START="${AUTO_START:-false}"
 
 FRAPPE_BRANCH="${FRAPPE_BRANCH:-version-16}"
 ERPNEXT_BRANCH="${ERPNEXT_BRANCH:-version-16}"
@@ -60,6 +61,7 @@ warn() { echo -e "${YELLOW}WARN:${RESET} $*"; }
 err() { echo -e "${RED}ERROR:${RESET} $*" >&2; }
 fail() { err "$*"; echo "Log file: $LOG_FILE" >&2; exit 1; }
 
+
 status_line() {
   local label="$1"
   local state="$2"
@@ -73,6 +75,40 @@ status_line() {
     *) printf "  %-28s %-7s %s\n" "$label" "$state" "$message" ;;
   esac
 }
+
+
+start_erpnext() {
+  log "Starting ERPNext development server"
+
+  if [[ ! -d "${BENCH_DIR}" ]]; then
+    fail "Bench folder not found: ${BENCH_DIR}. Run install first."
+  fi
+
+  local vm_ip
+  vm_ip="$(get_vm_ip)"
+
+  echo
+  echo "ERPNext will start in development mode."
+  echo
+  echo "Keep this terminal open while using ERPNext."
+  echo
+  echo "Direct browser URL, works immediately while Bench is running:"
+  echo "  http://${vm_ip}:8000"
+  echo
+  echo "Friendly browser URL, works only after the HOST /etc/hosts entry is configured:"
+  echo "  http://${SITE_NAME}:8000"
+  echo
+  echo "If ${SITE_NAME} does not open, use the direct IP URL first, then run:"
+  echo "  ./install-erpnext-dev.sh access"
+  echo
+
+  $SUDO -iu "$FRAPPE_USER" bash -lc "
+    export PATH=\"\$HOME/.local/bin:\$PATH\"
+    cd \"${BENCH_DIR}\"
+    bench start
+  "
+}
+
 
 random_password() {
   python3 - <<'PY'
@@ -490,11 +526,16 @@ Start ERPNext:
 One-line start command:
   sudo -iu ${FRAPPE_USER} bash -lc 'export PATH="\$HOME/.local/bin:\$PATH"; cd ${BENCH_DIR} && bench start'
 
-Browser:
-  http://${SITE_NAME}:8000
+Browser access:
+  Direct IP URL, works while Bench is running:
+    http://$(get_vm_ip):8000
 
-Notes:
-  Add this site name to your HOST machine /etc/hosts, not only inside the VM.
+  Friendly local URL, works after HOST /etc/hosts is configured:
+    http://${SITE_NAME}:8000
+
+Important:
+  ${SITE_NAME} only works after ERPNext is running and your HOST machine maps ${SITE_NAME} to the VM IP.
+  Use ./install-erpnext-dev.sh access to print the required host-side command.
 EOF_CREDS
 
   $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$cred_file"
@@ -508,30 +549,48 @@ get_vm_ip() {
 }
 
 show_access_instructions() {
-  local vm_ip
+  local vm_ip escaped_site
   vm_ip="$(get_vm_ip)"
+  escaped_site="${SITE_NAME//./\\.}"
 
   echo
   echo "============================================================"
   echo "Browser / Hostname Instructions"
   echo "============================================================"
   echo
-  echo "ERPNext URL:"
+  echo "ERPNext must be running before any browser URL will work."
+  echo
+  echo "Start ERPNext inside the VM with:"
+  echo "  ./install-erpnext-dev.sh start"
+  echo
+  echo "Or manually:"
+  echo "  sudo -iu ${FRAPPE_USER}"
+  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo "  cd ${BENCH_DIR}"
+  echo "  bench start"
+  echo
+  echo "Direct IP URL, works while Bench is running:"
+  echo "  http://${vm_ip}:8000"
+  echo
+  echo "Friendly local URL:"
   echo "  http://${SITE_NAME}:8000"
   echo
-  echo "Detected VM IP:"
-  echo "  ${vm_ip}"
+  echo "The friendly URL only works after your HOST machine maps ${SITE_NAME} to this VM IP."
   echo
   echo "Run this on your Linux Mint HOST machine, not inside the VM:"
   echo
-  echo "  sudo sed -i '/[[:space:]]${SITE_NAME//./\\.}\$/d' /etc/hosts"
+  echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
   echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
   echo
   echo "Then test on the host:"
   echo "  getent hosts ${SITE_NAME}"
   echo
+  echo "If ${SITE_NAME} still does not open, use the direct IP URL first:"
+  echo "  http://${vm_ip}:8000"
+  echo
   echo "============================================================"
 }
+
 
 print_summary() {
   local vm_ip
@@ -550,15 +609,22 @@ print_summary() {
   echo "  Password: ${ADMIN_PASSWORD}"
   echo
   echo "Start ERPNext:"
+  echo "  ./install-erpnext-dev.sh start"
+  echo
+  echo "Manual start command:"
   echo "  sudo -iu ${FRAPPE_USER}"
   echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
   echo "  cd ${BENCH_DIR}"
   echo "  bench start"
   echo
-  echo "Browser:"
-  echo "  http://${SITE_NAME}:8000"
+  echo "Browser access:"
+  echo "  Direct IP URL, works while Bench is running:"
+  echo "    http://${vm_ip}:8000"
   echo
-  echo "On your HOST machine, add this to /etc/hosts:"
+  echo "  Friendly URL, works after HOST /etc/hosts setup:"
+  echo "    http://${SITE_NAME}:8000"
+  echo
+  echo "On your HOST machine, add/update this /etc/hosts entry:"
   echo "  ${vm_ip} ${SITE_NAME}"
   echo
   echo "Credentials file:"
@@ -570,12 +636,23 @@ print_summary() {
   echo "============================================================"
 }
 
+
 check_bench_app_installed() {
   local app="$1"
   if [[ -d "${BENCH_DIR}/apps/${app}" ]]; then
     return 0
   fi
   return 1
+}
+
+site_app_installed() {
+  local app="$1"
+
+  if [[ ! -d "${BENCH_DIR}" || ! -d "${BENCH_DIR}/sites/${SITE_NAME}" ]]; then
+    return 1
+  fi
+
+  run_as_frappe "cd '${BENCH_DIR}' && bench --site '${SITE_NAME}' list-apps" 2>/dev/null | awk '{print $1}' | grep -qx "$app"
 }
 
 run_status() {
@@ -635,15 +712,27 @@ run_status() {
   fi
 
   if check_bench_app_installed erpnext; then
-    status_line "ERPNext app" "OK" "apps/erpnext exists"
+    status_line "ERPNext app files" "OK" "apps/erpnext exists"
   else
-    status_line "ERPNext app" "WARN" "apps/erpnext missing"
+    status_line "ERPNext app files" "WARN" "apps/erpnext missing"
   fi
 
   if [[ -d "${BENCH_DIR}/sites/${SITE_NAME}" ]]; then
     status_line "Site" "OK" "${SITE_NAME} exists"
   else
     status_line "Site" "WARN" "${SITE_NAME} missing"
+  fi
+
+  if site_app_installed frappe; then
+    status_line "Site app: frappe" "OK" "installed on ${SITE_NAME}"
+  else
+    status_line "Site app: frappe" "WARN" "not confirmed on ${SITE_NAME}"
+  fi
+
+  if site_app_installed erpnext; then
+    status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
+  else
+    status_line "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
   fi
 
   if [[ -f "${BENCH_DIR}/sites/common_site_config.json" ]]; then
@@ -656,16 +745,39 @@ run_status() {
     status_line "Common config" "WARN" "common_site_config.json missing"
   fi
 
-  for port in 8000 9000 11000 13000; do
+  local port label item
+  local port_checks=(
+    "8000:Bench web"
+    "9000:Socket.io"
+    "11000:Bench Redis queue"
+    "13000:Bench Redis cache"
+  )
+
+  for item in "${port_checks[@]}"; do
+    port="${item%%:*}"
+    label="${item#*:}"
     if nc -z 127.0.0.1 "$port" >/dev/null 2>&1; then
-      status_line "Port ${port}" "OK" "listening"
+      status_line "$label" "OK" "port ${port} listening"
     else
-      status_line "Port ${port}" "INFO" "not listening"
+      status_line "$label" "INFO" "port ${port} not listening"
     fi
   done
 
+  if [[ -x "${FRAPPE_HOME}/start-erpnext-dev.sh" ]]; then
+    status_line "Start helper" "OK" "${FRAPPE_HOME}/start-erpnext-dev.sh"
+  else
+    status_line "Start helper" "WARN" "missing or not executable"
+  fi
+
+  if [[ -f "${FRAPPE_HOME}/erpnext-dev-credentials.txt" ]]; then
+    status_line "Credentials file" "OK" "${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  else
+    status_line "Credentials file" "WARN" "missing"
+  fi
+
   status_line "VM IP" "INFO" "$(get_vm_ip)"
-  status_line "Browser URL" "INFO" "http://${SITE_NAME}:8000"
+  status_line "Direct IP URL" "INFO" "http://$(get_vm_ip):8000"
+  status_line "Friendly URL" "INFO" "http://${SITE_NAME}:8000"
   status_line "Host /etc/hosts" "INFO" "$(get_vm_ip) ${SITE_NAME}"
 
   echo
@@ -730,6 +842,22 @@ run_install() {
   write_credentials_file
   print_summary
   show_access_instructions
+
+  if [[ "${AUTO_START}" == "true" ]]; then
+    start_erpnext
+  elif [[ -t 0 ]]; then
+    echo
+    read -r -p "Start ERPNext now? [Y/n]: " start_now
+    start_now="${start_now:-Y}"
+
+    if [[ "$start_now" =~ ^[Yy]$ ]]; then
+      start_erpnext
+    else
+      echo
+      echo "You can start ERPNext later with:"
+      echo "  ./install-erpnext-dev.sh start"
+    fi
+  fi
 }
 
 soft_uninstall() {
@@ -812,6 +940,16 @@ run_start() {
 show_help() {
   cat <<EOF_HELP
 ${APP_NAME} v${SCRIPT_VERSION}
+
+Start ERPNext:
+  ./install-erpnext-dev.sh start
+
+Install and start automatically:
+  AUTO_START=true ./install-erpnext-dev.sh install
+
+Browser access:
+  Direct IP URL works while Bench is running: http://VM_IP:8000
+  Friendly URL works after HOST /etc/hosts setup: http://${SITE_NAME}:8000
 
 Usage:
   ./install-erpnext-dev.sh [action] [options]

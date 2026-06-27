@@ -1,5 +1,7 @@
 # ERPNext Developer Installer
 
+**Current script version:** `0.2.1`
+
 A developer-friendly installer manager for setting up a local **Frappe + ERPNext** environment on Ubuntu Server.
 
 This project is intended for developers, testers, lab environments, and KVM/VM-based local ERPNext evaluation.
@@ -102,6 +104,12 @@ Advanced users can run actions directly:
 ./install-erpnext-dev.sh help
 ```
 
+Install and start ERPNext automatically after completion:
+
+```bash
+AUTO_START=true ./install-erpnext-dev.sh install
+```
+
 For unattended confirmation prompts:
 
 ```bash
@@ -179,6 +187,8 @@ Use status mode to inspect the environment without changing it:
 ./install-erpnext-dev.sh status
 ```
 
+Status mode checks the OS, services, Bench folder, app files, site-level app installation, helper script, credentials file, runtime ports, VM IP, and browser URLs.
+
 ---
 
 ## Start ERPNext
@@ -204,21 +214,63 @@ Do **not** use `su - frappe` unless you manually set a password for the `frappe`
 
 ## Browser Access
 
+There are two ways to open the local ERPNext site from your host browser.
+
+### 1. Direct IP URL
+
+This works as soon as ERPNext is running with `bench start`:
+
+```text
+http://VM_IP:8000
+```
+
+Example:
+
+```text
+http://192.168.122.66:8000
+```
+
+### 2. Friendly local domain
+
+The friendly local domain is:
+
+```text
+http://erp.test:8000
+```
+
+This only works after **both** conditions are true:
+
+1. ERPNext/Bench is running inside the VM.
+2. Your host machine maps `erp.test` to the VM IP in `/etc/hosts`.
+
+Start ERPNext inside the VM:
+
+```bash
+./install-erpnext-dev.sh start
+```
+
+Or manually:
+
+```bash
+sudo -iu frappe
+export PATH="$HOME/.local/bin:$PATH"
+cd /home/frappe/frappe/frappe-bench
+bench start
+```
+
 After `bench start`, look for a line like:
 
 ```text
 Running on http://192.168.122.66:8000
 ```
 
-If you use the default site name `erp.test`, your host machine must resolve `erp.test` to the VM IP.
-
-Inside the VM, run:
+Then run the access helper inside the VM:
 
 ```bash
 ./install-erpnext-dev.sh access
 ```
 
-It will print the exact `/etc/hosts` command to run on your Linux Mint host.
+It prints the exact `/etc/hosts` command to run on your Linux Mint host.
 
 Example host machine entry:
 
@@ -226,17 +278,13 @@ Example host machine entry:
 192.168.122.66 erp.test
 ```
 
-Then open:
-
-```text
-http://erp.test:8000
-```
-
-You can also test directly by IP:
+If `erp.test` does not open yet, use the direct IP URL first:
 
 ```text
 http://192.168.122.66:8000
 ```
+
+Important: the `/etc/hosts` command must be run on the **host machine**, not inside the VM.
 
 ---
 
@@ -412,6 +460,7 @@ credentials.txt
 secrets.txt
 *.sql
 *.sql.gz
+*.tar.gz
 sites/*/private/backups/
 .DS_Store
 ```
