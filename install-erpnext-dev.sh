@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.5.1"
+SCRIPT_VERSION="0.5.2"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -451,34 +451,30 @@ require_sudo() {
 }
 
 frappe_shell_prefix() {
+  # Keep this as a semicolon-separated single line.
+  # Some sudo/su command paths can collapse multiline command substitution, which breaks
+  # constructs like: export NVM_DIR=...if [ -s ... ]. Semicolons make the prefix robust.
   cat <<'EOF_PREFIX'
-export PATH="$HOME/.local/bin:$PATH"
-export NVM_DIR="$HOME/.nvm"
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-  . "$NVM_DIR/nvm.sh"
-fi
-if command -v node >/dev/null 2>&1; then
-  export PATH="$(dirname "$(command -v node)"):$PATH"
-fi
+export PATH="$HOME/.local/bin:$PATH"; export NVM_DIR="$HOME/.nvm"; if [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh"; fi; if command -v node >/dev/null 2>&1; then export PATH="$(dirname "$(command -v node)"):$PATH"; fi;
 EOF_PREFIX
 }
 
 run_as_frappe() {
   local cmd="$1"
   local prefix
+  local full_cmd
 
   if ! id "$FRAPPE_USER" >/dev/null 2>&1; then
     return 1
   fi
 
   prefix="$(frappe_shell_prefix)"
+  full_cmd="${prefix} ${cmd}"
 
   if [[ "${EUID}" -eq 0 ]]; then
-    su - "$FRAPPE_USER" -s /bin/bash -c "${prefix}
-${cmd}"
+    su - "$FRAPPE_USER" -s /bin/bash -c "$full_cmd"
   else
-    sudo -iu "$FRAPPE_USER" bash -lc "${prefix}
-${cmd}"
+    sudo -iu "$FRAPPE_USER" bash -lc "$full_cmd"
   fi
 }
 
