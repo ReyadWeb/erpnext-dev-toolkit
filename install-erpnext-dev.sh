@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.5.0"
+SCRIPT_VERSION="0.5.1"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -450,17 +450,35 @@ require_sudo() {
   fi
 }
 
+frappe_shell_prefix() {
+  cat <<'EOF_PREFIX'
+export PATH="$HOME/.local/bin:$PATH"
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+fi
+if command -v node >/dev/null 2>&1; then
+  export PATH="$(dirname "$(command -v node)"):$PATH"
+fi
+EOF_PREFIX
+}
+
 run_as_frappe() {
   local cmd="$1"
+  local prefix
 
   if ! id "$FRAPPE_USER" >/dev/null 2>&1; then
     return 1
   fi
 
+  prefix="$(frappe_shell_prefix)"
+
   if [[ "${EUID}" -eq 0 ]]; then
-    su - "$FRAPPE_USER" -s /bin/bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\"; ${cmd}"
+    su - "$FRAPPE_USER" -s /bin/bash -c "${prefix}
+${cmd}"
   else
-    sudo -iu "$FRAPPE_USER" bash -lc "export PATH=\"\$HOME/.local/bin:\$PATH\"; ${cmd}"
+    sudo -iu "$FRAPPE_USER" bash -lc "${prefix}
+${cmd}"
   fi
 }
 
@@ -1742,11 +1760,78 @@ branch_available() {
   git ls-remote --exit-code --heads "$repo" "$branch" >/dev/null 2>&1 || run_as_frappe "git ls-remote --exit-code --heads ${repo_q} ${branch_q} >/dev/null 2>&1"
 }
 
+
+ensure_app_library_node_tools() {
+  log "Checking Node/Yarn environment for App Library"
+
+  run_as_frappe '
+set -e
+
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Node.js was not found for the frappe user." >&2
+  echo "Run Recommended Setup or repair the Node/nvm installation first." >&2
+  exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "npm was not found for the frappe user." >&2
+  exit 1
+fi
+
+if ! command -v yarn >/dev/null 2>&1; then
+  echo "Yarn was not found. Installing Yarn globally with npm..."
+  npm install -g yarn
+fi
+
+echo "Node: $(command -v node) $(node -v)"
+echo "NPM:  $(command -v npm) $(npm -v)"
+echo "Yarn: $(command -v yarn) $(yarn -v)"
+' || fail "Node/Yarn preflight failed for App Library."
+
+  ok "Node/Yarn environment ready"
+}
+
+prepare_downloaded_app_dependencies() {
+  local bench_dir="$1"
+  local app_name="$2"
+
+  if ! app_folder_exists "$bench_dir" "$app_name"; then
+    return 0
+  fi
+
+  log "Preparing dependencies for downloaded app: ${app_name}"
+
+  run_as_frappe "
+set -e
+cd '${bench_dir}'
+
+if [ -x './env/bin/python' ]; then
+  echo 'Installing Python package in bench environment...'
+  ./env/bin/python -m pip install -q -e 'apps/${app_name}'
+fi
+
+if [ -f 'apps/${app_name}/package.json' ]; then
+  echo 'Installing frontend dependencies with Yarn...'
+  cd 'apps/${app_name}'
+  yarn install --check-files
+fi
+" || fail "Dependency preparation failed for ${app_name}. Check the app compatibility and logs."
+
+  ok "Dependencies ready for ${app_name}"
+}
+
 show_installed_apps() {
   require_sudo
 
-  local bench_dir
+  local bench_dir bench_q site_q
   bench_dir="$(require_site_environment)" || return 1
+  bench_q="$(printf '%q' "$bench_dir")"
+  site_q="$(printf '%q' "$SITE_NAME")"
 
   echo
   echo "============================================================"
@@ -1756,10 +1841,13 @@ show_installed_apps() {
   echo "Bench: ${bench_dir}"
   echo
   echo "Installed on site:"
-  run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' list-apps" || warn "Could not list installed apps."
+  run_as_frappe "cd ${bench_q} && bench --site ${site_q} list-apps" || warn "Could not list installed apps."
   echo
   echo "Downloaded app folders:"
-  run_as_frappe "cd '${bench_dir}' && find apps -maxdepth 1 -mindepth 1 -type d -printf '  %f\n' | sort" || warn "Could not list downloaded app folders."
+  run_as_frappe "cd ${bench_q} && find apps -maxdepth 1 -mindepth 1 -type d -printf '  %f\\n' | sort" || warn "Could not list downloaded app folders."
+  echo
+  echo "Downloaded but not installed on ${SITE_NAME}:"
+  run_as_frappe "cd ${bench_q} && installed=\$(bench --site ${site_q} list-apps 2>/dev/null | awk '{print \$1}'); missing=0; for d in apps/*; do [ -d \"\$d\" ] || continue; app=\"\${d##*/}\"; if ! printf '%s\\n' \"\$installed\" | grep -qx \"\$app\"; then echo \"  \$app\"; missing=1; fi; done; [ \"\$missing\" -eq 1 ] || echo '  none'" || warn "Could not compare downloaded apps with installed site apps."
   echo "============================================================"
 }
 
@@ -1820,6 +1908,8 @@ install_frappe_app() {
     create_site_backup true || warn "Pre-install backup failed. Continuing only because app installation was explicitly confirmed."
   fi
 
+  ensure_app_library_node_tools
+
   was_running=0
   if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
     was_running=1
@@ -1850,6 +1940,8 @@ install_frappe_app() {
       run_as_frappe "cd '${bench_dir}' && bench get-app ${repo_q}"
     fi
   fi
+
+  prepare_downloaded_app_dependencies "$bench_dir" "$app_name"
 
   if site_app_installed "$app_name"; then
     ok "${display} is already installed on ${SITE_NAME}"

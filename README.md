@@ -12,16 +12,16 @@ This project is designed for local developer VMs, test labs, and evaluation envi
 ## Current Version
 
 ```text
-v0.5.0
+v0.5.1
 ```
 
 This version adds an App Library on top of the stable local VM installer, backup/maintenance workflow, and service readiness checks. The App Library can show installed apps and install selected optional Frappe apps such as CRM, HRMS, Helpdesk, and Insights.
 
 ---
 
-## v0.5.0 App Library
+## v0.5.1 App Library
 
-v0.5.0 adds an optional App Library for installing common Frappe ecosystem apps into the local ERPNext developer VM.
+v0.5.1 adds an optional App Library for installing common Frappe ecosystem apps into the local ERPNext developer VM.
 
 Included app profiles:
 
@@ -133,9 +133,9 @@ http://VM_IP:8000
 ---
 
 
-### v0.5.0 readiness polish
+### v0.5.1 readiness polish
 
-v0.5.0 makes service start and restart clearer. After `start`, `restart`, `service-start`, or `service-restart`, the script shows visible waiting output while checking required development ports. This prevents confusion when systemd reports the service as running but Bench is still starting internally.
+v0.5.1 makes service start and restart clearer. After `start`, `restart`, `service-start`, or `service-restart`, the script shows visible waiting output while checking required development ports. This prevents confusion when systemd reports the service as running but Bench is still starting internally.
 
 ### v0.4.1 backup listing polish
 
@@ -227,7 +227,7 @@ sudo apt update && sudo apt install -y curl ca-certificates && curl -fsSL "https
 
 ## Menu Layout
 
-v0.5.0 keeps the main menu simple:
+v0.5.1 keeps the main menu simple:
 
 ```text
 1) Recommended Setup
@@ -541,7 +541,7 @@ Maintenance menu options:
 
 ## Autostart on VM Boot
 
-v0.5.0 can create a local development systemd service:
+v0.5.1 can create a local development systemd service:
 
 ```text
 erpnext-dev.service
