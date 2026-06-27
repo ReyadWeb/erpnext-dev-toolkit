@@ -94,16 +94,45 @@ check_os() {
   . /etc/os-release
 
   if [[ "${ID}" != "ubuntu" ]]; then
-    fail "This script is designed for Ubuntu. Detected: ${PRETTY_NAME:-unknown}"
+    fail "This script is designed for Ubuntu Server 24.04 or 26.04. Detected: ${PRETTY_NAME:-unknown}"
   fi
 
-  if [[ "${VERSION_ID}" != "26.04" ]]; then
-    warn "Designed for Ubuntu 26.04 LTS. Detected: ${PRETTY_NAME:-Ubuntu ${VERSION_ID}}"
-    warn "Continuing because Frappe supports Ubuntu 24.04+."
+  case "${VERSION_ID}" in
+    "24.04")
+      ok "Ubuntu 24.04 LTS detected"
+      ;;
+    "26.04")
+      ok "Ubuntu 26.04 LTS detected"
+      ;;
+    *)
+      fail "Unsupported Ubuntu version: ${PRETTY_NAME:-Ubuntu ${VERSION_ID}}. Supported: Ubuntu 24.04 LTS and Ubuntu 26.04 LTS."
+      ;;
+  esac
+}
+apt_package_available() {
+  local package="$1"
+  apt-cache policy "$package" | grep -qv "Candidate: (none)"
+}
+
+install_required_packages() {
+  log "Installing required system packages"
+
+  $SUDO apt-get update
+  $SUDO apt-get install -y "$@"
+}
+
+install_optional_package() {
+  local package="$1"
+
+  if apt_package_available "$package"; then
+    $SUDO apt-get install -y "$package"
+    ok "Optional package installed: $package"
   else
-    ok "Ubuntu 26.04 LTS detected"
+    warn "Optional package not available from apt: $package"
+    warn "Continuing without $package."
   fi
 }
+
 
 prepare_passwords() {
   log "Preparing generated credentials"
@@ -122,15 +151,18 @@ prepare_passwords() {
 install_system_packages() {
   log "Installing system packages"
 
-  $SUDO apt update
-  $SUDO apt install -y \
+  install_required_packages \
     git curl wget nano ca-certificates gnupg lsb-release \
     software-properties-common build-essential pkg-config \
     redis-server mariadb-server mariadb-client libmariadb-dev \
     python3 python3-dev python3-pip python3-venv \
     libffi-dev libssl-dev libjpeg-dev zlib1g-dev \
-    xvfb libfontconfig wkhtmltopdf \
+    xvfb libfontconfig \
     cron netcat-openbsd
+
+  log "Installing optional packages"
+
+  install_optional_package "wkhtmltopdf"
 
   $SUDO systemctl enable --now mariadb
   $SUDO systemctl enable --now redis-server
