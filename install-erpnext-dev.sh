@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.3.0"
+SCRIPT_VERSION="0.3.1"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -939,92 +939,336 @@ print_summary() {
 }
 
 
-check_bench_app_installed() {
-  local app="$1"
-  if [[ -d "${BENCH_DIR}/apps/${app}" ]]; then
+bench_dir_candidates() {
+  printf '%s\n' \
+    "${BENCH_DIR}" \
+    "${FRAPPE_HOME}/${BENCH_NAME}" \
+    "${FRAPPE_HOME}/frappe/${BENCH_NAME}"
+}
+
+detect_bench_dir() {
+  local candidate found=""
+
+  while IFS= read -r candidate; do
+    [[ -z "$candidate" ]] && continue
+    if [[ -d "$candidate/apps/frappe" && -d "$candidate/sites" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+    if [[ -z "$found" && -d "$candidate" ]]; then
+      found="$candidate"
+    fi
+  done < <(bench_dir_candidates | awk '!seen[$0]++')
+
+  if [[ -d "$FRAPPE_HOME" ]]; then
+    candidate="$(find "$FRAPPE_HOME" -maxdepth 3 -type d -name "$BENCH_NAME" 2>/dev/null | head -n 1 || true)"
+    if [[ -n "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  fi
+
+  if [[ -n "$found" ]]; then
+    echo "$found"
     return 0
   fi
+
+  echo "$BENCH_DIR"
   return 1
+}
+
+active_bench_dir() {
+  detect_bench_dir 2>/dev/null || echo "$BENCH_DIR"
+}
+
+check_bench_app_installed() {
+  local app="$1"
+  local bench_dir
+  bench_dir="$(active_bench_dir)"
+
+  [[ -d "${bench_dir}/apps/${app}" ]]
+}
+
+site_exists() {
+  local bench_dir
+  bench_dir="$(active_bench_dir)"
+
+  [[ -d "${bench_dir}/sites/${SITE_NAME}" ]]
 }
 
 site_app_installed() {
   local app="$1"
+  local bench_dir
+  bench_dir="$(active_bench_dir)"
 
-  if [[ ! -d "${BENCH_DIR}" || ! -d "${BENCH_DIR}/sites/${SITE_NAME}" ]]; then
+  if [[ ! -d "$bench_dir" || ! -d "${bench_dir}/sites/${SITE_NAME}" ]]; then
     return 1
   fi
 
-  run_as_frappe "cd '${BENCH_DIR}' && bench --site '${SITE_NAME}' list-apps" 2>/dev/null | awk '{print $1}' | grep -qx "$app"
+  run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' list-apps" 2>/dev/null | awk '{print $1}' | grep -qx "$app"
 }
 
 install_state() {
-  if [[ -d "${BENCH_DIR}" && -d "${BENCH_DIR}/apps/frappe" && -d "${BENCH_DIR}/apps/erpnext" && -d "${BENCH_DIR}/sites/${SITE_NAME}" ]]; then
-    echo "Installed"
-  elif [[ -d "${BENCH_DIR}" ]]; then
+  local bench_dir
+  bench_dir="$(active_bench_dir)"
+
+  if [[ -d "${bench_dir}" && -d "${bench_dir}/apps/frappe" && -d "${bench_dir}/apps/erpnext" && -d "${bench_dir}/sites/${SITE_NAME}" ]]; then
+    if site_app_installed erpnext || [[ -f "${bench_dir}/sites/apps.txt" ]]; then
+      echo "Installed"
+    else
+      echo "Installed files found; site app not confirmed"
+    fi
+  elif [[ -d "${bench_dir}" || -d "${FRAPPE_HOME}" ]]; then
     echo "Incomplete"
   else
     echo "Not installed"
   fi
 }
 
+runtime_state() {
+  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
+    echo "Running via service"
+  elif nc -z 127.0.0.1 8000 >/dev/null 2>&1; then
+    echo "Running"
+  elif id "$FRAPPE_USER" >/dev/null 2>&1 && pgrep -u "$FRAPPE_USER" -f "bench start" >/dev/null 2>&1; then
+    echo "Starting / partially running"
+  else
+    echo "Stopped"
+  fi
+}
+
+autostart_state() {
+  if service_exists && systemctl is-enabled --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; then
+    echo "Enabled"
+  elif service_exists; then
+    echo "Disabled"
+  else
+    echo "Not configured"
+  fi
+}
+
+service_state() {
+  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
+    echo "Running"
+  elif service_exists; then
+    echo "Stopped"
+  else
+    echo "Not configured"
+  fi
+}
+
+recommended_action() {
+  local installed runtime auto
+  installed="$1"
+  runtime="$2"
+  auto="$3"
+
+  case "$installed" in
+    "Installed"|"Installed files found; site app not confirmed")
+      if [[ "$runtime" == Running* ]]; then
+        if [[ "$auto" == "Enabled" ]]; then
+          echo "ERPNext is ready. Open the browser URL below."
+        else
+          echo "ERPNext is running. Optional: enable autostart with ./install-erpnext-dev.sh enable-autostart"
+        fi
+      else
+        echo "Start ERPNext with ./install-erpnext-dev.sh start"
+      fi
+      ;;
+    "Incomplete")
+      echo "Run ./install-erpnext-dev.sh repair, or run setup for a clean reinstall."
+      ;;
+    *)
+      echo "Run ./install-erpnext-dev.sh setup"
+      ;;
+  esac
+}
+
 run_status() {
   require_sudo
 
-  local vm_ip state service_state autostart_state issue
+  local vm_ip installed runtime auto svc bench_dir creds_state helper_state
   vm_ip="$(get_vm_ip)"
-  state="$(install_state)"
+  installed="$(install_state)"
+  runtime="$(runtime_state)"
+  auto="$(autostart_state)"
+  svc="$(service_state)"
+  bench_dir="$(active_bench_dir)"
 
-  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    service_state="Running"
-  elif service_exists; then
-    service_state="Stopped"
+  if [[ -f "${FRAPPE_HOME}/erpnext-dev-credentials.txt" ]]; then
+    creds_state="Available"
   else
-    service_state="Not configured"
+    creds_state="Missing"
   fi
 
-  if service_exists && systemctl is-enabled --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; then
-    autostart_state="Enabled"
-  elif service_exists; then
-    autostart_state="Disabled"
+  if [[ -x "${FRAPPE_HOME}/start-erpnext-dev.sh" ]]; then
+    helper_state="Available"
   else
-    autostart_state="Not configured"
+    helper_state="Missing"
   fi
 
   echo
   echo "============================================================"
-  echo "ERPNext Developer Status"
+  echo "ERPNext Developer Quick Status"
   echo "============================================================"
-  printf "  %-22s %s\n" "Install status:" "$state"
-  printf "  %-22s %s\n" "ERPNext service:" "$service_state"
-  printf "  %-22s %s\n" "Autostart:" "$autostart_state"
-  printf "  %-22s %s\n" "Site:" "$SITE_NAME"
-  printf "  %-22s %s\n" "VM IP:" "$vm_ip"
-  printf "  %-22s http://%s:8000\n" "Direct URL:" "$vm_ip"
-  printf "  %-22s http://%s:8000\n" "Friendly URL:" "$SITE_NAME"
-  printf "  %-22s %s\n" "Credentials:" "${FRAPPE_HOME}/erpnext-dev-credentials.txt"
-
+  printf "  %-24s %s\n" "Install status:" "$installed"
+  printf "  %-24s %s\n" "Runtime status:" "$runtime"
+  printf "  %-24s %s\n" "Autostart:" "$auto"
+  printf "  %-24s %s\n" "Service:" "$svc"
+  printf "  %-24s %s\n" "Site:" "$SITE_NAME"
+  printf "  %-24s %s\n" "Bench folder:" "$bench_dir"
+  printf "  %-24s %s\n" "Credentials:" "$creds_state"
+  printf "  %-24s %s\n" "Start helper:" "$helper_state"
+  printf "  %-24s %s\n" "VM IP:" "$vm_ip"
+  printf "  %-24s http://%s:8000\n" "Direct URL:" "$vm_ip"
+  printf "  %-24s http://%s:8000\n" "Friendly URL:" "$SITE_NAME"
   echo
-  case "$state" in
-    Installed)
-      if [[ "$service_state" == "Running" ]]; then
-        ok "ERPNext appears installed and running."
-      else
-        warn "ERPNext is installed but not running. Start it with: ./install-erpnext-dev.sh start"
-      fi
-      ;;
-    Incomplete)
-      warn "ERPNext environment looks incomplete. Recommended fix: ./install-erpnext-dev.sh repair or ./install-erpnext-dev.sh setup"
-      ;;
-    *)
-      warn "ERPNext is not installed. Recommended fix: ./install-erpnext-dev.sh setup"
-      ;;
-  esac
-
+  echo "Recommended action:"
+  echo "  $(recommended_action "$installed" "$runtime" "$auto")"
   echo
-  echo "Friendly URL note: http://${SITE_NAME}:8000 only works after Bench/service is running and your HOST /etc/hosts maps ${SITE_NAME} to ${vm_ip}."
+  echo "Friendly URL note: http://${SITE_NAME}:8000 only works after ERPNext is running and your HOST /etc/hosts maps ${SITE_NAME} to ${vm_ip}."
   echo "For detailed diagnostics, run: ./install-erpnext-dev.sh doctor"
   echo "============================================================"
 }
+
+run_runtime_status() {
+  require_sudo
+
+  echo
+  echo "============================================================"
+  echo "ERPNext Runtime Status"
+  echo "============================================================"
+  status_line "Runtime" "INFO" "$(runtime_state)"
+  status_line "Service" "INFO" "$(service_state)"
+  status_line "Autostart" "INFO" "$(autostart_state)"
+
+  local item port label
+  local port_checks=(
+    "8000:Bench web"
+    "9000:Socket.io"
+    "11000:Bench Redis queue"
+    "13000:Bench Redis cache"
+  )
+
+  for item in "${port_checks[@]}"; do
+    port="${item%%:*}"
+    label="${item#*:}"
+    if nc -z 127.0.0.1 "$port" >/dev/null 2>&1; then
+      status_line "$label" "OK" "port ${port} listening"
+    else
+      status_line "$label" "INFO" "port ${port} not listening"
+    fi
+  done
+
+  echo
+  echo "If installed but stopped, run: ./install-erpnext-dev.sh start"
+  echo "============================================================"
+}
+
+run_installation_status() {
+  require_sudo
+
+  local bench_dir
+  bench_dir="$(active_bench_dir)"
+
+  echo
+  echo "============================================================"
+  echo "ERPNext Installation Status"
+  echo "============================================================"
+  status_line "Install status" "INFO" "$(install_state)"
+
+  if id "$FRAPPE_USER" >/dev/null 2>&1; then
+    status_line "frappe user" "OK" "$FRAPPE_USER exists"
+  else
+    status_line "frappe user" "FAIL" "$FRAPPE_USER missing"
+  fi
+
+  if [[ -d "$bench_dir" ]]; then
+    status_line "Bench folder" "OK" "$bench_dir"
+  else
+    status_line "Bench folder" "FAIL" "$bench_dir missing"
+  fi
+
+  if check_bench_app_installed frappe; then
+    status_line "Frappe app files" "OK" "apps/frappe exists"
+  else
+    status_line "Frappe app files" "FAIL" "apps/frappe missing"
+  fi
+
+  if check_bench_app_installed erpnext; then
+    status_line "ERPNext app files" "OK" "apps/erpnext exists"
+  else
+    status_line "ERPNext app files" "WARN" "apps/erpnext missing"
+  fi
+
+  if site_exists; then
+    status_line "Site folder" "OK" "${SITE_NAME} exists"
+  else
+    status_line "Site folder" "WARN" "${SITE_NAME} missing"
+  fi
+
+  if site_app_installed frappe; then
+    status_line "Site app: frappe" "OK" "installed on ${SITE_NAME}"
+  else
+    status_line "Site app: frappe" "WARN" "not confirmed on ${SITE_NAME}"
+  fi
+
+  if site_app_installed erpnext; then
+    status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
+  else
+    status_line "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
+  fi
+
+  echo "============================================================"
+}
+
+run_service_summary() {
+  require_sudo
+
+  echo
+  echo "============================================================"
+  echo "ERPNext Service / Autostart Status"
+  echo "============================================================"
+  status_line "Service file" "INFO" "$(erpnext_service_path)"
+  status_line "Service" "INFO" "$(service_state)"
+  status_line "Autostart" "INFO" "$(autostart_state)"
+  echo
+  echo "Useful commands:"
+  echo "  ./install-erpnext-dev.sh enable-autostart"
+  echo "  ./install-erpnext-dev.sh disable-autostart"
+  echo "  ./install-erpnext-dev.sh service-start"
+  echo "  ./install-erpnext-dev.sh service-stop"
+  echo "  ./install-erpnext-dev.sh logs"
+  echo "============================================================"
+}
+
+show_status_menu() {
+  while true; do
+    echo
+    echo "============================================================"
+    echo "Status"
+    echo "============================================================"
+    echo "1) Quick Status"
+    echo "2) Runtime Status"
+    echo "3) Installation Status"
+    echo "4) Service / Autostart Status"
+    echo "5) Full Health Report"
+    echo "6) Back"
+    echo
+    read -r -p "Choose an option: " status_choice
+
+    case "$status_choice" in
+      1) run_status ;;
+      2) run_runtime_status ;;
+      3) run_installation_status ;;
+      4) run_service_summary ;;
+      5) run_full_status ;;
+      6) return 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
 
 run_full_status() {
   require_sudo
@@ -1086,10 +1330,13 @@ run_full_status() {
     status_line "frappe user" "FAIL" "$FRAPPE_USER missing"
   fi
 
-  if [[ -d "$BENCH_DIR" ]]; then
-    status_line "Bench folder" "OK" "$BENCH_DIR"
+  local bench_dir
+  bench_dir="$(active_bench_dir)"
+
+  if [[ -d "$bench_dir" ]]; then
+    status_line "Bench folder" "OK" "$bench_dir"
   else
-    status_line "Bench folder" "FAIL" "$BENCH_DIR missing"
+    status_line "Bench folder" "FAIL" "$bench_dir missing"
   fi
 
   if check_bench_app_installed frappe; then
@@ -1104,7 +1351,7 @@ run_full_status() {
     status_line "ERPNext app files" "WARN" "apps/erpnext missing"
   fi
 
-  if [[ -d "${BENCH_DIR}/sites/${SITE_NAME}" ]]; then
+  if [[ -d "${bench_dir}/sites/${SITE_NAME}" ]]; then
     status_line "Site" "OK" "${SITE_NAME} exists"
   else
     status_line "Site" "WARN" "${SITE_NAME} missing"
@@ -1122,8 +1369,8 @@ run_full_status() {
     status_line "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
   fi
 
-  if [[ -f "${BENCH_DIR}/sites/common_site_config.json" ]]; then
-    if grep -q '"default_site"[[:space:]]*:[[:space:]]*"'"${SITE_NAME}"'"' "${BENCH_DIR}/sites/common_site_config.json"; then
+  if [[ -f "${bench_dir}/sites/common_site_config.json" ]]; then
+    if grep -q '"default_site"[[:space:]]*:[[:space:]]*"'"${SITE_NAME}"'"' "${bench_dir}/sites/common_site_config.json"; then
       status_line "Default site" "OK" "${SITE_NAME}"
     else
       status_line "Default site" "WARN" "not set to ${SITE_NAME}"
@@ -1448,7 +1695,11 @@ Basic actions:
   install       Alias for setup
   start         Start ERPNext in the background systemd service
   stop          Stop ERPNext service and development processes
-  status        Show simple developer status
+  status        Show quick developer status and exit
+  status-menu   Show interactive Status submenu
+  runtime-status       Show runtime/port status
+  install-status       Show installation/site status
+  service-summary      Show service/autostart summary
   access        Show browser/IP/hostname instructions and exit
   menu          Show interactive menu
   help          Show this help
@@ -1520,7 +1771,7 @@ show_menu() {
       1) run_install ;;
       2) run_start ;;
       3) run_stop ;;
-      4) run_status ;;
+      4) show_status_menu ;;
       5) show_access_instructions ;;
       6) show_advanced_menu ;;
       7) show_help ;;
@@ -1537,7 +1788,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|multi-env-guide)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|multi-env-guide)
         ACTION="$1"
         shift
         ;;
@@ -1556,6 +1807,10 @@ main() {
     setup|install) run_install ;;
     repair) run_repair ;;
     status) run_status ;;
+    status-menu) show_status_menu ;;
+    runtime-status) run_runtime_status ;;
+    install-status) run_installation_status ;;
+    service-summary) run_service_summary ;;
     doctor|full-status) run_full_status ;;
     start) run_start ;;
     stop) run_stop ;;

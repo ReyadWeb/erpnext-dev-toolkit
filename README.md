@@ -12,10 +12,10 @@ This project is designed for local developer VMs, test labs, and evaluation envi
 ## Current Version
 
 ```text
-v0.3.0
+v0.3.1
 ```
 
-This version adds a cleaner basic/advanced menu structure and an optional systemd autostart service so ERPNext can start automatically when the VM boots.
+This version refines the status workflow so installation, runtime, and autostart states are reported separately. It keeps the cleaner basic/advanced menu structure and optional systemd autostart service from v0.3.0.
 
 ---
 
@@ -129,7 +129,7 @@ sudo apt update && sudo apt install -y curl ca-certificates && curl -fsSL "https
 
 ## Menu Layout
 
-v0.3.0 keeps the main menu simple:
+v0.3.1 keeps the main menu simple:
 
 ```text
 1) Recommended Setup
@@ -143,6 +143,27 @@ v0.3.0 keeps the main menu simple:
 ```
 
 The main menu is intended for normal daily use.
+
+The Status option opens a focused status submenu instead of dumping every diagnostic check at once:
+
+```text
+1) Quick Status
+2) Runtime Status
+3) Installation Status
+4) Service / Autostart Status
+5) Full Health Report
+6) Back
+```
+
+Status is intentionally split into separate concepts:
+
+```text
+Installed / not installed      = files, bench, apps, and site exist
+Running / stopped              = web/service/bench runtime state
+Autostart enabled / disabled   = whether systemd starts ERPNext on VM boot
+```
+
+This prevents a stopped ERPNext service from being incorrectly reported as "not installed".
 
 Advanced tools are under:
 
@@ -203,10 +224,16 @@ Stop ERPNext:
 ./install-erpnext-dev.sh stop
 ```
 
-Show simple status:
+Show quick status:
 
 ```bash
 ./install-erpnext-dev.sh status
+```
+
+Open the interactive status menu:
+
+```bash
+./install-erpnext-dev.sh status-menu
 ```
 
 Show full diagnostics:
@@ -229,9 +256,57 @@ Follow service logs live:
 
 ---
 
+## Status Commands
+
+Quick status:
+
+```bash
+./install-erpnext-dev.sh status
+```
+
+Interactive status submenu:
+
+```bash
+./install-erpnext-dev.sh status-menu
+```
+
+Runtime and port status:
+
+```bash
+./install-erpnext-dev.sh runtime-status
+```
+
+Installation and site status:
+
+```bash
+./install-erpnext-dev.sh install-status
+```
+
+Service and autostart summary:
+
+```bash
+./install-erpnext-dev.sh service-summary
+```
+
+Full health report:
+
+```bash
+./install-erpnext-dev.sh doctor
+```
+
+Useful interpretation:
+
+```text
+Installed + Stopped      → run ./install-erpnext-dev.sh start
+Installed + Running      → open the browser URL
+Autostart Disabled       → optional: run ./install-erpnext-dev.sh enable-autostart
+Not installed            → run ./install-erpnext-dev.sh setup
+Incomplete               → run repair or perform a clean setup
+```
+
 ## Autostart on VM Boot
 
-v0.3.0 can create a local development systemd service:
+v0.3.1 can create a local development systemd service:
 
 ```text
 erpnext-dev.service
@@ -388,6 +463,10 @@ Available advanced commands:
 ```bash
 ./install-erpnext-dev.sh repair
 ./install-erpnext-dev.sh doctor
+./install-erpnext-dev.sh status-menu
+./install-erpnext-dev.sh runtime-status
+./install-erpnext-dev.sh install-status
+./install-erpnext-dev.sh service-summary
 ./install-erpnext-dev.sh uninstall
 ./install-erpnext-dev.sh foreground-start
 ./install-erpnext-dev.sh access-menu
