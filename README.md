@@ -1,35 +1,41 @@
 # ERPNext Developer Installer
 
-A simple developer installer for setting up a local **Frappe + ERPNext** development environment on Ubuntu.
+A developer-friendly installer manager for setting up a local **Frappe + ERPNext** environment on Ubuntu Server.
 
-This project is intended for developers, testers, lab environments, and local VM setups where you want a fast way to install ERPNext for development or evaluation.
+This project is intended for developers, testers, lab environments, and KVM/VM-based local ERPNext evaluation.
 
-> This installer is for **development environments only**.
+> This installer is for **development environments only**.  
 > Do **not** use it as-is for production servers.
 
 ---
 
-## What This Installer Does
+## What It Installs
 
-The script automates the setup of:
+The installer can set up:
 
-* Frappe Framework
-* ERPNext
-* Frappe Bench
-* MariaDB
-* Redis
-* Node.js
-* Yarn
-* Python
-* Local ERPNext development site
+- Frappe Framework
+- ERPNext
+- Frappe Bench
+- MariaDB
+- Redis
+- Node.js
+- Yarn
+- Python via `uv`
+- Local ERPNext site
 
-Default site name:
+Default site:
 
 ```text
 erp.test
 ```
 
-Default start command:
+Default bench path:
+
+```text
+/home/frappe/frappe/frappe-bench
+```
+
+Default development start command:
 
 ```bash
 bench start
@@ -37,185 +43,187 @@ bench start
 
 ---
 
-## Target Environment
+## Supported Environment
 
-Recommended environment:
+Supported operating systems:
 
 ```text
-OS: Ubuntu 26.04 LTS
-Use case: Local development / KVM VM / test environment
-Mode: Development, not production
+Ubuntu Server 24.04 LTS
+Ubuntu Server 26.04 LTS
 ```
 
 Recommended VM resources:
 
 ```text
 CPU: 4 cores minimum
-RAM: 8 GB minimum
+RAM: 8 GB recommended
 Disk: 60 GB minimum
 Network: NAT or bridged
 ```
 
-This installer is designed for a **fresh Ubuntu Server VM**.
+The script intentionally exits if it detects an unsupported OS. Run it inside the **Ubuntu Server VM**, not on your Linux Mint/desktop host.
 
 ---
 
-## Important: Run Inside the Ubuntu VM
+## Quick Start: Menu Mode
 
-Run this installer inside the target Ubuntu Server VM, **not on your Linux host machine**.
-
-For example:
-
-```text
-Correct:
-Ubuntu Server VM → run installer here
-
-Incorrect:
-Linux Mint / desktop host → do not run installer here
-```
-
-The script intentionally exits if it detects an unsupported operating system.
-
----
-
-## Repository Contents
-
-```text
-erpnext-dev-installer/
-├── install-erpnext-dev.sh
-├── README.md
-├── LICENSE
-└── .gitignore
-```
-
----
-
-## One-Command Install
-
-Run this inside a fresh Ubuntu Server development VM:
+Run this inside the Ubuntu Server VM:
 
 ```bash
 sudo apt update && sudo apt install -y curl ca-certificates && curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh && chmod +x install-erpnext-dev.sh && ./install-erpnext-dev.sh
 ```
 
----
+The script opens an interactive menu:
 
-## One-Command Install With Custom Values
-
-Example:
-
-```bash
-sudo apt update && sudo apt install -y curl ca-certificates && curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh && chmod +x install-erpnext-dev.sh && SITE_NAME=erp.test ADMIN_PASSWORD='ChangeThisAdminPassword' ./install-erpnext-dev.sh
+```text
+1) Install / Reinstall ERPNext Development Environment
+2) Repair / Health Check
+3) Uninstall ERPNext Development Environment
+4) Show Status
+5) Start ERPNext
+6) Show Browser / Hostname Instructions
+7) Help
+8) Exit
 ```
 
 ---
 
-## Safer Manual Install
+## Command-Line Mode
 
-Clone the repository:
-
-```bash
-git clone https://github.com/ReyadWeb/erpnext-dev-installer.git
-cd erpnext-dev-installer
-```
-
-Make the installer executable:
+Advanced users can run actions directly:
 
 ```bash
-chmod +x install-erpnext-dev.sh
+./install-erpnext-dev.sh install
+./install-erpnext-dev.sh repair
+./install-erpnext-dev.sh status
+./install-erpnext-dev.sh start
+./install-erpnext-dev.sh uninstall
+./install-erpnext-dev.sh access
+./install-erpnext-dev.sh help
 ```
 
-Optionally review the script before running it:
+For unattended confirmation prompts:
 
 ```bash
-less install-erpnext-dev.sh
+./install-erpnext-dev.sh install --yes
 ```
 
-Run the installer:
+---
+
+## Fresh Install
+
+Interactive:
 
 ```bash
 ./install-erpnext-dev.sh
 ```
 
----
+Then choose:
 
-## Optional Configuration
+```text
+1) Install / Reinstall ERPNext Development Environment
+```
 
-You can override defaults using environment variables:
+Direct command:
+
+```bash
+./install-erpnext-dev.sh install
+```
+
+Install with custom values:
 
 ```bash
 SITE_NAME=erp.test \
 FRAPPE_USER=frappe \
 ADMIN_PASSWORD='ChangeThisAdminPassword' \
-./install-erpnext-dev.sh
+./install-erpnext-dev.sh install
 ```
 
 Common variables:
 
-| Variable            | Default            | Purpose                              |
-| ------------------- | ------------------ | ------------------------------------ |
-| `SITE_NAME`         | `erp.test`         | Local Frappe/ERPNext site name       |
-| `FRAPPE_USER`       | `frappe`           | Linux user used for Bench            |
-| `BENCH_NAME`        | `frappe-bench`     | Bench folder name                    |
-| `FRAPPE_BRANCH`     | `version-16`       | Frappe branch                        |
-| `ERPNEXT_BRANCH`    | `version-16`       | ERPNext branch                       |
-| `ADMIN_PASSWORD`    | Generated if empty | ERPNext Administrator password       |
-| `DB_ADMIN_USER`     | `frappe_db_admin`  | MariaDB admin user created for Bench |
-| `DB_ADMIN_PASSWORD` | Generated if empty | MariaDB admin password               |
+| Variable | Default | Purpose |
+|---|---|---|
+| `SITE_NAME` | `erp.test` | Local Frappe/ERPNext site name |
+| `FRAPPE_USER` | `frappe` | Linux user used for Bench |
+| `BENCH_NAME` | `frappe-bench` | Bench folder name |
+| `FRAPPE_BRANCH` | `version-16` | Frappe branch |
+| `ERPNEXT_BRANCH` | `version-16` | ERPNext branch |
+| `ADMIN_PASSWORD` | Generated if empty | ERPNext Administrator password |
+| `DB_ADMIN_USER` | `frappe_db_admin` | MariaDB admin user created for Bench |
+| `DB_ADMIN_PASSWORD` | Generated if empty | MariaDB admin password |
 
 ---
 
-## After Installation
+## Repair / Health Check
 
-Switch to the Frappe user:
+Run:
 
 ```bash
-su - frappe
+./install-erpnext-dev.sh repair
 ```
 
-Go to the bench folder:
+Repair mode performs safe fixes such as:
+
+- Start/enable MariaDB
+- Start/enable Redis
+- Configure Redis memory overcommit
+- Ensure the `frappe` Linux user exists
+- Fix ownership of `/home/frappe`
+- Recreate the start helper script
+- Repair bench site defaults when a bench exists
+- Optionally run migrate/build/clear-cache
+
+Use status mode to inspect the environment without changing it:
 
 ```bash
-cd ~/frappe/frappe-bench
+./install-erpnext-dev.sh status
 ```
 
-Start ERPNext:
+---
+
+## Start ERPNext
+
+Run:
 
 ```bash
+./install-erpnext-dev.sh start
+```
+
+Or manually:
+
+```bash
+sudo -iu frappe
+export PATH="$HOME/.local/bin:$PATH"
+cd /home/frappe/frappe/frappe-bench
 bench start
 ```
 
-Keep this terminal open while using ERPNext.
-
-Open ERPNext in your browser:
-
-```text
-http://erp.test:8000
-```
-
-Login:
-
-```text
-Username: Administrator
-Password: check ~/erpnext-dev-credentials.txt
-```
-
-The credentials file is created inside the Frappe user's home directory:
-
-```text
-/home/frappe/erpnext-dev-credentials.txt
-```
+Do **not** use `su - frappe` unless you manually set a password for the `frappe` Linux user. The installer creates the `frappe` user without password login.
 
 ---
 
-## Hostname Setup
+## Browser Access
 
-If ERPNext is running inside a KVM VM, add the VM IP to your **host machine's** `/etc/hosts` file.
-
-Example:
+After `bench start`, look for a line like:
 
 ```text
-192.168.122.36 erp.test
+Running on http://192.168.122.66:8000
+```
+
+If you use the default site name `erp.test`, your host machine must resolve `erp.test` to the VM IP.
+
+Inside the VM, run:
+
+```bash
+./install-erpnext-dev.sh access
+```
+
+It will print the exact `/etc/hosts` command to run on your Linux Mint host.
+
+Example host machine entry:
+
+```text
+192.168.122.66 erp.test
 ```
 
 Then open:
@@ -224,39 +232,70 @@ Then open:
 http://erp.test:8000
 ```
 
-To find the VM IP from inside the VM:
-
-```bash
-hostname -I
-```
-
-To verify hostname resolution from your host machine:
-
-```bash
-getent hosts erp.test
-```
-
-Expected example:
+You can also test directly by IP:
 
 ```text
-192.168.122.36 erp.test
+http://192.168.122.66:8000
 ```
+
+---
+
+## Login Credentials
+
+The installer writes credentials to:
+
+```text
+/home/frappe/erpnext-dev-credentials.txt
+```
+
+Read it from the VM with:
+
+```bash
+sudo cat /home/frappe/erpnext-dev-credentials.txt
+```
+
+ERPNext web login:
+
+```text
+Username: Administrator
+Password: shown in erpnext-dev-credentials.txt
+```
+
+---
+
+## Uninstall Options
+
+Run:
+
+```bash
+./install-erpnext-dev.sh uninstall
+```
+
+Available uninstall levels:
+
+```text
+1) Soft uninstall: stop Bench and archive /home/frappe/frappe
+2) Remove bench files only
+3) Full purge: remove bench, frappe user, MariaDB/Redis packages
+```
+
+Recommended for development testing:
+
+```text
+Soft uninstall
+```
+
+It archives the bench folder instead of deleting it immediately.
+
+For the cleanest test, use a fresh VM or roll back to a KVM snapshot.
 
 ---
 
 ## KVM Fixed IP Recommendation
 
-For KVM/libvirt users, it is recommended to reserve a fixed IP for the VM using a libvirt DHCP reservation.
+For KVM/libvirt users, reserve a fixed IP for the VM so `erp.test` does not break after reboot.
 
-Example target:
-
-```text
-192.168.122.36 erp.test
-```
-
-This avoids changing `/etc/hosts` every time the VM receives a new IP address.
-
-Example workflow on the host machine:
+On the host machine:
 
 ```bash
 virsh list --all
@@ -266,23 +305,21 @@ virsh domiflist "YOUR_VM_NAME"
 Then reserve the IP using the VM MAC address:
 
 ```bash
-sudo virsh net-update default add ip-dhcp-host "<host mac='YOUR_VM_MAC' name='erpnext-dev' ip='192.168.122.36'/>" --live --config
+sudo virsh net-update default add ip-dhcp-host "<host mac='YOUR_VM_MAC' name='erpnext-dev' ip='192.168.122.66'/>" --live --config
 ```
 
 Restart the VM after adding the reservation.
 
 ---
 
-## Development Notes
+## Useful Bench Commands
 
-This installer uses Frappe development mode.
-
-To start ERPNext:
+Run as the `frappe` user:
 
 ```bash
-su - frappe
-cd ~/frappe/frappe-bench
-bench start
+sudo -iu frappe
+export PATH="$HOME/.local/bin:$PATH"
+cd /home/frappe/frappe/frappe-bench
 ```
 
 Useful commands:
@@ -295,7 +332,7 @@ bench --site erp.test clear-cache
 bench --site erp.test backup
 ```
 
-Expected installed apps:
+Expected apps:
 
 ```text
 frappe
@@ -304,65 +341,67 @@ erpnext
 
 ---
 
-## Updating ERPNext
+## Troubleshooting
 
-From the bench folder:
+### Browser cannot resolve erp.test
 
-```bash
-su - frappe
-cd ~/frappe/frappe-bench
-bench update
-```
-
-For local development, always consider taking a VM snapshot before major updates.
-
----
-
-## Backups
-
-Create a site backup:
+Run this inside the VM:
 
 ```bash
-su - frappe
-cd ~/frappe/frappe-bench
-bench --site erp.test backup
+./install-erpnext-dev.sh access
 ```
 
-Backups are usually stored under:
+Then run the printed `/etc/hosts` commands on the Linux Mint host.
+
+### `su - frappe` asks for a password
+
+Use this instead:
+
+```bash
+sudo -iu frappe
+```
+
+The installer creates the `frappe` user without a login password.
+
+### `wkhtmltopdf` is not available
+
+On newer Ubuntu releases, `wkhtmltopdf` may not be available from apt.
+
+The installer treats it as optional and continues. ERPNext can still install, but PDF generation may require a separate manual setup later.
+
+### Redis Queue error
+
+If you see:
 
 ```text
-~/frappe/frappe-bench/sites/erp.test/private/backups/
+Error 111 connecting to 127.0.0.1:11000. Connection refused.
 ```
 
----
-
-## Uninstall / Reset
-
-For a simple development reset, rename the bench folder instead of deleting it immediately:
+Run repair:
 
 ```bash
-su - frappe
-cd ~
-mv ~/frappe ~/frappe-backup-$(date +%Y%m%d-%H%M%S)
+./install-erpnext-dev.sh repair
 ```
 
-For the cleanest test, use a fresh VM or roll back to a KVM snapshot.
+Or start Bench manually:
+
+```bash
+./install-erpnext-dev.sh start
+```
+
+### Show environment status
+
+```bash
+./install-erpnext-dev.sh status
+```
 
 ---
 
-## Important Safety Notes
+## Safety Notes
 
-Do not commit generated credentials.
+Do not commit generated credentials, backups, logs, `.env` files, database dumps, or site backups.
 
-The installer may generate credentials and save them in:
-
-```text
-~/erpnext-dev-credentials.txt
-```
-
-Files like credentials, logs, database dumps, and `.env` files should stay out of Git.
-
-This repository's `.gitignore` should include:
+Recommended `.gitignore` entries:
 
 ```gitignore
 *.log
@@ -373,104 +412,8 @@ credentials.txt
 secrets.txt
 *.sql
 *.sql.gz
+sites/*/private/backups/
 .DS_Store
-```
-
----
-
-## Troubleshooting
-
-### Installer exits with unsupported OS
-
-Example:
-
-```text
-ERROR: This script is designed for Ubuntu. Detected: Linux Mint
-```
-
-This means the script was probably run on the host machine instead of the Ubuntu VM.
-
-SSH into the Ubuntu VM first, then run the installer there.
-
----
-
-### ERPNext install fails with Redis Queue error
-
-If you see:
-
-```text
-Error 111 connecting to 127.0.0.1:11000. Connection refused.
-```
-
-Start Bench services in one terminal:
-
-```bash
-su - frappe
-cd ~/frappe/frappe-bench
-bench start
-```
-
-Then retry the failed command in another terminal.
-
----
-
-### Browser cannot open erp.test
-
-Check that the hostname resolves from your host machine:
-
-```bash
-getent hosts erp.test
-```
-
-Expected example:
-
-```text
-192.168.122.36 erp.test
-```
-
-If it does not resolve, update the host machine's `/etc/hosts` file.
-
----
-
-### Check VM IP
-
-Inside the VM:
-
-```bash
-hostname -I
-```
-
----
-
-### Check installed apps
-
-```bash
-su - frappe
-cd ~/frappe/frappe-bench
-bench --site erp.test list-apps
-```
-
-Expected:
-
-```text
-frappe
-erpnext
-```
-
----
-
-### Start ERPNext manually
-
-```bash
-su - frappe
-cd ~/frappe/frappe-bench
-bench start
-```
-
-Then open:
-
-```text
-http://erp.test:8000
 ```
 
 ---
@@ -478,4 +421,3 @@ http://erp.test:8000
 ## License
 
 This project is licensed under the GPL-3.0 license.
-
