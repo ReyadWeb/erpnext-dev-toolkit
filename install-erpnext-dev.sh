@@ -221,6 +221,7 @@ export HOME="/home/${FRAPPE_USER}"
 export PATH="\$HOME/.local/bin:\$PATH"
 
 mkdir -p "\$HOME"
+cd "\$HOME"
 
 echo
 echo "==> Installing nvm / Node ${NODE_VERSION} / Yarn"
