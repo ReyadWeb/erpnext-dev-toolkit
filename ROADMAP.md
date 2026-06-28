@@ -1,90 +1,69 @@
 # ERPNext Developer Installer Roadmap
 
-## Current release: v0.7.0 Beta
+## Current baseline: v0.8.0
 
-Focus: VM/networking foundation and access diagnostics.
+v0.8.0 is a beta local developer VM installer with an optional local HTTPS reverse proxy foundation.
 
-### Completed through v0.7.0
+Verified core capabilities:
 
-- Fresh ERPNext developer install workflow.
-- Frappe v16 + ERPNext v16 setup.
-- systemd service for local developer startup.
-- Autostart on VM boot.
-- Readiness waiting for ports 8000, 9000, 11000, and 13000.
-- Status and doctor reports.
-- Backup and backup-with-files commands.
-- App Library installs for CRM, HRMS, Telephony, Helpdesk, and Insights.
-- App registry repair for `sites/apps.txt`.
-- Optional app status checks in doctor.
-- VM network diagnostics.
-- KVM fixed-IP and VM-identification guidance.
-- Future SSL roadmap command.
+- Ubuntu 24.04 / 26.04 support path
+- ERPNext v16 local dev setup
+- systemd service/autostart
+- readiness wait
+- status/doctor reports
+- backup/list-backups
+- App Library
+- CRM, HRMS, Telephony, Helpdesk, Insights install flow
+- VM/networking diagnostics
+- KVM/libvirt helper commands
+- Local SSL guide/status/configuration commands
 
-## v0.7.x stabilization
+## v0.8.x — Local SSL hardening
 
-- Test `network-status`, `hosts-command`, `host-test`, and `kvm-identify` on multiple VM names, including names with spaces.
-- Improve host-side instructions for Linux Mint, Ubuntu, and bridged networking.
-- Add clearer warnings when the VM IP changes.
-- Add optional environment variable examples for multiple sites.
+Planned refinements:
 
-## v0.8.0 Local HTTPS planning / implementation
+- Improve local SSL error handling.
+- Add clearer `ssl-status` diagnostics.
+- Add rollback verification after disabling local SSL.
+- Add optional self-signed certificate helper for testing only.
+- Add mkcert copy/trust troubleshooting.
+- Add Nginx log helper for SSL issues.
+- Confirm websocket/socket.io behavior through HTTPS.
 
-Goal: local HTTPS for developer VMs without making the project production-only.
+## v0.9.0 — Production planning branch
 
-Planned architecture:
+Production should not be mixed into the current development `bench start` workflow.
 
-```text
-Browser HTTPS :443
-  -> Nginx reverse proxy inside VM
-    -> Bench web 127.0.0.1:8000
-    -> Socket.io 127.0.0.1:9000
-```
+Planned production research/design:
 
-Planned commands:
+- Separate `install-erpnext-prod.sh` concept.
+- Production Nginx and Supervisor/systemd worker design.
+- Domain/DNS preflight checks.
+- Let's Encrypt HTTP-01 plan.
+- Let's Encrypt DNS-01 with Cloudflare plan.
+- Cloudflare Origin CA plan.
+- Firewall profile.
+- Backup/restore schedule.
+- Update and rollback strategy.
+- Monitoring and log rotation.
 
-```bash
-./install-erpnext-dev.sh ssl-status
-./install-erpnext-dev.sh local-ssl-guide
-./install-erpnext-dev.sh configure-local-ssl
-./install-erpnext-dev.sh disable-local-ssl
-```
+## v1.0.0 — Stable developer installer criteria
 
-Recommended local certificate approach:
+Required before v1.0.0:
 
-- mkcert or local CA workflow.
-- Trust the local CA on the host browser machine.
-- Keep Redis and internal services private.
-
-## v0.9.0 Production planning branch
-
-Production should likely become a separate script or mode.
-
-Candidate production features:
-
-- Production preflight checks.
-- Domain/DNS validation.
-- Nginx production config.
-- Supervisor or production systemd units.
-- Let's Encrypt HTTP-01.
-- Let's Encrypt DNS-01 with Cloudflare.
-- Cloudflare Origin CA workflow.
-- Firewall setup.
-- Backup and restore policy.
-- Monitoring and update strategy.
-
-## v1.0.0 Stable developer installer criteria
-
-- Fresh Ubuntu 24.04 VM install passes.
-- Fresh Ubuntu 26.04 VM install passes.
+- Fresh Ubuntu 24.04 VM test passes.
+- Fresh Ubuntu 26.04 VM test passes.
 - Reboot/autostart passes.
 - Start/stop/restart passes.
 - Doctor/status passes.
 - Backup/list-backups passes.
-- Restore database passes.
-- Restore full backup passes.
+- Restore database tested.
+- Restore full backup tested.
 - CRM install passes.
 - HRMS install passes.
 - Helpdesk + Telephony install passes.
 - Insights install passes.
+- Local SSL test passes.
 - Uninstall/reset passes on disposable VM.
-- README and TESTING guide complete.
+- README/CHANGELOG/TESTING complete.
+- Known limitations documented.

@@ -1,86 +1,86 @@
-# Testing Guide v0.7.0
+# Testing Guide v0.8.0
 
-## Syntax check
+## Syntax and help
 
 ```bash
 bash -n install-erpnext-dev.sh
 ./install-erpnext-dev.sh help
 ```
 
-## Existing VM regression
-
-```bash
-./install-erpnext-dev.sh restart
-./install-erpnext-dev.sh doctor
-./install-erpnext-dev.sh list-apps
-./install-erpnext-dev.sh app-status
-```
-
-Expected: all core services and optional apps show OK.
-
-## Networking commands
+## Existing environment regression
 
 ```bash
 ./install-erpnext-dev.sh network-status
-./install-erpnext-dev.sh hosts-command
-./install-erpnext-dev.sh host-test
-./install-erpnext-dev.sh kvm-identify
-./install-erpnext-dev.sh kvm-guide
-./install-erpnext-dev.sh multi-env-guide
-./install-erpnext-dev.sh ssl-roadmap
+./install-erpnext-dev.sh app-status
+./install-erpnext-dev.sh restart
+./install-erpnext-dev.sh doctor
 ```
 
 Expected:
 
-- `network-status` shows hostname, interface, MAC, IP, gateway, direct URL, friendly URL, and host mapping commands.
-- `hosts-command` prints only the host `/etc/hosts` update commands.
-- `host-test` prints host-side `getent` and `curl` tests.
-- `kvm-identify` prints a MAC-based VM lookup command that supports VM names with spaces.
-- `ssl-roadmap` prints planning guidance only and does not change the system.
+- ERPNext service running.
+- Ports 8000, 9000, 11000, 13000 listening.
+- Optional apps show installed if previously installed.
 
-## Fresh VM regression
+## SSL status before configuration
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh
-chmod +x install-erpnext-dev.sh
-./install-erpnext-dev.sh setup
-./install-erpnext-dev.sh start
-./install-erpnext-dev.sh doctor
-./install-erpnext-dev.sh network-status
+./install-erpnext-dev.sh ssl-status
+./install-erpnext-dev.sh local-ssl-guide
 ```
 
-## App Library regression
+Expected before cert/key are installed:
+
+- SSL certificate/key warnings.
+- HTTPS port 443 may be not listening.
+- Guide prints mkcert and certificate copy instructions.
+
+## Local SSL setup test
+
+On the host machine, generate a local certificate with mkcert:
 
 ```bash
-./install-erpnext-dev.sh install-crm
-./install-erpnext-dev.sh install-hrms
-./install-erpnext-dev.sh install-helpdesk
-./install-erpnext-dev.sh install-insights
-./install-erpnext-dev.sh list-apps
-./install-erpnext-dev.sh doctor
+mkcert -install
+mkcert -cert-file erp.test.crt -key-file erp.test.key erp.test VM_IP localhost 127.0.0.1
+scp erp.test.crt erp.test.key USER@VM_IP:/tmp/
 ```
 
-Expected app stack:
-
-```text
-frappe
-erpnext
-crm
-hrms
-telephony
-helpdesk
-insights
-```
-
-## KVM host validation
-
-On the host, compare the MAC from `network-status` with:
+Inside the VM:
 
 ```bash
-virsh list --all --name
-target_mac="PASTE_MAC_HERE"
-while IFS= read -r vm; do
-  [ -n "$vm" ] || continue
-  virsh domiflist "$vm" | grep -qi "$target_mac" && echo "Matched VM: $vm"
-done < <(virsh list --all --name)
+sudo mkdir -p /etc/erpnext-dev-ssl
+sudo cp /tmp/erp.test.crt /etc/erpnext-dev-ssl/erp.test.crt
+sudo cp /tmp/erp.test.key /etc/erpnext-dev-ssl/erp.test.key
+sudo chown root:root /etc/erpnext-dev-ssl/erp.test.crt /etc/erpnext-dev-ssl/erp.test.key
+sudo chmod 644 /etc/erpnext-dev-ssl/erp.test.crt
+sudo chmod 600 /etc/erpnext-dev-ssl/erp.test.key
+
+./install-erpnext-dev.sh configure-local-ssl
+./install-erpnext-dev.sh ssl-status
 ```
+
+From the host:
+
+```bash
+curl -kI https://erp.test
+```
+
+Expected:
+
+- Nginx config test passes.
+- Nginx service starts/reloads.
+- Port 443 listens.
+- `https://erp.test` opens in browser.
+- `http://erp.test:8000` still works.
+
+## Disable SSL test
+
+```bash
+./install-erpnext-dev.sh disable-local-ssl
+./install-erpnext-dev.sh ssl-status
+```
+
+Expected:
+
+- Nginx site symlink removed.
+- Direct Bench access remains available.

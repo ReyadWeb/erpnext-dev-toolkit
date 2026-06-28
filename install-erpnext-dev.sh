@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.7.0"
+SCRIPT_VERSION="0.8.0"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -24,6 +24,10 @@ ENABLE_AUTOSTART="${ENABLE_AUTOSTART:-prompt}"
 ERPNEXT_SERVICE_NAME="${ERPNEXT_SERVICE_NAME:-erpnext-dev.service}"
 READY_TIMEOUT="${READY_TIMEOUT:-90}"
 READY_INTERVAL="${READY_INTERVAL:-5}"
+
+SSL_CERT_DIR="${SSL_CERT_DIR:-/etc/erpnext-dev-ssl}"
+SSL_NGINX_CONF_DIR="${SSL_NGINX_CONF_DIR:-/etc/nginx}"
+SSL_REDIRECT_HTTP="${SSL_REDIRECT_HTTP:-true}"
 
 FRAPPE_BRANCH="${FRAPPE_BRANCH:-version-16}"
 ERPNEXT_BRANCH="${ERPNEXT_BRANCH:-version-16}"
@@ -1197,6 +1201,381 @@ Recommended roadmap:
 EOF_SSL
 }
 
+
+ssl_site_slug() {
+  printf '%s' "$SITE_NAME" | tr -c 'A-Za-z0-9._-' '-'
+}
+
+ssl_nginx_site_name() {
+  echo "erpnext-dev-$(ssl_site_slug)"
+}
+
+ssl_cert_path() {
+  echo "${SSL_CERT_PATH:-${SSL_CERT_DIR}/${SITE_NAME}.crt}"
+}
+
+ssl_key_path() {
+  echo "${SSL_KEY_PATH:-${SSL_CERT_DIR}/${SITE_NAME}.key}"
+}
+
+ssl_nginx_available_path() {
+  echo "${SSL_NGINX_CONF_DIR}/sites-available/$(ssl_nginx_site_name).conf"
+}
+
+ssl_nginx_enabled_path() {
+  echo "${SSL_NGINX_CONF_DIR}/sites-enabled/$(ssl_nginx_site_name).conf"
+}
+
+show_local_ssl_guide() {
+  local vm_ip cert_path key_path escaped_site
+  vm_ip="$(get_vm_ip)"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+  escaped_site="${SITE_NAME//./\\.}"
+
+  cat <<EOF_LOCAL_SSL
+
+============================================================
+Local SSL / HTTPS Guide
+============================================================
+
+Goal:
+  https://${SITE_NAME}
+
+The local SSL feature uses Nginx inside the VM as a reverse proxy:
+
+  Browser HTTPS :443
+    -> Nginx inside the VM
+      -> Bench web on 127.0.0.1:8000
+      -> Socket.io on 127.0.0.1:9000
+
+Important:
+  The certificate must be trusted by the HOST browser machine, not only by
+  the ERPNext VM. For local development, mkcert is usually the best workflow.
+
+Expected certificate paths inside the VM:
+  Certificate: ${cert_path}
+  Private key: ${key_path}
+
+Recommended mkcert workflow on your Linux Mint/Ubuntu HOST:
+
+  mkcert -install
+  mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1
+
+Copy the generated certificate and key into the VM:
+
+  scp ${SITE_NAME}.crt ${SITE_NAME}.key USER@${vm_ip}:/tmp/
+
+Inside the VM, install the certificate files:
+
+  sudo mkdir -p ${SSL_CERT_DIR}
+  sudo cp /tmp/${SITE_NAME}.crt ${cert_path}
+  sudo cp /tmp/${SITE_NAME}.key ${key_path}
+  sudo chown root:root ${cert_path} ${key_path}
+  sudo chmod 644 ${cert_path}
+  sudo chmod 600 ${key_path}
+
+Then configure the local HTTPS reverse proxy:
+
+  ./install-erpnext-dev.sh configure-local-ssl
+  ./install-erpnext-dev.sh ssl-status
+
+Host /etc/hosts still needs to map ${SITE_NAME} to this VM IP:
+
+  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts
+  echo "${vm_ip} ${SITE_NAME}" | sudo tee -a /etc/hosts
+
+Test from the host:
+
+  curl -kI https://${SITE_NAME}
+
+Browser URL:
+
+  https://${SITE_NAME}
+
+Direct Bench access remains available:
+
+  http://${SITE_NAME}:8000
+  http://${vm_ip}:8000
+
+============================================================
+EOF_LOCAL_SSL
+}
+
+show_ssl_status() {
+  local cert_path key_path available_path enabled_path vm_ip nginx_state ssl_ready
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+  available_path="$(ssl_nginx_available_path)"
+  enabled_path="$(ssl_nginx_enabled_path)"
+  vm_ip="$(get_vm_ip)"
+
+  if command -v nginx >/dev/null 2>&1; then
+    nginx_state="installed"
+  else
+    nginx_state="not installed"
+  fi
+
+  echo
+  echo "============================================================"
+  echo "Local SSL / HTTPS Status"
+  echo "============================================================"
+  status_line "Nginx" "INFO" "$nginx_state"
+
+  if systemctl list-unit-files nginx.service >/dev/null 2>&1; then
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+      status_line "Nginx service" "OK" "running"
+    else
+      status_line "Nginx service" "WARN" "not running"
+    fi
+  else
+    status_line "Nginx service" "INFO" "not available"
+  fi
+
+  if [[ -f "$available_path" ]]; then
+    status_line "Nginx SSL config" "OK" "$available_path"
+  else
+    status_line "Nginx SSL config" "WARN" "missing at $available_path"
+  fi
+
+  if [[ -L "$enabled_path" || -f "$enabled_path" ]]; then
+    status_line "Nginx SSL enabled" "OK" "$enabled_path"
+  else
+    status_line "Nginx SSL enabled" "WARN" "not enabled"
+  fi
+
+  if [[ -f "$cert_path" ]]; then
+    status_line "SSL certificate" "OK" "$cert_path"
+  else
+    status_line "SSL certificate" "WARN" "missing at $cert_path"
+  fi
+
+  if [[ -f "$key_path" ]]; then
+    status_line "SSL private key" "OK" "$key_path"
+  else
+    status_line "SSL private key" "WARN" "missing at $key_path"
+  fi
+
+  if port_listens 80; then
+    status_line "HTTP reverse proxy" "OK" "port 80 listening"
+  else
+    status_line "HTTP reverse proxy" "INFO" "port 80 not listening"
+  fi
+
+  if port_listens 443; then
+    status_line "HTTPS reverse proxy" "OK" "port 443 listening"
+  else
+    status_line "HTTPS reverse proxy" "INFO" "port 443 not listening"
+  fi
+
+  if port_listens 8000; then
+    status_line "Bench web" "OK" "127.0.0.1:8000 listening"
+  else
+    status_line "Bench web" "WARN" "127.0.0.1:8000 not listening"
+  fi
+
+  if port_listens 9000; then
+    status_line "Socket.io" "OK" "127.0.0.1:9000 listening"
+  else
+    status_line "Socket.io" "WARN" "127.0.0.1:9000 not listening"
+  fi
+
+  echo
+  echo "URLs:"
+  echo "  Direct Bench:     http://${vm_ip}:8000"
+  echo "  Friendly Bench:   http://${SITE_NAME}:8000"
+  echo "  Local HTTPS:      https://${SITE_NAME}"
+  echo
+
+  ssl_ready=0
+  if [[ -f "$available_path" && ( -L "$enabled_path" || -f "$enabled_path" ) && -f "$cert_path" && -f "$key_path" ]] && port_listens 443; then
+    ssl_ready=1
+  fi
+
+  if [[ "$ssl_ready" -eq 1 ]]; then
+    ok "Local HTTPS appears configured. Test from the host: curl -kI https://${SITE_NAME}"
+  else
+    warn "Local HTTPS is not fully configured yet. Run: ./install-erpnext-dev.sh local-ssl-guide"
+  fi
+
+  echo "============================================================"
+}
+
+write_local_ssl_nginx_config() {
+  local available_path cert_path key_path redirect_block
+  available_path="$(ssl_nginx_available_path)"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+
+  if [[ "$SSL_REDIRECT_HTTP" == "true" ]]; then
+    redirect_block="return 301 https://\$host\$request_uri;"
+  else
+    redirect_block="proxy_pass http://127.0.0.1:8000;\n    proxy_set_header Host \$host;\n    proxy_set_header X-Forwarded-Host \$host;\n    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto http;\n    proxy_set_header X-Real-IP \$remote_addr;\n    proxy_redirect off;"
+  fi
+
+  $SUDO mkdir -p "${SSL_NGINX_CONF_DIR}/sites-available" "${SSL_NGINX_CONF_DIR}/sites-enabled"
+
+  $SUDO tee "$available_path" >/dev/null <<EOF_NGINX
+# Managed by ERPNext Developer Installer.
+# Local development reverse proxy for ${SITE_NAME}.
+# Direct Bench access remains available on :8000.
+
+server {
+    listen 80;
+    server_name ${SITE_NAME};
+
+    ${redirect_block}
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${SITE_NAME};
+
+    ssl_certificate     ${cert_path};
+    ssl_certificate_key ${key_path};
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 100m;
+
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+
+    location /socket.io {
+        proxy_pass http://127.0.0.1:9000/socket.io;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;
+    }
+}
+EOF_NGINX
+}
+
+configure_local_ssl() {
+  require_sudo
+
+  local cert_path key_path available_path enabled_path vm_ip
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+  available_path="$(ssl_nginx_available_path)"
+  enabled_path="$(ssl_nginx_enabled_path)"
+  vm_ip="$(get_vm_ip)"
+
+  echo
+  echo "============================================================"
+  echo "Configure Local SSL / HTTPS"
+  echo "============================================================"
+  echo "This configures Nginx as a local HTTPS reverse proxy."
+  echo "It does not replace the ERPNext dev service and does not remove :8000 access."
+  echo
+  echo "Expected certificate: ${cert_path}"
+  echo "Expected key:         ${key_path}"
+  echo
+
+  if [[ ! -f "$cert_path" || ! -f "$key_path" ]]; then
+    $SUDO mkdir -p "$SSL_CERT_DIR"
+    warn "Certificate or key is missing."
+    echo
+    echo "Create/copy the certificate files first, then rerun this command."
+    echo "For instructions, run: ./install-erpnext-dev.sh local-ssl-guide"
+    echo
+    echo "Quick target paths:"
+    echo "  ${cert_path}"
+    echo "  ${key_path}"
+    echo "============================================================"
+    return 1
+  fi
+
+  log "Installing Nginx if needed"
+  $SUDO apt-get update
+  $SUDO apt-get install -y nginx
+
+  log "Writing local SSL reverse proxy config"
+  write_local_ssl_nginx_config
+
+  log "Enabling local SSL Nginx site"
+  $SUDO ln -sfn "$available_path" "$enabled_path"
+
+  log "Testing Nginx configuration"
+  if ! $SUDO nginx -t; then
+    err "Nginx configuration test failed. Disabling the new SSL site."
+    $SUDO rm -f "$enabled_path"
+    fail "Local SSL configuration failed. Existing ERPNext :8000 access was not changed."
+  fi
+
+  log "Starting/reloading Nginx"
+  $SUDO systemctl enable --now nginx
+  $SUDO systemctl reload nginx
+
+  ok "Local HTTPS reverse proxy configured"
+  echo
+  echo "Test from the host:"
+  echo "  curl -kI https://${SITE_NAME}"
+  echo
+  echo "Open in browser:"
+  echo "  https://${SITE_NAME}"
+  echo
+  echo "Direct Bench access still works:"
+  echo "  http://${SITE_NAME}:8000"
+  echo "  http://${vm_ip}:8000"
+  echo "============================================================"
+}
+
+disable_local_ssl() {
+  require_sudo
+
+  local enabled_path available_path
+  enabled_path="$(ssl_nginx_enabled_path)"
+  available_path="$(ssl_nginx_available_path)"
+
+  echo
+  echo "============================================================"
+  echo "Disable Local SSL / HTTPS"
+  echo "============================================================"
+  echo "This disables the Nginx site symlink only."
+  echo "It keeps certificate files and the saved Nginx config for later reuse."
+  echo
+
+  if [[ -L "$enabled_path" || -f "$enabled_path" ]]; then
+    $SUDO rm -f "$enabled_path"
+    ok "Disabled local SSL site: $enabled_path"
+  else
+    warn "Local SSL site was not enabled."
+  fi
+
+  if command -v nginx >/dev/null 2>&1; then
+    if $SUDO nginx -t; then
+      $SUDO systemctl reload nginx || true
+      ok "Nginx reloaded"
+    else
+      warn "Nginx config test failed after disabling. Check manually: sudo nginx -t"
+    fi
+  fi
+
+  echo
+  echo "Saved config: ${available_path}"
+  echo "Direct Bench access remains available on :8000."
+  echo "============================================================"
+}
+
 show_kvm_fixed_ip_guide() {
   local vm_ip clean_name escaped_site
   vm_ip="$(get_vm_ip)"
@@ -1307,7 +1686,11 @@ show_access_menu() {
     echo "6) Show KVM/libvirt fixed IP guide"
     echo "7) Show multi-environment naming guide"
     echo "8) Show SSL/HTTPS roadmap"
-    echo "9) Back"
+    echo "9) Show local SSL status"
+    echo "10) Show local SSL guide"
+    echo "11) Configure local SSL reverse proxy"
+    echo "12) Disable local SSL reverse proxy"
+    echo "13) Back"
     echo
     read -r -p "Choose an option: " access_choice
 
@@ -1320,7 +1703,11 @@ show_access_menu() {
       6) show_kvm_fixed_ip_guide ;;
       7) show_multi_environment_guide ;;
       8) show_ssl_roadmap_guide ;;
-      9) return 0 ;;
+      9) show_ssl_status ;;
+      10) show_local_ssl_guide ;;
+      11) configure_local_ssl ;;
+      12) disable_local_ssl ;;
+      13) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -3239,10 +3626,14 @@ show_advanced_menu() {
     echo "10) KVM Fixed IP Guide"
     echo "11) Multi-Environment Guide"
     echo "12) SSL/HTTPS Roadmap"
-    echo "13) Start Bench in Foreground"
-    echo "14) Show Service Logs"
-    echo "15) Access Submenu"
-    echo "16) Back"
+    echo "13) Local SSL Status"
+    echo "14) Local SSL Guide"
+    echo "15) Configure Local SSL"
+    echo "16) Disable Local SSL"
+    echo "17) Start Bench in Foreground"
+    echo "18) Show Service Logs"
+    echo "19) Access Submenu"
+    echo "20) Back"
     echo
     read -r -p "Choose an option: " advanced_choice
 
@@ -3259,10 +3650,14 @@ show_advanced_menu() {
       10) show_kvm_fixed_ip_guide ;;
       11) show_multi_environment_guide ;;
       12) show_ssl_roadmap_guide ;;
-      13) run_foreground_start ;;
-      14) show_erpnext_service_logs ;;
-      15) show_access_menu ;;
-      16) return 0 ;;
+      13) show_ssl_status ;;
+      14) show_local_ssl_guide ;;
+      15) configure_local_ssl ;;
+      16) disable_local_ssl ;;
+      17) run_foreground_start ;;
+      18) show_erpnext_service_logs ;;
+      19) show_access_menu ;;
+      20) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -3293,6 +3688,8 @@ Basic actions:
   access        Show browser/IP/hostname instructions and exit
   network-status Show VM IP/MAC/interface and access diagnostics
   hosts-command Show HOST /etc/hosts command only
+  ssl-status    Show local HTTPS reverse proxy status
+  local-ssl-guide Show local mkcert/certificate setup guide
   backup        Create database backup
   backup-files  Create database + files backup
   list-backups  List site backups
@@ -3339,6 +3736,8 @@ Advanced actions:
   kvm-identify        Show KVM VM identification helper using the VM MAC
   host-test           Show host-side access test commands
   ssl-roadmap         Show future SSL/HTTPS implementation roadmap
+  configure-local-ssl Configure Nginx local HTTPS reverse proxy
+  disable-local-ssl   Disable local HTTPS reverse proxy site
   multi-env-guide     Show multiple local environment guide
 
 Options:
@@ -3374,6 +3773,8 @@ Examples:
   ./install-erpnext-dev.sh install-crm
   ./install-erpnext-dev.sh app-status
   ./install-erpnext-dev.sh network-status
+  ./install-erpnext-dev.sh ssl-status
+  ./install-erpnext-dev.sh local-ssl-guide
   ./install-erpnext-dev.sh doctor
 EOF_HELP
 }
@@ -3420,7 +3821,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|configure-local-ssl|disable-local-ssl|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -3487,6 +3888,10 @@ main() {
     hosts-command) show_host_hosts_command ;;
     host-test) show_host_access_test_guide ;;
     ssl-roadmap) show_ssl_roadmap_guide ;;
+    ssl-status) show_ssl_status ;;
+    local-ssl-guide) show_local_ssl_guide ;;
+    configure-local-ssl) configure_local_ssl ;;
+    disable-local-ssl) disable_local_ssl ;;
     multi-env-guide) show_multi_environment_guide ;;
     help|-h|--help) show_help ;;
     *) fail "Unknown action: ${ACTION}" ;;

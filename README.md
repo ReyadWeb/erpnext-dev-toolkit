@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v0.7.0 Beta
+# ERPNext Developer Installer v0.8.0 Beta
 
 A menu-driven Bash installer for creating a local ERPNext / Frappe developer VM on Ubuntu 24.04 or Ubuntu 26.04.
 
@@ -6,7 +6,9 @@ This project is intended for local development, learning, evaluation, and repeat
 
 ## Status
 
-v0.7.0 builds on the verified v0.6.0 public beta and adds VM/networking diagnostics. The full app stack has been tested successfully on a local VM:
+v0.8.0 builds on the verified v0.7.0 VM/networking foundation and adds the first local SSL / HTTPS reverse proxy implementation.
+
+Verified app stack from the v0.5.x/v0.6.x/v0.7.x test cycle:
 
 | App | Status |
 |---|---|
@@ -34,47 +36,16 @@ Recommended flow:
 ./install-erpnext-dev.sh access
 ```
 
-## New in v0.7.0
+## New in v0.8.0
 
-- Added `network-status` command.
-- Added `hosts-command` command.
-- Added `host-test` command.
-- Added `kvm-identify` command.
-- Added `ssl-roadmap` command.
-- Improved Access submenu.
-- Improved Advanced menu networking options.
-- Added host-safe KVM VM identification loop that supports VM names with spaces.
-- Added future SSL / HTTPS roadmap guidance.
-
-## Common commands
-
-```bash
-./install-erpnext-dev.sh status
-./install-erpnext-dev.sh doctor
-./install-erpnext-dev.sh start
-./install-erpnext-dev.sh restart
-./install-erpnext-dev.sh stop
-./install-erpnext-dev.sh access
-./install-erpnext-dev.sh network-status
-./install-erpnext-dev.sh list-apps
-./install-erpnext-dev.sh app-status
-```
-
-## VM and hostname commands
-
-```bash
-./install-erpnext-dev.sh access
-./install-erpnext-dev.sh hosts-command
-./install-erpnext-dev.sh network-status
-./install-erpnext-dev.sh host-test
-./install-erpnext-dev.sh kvm-identify
-./install-erpnext-dev.sh kvm-guide
-./install-erpnext-dev.sh multi-env-guide
-```
-
-`network-status` shows the VM hostname, primary interface, MAC address, IP address, gateway, direct URL, friendly URL, and the host commands needed to map `erp.test`.
-
-`kvm-identify` prints a host-side libvirt loop that correctly handles VM names with spaces.
+- Added `ssl-status` command.
+- Added `local-ssl-guide` command.
+- Added `configure-local-ssl` command.
+- Added `disable-local-ssl` command.
+- Added guarded Nginx reverse proxy configuration for local HTTPS.
+- Added mkcert/local CA workflow guidance.
+- Kept direct Bench access on `:8000` unchanged.
+- Added SSL options to Access and Advanced menus.
 
 ## Browser access
 
@@ -90,11 +61,71 @@ Friendly local access:
 http://erp.test:8000
 ```
 
+Optional local HTTPS access after SSL setup:
+
+```text
+https://erp.test
+```
+
 The friendly URL requires a host `/etc/hosts` entry on your Linux Mint / Ubuntu host:
 
 ```bash
 sudo sed -i '/[[:space:]]erp\.test$/d' /etc/hosts
 echo "VM_IP erp.test" | sudo tee -a /etc/hosts
+```
+
+## Local SSL / HTTPS
+
+v0.8.0 adds a local HTTPS reverse proxy foundation. It does not remove or replace the existing development service.
+
+Architecture:
+
+```text
+Browser HTTPS :443
+  -> Nginx inside the VM
+    -> Bench web on 127.0.0.1:8000
+    -> Socket.io on 127.0.0.1:9000
+```
+
+Commands:
+
+```bash
+./install-erpnext-dev.sh ssl-status
+./install-erpnext-dev.sh local-ssl-guide
+./install-erpnext-dev.sh configure-local-ssl
+./install-erpnext-dev.sh disable-local-ssl
+```
+
+Expected certificate paths inside the VM:
+
+```text
+/etc/erpnext-dev-ssl/erp.test.crt
+/etc/erpnext-dev-ssl/erp.test.key
+```
+
+Recommended local certificate workflow:
+
+1. Use `mkcert` on the host machine.
+2. Trust the local CA on the host/browser machine.
+3. Generate a certificate for `erp.test` and the VM IP.
+4. Copy the certificate and key into the VM.
+5. Run `configure-local-ssl`.
+
+The certificate must be trusted by the host browser machine. A certificate trusted only inside the VM is not enough.
+
+## Common commands
+
+```bash
+./install-erpnext-dev.sh status
+./install-erpnext-dev.sh doctor
+./install-erpnext-dev.sh start
+./install-erpnext-dev.sh restart
+./install-erpnext-dev.sh stop
+./install-erpnext-dev.sh access
+./install-erpnext-dev.sh network-status
+./install-erpnext-dev.sh ssl-status
+./install-erpnext-dev.sh list-apps
+./install-erpnext-dev.sh app-status
 ```
 
 ## Optional app library
@@ -110,6 +141,18 @@ echo "VM_IP erp.test" | sudo tee -a /etc/hosts
 
 Helpdesk requires Telephony. The installer handles this dependency automatically.
 
+## VM and hostname commands
+
+```bash
+./install-erpnext-dev.sh access
+./install-erpnext-dev.sh hosts-command
+./install-erpnext-dev.sh network-status
+./install-erpnext-dev.sh host-test
+./install-erpnext-dev.sh kvm-identify
+./install-erpnext-dev.sh kvm-guide
+./install-erpnext-dev.sh multi-env-guide
+```
+
 ## Backups and maintenance
 
 ```bash
@@ -122,28 +165,8 @@ Helpdesk requires Telephony. The installer handles this dependency automatically
 ./install-erpnext-dev.sh clear-cache
 ```
 
-## SSL / HTTPS direction
-
-SSL is planned but not automated in v0.7.0. The future local HTTPS plan is:
-
-```text
-Browser HTTPS :443
-  -> Nginx reverse proxy inside the VM
-    -> Bench web on 127.0.0.1:8000
-    -> Socket.io on 127.0.0.1:9000
-```
-
-Planned future commands:
-
-```bash
-./install-erpnext-dev.sh ssl-status
-./install-erpnext-dev.sh local-ssl-guide
-./install-erpnext-dev.sh configure-local-ssl
-./install-erpnext-dev.sh disable-local-ssl
-```
-
-Production SSL should be handled in a separate production track, not mixed into the current developer `bench start` workflow.
-
 ## Production warning
 
-This script is for local developer VM use. It does not yet configure a production architecture with Nginx, Supervisor, hardened MariaDB/Redis, firewall rules, SSL renewal, monitoring, or disaster recovery.
+This script is for local developer VM use. It does not yet configure a production architecture with production Nginx/Supervisor workers, hardened MariaDB/Redis, firewall rules, public-domain SSL renewal, monitoring, or disaster recovery.
+
+Production should become a separate track, likely with a future `install-erpnext-prod.sh` script.
