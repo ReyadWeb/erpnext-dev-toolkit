@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.5.7"
+SCRIPT_VERSION="0.5.8"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -199,6 +199,25 @@ show_access_when_ready() {
   fi
 }
 
+show_ready_summary() {
+  local vm_ip
+  vm_ip="$(get_vm_ip)"
+
+  echo
+  echo "============================================================"
+  echo "ERPNext Ready"
+  echo "============================================================"
+  echo "ERPNext is running and the required development ports are listening."
+  echo
+  echo "Open one of these URLs:"
+  echo "  Direct IP:    http://${vm_ip}:8000"
+  echo "  Friendly URL: http://${SITE_NAME}:8000"
+  echo
+  echo "Friendly URL note: your HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."
+  echo "For full access instructions, run: ./install-erpnext-dev.sh access"
+  echo "============================================================"
+}
+
 path_is_dir() {
   local path="$1"
 
@@ -329,7 +348,7 @@ start_erpnext_service() {
   if $SUDO systemctl start "${ERPNEXT_SERVICE_NAME}"; then
     ok "ERPNext service start command completed"
     if wait_for_erpnext_ready; then
-      show_access_instructions
+      show_ready_summary
     else
       return 1
     fi
@@ -367,7 +386,7 @@ restart_erpnext_service() {
   if $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}"; then
     ok "ERPNext service restart command completed"
     if wait_for_erpnext_ready; then
-      show_access_instructions
+      show_ready_summary
     else
       return 1
     fi
@@ -1515,8 +1534,9 @@ show_status_menu() {
     echo "2) Runtime Status"
     echo "3) Installation Status"
     echo "4) Service / Autostart Status"
-    echo "5) Full Health Report"
-    echo "6) Back"
+    echo "5) Optional App Status"
+    echo "6) Full Health Report"
+    echo "7) Back"
     echo
     read -r -p "Choose an option: " status_choice
 
@@ -1525,8 +1545,9 @@ show_status_menu() {
       2) run_runtime_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
       3) run_installation_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
       4) run_service_summary; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      5) run_full_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      6) return 0 ;;
+      5) run_app_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
+      6) run_full_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
+      7) return 0 ;;
       *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
     esac
   done
@@ -1631,6 +1652,27 @@ run_full_status() {
   else
     status_line "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
   fi
+
+  local optional_app optional_label optional_item
+  local optional_apps=(
+    "crm:Frappe CRM"
+    "hrms:Frappe HR / HRMS"
+    "telephony:Frappe Telephony"
+    "helpdesk:Frappe Helpdesk"
+    "insights:Frappe Insights"
+  )
+
+  for optional_item in "${optional_apps[@]}"; do
+    optional_app="${optional_item%%:*}"
+    optional_label="${optional_item#*:}"
+    if site_app_installed "$optional_app"; then
+      status_line "Optional: ${optional_app}" "OK" "${optional_label} installed"
+    elif app_folder_exists "$bench_dir" "$optional_app"; then
+      status_line "Optional: ${optional_app}" "WARN" "downloaded but not installed"
+    else
+      status_line "Optional: ${optional_app}" "INFO" "not installed"
+    fi
+  done
 
   local common_config="${bench_dir}/sites/common_site_config.json"
   if path_is_file "$common_config"; then
@@ -1922,12 +1964,16 @@ for token in raw.replace("\r", "\n").replace(",", "\n").split():
 items = [x for x in items if x in valid_set]
 
 ordered = []
-for core in ("frappe", "erpnext"):
-    if core in valid_set and core not in ordered:
-        ordered.append(core)
+preferred = ("frappe", "erpnext", "crm", "hrms", "telephony", "helpdesk", "insights")
 
+# Keep core and curated apps in a predictable order for cleaner diagnostics.
+for name in preferred:
+    if name in valid_set and name not in ordered:
+        ordered.append(name)
+
+# Preserve any custom app entries after the curated apps.
 for item in items:
-    if item not in ordered:
+    if item in valid_set and item not in ordered:
         ordered.append(item)
 
 if required and required in valid_set and required not in ordered:
@@ -1989,6 +2035,59 @@ ensure_app_in_apps_txt() {
   run_as_frappe "cd ${bench_q} && grep -qxF ${app_q} sites/apps.txt" || fail "Could not register ${app_name} in sites/apps.txt."
 
   ok "${app_name} is registered in sites/apps.txt"
+}
+
+app_in_apps_txt() {
+  local app="$1"
+  local bench_dir bench_q app_q
+  bench_dir="$(active_bench_dir)"
+  bench_q="$(printf '%q' "$bench_dir")"
+  app_q="$(printf '%q' "$app")"
+
+  path_is_file "${bench_dir}/sites/apps.txt" || return 1
+  run_as_frappe "cd ${bench_q} && grep -qxF ${app_q} sites/apps.txt" >/dev/null 2>&1
+}
+
+run_app_status() {
+  require_sudo
+
+  local bench_dir app label
+  bench_dir="$(require_site_environment)" || return 1
+
+  normalize_apps_txt "$bench_dir" "" "true" || warn "Could not normalize sites/apps.txt before app status."
+
+  echo
+  echo "============================================================"
+  echo "Optional Frappe App Status"
+  echo "============================================================"
+  echo "Site: ${SITE_NAME}"
+  echo "Bench: ${bench_dir}"
+  echo
+
+  local app_items=(
+    "crm:Frappe CRM"
+    "hrms:Frappe HR / HRMS"
+    "telephony:Frappe Telephony"
+    "helpdesk:Frappe Helpdesk"
+    "insights:Frappe Insights"
+  )
+
+  for item in "${app_items[@]}"; do
+    app="${item%%:*}"
+    label="${item#*:}"
+
+    if site_app_installed "$app"; then
+      status_line "$label" "OK" "installed on ${SITE_NAME}"
+    elif app_folder_exists "$bench_dir" "$app" && app_in_apps_txt "$app"; then
+      status_line "$label" "WARN" "downloaded and registered, not installed on ${SITE_NAME}"
+    elif app_folder_exists "$bench_dir" "$app"; then
+      status_line "$label" "WARN" "downloaded, not registered in sites/apps.txt"
+    else
+      status_line "$label" "INFO" "not installed"
+    fi
+  done
+
+  echo "============================================================"
 }
 
 show_installed_apps() {
@@ -2924,13 +3023,14 @@ show_advanced_menu() {
     echo "4) Autostart / Service Manager"
     echo "5) Backup / Maintenance"
     echo "6) App Library"
-    echo "7) Full Health Report"
-    echo "8) KVM Fixed IP Guide"
-    echo "9) Multi-Environment Guide"
-    echo "10) Start Bench in Foreground"
-    echo "11) Show Service Logs"
-    echo "12) Access Submenu"
-    echo "13) Back"
+    echo "7) Optional App Status"
+    echo "8) Full Health Report"
+    echo "9) KVM Fixed IP Guide"
+    echo "10) Multi-Environment Guide"
+    echo "11) Start Bench in Foreground"
+    echo "12) Show Service Logs"
+    echo "13) Access Submenu"
+    echo "14) Back"
     echo
     read -r -p "Choose an option: " advanced_choice
 
@@ -2941,13 +3041,14 @@ show_advanced_menu() {
       4) show_service_menu ;;
       5) run_backup_maintenance_menu ;;
       6) show_app_library_menu ;;
-      7) run_full_status ;;
-      8) show_kvm_fixed_ip_guide ;;
-      9) show_multi_environment_guide ;;
-      10) run_foreground_start ;;
-      11) show_erpnext_service_logs ;;
-      12) show_access_menu ;;
-      13) return 0 ;;
+      7) run_app_status ;;
+      8) run_full_status ;;
+      9) show_kvm_fixed_ip_guide ;;
+      10) show_multi_environment_guide ;;
+      11) run_foreground_start ;;
+      12) show_erpnext_service_logs ;;
+      13) show_access_menu ;;
+      14) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -2982,6 +3083,7 @@ Basic actions:
   app-library   Show optional Frappe app library
   apps          Alias for app-library
   list-apps     Show installed and downloaded Frappe apps
+  app-status    Show optional Frappe app install status
   maintenance   Show maintenance menu
   menu          Show interactive menu
   help          Show this help
@@ -3051,6 +3153,7 @@ Examples:
   ./install-erpnext-dev.sh backup
   ./install-erpnext-dev.sh app-library
   ./install-erpnext-dev.sh install-crm
+  ./install-erpnext-dev.sh app-status
   ./install-erpnext-dev.sh doctor
 EOF_HELP
 }
@@ -3097,7 +3200,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|multi-env-guide|app-library|apps|list-apps|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -3130,6 +3233,7 @@ main() {
     backup-menu) run_backup_maintenance_menu ;;
     app-library|apps) show_app_library_menu ;;
     list-apps) show_installed_apps ;;
+    app-status) run_app_status ;;
     install-crm) install_app_profile crm ;;
     install-hrms) install_app_profile hrms ;;
     install-helpdesk) install_app_profile helpdesk ;;

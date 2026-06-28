@@ -1,16 +1,29 @@
 # ERPNext Developer Installer
 
+## v0.5.8 Notes
 
-## v0.5.7 Notes
+v0.5.8 is a polish release after the full App Library validation. It keeps the v0.5.8 Helpdesk → Telephony dependency handling and adds cleaner status UX for public beta preparation.
+
+What changed:
+
+- Added `./install-erpnext-dev.sh app-status` for a compact optional-app status report.
+- Added optional app status lines to `doctor` / full health report.
+- Reduced repeated full browser instructions after service start/restart; the script now shows a compact ready summary and points users to `./install-erpnext-dev.sh access` for full instructions.
+- Normalizes `sites/apps.txt` in a predictable curated order: `frappe`, `erpnext`, `crm`, `hrms`, `telephony`, `helpdesk`, `insights`, then custom apps.
+- Added `ROADMAP.md` to document future development toward public beta and v1.0.
+
+
+
+## v0.5.8 Notes
 
 This release fixes the App Registry Repair command and hardens `sites/apps.txt` normalization by using an external temporary Python repair script instead of embedding a Python here-document inside a generated shell command. This prevents `PY_APP_REGISTRY` here-document parsing errors and makes `./install-erpnext-dev.sh repair-app-registry` available from command mode.
 
-## v0.5.7 reliability update
+## v0.5.8 reliability update
 
 This release improves App Library resume behavior when an app folder was downloaded but the app was not registered in `sites/apps.txt`. The installer now checks downloaded apps against both site installation and Bench registration, safely adds a downloaded app to `sites/apps.txt` before `install-app`, and removes the noisy integer comparison warning in the app listing screen.
 
 
-## v0.5.7 Reliability Fix
+## v0.5.8 Reliability Fix
 
 This release hardens the internal `run_as_frappe` command wrapper by running Frappe-user commands through a temporary shell script instead of passing long multi-line command strings directly through `bash -lc`. This prevents command-collapsing issues such as `set -eexport` or `if ... then` syntax errors during App Library installs.
 
@@ -27,21 +40,22 @@ This project is designed for local developer VMs, test labs, and evaluation envi
 ## Current Version
 
 ```text
-v0.5.7
+v0.5.8
 ```
 
-This version adds an App Library on top of the stable local VM installer, backup/maintenance workflow, and service readiness checks. The App Library can show installed apps and install selected optional Frappe apps such as CRM, HRMS, Helpdesk, and Insights.
+This version builds on the verified App Library release with polish for status reporting, restart UX, and public-beta planning. It can show installed apps, summarize optional app status, and install selected Frappe apps such as CRM, HRMS, Telephony, Helpdesk, and Insights.
 
 ---
 
-## v0.5.7 App Library
+## v0.5.8 App Library
 
-v0.5.7 adds an optional App Library for installing common Frappe ecosystem apps into the local ERPNext developer VM.
+v0.5.8 adds an optional App Library for installing common Frappe ecosystem apps into the local ERPNext developer VM.
 
 Included app profiles:
 
 - Frappe CRM
 - Frappe HR / HRMS
+- Frappe Telephony
 - Frappe Helpdesk
 - Frappe Insights
 - Custom trusted Frappe app from Git URL
@@ -148,9 +162,9 @@ http://VM_IP:8000
 ---
 
 
-### v0.5.7 readiness polish
+### v0.5.8 readiness polish
 
-v0.5.7 makes service start and restart clearer. After `start`, `restart`, `service-start`, or `service-restart`, the script shows visible waiting output while checking required development ports. This prevents confusion when systemd reports the service as running but Bench is still starting internally.
+v0.5.8 makes service start and restart clearer. After `start`, `restart`, `service-start`, or `service-restart`, the script shows visible waiting output while checking required development ports. This prevents confusion when systemd reports the service as running but Bench is still starting internally.
 
 ### v0.4.1 backup listing polish
 
@@ -242,7 +256,7 @@ sudo apt update && sudo apt install -y curl ca-certificates && curl -fsSL "https
 
 ## Menu Layout
 
-v0.5.7 keeps the main menu simple:
+v0.5.8 keeps the main menu simple:
 
 ```text
 1) Recommended Setup
@@ -422,9 +436,9 @@ Incomplete               → run repair or perform a clean setup
 ```
 
 
-### v0.5.7 reliability note
+### v0.5.8 reliability note
 
-v0.5.7 fixes a shell-prefix formatting issue in App Library commands. In v0.5.1, some `sudo -iu frappe bash -lc` calls could collapse environment setup commands together, causing errors such as `syntax error near unexpected token then`. The command runner now uses a semicolon-separated Frappe shell prefix so `bench`, `node`, `npm`, and `yarn` commands run reliably as the `frappe` user.
+v0.5.8 fixes a shell-prefix formatting issue in App Library commands. In v0.5.1, some `sudo -iu frappe bash -lc` calls could collapse environment setup commands together, causing errors such as `syntax error near unexpected token then`. The command runner now uses a semicolon-separated Frappe shell prefix so `bench`, `node`, `npm`, and `yarn` commands run reliably as the `frappe` user.
 
 ## App Library
 
@@ -561,7 +575,7 @@ Maintenance menu options:
 
 ## Autostart on VM Boot
 
-v0.5.7 can create a local development systemd service:
+v0.5.8 can create a local development systemd service:
 
 ```text
 erpnext-dev.service
@@ -810,7 +824,7 @@ Do not expose a local `bench start` development server directly to the public in
 ---
 
 
-## v0.5.7 App Registry Reliability
+## v0.5.8 App Registry Reliability
 
 This release hardens the App Library after testing interrupted optional app installs. It adds automatic normalization of `sites/apps.txt` before app listing, backup, and app installation. This repairs common registry damage such as concatenated entries like `erpnextcrm`, ensures one app per line, and verifies downloaded app folders are registered correctly.
 
@@ -827,7 +841,7 @@ The backup workflow now treats Bench backup errors, tracebacks, and module impor
 This project is licensed under the GPL-3.0 license.
 
 
-## v0.5.7 Notes
+## v0.5.8 Notes
 
 This release adds dependency handling for Frappe Helpdesk. Helpdesk requires the Frappe Telephony app, so the installer now downloads, registers, and installs Telephony before installing Helpdesk when needed.
 
@@ -843,3 +857,8 @@ Relevant environment override:
 ```bash
 TELEPHONY_BRANCH=develop
 ```
+
+
+## Roadmap
+
+Future development is tracked in `ROADMAP.md`. The next milestones focus on fresh-VM regression, public beta documentation, VM networking improvements, backup/restore hardening, and a separate production track later.
