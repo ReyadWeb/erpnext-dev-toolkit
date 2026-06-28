@@ -1,11 +1,16 @@
 # ERPNext Developer Installer
 
-## v0.5.5 reliability update
+
+## v0.5.6 Notes
+
+This release fixes the App Registry Repair command and hardens `sites/apps.txt` normalization by using an external temporary Python repair script instead of embedding a Python here-document inside a generated shell command. This prevents `PY_APP_REGISTRY` here-document parsing errors and makes `./install-erpnext-dev.sh repair-app-registry` available from command mode.
+
+## v0.5.6 reliability update
 
 This release improves App Library resume behavior when an app folder was downloaded but the app was not registered in `sites/apps.txt`. The installer now checks downloaded apps against both site installation and Bench registration, safely adds a downloaded app to `sites/apps.txt` before `install-app`, and removes the noisy integer comparison warning in the app listing screen.
 
 
-## v0.5.5 Reliability Fix
+## v0.5.6 Reliability Fix
 
 This release hardens the internal `run_as_frappe` command wrapper by running Frappe-user commands through a temporary shell script instead of passing long multi-line command strings directly through `bash -lc`. This prevents command-collapsing issues such as `set -eexport` or `if ... then` syntax errors during App Library installs.
 
@@ -22,16 +27,16 @@ This project is designed for local developer VMs, test labs, and evaluation envi
 ## Current Version
 
 ```text
-v0.5.5
+v0.5.6
 ```
 
 This version adds an App Library on top of the stable local VM installer, backup/maintenance workflow, and service readiness checks. The App Library can show installed apps and install selected optional Frappe apps such as CRM, HRMS, Helpdesk, and Insights.
 
 ---
 
-## v0.5.5 App Library
+## v0.5.6 App Library
 
-v0.5.5 adds an optional App Library for installing common Frappe ecosystem apps into the local ERPNext developer VM.
+v0.5.6 adds an optional App Library for installing common Frappe ecosystem apps into the local ERPNext developer VM.
 
 Included app profiles:
 
@@ -143,9 +148,9 @@ http://VM_IP:8000
 ---
 
 
-### v0.5.5 readiness polish
+### v0.5.6 readiness polish
 
-v0.5.5 makes service start and restart clearer. After `start`, `restart`, `service-start`, or `service-restart`, the script shows visible waiting output while checking required development ports. This prevents confusion when systemd reports the service as running but Bench is still starting internally.
+v0.5.6 makes service start and restart clearer. After `start`, `restart`, `service-start`, or `service-restart`, the script shows visible waiting output while checking required development ports. This prevents confusion when systemd reports the service as running but Bench is still starting internally.
 
 ### v0.4.1 backup listing polish
 
@@ -237,7 +242,7 @@ sudo apt update && sudo apt install -y curl ca-certificates && curl -fsSL "https
 
 ## Menu Layout
 
-v0.5.5 keeps the main menu simple:
+v0.5.6 keeps the main menu simple:
 
 ```text
 1) Recommended Setup
@@ -417,9 +422,9 @@ Incomplete               → run repair or perform a clean setup
 ```
 
 
-### v0.5.5 reliability note
+### v0.5.6 reliability note
 
-v0.5.5 fixes a shell-prefix formatting issue in App Library commands. In v0.5.1, some `sudo -iu frappe bash -lc` calls could collapse environment setup commands together, causing errors such as `syntax error near unexpected token then`. The command runner now uses a semicolon-separated Frappe shell prefix so `bench`, `node`, `npm`, and `yarn` commands run reliably as the `frappe` user.
+v0.5.6 fixes a shell-prefix formatting issue in App Library commands. In v0.5.1, some `sudo -iu frappe bash -lc` calls could collapse environment setup commands together, causing errors such as `syntax error near unexpected token then`. The command runner now uses a semicolon-separated Frappe shell prefix so `bench`, `node`, `npm`, and `yarn` commands run reliably as the `frappe` user.
 
 ## App Library
 
@@ -556,7 +561,7 @@ Maintenance menu options:
 
 ## Autostart on VM Boot
 
-v0.5.5 can create a local development systemd service:
+v0.5.6 can create a local development systemd service:
 
 ```text
 erpnext-dev.service
@@ -805,7 +810,7 @@ Do not expose a local `bench start` development server directly to the public in
 ---
 
 
-## v0.5.5 App Registry Reliability
+## v0.5.6 App Registry Reliability
 
 This release hardens the App Library after testing interrupted optional app installs. It adds automatic normalization of `sites/apps.txt` before app listing, backup, and app installation. This repairs common registry damage such as concatenated entries like `erpnextcrm`, ensures one app per line, and verifies downloaded app folders are registered correctly.
 

@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.5.5"
+SCRIPT_VERSION="0.5.6"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1844,7 +1844,8 @@ normalize_apps_txt() {
   local bench_dir="$1"
   local required_app="${2:-}"
   local quiet="${3:-false}"
-  local bench_q required_q quiet_q
+  local repair_py
+  local bench_q repair_py_q required_q quiet_q
 
   bench_q="$(printf '%q' "$bench_dir")"
   required_q="$(printf '%q' "$required_app")"
@@ -1854,16 +1855,15 @@ normalize_apps_txt() {
     log "Normalizing Bench app registry: sites/apps.txt"
   fi
 
-  run_as_frappe "
-set -e
-cd ${bench_q}
-mkdir -p sites
-python - ${required_q} ${quiet_q} <<'PY_APP_REGISTRY'
+  repair_py="$(mktemp /tmp/erpnext-dev-app-registry.XXXXXX.py)" || return 1
+
+  cat > "$repair_py" <<'PY_APP_REGISTRY'
 from pathlib import Path
 import sys
 
 required = sys.argv[1] if len(sys.argv) > 1 else ""
 quiet = (sys.argv[2].lower() == "true") if len(sys.argv) > 2 else False
+
 apps_dir = Path("apps")
 apps_txt = Path("sites/apps.txt")
 apps_txt.parent.mkdir(parents=True, exist_ok=True)
@@ -1871,22 +1871,24 @@ apps_txt.parent.mkdir(parents=True, exist_ok=True)
 valid = []
 if apps_dir.exists():
     for d in sorted([x for x in apps_dir.iterdir() if x.is_dir()], key=lambda x: x.name):
-        # Frappe apps normally have a Python package with the same name as the app folder.
-        # This avoids registering random incomplete folders.
+        # A Frappe app folder normally contains a Python package with the same name.
+        # setup.py / pyproject.toml are fallback signals for app repositories.
         if (d / d.name).is_dir() or (d / "pyproject.toml").exists() or (d / "setup.py").exists():
             valid.append(d.name)
-valid_set = set(valid)
 
+valid_set = set(valid)
 raw = apps_txt.read_text() if apps_txt.exists() else ""
 original = raw
 
-# Tokenize and repair common concatenation damage such as "erpnextcrm".
-# The segmentation pass uses the discovered app folders, so it also supports future apps.
 names_by_len = sorted(valid, key=len, reverse=True)
 
 def split_concat(token: str):
+    token = token.strip()
+    if not token:
+        return []
     if token in valid_set:
         return [token]
+
     out = []
     i = 0
     while i < len(token):
@@ -1895,23 +1897,22 @@ def split_concat(token: str):
             if token.startswith(name, i):
                 match = name
                 break
-        if not match:
+        if match is None:
+            # Unknown token. Returning it allows filtering below to drop it safely.
             return [token]
         out.append(match)
         i += len(match)
-    return out or [token]
+    return out
 
 items = []
 for token in raw.replace("\r", "\n").replace(",", "\n").split():
-    for item in split_concat(token.strip()):
+    for item in split_concat(token):
         if item and item not in items:
             items.append(item)
 
-# Keep only app names that have a matching local app folder. This prevents broken entries
-# like erpnextcrm from being imported by Frappe.
+# Drop invalid entries like erpnextcrm. Frappe tries to import every entry in apps.txt.
 items = [x for x in items if x in valid_set]
 
-# Ensure core apps are first when present.
 ordered = []
 for core in ("frappe", "erpnext"):
     if core in valid_set and core not in ordered:
@@ -1921,12 +1922,10 @@ for item in items:
     if item not in ordered:
         ordered.append(item)
 
-# Ensure the app currently being installed is registered if its folder exists.
 if required and required in valid_set and required not in ordered:
     ordered.append(required)
 
-# Include any other valid downloaded app folders after known/previous entries.
-# This repairs interrupted get-app states where the folder exists but apps.txt missed it.
+# Register valid downloaded apps so partially interrupted get-app states are recoverable.
 for item in valid:
     if item not in ordered:
         ordered.append(item)
@@ -1934,7 +1933,7 @@ for item in valid:
 new = "\n".join(ordered) + ("\n" if ordered else "")
 if new != original:
     if apps_txt.exists():
-        backup = apps_txt.with_name(f"apps.txt.bak.registry-repair")
+        backup = apps_txt.with_name("apps.txt.bak.registry-repair")
         backup.write_text(original)
     apps_txt.write_text(new)
     if not quiet:
@@ -1944,9 +1943,16 @@ else:
     if not quiet:
         print("sites/apps.txt already normalized")
 PY_APP_REGISTRY
-" || return 1
 
-  return 0
+  chmod 644 "$repair_py" 2>/dev/null || true
+
+  repair_py_q="$(printf '%q' "$repair_py")"
+
+  run_as_frappe "set -e; cd ${bench_q}; python3 ${repair_py_q} ${required_q} ${quiet_q}"
+  local rc=$?
+
+  rm -f "$repair_py" 2>/dev/null || true
+  return "$rc"
 }
 
 repair_app_registry() {
@@ -3014,7 +3020,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|multi-env-guide|app-library|apps|list-apps|install-crm|install-hrms|install-helpdesk|install-insights|install-custom-app)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|multi-env-guide|app-library|apps|list-apps|install-crm|install-hrms|install-helpdesk|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -3052,6 +3058,7 @@ main() {
     install-helpdesk) install_app_profile helpdesk ;;
     install-insights) install_app_profile insights ;;
     install-custom-app) install_custom_app_interactive ;;
+    repair-app-registry) repair_app_registry ;;
     backup) create_site_backup false ;;
     backup-files) create_site_backup true ;;
     list-backups|backups) list_site_backups ;;
