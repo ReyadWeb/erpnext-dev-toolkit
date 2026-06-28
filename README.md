@@ -1,118 +1,113 @@
-# ERPNext Developer Installer v0.8.1 Beta
+# ERPNext Developer Installer v0.8.2
 
-A menu-driven Bash installer for creating a local ERPNext / Frappe developer VM on Ubuntu 24.04 or Ubuntu 26.04.
-
-This project is intended for local development, learning, evaluation, and repeatable VM setup. It is not a production installer.
+Public beta local developer installer for ERPNext/Frappe environments on Ubuntu VMs.
 
 ## Status
 
-v0.8.1 builds on the verified v0.7.0 VM/networking foundation and adds the local SSL / HTTPS reverse proxy implementation with improved SSL diagnostics and self-signed test certificate helper.
+**Beta-quality for local developer VM use.**
 
-Verified app stack from the v0.5.x/v0.6.x/v0.7.x test cycle:
+This script is intended for local learning, development, testing, and VM-based ERPNext experimentation. It is **not a production installer**.
 
-| App | Status |
-|---|---|
-| Frappe | Verified |
-| ERPNext | Verified |
-| Frappe CRM | Verified |
-| Frappe HR / HRMS | Verified |
-| Frappe Telephony | Verified |
-| Frappe Helpdesk | Verified |
-| Frappe Insights | Verified |
+## Verified local stack
+
+The installer has been validated with:
+
+- Frappe Framework v16
+- ERPNext v16
+- Frappe CRM
+- Frappe HR / HRMS
+- Frappe Telephony
+- Frappe Helpdesk
+- Frappe Insights
+- Local systemd service/autostart
+- Backups and maintenance commands
+- App registry repair
+- KVM/libvirt networking diagnostics
+- Local HTTPS via Nginx reverse proxy
 
 ## Quick start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh
+curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh" -o install-erpnext-dev.sh
 chmod +x install-erpnext-dev.sh
-./install-erpnext-dev.sh
+./install-erpnext-dev.sh setup
 ```
 
-Recommended flow:
+Then start ERPNext:
 
 ```bash
-./install-erpnext-dev.sh setup
 ./install-erpnext-dev.sh start
 ./install-erpnext-dev.sh access
 ```
 
-## New in v0.8.1
+## Core commands
 
-- Improved `ssl-status` with Nginx service, ports, cert/key permissions, certificate details, and local HTTP tests.
-- Added `create-self-signed-local-cert` command for quick local SSL testing.
-- Expanded `local-ssl-guide` with self-signed and mkcert workflows.
-- Added clearer host-side curl tests and rollback instructions.
-- Preserved v0.8.0 reverse proxy behavior.
-
-## Added in v0.8.0
-
-- Added `ssl-status` command.
-- Added `local-ssl-guide` command.
-- Added `configure-local-ssl` command.
-- Added `disable-local-ssl` command.
-- Added guarded Nginx reverse proxy configuration for local HTTPS.
-- Added mkcert/local CA workflow guidance.
-- Kept direct Bench access on `:8000` unchanged.
-- Added SSL options to Access and Advanced menus.
-
-## Browser access
-
-Direct IP access:
-
-```text
-http://VM_IP:8000
+```bash
+./install-erpnext-dev.sh status
+./install-erpnext-dev.sh doctor
+./install-erpnext-dev.sh start
+./install-erpnext-dev.sh stop
+./install-erpnext-dev.sh restart
+./install-erpnext-dev.sh access
+./install-erpnext-dev.sh network-status
 ```
 
-Friendly local access:
+## App Library
+
+```bash
+./install-erpnext-dev.sh app-library
+./install-erpnext-dev.sh app-status
+./install-erpnext-dev.sh install-crm
+./install-erpnext-dev.sh install-hrms
+./install-erpnext-dev.sh install-helpdesk
+./install-erpnext-dev.sh install-insights
+./install-erpnext-dev.sh list-apps
+```
+
+Helpdesk dependency handling includes Telephony.
+
+## Local HTTPS / SSL
+
+v0.8.x adds optional local HTTPS while keeping direct Bench access unchanged.
+
+Current direct access remains available:
 
 ```text
 http://erp.test:8000
+http://VM_IP:8000
 ```
 
-Optional local HTTPS access after SSL setup:
+Optional local HTTPS target:
 
 ```text
 https://erp.test
 ```
 
-The friendly URL requires a host `/etc/hosts` entry on your Linux Mint / Ubuntu host:
-
-```bash
-sudo sed -i '/[[:space:]]erp\.test$/d' /etc/hosts
-echo "VM_IP erp.test" | sudo tee -a /etc/hosts
-```
-
-## Local SSL / HTTPS
-
-v0.8.1 adds a local HTTPS reverse proxy foundation. It does not remove or replace the existing development service.
-
 Architecture:
 
 ```text
 Browser HTTPS :443
-  -> Nginx inside the VM
-    -> Bench web on 127.0.0.1:8000
-    -> Socket.io on 127.0.0.1:9000
+  -> Nginx inside VM
+    -> Bench web 127.0.0.1:8000
+    -> Socket.io 127.0.0.1:9000
 ```
 
-Commands:
+SSL commands:
 
 ```bash
 ./install-erpnext-dev.sh ssl-status
 ./install-erpnext-dev.sh local-ssl-guide
 ./install-erpnext-dev.sh create-self-signed-local-cert
 ./install-erpnext-dev.sh configure-local-ssl
+./install-erpnext-dev.sh verify-local-ssl
+./install-erpnext-dev.sh mkcert-guide
+./install-erpnext-dev.sh ssl-rollback-guide
 ./install-erpnext-dev.sh disable-local-ssl
 ```
 
-Expected certificate paths inside the VM:
+### Quick self-signed test
 
-```text
-/etc/erpnext-dev-ssl/erp.test.crt
-/etc/erpnext-dev-ssl/erp.test.key
-```
-
-Quick local certificate workflow for testing:
+Inside the VM:
 
 ```bash
 ./install-erpnext-dev.sh create-self-signed-local-cert
@@ -120,53 +115,33 @@ Quick local certificate workflow for testing:
 ./install-erpnext-dev.sh ssl-status
 ```
 
-This proves HTTPS works, but browsers will show a warning because the certificate is self-signed.
-
-Recommended trusted local certificate workflow:
-
-1. Use `mkcert` on the host machine.
-2. Trust the local CA on the host/browser machine.
-3. Generate a certificate for `erp.test` and the VM IP.
-4. Copy the certificate and key into the VM.
-5. Run `configure-local-ssl`.
-
-The certificate must be trusted by the host browser machine. A certificate trusted only inside the VM is not enough.
-
-## Common commands
+From the host:
 
 ```bash
-./install-erpnext-dev.sh status
-./install-erpnext-dev.sh doctor
-./install-erpnext-dev.sh start
-./install-erpnext-dev.sh restart
-./install-erpnext-dev.sh stop
-./install-erpnext-dev.sh access
+curl -I http://erp.test
+curl -kI https://erp.test
+curl -I http://erp.test:8000
+```
+
+Expected:
+
+```text
+http://erp.test        -> 301 redirect to https://erp.test/
+https://erp.test       -> 200 OK through Nginx HTTPS reverse proxy
+http://erp.test:8000   -> 200 OK direct Bench fallback
+```
+
+Self-signed certificates require browser exceptions. For trusted browser SSL, use:
+
+```bash
+./install-erpnext-dev.sh mkcert-guide
+```
+
+## KVM/libvirt networking
+
+```bash
 ./install-erpnext-dev.sh network-status
-./install-erpnext-dev.sh ssl-status
-./install-erpnext-dev.sh create-self-signed-local-cert
-./install-erpnext-dev.sh list-apps
-./install-erpnext-dev.sh app-status
-```
-
-## Optional app library
-
-```bash
-./install-erpnext-dev.sh install-crm
-./install-erpnext-dev.sh install-hrms
-./install-erpnext-dev.sh install-helpdesk
-./install-erpnext-dev.sh install-insights
-./install-erpnext-dev.sh list-apps
-./install-erpnext-dev.sh app-status
-```
-
-Helpdesk requires Telephony. The installer handles this dependency automatically.
-
-## VM and hostname commands
-
-```bash
-./install-erpnext-dev.sh access
 ./install-erpnext-dev.sh hosts-command
-./install-erpnext-dev.sh network-status
 ./install-erpnext-dev.sh host-test
 ./install-erpnext-dev.sh kvm-identify
 ./install-erpnext-dev.sh kvm-guide
@@ -185,8 +160,6 @@ Helpdesk requires Telephony. The installer handles this dependency automatically
 ./install-erpnext-dev.sh clear-cache
 ```
 
-## Production warning
+## Important limitation
 
-This script is for local developer VM use. It does not yet configure a production architecture with production Nginx/Supervisor workers, hardened MariaDB/Redis, firewall rules, public-domain SSL renewal, monitoring, or disaster recovery.
-
-Production should become a separate track, likely with a future `install-erpnext-prod.sh` script.
+This is a developer installer. Production should be a separate track with production-ready Nginx/Supervisor/systemd worker configuration, firewall rules, domain/DNS validation, SSL renewal, backup/restore testing, monitoring, and a defined update strategy.

@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.1"
+SCRIPT_VERSION="0.8.2"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1165,6 +1165,8 @@ Planned local architecture:
 Planned local SSL commands:
   ./install-erpnext-dev.sh ssl-status
   ./install-erpnext-dev.sh local-ssl-guide
+  ./install-erpnext-dev.sh mkcert-guide
+  ./install-erpnext-dev.sh verify-local-ssl
   ./install-erpnext-dev.sh configure-local-ssl
   ./install-erpnext-dev.sh disable-local-ssl
 
@@ -1270,8 +1272,10 @@ Option 1: Quick self-signed test certificate
 
 Option 2: Trusted local certificate with mkcert
   This is the better browser experience because the host browser trusts the certificate.
+  For the full checklist, run:
+    ./install-erpnext-dev.sh mkcert-guide
 
-  Run on your Linux Mint/Ubuntu HOST:
+  Summary on your Linux Mint/Ubuntu HOST:
     mkcert -install
     mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1
 
@@ -1307,9 +1311,142 @@ Expected behavior after local SSL is configured:
 
 Rollback:
   ./install-erpnext-dev.sh disable-local-ssl
+  ./install-erpnext-dev.sh ssl-rollback-guide
 
 ============================================================
 EOF_LOCAL_SSL
+}
+
+show_mkcert_local_ssl_guide() {
+  local vm_ip cert_path key_path escaped_site
+  vm_ip="$(get_vm_ip)"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+  escaped_site="${SITE_NAME//./\\.}"
+
+  cat <<EOF_MKCERT
+
+============================================================
+Trusted Local SSL with mkcert
+============================================================
+
+Goal:
+  Use https://${SITE_NAME} without browser warnings on the HOST machine.
+
+Important:
+  The browser trust must happen on the HOST machine where the browser runs,
+  not only inside the ERPNext VM.
+
+1) On the Linux Mint/Ubuntu HOST, install mkcert:
+
+  sudo apt update
+  sudo apt install -y libnss3-tools
+
+  # Install mkcert from your distro package manager if available, or from the
+  # official mkcert release package for your OS.
+
+2) On the HOST, create and trust the local CA:
+
+  mkcert -install
+
+3) On the HOST, generate a certificate for this VM/site:
+
+  mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1
+
+4) Copy the cert/key from HOST to VM:
+
+  scp ${SITE_NAME}.crt ${SITE_NAME}.key USER@${vm_ip}:/tmp/
+
+5) Inside the VM, install the cert/key:
+
+  sudo mkdir -p ${SSL_CERT_DIR}
+  sudo cp /tmp/${SITE_NAME}.crt ${cert_path}
+  sudo cp /tmp/${SITE_NAME}.key ${key_path}
+  sudo chown root:root ${cert_path} ${key_path}
+  sudo chmod 644 ${cert_path}
+  sudo chmod 600 ${key_path}
+
+6) Inside the VM, enable/reload the HTTPS reverse proxy:
+
+  ./install-erpnext-dev.sh configure-local-ssl
+  ./install-erpnext-dev.sh ssl-status
+
+7) On the HOST, confirm DNS/hosts and HTTPS:
+
+  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts
+  echo "${vm_ip} ${SITE_NAME}" | sudo tee -a /etc/hosts
+  getent hosts ${SITE_NAME}
+  curl -I http://${SITE_NAME}
+  curl -I https://${SITE_NAME}
+
+Expected:
+  http://${SITE_NAME}       -> 301 redirect to https://${SITE_NAME}/
+  https://${SITE_NAME}      -> 200 OK without using curl -k
+  http://${SITE_NAME}:8000  -> direct Bench fallback still works
+
+Rollback:
+  ./install-erpnext-dev.sh disable-local-ssl
+  ./install-erpnext-dev.sh ssl-rollback-guide
+
+============================================================
+EOF_MKCERT
+}
+
+show_ssl_rollback_guide() {
+  local available_path enabled_path cert_path key_path
+  available_path="$(ssl_nginx_available_path)"
+  enabled_path="$(ssl_nginx_enabled_path)"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+
+  cat <<EOF_SSL_ROLLBACK
+
+============================================================
+Local SSL Rollback / Disable Guide
+============================================================
+
+Safe rollback command:
+  ./install-erpnext-dev.sh disable-local-ssl
+
+What it does:
+  - Removes the enabled Nginx site symlink:
+    ${enabled_path}
+  - Reloads Nginx if the configuration is valid
+  - Keeps the saved config and certificate files for later reuse
+
+What it does NOT change:
+  - ERPNext dev service
+  - Bench ports 8000/9000
+  - MariaDB / Redis
+  - Site data
+  - Certificate files
+
+Direct fallback should remain available:
+  http://${SITE_NAME}:8000
+
+Manual cleanup if you want to remove files later:
+  sudo rm -f ${enabled_path}
+  sudo rm -f ${available_path}
+  sudo rm -f ${cert_path} ${key_path}
+  sudo nginx -t && sudo systemctl reload nginx
+
+============================================================
+EOF_SSL_ROLLBACK
+}
+
+verify_local_ssl() {
+  echo
+  echo "============================================================"
+  echo "Verify Local SSL / HTTPS"
+  echo "============================================================"
+  show_ssl_status
+  echo
+  echo "Host-side verification commands:"
+  echo "  curl -I http://${SITE_NAME}"
+  echo "  curl -kI https://${SITE_NAME}     # self-signed test"
+  echo "  curl -I https://${SITE_NAME}      # trusted mkcert test"
+  echo "  curl -I http://${SITE_NAME}:8000"
+  echo "============================================================"
 }
 
 ssl_file_permissions() {
@@ -1324,15 +1461,52 @@ ssl_file_permissions() {
 ssl_cert_summary() {
   local cert_path="$1"
   if [[ -f "$cert_path" ]] && command -v openssl >/dev/null 2>&1; then
-    local subject issuer dates san
+    local subject issuer dates san enddate end_epoch now_epoch days_left cert_type
     subject="$(openssl x509 -in "$cert_path" -noout -subject 2>/dev/null | sed 's/^subject=//')"
     issuer="$(openssl x509 -in "$cert_path" -noout -issuer 2>/dev/null | sed 's/^issuer=//')"
     dates="$(openssl x509 -in "$cert_path" -noout -dates 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
     san="$(openssl x509 -in "$cert_path" -noout -ext subjectAltName 2>/dev/null | tail -n +2 | tr -d '\n' | sed 's/^[[:space:]]*//')"
+    enddate="$(openssl x509 -in "$cert_path" -noout -enddate 2>/dev/null | sed 's/^notAfter=//')"
     [[ -n "$subject" ]] && echo "  Subject: ${subject}"
     [[ -n "$issuer" ]] && echo "  Issuer:  ${issuer}"
     [[ -n "$dates" ]] && echo "  Dates:   ${dates}"
     [[ -n "$san" ]] && echo "  SAN:     ${san}"
+
+    if [[ -n "$subject" && -n "$issuer" && "$subject" == "$issuer" ]]; then
+      cert_type="self-signed"
+    else
+      cert_type="CA-signed or locally trusted CA"
+    fi
+    echo "  Type:    ${cert_type}"
+
+    if [[ -n "$enddate" ]] && command -v date >/dev/null 2>&1; then
+      end_epoch="$(date -d "$enddate" +%s 2>/dev/null || true)"
+      now_epoch="$(date +%s 2>/dev/null || true)"
+      if [[ -n "$end_epoch" && -n "$now_epoch" ]]; then
+        days_left=$(( (end_epoch - now_epoch) / 86400 ))
+        if (( days_left < 0 )); then
+          echo "  Expiry:  EXPIRED ($days_left days)"
+        elif (( days_left <= 30 )); then
+          echo "  Expiry:  WARNING (${days_left} days left)"
+        else
+          echo "  Expiry:  OK (${days_left} days left)"
+        fi
+      fi
+    fi
+  fi
+}
+
+ssl_key_permission_status() {
+  local key_path="$1"
+  local mode owner group
+  [[ -f "$key_path" ]] || return 0
+  mode="$(stat -c '%a' "$key_path" 2>/dev/null || true)"
+  owner="$(stat -c '%U' "$key_path" 2>/dev/null || true)"
+  group="$(stat -c '%G' "$key_path" 2>/dev/null || true)"
+  if [[ "$owner" == "root" && "$group" == "root" && "$mode" == "600" ]]; then
+    status_line "SSL key permissions" "OK" "root:root 600"
+  else
+    status_line "SSL key permissions" "WARN" "current ${owner}:${group} ${mode}; recommended root:root 600"
   fi
 }
 
@@ -1408,6 +1582,7 @@ show_ssl_status() {
 
   if [[ -f "$key_path" ]]; then
     status_line "SSL private key" "OK" "$key_path (${key_perms})"
+    ssl_key_permission_status "$key_path"
   else
     status_line "SSL private key" "WARN" "missing at $key_path"
   fi
@@ -1815,10 +1990,13 @@ show_access_menu() {
     echo "8) Show SSL/HTTPS roadmap"
     echo "9) Show local SSL status"
     echo "10) Show local SSL guide"
-    echo "11) Create self-signed local cert"
-    echo "12) Configure local SSL reverse proxy"
-    echo "13) Disable local SSL reverse proxy"
-    echo "14) Back"
+    echo "11) Show trusted mkcert SSL guide"
+    echo "12) Verify local SSL"
+    echo "13) Create self-signed local cert"
+    echo "14) Configure local SSL reverse proxy"
+    echo "15) Disable local SSL reverse proxy"
+    echo "16) Show SSL rollback guide"
+    echo "17) Back"
     echo
     read -r -p "Choose an option: " access_choice
 
@@ -1833,10 +2011,13 @@ show_access_menu() {
       8) show_ssl_roadmap_guide ;;
       9) show_ssl_status ;;
       10) show_local_ssl_guide ;;
-      11) create_self_signed_local_cert ;;
-      12) configure_local_ssl ;;
-      13) disable_local_ssl ;;
-      14) return 0 ;;
+      11) show_mkcert_local_ssl_guide ;;
+      12) verify_local_ssl ;;
+      13) create_self_signed_local_cert ;;
+      14) configure_local_ssl ;;
+      15) disable_local_ssl ;;
+      16) show_ssl_rollback_guide ;;
+      17) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -3782,13 +3963,15 @@ show_advanced_menu() {
       12) show_ssl_roadmap_guide ;;
       13) show_ssl_status ;;
       14) show_local_ssl_guide ;;
-      15) create_self_signed_local_cert ;;
-      16) configure_local_ssl ;;
-      17) disable_local_ssl ;;
-      18) run_foreground_start ;;
-      19) show_erpnext_service_logs ;;
-      20) show_access_menu ;;
-      21) return 0 ;;
+      15) show_mkcert_local_ssl_guide ;;
+      16) verify_local_ssl ;;
+      17) create_self_signed_local_cert ;;
+      18) configure_local_ssl ;;
+      19) disable_local_ssl ;;
+      20) run_foreground_start ;;
+      21) show_erpnext_service_logs ;;
+      22) show_access_menu ;;
+      23) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -3820,7 +4003,9 @@ Basic actions:
   network-status Show VM IP/MAC/interface and access diagnostics
   hosts-command Show HOST /etc/hosts command only
   ssl-status    Show local HTTPS reverse proxy status
-  local-ssl-guide Show local mkcert/certificate setup guide
+  local-ssl-guide Show local SSL overview and quick test guide
+  mkcert-guide  Show trusted browser SSL workflow with mkcert
+  verify-local-ssl Verify local SSL status and show host tests
   create-self-signed-local-cert Create quick self-signed cert for local SSL testing
   backup        Create database backup
   backup-files  Create database + files backup
@@ -3868,6 +4053,9 @@ Advanced actions:
   kvm-identify        Show KVM VM identification helper using the VM MAC
   host-test           Show host-side access test commands
   ssl-roadmap         Show future SSL/HTTPS implementation roadmap
+  mkcert-guide        Show trusted local SSL workflow with mkcert
+  ssl-rollback-guide  Show local SSL rollback/disable guide
+  verify-local-ssl    Verify local SSL status and show host tests
   create-self-signed-local-cert Create quick local SSL test certificate
   configure-local-ssl Configure Nginx local HTTPS reverse proxy
   disable-local-ssl   Disable local HTTPS reverse proxy site
@@ -3908,6 +4096,8 @@ Examples:
   ./install-erpnext-dev.sh network-status
   ./install-erpnext-dev.sh ssl-status
   ./install-erpnext-dev.sh local-ssl-guide
+  ./install-erpnext-dev.sh mkcert-guide
+  ./install-erpnext-dev.sh verify-local-ssl
   ./install-erpnext-dev.sh doctor
 EOF_HELP
 }
@@ -3954,7 +4144,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|ssl-rollback-guide|verify-local-ssl|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -4023,6 +4213,9 @@ main() {
     ssl-roadmap) show_ssl_roadmap_guide ;;
     ssl-status) show_ssl_status ;;
     local-ssl-guide) show_local_ssl_guide ;;
+    mkcert-guide|trusted-local-ssl-guide) show_mkcert_local_ssl_guide ;;
+    ssl-rollback-guide) show_ssl_rollback_guide ;;
+    verify-local-ssl) verify_local_ssl ;;
     create-self-signed-local-cert|self-signed-local-cert) create_self_signed_local_cert ;;
     configure-local-ssl) configure_local_ssl ;;
     disable-local-ssl) disable_local_ssl ;;

@@ -1,76 +1,46 @@
-# ERPNext Developer Installer Roadmap
+# Roadmap
 
-## Current baseline: v0.8.1
+## Current release: v0.8.2
 
-v0.8.1 is a beta local developer VM installer with an optional local HTTPS reverse proxy foundation plus improved SSL diagnostics.
+Focus: trusted local SSL polish.
 
-Verified core capabilities:
+- Self-signed local SSL workflow for quick testing.
+- mkcert trusted certificate guide for browser-trusted local SSL.
+- SSL status, verification, and rollback guidance.
+- Nginx reverse proxy remains optional and does not replace direct Bench access.
 
-- Ubuntu 24.04 / 26.04 support path
-- ERPNext v16 local dev setup
-- systemd service/autostart
-- readiness wait
-- status/doctor reports
-- backup/list-backups
-- App Library
-- CRM, HRMS, Telephony, Helpdesk, Insights install flow
-- VM/networking diagnostics
-- KVM/libvirt helper commands
-- Local SSL guide/status/configuration commands
-- Self-signed local certificate helper for fast testing
-- Improved SSL diagnostics for Nginx, ports, cert/key permissions, and local HTTP responses
+## v0.8.x remaining polish
 
-## v0.8.x — Local SSL hardening
+- Add more robust SSL browser-trust troubleshooting.
+- Improve Nginx config validation messages.
+- Add optional certificate expiry warning in doctor.
+- Consider optional `ssl-doctor` alias if SSL diagnostics grow further.
 
-Completed in v0.8.1:
+## v0.9.0 production planning branch
 
-- Added clearer `ssl-status` diagnostics.
-- Added optional self-signed certificate helper for testing only.
-- Added local HTTP/HTTPS/Bench response checks.
-- Expanded mkcert and rollback guidance.
+Production must remain a separate track from the developer installer.
 
-Remaining refinements:
+Planned production topics:
 
-- Improve local SSL error handling.
-- Add rollback verification after disabling local SSL.
-- Add mkcert copy/trust troubleshooting.
-- Add Nginx log helper for SSL issues.
-- Confirm websocket/socket.io behavior through HTTPS.
-
-## v0.9.0 — Production planning branch
-
-Production should not be mixed into the current development `bench start` workflow.
-
-Planned production research/design:
-
-- Separate `install-erpnext-prod.sh` concept.
-- Production Nginx and Supervisor/systemd worker design.
+- Production architecture decision.
+- Nginx + production workers.
+- Supervisor or production systemd units.
+- Firewall and port exposure.
 - Domain/DNS preflight checks.
-- Let's Encrypt HTTP-01 plan.
-- Let's Encrypt DNS-01 with Cloudflare plan.
-- Cloudflare Origin CA plan.
-- Firewall profile.
-- Backup/restore schedule.
-- Update and rollback strategy.
-- Monitoring and log rotation.
+- Let's Encrypt HTTP-01.
+- Let's Encrypt DNS-01 with Cloudflare.
+- Cloudflare Origin CA.
+- SSL renewal checks.
+- Production backup/restore policy.
+- Monitoring and update strategy.
 
-## v1.0.0 — Stable developer installer criteria
+## Future v1.0.0 developer installer criteria
 
-Required before v1.0.0:
-
-- Fresh Ubuntu 24.04 VM test passes.
-- Fresh Ubuntu 26.04 VM test passes.
+- Fresh Ubuntu 24.04 test passes.
+- Fresh Ubuntu 26.04 test passes.
 - Reboot/autostart passes.
-- Start/stop/restart passes.
-- Doctor/status passes.
-- Backup/list-backups passes.
-- Restore database tested.
-- Restore full backup tested.
-- CRM install passes.
-- HRMS install passes.
-- Helpdesk + Telephony install passes.
-- Insights install passes.
-- Local SSL test passes.
-- Uninstall/reset passes on disposable VM.
-- README/CHANGELOG/TESTING complete.
-- Known limitations documented.
+- Backup and restore are fully tested.
+- App Library installs pass cleanly.
+- Local HTTPS is stable and documented.
+- Uninstall/reset is tested on a disposable VM.
+- README, TESTING, CHANGELOG, and ROADMAP are complete.

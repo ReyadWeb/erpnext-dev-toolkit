@@ -1,46 +1,49 @@
-# Testing Guide v0.8.1
+# Testing Guide v0.8.2
 
-## Syntax and help
+## Syntax test
 
 ```bash
 bash -n install-erpnext-dev.sh
 ./install-erpnext-dev.sh help
 ```
 
-Expected:
+## Existing environment health
 
-- Bash syntax passes.
-- Help output includes `ssl-status`, `local-ssl-guide`, `create-self-signed-local-cert`, `configure-local-ssl`, and `disable-local-ssl`.
-
-## Existing environment regression
+Inside the VM:
 
 ```bash
-./install-erpnext-dev.sh network-status
-./install-erpnext-dev.sh app-status
-./install-erpnext-dev.sh restart
 ./install-erpnext-dev.sh doctor
+./install-erpnext-dev.sh runtime-status
+./install-erpnext-dev.sh list-apps
 ```
 
 Expected:
 
 - ERPNext service running.
 - Ports 8000, 9000, 11000, 13000 listening.
-- Optional apps show installed if previously installed.
+- Optional apps show OK if installed.
+- App registry shows no downloaded-but-not-installed apps unless intentionally testing a partial install.
 
-## SSL status before configuration
+## SSL status and guides
+
+Inside the VM:
 
 ```bash
 ./install-erpnext-dev.sh ssl-status
 ./install-erpnext-dev.sh local-ssl-guide
+./install-erpnext-dev.sh mkcert-guide
+./install-erpnext-dev.sh verify-local-ssl
+./install-erpnext-dev.sh ssl-rollback-guide
 ```
 
-Expected before cert/key are installed:
+Expected:
 
-- SSL certificate/key warnings.
-- HTTPS port 443 may be not listening.
-- Guide prints self-signed and mkcert workflows.
+- Commands display guidance/status without breaking ERPNext.
+- `ssl-status` shows cert/key/config/port status.
+- `mkcert-guide` shows host-side trust workflow.
+- `ssl-rollback-guide` shows safe rollback steps.
 
-## Quick self-signed local SSL test
+## Self-signed SSL quick test
 
 Inside the VM:
 
@@ -60,59 +63,43 @@ curl -I http://erp.test:8000
 
 Expected:
 
-- `http://erp.test` redirects to `https://erp.test/`.
-- `https://erp.test` returns the ERPNext login page with `curl -k`.
-- `http://erp.test:8000` still returns the ERPNext login page directly from Bench.
-- Browser may warn because self-signed certs are not trusted by default.
-
-## Trusted mkcert local SSL test
-
-On the host machine, generate a local certificate with mkcert:
-
-```bash
-mkcert -install
-mkcert -cert-file erp.test.crt -key-file erp.test.key erp.test VM_IP localhost 127.0.0.1
-scp erp.test.crt erp.test.key USER@VM_IP:/tmp/
+```text
+http://erp.test        -> 301 redirect to https://erp.test/
+https://erp.test       -> 200 OK through Nginx HTTPS reverse proxy
+http://erp.test:8000   -> 200 OK direct Bench fallback
 ```
 
-Inside the VM:
+## Trusted mkcert test
+
+Run `./install-erpnext-dev.sh mkcert-guide` and follow the host-to-VM instructions.
+
+After installing mkcert-generated cert/key in the VM and re-running `configure-local-ssl`, test from the host:
 
 ```bash
-sudo mkdir -p /etc/erpnext-dev-ssl
-sudo cp /tmp/erp.test.crt /etc/erpnext-dev-ssl/erp.test.crt
-sudo cp /tmp/erp.test.key /etc/erpnext-dev-ssl/erp.test.key
-sudo chown root:root /etc/erpnext-dev-ssl/erp.test.crt /etc/erpnext-dev-ssl/erp.test.key
-sudo chmod 644 /etc/erpnext-dev-ssl/erp.test.crt
-sudo chmod 600 /etc/erpnext-dev-ssl/erp.test.key
-
-./install-erpnext-dev.sh configure-local-ssl
-./install-erpnext-dev.sh ssl-status
-```
-
-From the host:
-
-```bash
-curl -I http://erp.test
 curl -I https://erp.test
-curl -I http://erp.test:8000
 ```
 
 Expected:
 
-- Nginx config test passes.
-- Nginx service starts/reloads.
-- Port 443 listens.
-- `https://erp.test` opens in browser without a warning if mkcert CA trust is installed correctly on that host browser.
-- `http://erp.test:8000` still works.
+- 200 OK without `-k`.
+- Browser should not show a certificate warning if mkcert CA is trusted on the host/browser profile.
 
-## Disable SSL test
+## Rollback test
+
+Inside the VM:
 
 ```bash
 ./install-erpnext-dev.sh disable-local-ssl
 ./install-erpnext-dev.sh ssl-status
 ```
 
+From the host:
+
+```bash
+curl -I http://erp.test:8000
+```
+
 Expected:
 
-- Nginx site symlink removed.
-- Direct Bench access remains available.
+- Direct Bench access still works.
+- HTTPS site is disabled or no longer responds through the local SSL Nginx site.
