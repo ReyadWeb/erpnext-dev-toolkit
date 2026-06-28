@@ -1,46 +1,41 @@
 # Roadmap
 
-## Current release: v0.8.2
+## Completed beta milestones
 
-Focus: trusted local SSL polish.
+- v0.5.x: App Library validation and app registry repair.
+- v0.6.0: Public beta documentation.
+- v0.7.0: VM/networking diagnostics and KVM helpers.
+- v0.8.0: Local HTTPS reverse proxy foundation.
+- v0.8.1: SSL diagnostics and self-signed cert workflow.
+- v0.8.2: Trusted local SSL / mkcert guidance.
+- v0.8.3: Final local SSL hardening, cert replacement helper, rollback verification.
 
-- Self-signed local SSL workflow for quick testing.
-- mkcert trusted certificate guide for browser-trusted local SSL.
-- SSL status, verification, and rollback guidance.
-- Nginx reverse proxy remains optional and does not replace direct Bench access.
+## Next: v0.9.0 production planning release
 
-## v0.8.x remaining polish
+Goal: design the production track without destabilizing the developer installer.
 
-- Add more robust SSL browser-trust troubleshooting.
-- Improve Nginx config validation messages.
-- Add optional certificate expiry warning in doctor.
-- Consider optional `ssl-doctor` alias if SSL diagnostics grow further.
+Planned work:
 
-## v0.9.0 production planning branch
+- Add production planning documentation.
+- Add `production-roadmap` command.
+- Add `production-preflight-guide` command.
+- Define separate `install-erpnext-prod.sh` architecture.
+- Compare Let's Encrypt HTTP-01, DNS-01 with Cloudflare, and Cloudflare Origin CA.
+- Document required production services: Nginx, production workers, firewall, backups, monitoring, updates, and restore testing.
 
-Production must remain a separate track from the developer installer.
+## Future production track
 
-Planned production topics:
+Production should be separate from this dev installer. Expected areas:
 
-- Production architecture decision.
-- Nginx + production workers.
-- Supervisor or production systemd units.
-- Firewall and port exposure.
-- Domain/DNS preflight checks.
-- Let's Encrypt HTTP-01.
-- Let's Encrypt DNS-01 with Cloudflare.
-- Cloudflare Origin CA.
-- SSL renewal checks.
-- Production backup/restore policy.
-- Monitoring and update strategy.
+- Real domain / DNS validation.
+- Nginx production config.
+- Supervisor or production-grade systemd workers.
+- Let's Encrypt or Cloudflare Origin SSL.
+- Firewall hardening.
+- Automated backups and tested restore.
+- Update and maintenance strategy.
+- Monitoring and logs.
 
-## Future v1.0.0 developer installer criteria
+## v1.0 target
 
-- Fresh Ubuntu 24.04 test passes.
-- Fresh Ubuntu 26.04 test passes.
-- Reboot/autostart passes.
-- Backup and restore are fully tested.
-- App Library installs pass cleanly.
-- Local HTTPS is stable and documented.
-- Uninstall/reset is tested on a disposable VM.
-- README, TESTING, CHANGELOG, and ROADMAP are complete.
+Stable developer installer after clean fresh-VM regression testing, backup/restore validation, app library validation, local HTTPS validation, and documentation review.

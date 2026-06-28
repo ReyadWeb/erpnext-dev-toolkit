@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.2"
+SCRIPT_VERSION="0.8.3"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1282,13 +1282,11 @@ Option 2: Trusted local certificate with mkcert
   Copy the generated certificate and key into the VM:
     scp ${SITE_NAME}.crt ${SITE_NAME}.key USER@${vm_ip}:/tmp/
 
-  Inside the VM, install the certificate files:
-    sudo mkdir -p ${SSL_CERT_DIR}
-    sudo cp /tmp/${SITE_NAME}.crt ${cert_path}
-    sudo cp /tmp/${SITE_NAME}.key ${key_path}
-    sudo chown root:root ${cert_path} ${key_path}
-    sudo chmod 644 ${cert_path}
-    sudo chmod 600 ${key_path}
+  Inside the VM, install the certificate files safely:
+    ./install-erpnext-dev.sh install-local-ssl-cert
+
+  Or use custom source paths:
+    LOCAL_SSL_CERT_SOURCE=/tmp/${SITE_NAME}.crt LOCAL_SSL_KEY_SOURCE=/tmp/${SITE_NAME}.key ./install-erpnext-dev.sh install-local-ssl-cert
 
   Then configure HTTPS:
     ./install-erpnext-dev.sh configure-local-ssl
@@ -1357,14 +1355,13 @@ Important:
 
   scp ${SITE_NAME}.crt ${SITE_NAME}.key USER@${vm_ip}:/tmp/
 
-5) Inside the VM, install the cert/key:
+5) Inside the VM, install the cert/key safely:
 
-  sudo mkdir -p ${SSL_CERT_DIR}
-  sudo cp /tmp/${SITE_NAME}.crt ${cert_path}
-  sudo cp /tmp/${SITE_NAME}.key ${key_path}
-  sudo chown root:root ${cert_path} ${key_path}
-  sudo chmod 644 ${cert_path}
-  sudo chmod 600 ${key_path}
+  ./install-erpnext-dev.sh install-local-ssl-cert
+
+  Or, if you copied the files somewhere else:
+
+  LOCAL_SSL_CERT_SOURCE=/path/to/${SITE_NAME}.crt LOCAL_SSL_KEY_SOURCE=/path/to/${SITE_NAME}.key ./install-erpnext-dev.sh install-local-ssl-cert
 
 6) Inside the VM, enable/reload the HTTPS reverse proxy:
 
@@ -1392,6 +1389,200 @@ Rollback:
 EOF_MKCERT
 }
 
+show_browser_trust_check_guide() {
+  local vm_ip escaped_site
+  vm_ip="$(get_vm_ip)"
+  escaped_site="${SITE_NAME//./\\.}"
+
+  cat <<EOF_BROWSER_TRUST
+
+============================================================
+Browser Trust / Trusted Certificate Check
+============================================================
+
+Purpose:
+  Confirm whether https://${SITE_NAME} is only working with curl -k
+  or is trusted by the HOST browser/curl normally.
+
+Run these on the HOST machine, not inside the VM:
+
+1) Confirm hostname resolution:
+  getent hosts ${SITE_NAME}
+
+2) If needed, update /etc/hosts:
+  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts
+  echo "${vm_ip} ${SITE_NAME}" | sudo tee -a /etc/hosts
+
+3) Test HTTPS without bypassing certificate validation:
+  curl -I https://${SITE_NAME}
+
+Expected for trusted mkcert/local CA:
+  HTTP/2 200
+
+Expected for self-signed certificate:
+  curl: (60) SSL certificate problem
+
+4) Test HTTPS with validation bypass, for self-signed testing only:
+  curl -kI https://${SITE_NAME}
+
+5) Browser test:
+  Open https://${SITE_NAME}
+
+If the browser warns about the certificate:
+  - The reverse proxy may still be working.
+  - The certificate is not trusted by the HOST browser yet.
+  - Use: ./install-erpnext-dev.sh mkcert-guide
+
+Important:
+  Certificate trust must be installed on the HOST machine where the browser runs.
+  Trusting a CA inside the VM alone does not make the host browser trust it.
+
+============================================================
+EOF_BROWSER_TRUST
+}
+
+install_local_ssl_cert() {
+  require_sudo
+
+  local src_cert src_key cert_path key_path stamp
+  src_cert="${LOCAL_SSL_CERT_SOURCE:-/tmp/${SITE_NAME}.crt}"
+  src_key="${LOCAL_SSL_KEY_SOURCE:-/tmp/${SITE_NAME}.key}"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+
+  echo
+  echo "============================================================"
+  echo "Install / Replace Local SSL Certificate"
+  echo "============================================================"
+  echo "Source certificate: ${src_cert}"
+  echo "Source private key: ${src_key}"
+  echo "Target certificate: ${cert_path}"
+  echo "Target private key: ${key_path}"
+  echo
+
+  if [[ ! -f "$src_cert" || ! -f "$src_key" ]]; then
+    warn "Source certificate or key was not found."
+    echo
+    echo "Default expected source files:"
+    echo "  /tmp/${SITE_NAME}.crt"
+    echo "  /tmp/${SITE_NAME}.key"
+    echo
+    echo "You can override the source paths like this:"
+    echo "  LOCAL_SSL_CERT_SOURCE=/path/to/${SITE_NAME}.crt LOCAL_SSL_KEY_SOURCE=/path/to/${SITE_NAME}.key ./install-erpnext-dev.sh install-local-ssl-cert"
+    echo
+    echo "For trusted local certificates, generate them on the HOST with mkcert, copy them to the VM, then rerun this command."
+    echo "For the full workflow, run: ./install-erpnext-dev.sh mkcert-guide"
+    echo "============================================================"
+    return 1
+  fi
+
+  $SUDO mkdir -p "$SSL_CERT_DIR"
+
+  stamp="$(date +%Y%m%d_%H%M%S)"
+  if [[ -f "$cert_path" ]]; then
+    warn "Existing certificate found. Backing up to ${cert_path}.bak.${stamp}"
+    $SUDO cp "$cert_path" "${cert_path}.bak.${stamp}"
+  fi
+  if [[ -f "$key_path" ]]; then
+    warn "Existing key found. Backing up to ${key_path}.bak.${stamp}"
+    $SUDO cp "$key_path" "${key_path}.bak.${stamp}"
+  fi
+
+  $SUDO install -o root -g root -m 644 "$src_cert" "$cert_path"
+  $SUDO install -o root -g root -m 600 "$src_key" "$key_path"
+
+  ok "Certificate installed with safe permissions"
+
+  if command -v nginx >/dev/null 2>&1 && [[ -L "$(ssl_nginx_enabled_path)" || -f "$(ssl_nginx_enabled_path)" ]]; then
+    log "Testing and reloading Nginx with the new certificate"
+    if $SUDO nginx -t; then
+      $SUDO systemctl reload nginx || true
+      ok "Nginx reloaded"
+    else
+      warn "Nginx config test failed. The certificate was copied, but Nginx was not reloaded."
+      warn "Check manually: sudo nginx -t"
+    fi
+  else
+    echo
+    echo "Next step:"
+    echo "  ./install-erpnext-dev.sh configure-local-ssl"
+  fi
+
+  echo
+  echo "Verify:"
+  echo "  ./install-erpnext-dev.sh ssl-status"
+  echo "  ./install-erpnext-dev.sh verify-local-ssl"
+  echo "============================================================"
+}
+
+verify_ssl_rollback() {
+  local enabled_path available_path cert_path key_path bench_head https_head http_head
+  enabled_path="$(ssl_nginx_enabled_path)"
+  available_path="$(ssl_nginx_available_path)"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+
+  echo
+  echo "============================================================"
+  echo "Verify Local SSL Rollback / Disable State"
+  echo "============================================================"
+
+  if [[ -L "$enabled_path" || -f "$enabled_path" ]]; then
+    status_line "SSL site enabled" "WARN" "$enabled_path is still enabled"
+  else
+    status_line "SSL site enabled" "OK" "disabled"
+  fi
+
+  if [[ -f "$available_path" ]]; then
+    status_line "Saved SSL config" "INFO" "$available_path kept for reuse"
+  else
+    status_line "Saved SSL config" "INFO" "not present"
+  fi
+
+  if [[ -f "$cert_path" ]]; then
+    status_line "SSL certificate" "INFO" "$cert_path kept for reuse"
+  else
+    status_line "SSL certificate" "INFO" "not present"
+  fi
+
+  if [[ -f "$key_path" ]]; then
+    status_line "SSL private key" "INFO" "$key_path kept for reuse"
+  else
+    status_line "SSL private key" "INFO" "not present"
+  fi
+
+  if port_listens 443; then
+    status_line "Port 443" "INFO" "listening; another/default Nginx site may still be active"
+  else
+    status_line "Port 443" "OK" "not listening"
+  fi
+
+  if port_listens 8000; then
+    status_line "Direct Bench fallback" "OK" "127.0.0.1:8000 listening"
+  else
+    status_line "Direct Bench fallback" "WARN" "127.0.0.1:8000 not listening"
+  fi
+
+  echo
+  echo "Local response checks from inside the VM:"
+  http_head="$(curl_head_status "http://${SITE_NAME}/" "$SITE_NAME" 80 "127.0.0.1" || true)"
+  https_head="$(curl_head_status "https://${SITE_NAME}/" "$SITE_NAME" 443 "127.0.0.1" || true)"
+  bench_head="$(curl_head_status "http://127.0.0.1:8000/" "" "" "" || true)"
+  echo "  http://${SITE_NAME}       -> ${http_head:-no response}"
+  echo "  https://${SITE_NAME}      -> ${https_head:-no response}"
+  echo "  http://127.0.0.1:8000    -> ${bench_head:-no response}"
+
+  echo
+  echo "Expected after disabling local SSL:"
+  echo "  - Direct Bench access remains available on http://${SITE_NAME}:8000"
+  echo "  - The managed Nginx symlink is disabled"
+  echo "  - Certificate files may remain for reuse"
+  echo
+  echo "Re-enable later with:"
+  echo "  ./install-erpnext-dev.sh configure-local-ssl"
+  echo "============================================================"
+}
+
 show_ssl_rollback_guide() {
   local available_path enabled_path cert_path key_path
   available_path="$(ssl_nginx_available_path)"
@@ -1407,6 +1598,7 @@ Local SSL Rollback / Disable Guide
 
 Safe rollback command:
   ./install-erpnext-dev.sh disable-local-ssl
+  ./install-erpnext-dev.sh verify-ssl-rollback
 
 What it does:
   - Removes the enabled Nginx site symlink:
@@ -1478,6 +1670,11 @@ ssl_cert_summary() {
       cert_type="CA-signed or locally trusted CA"
     fi
     echo "  Type:    ${cert_type}"
+    if [[ "$cert_type" == "self-signed" ]]; then
+      echo "  Trust:   browser warning expected unless this CA/cert is trusted on the HOST"
+    else
+      echo "  Trust:   test from HOST with: curl -I https://${SITE_NAME}"
+    fi
 
     if [[ -n "$enddate" ]] && command -v date >/dev/null 2>&1; then
       end_epoch="$(date -d "$enddate" +%s 2>/dev/null || true)"
@@ -1991,12 +2188,15 @@ show_access_menu() {
     echo "9) Show local SSL status"
     echo "10) Show local SSL guide"
     echo "11) Show trusted mkcert SSL guide"
-    echo "12) Verify local SSL"
-    echo "13) Create self-signed local cert"
-    echo "14) Configure local SSL reverse proxy"
-    echo "15) Disable local SSL reverse proxy"
-    echo "16) Show SSL rollback guide"
-    echo "17) Back"
+    echo "12) Show browser trust check guide"
+    echo "13) Install/replace local SSL cert from /tmp or env paths"
+    echo "14) Verify local SSL"
+    echo "15) Create self-signed local cert"
+    echo "16) Configure local SSL reverse proxy"
+    echo "17) Disable local SSL reverse proxy"
+    echo "18) Show SSL rollback guide"
+    echo "19) Verify SSL rollback/disable state"
+    echo "20) Back"
     echo
     read -r -p "Choose an option: " access_choice
 
@@ -2012,425 +2212,19 @@ show_access_menu() {
       9) show_ssl_status ;;
       10) show_local_ssl_guide ;;
       11) show_mkcert_local_ssl_guide ;;
-      12) verify_local_ssl ;;
-      13) create_self_signed_local_cert ;;
-      14) configure_local_ssl ;;
-      15) disable_local_ssl ;;
-      16) show_ssl_rollback_guide ;;
-      17) return 0 ;;
+      12) show_browser_trust_check_guide ;;
+      13) install_local_ssl_cert ;;
+      14) verify_local_ssl ;;
+      15) create_self_signed_local_cert ;;
+      16) configure_local_ssl ;;
+      17) disable_local_ssl ;;
+      18) show_ssl_rollback_guide ;;
+      19) verify_ssl_rollback ;;
+      20) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
 }
-
-print_summary() {
-  local vm_ip bench_dir
-  vm_ip="$(get_vm_ip)"
-  bench_dir="$(active_bench_dir)"
-
-  echo
-  echo "============================================================"
-  echo "ERPNext Developer Environment Installed"
-  echo "============================================================"
-  echo
-  echo "Site: ${SITE_NAME}"
-  echo "Bench: ${bench_dir}"
-  echo
-  echo "Login:"
-  echo "  Username: Administrator"
-  echo "  Password: ${ADMIN_PASSWORD}"
-  echo
-  echo "Start ERPNext:"
-  echo "  ./install-erpnext-dev.sh start"
-  echo
-  echo "Manual start command:"
-  echo "  sudo -iu ${FRAPPE_USER}"
-  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-  echo "  cd ${bench_dir}"
-  echo "  bench start"
-  echo
-  echo "Browser access:"
-  echo "  Direct IP URL, works while Bench is running:"
-  echo "    http://${vm_ip}:8000"
-  echo
-  echo "  Friendly URL, works after HOST /etc/hosts setup:"
-  echo "    http://${SITE_NAME}:8000"
-  echo
-  echo "On your HOST machine, add/update this /etc/hosts entry:"
-  echo "  ${vm_ip} ${SITE_NAME}"
-  echo
-  echo "Credentials file:"
-  echo "  ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
-  echo
-  echo "Install log:"
-  echo "  ${LOG_FILE}"
-  echo
-  echo "============================================================"
-}
-
-
-bench_dir_candidates() {
-  printf '%s\n' \
-    "${BENCH_DIR}" \
-    "${FRAPPE_HOME}/${BENCH_NAME}" \
-    "${FRAPPE_HOME}/frappe/${BENCH_NAME}"
-}
-
-detect_bench_dir() {
-  local candidate found=""
-
-  while IFS= read -r candidate; do
-    [[ -z "$candidate" ]] && continue
-    if bench_dir_is_valid "$candidate"; then
-      echo "$candidate"
-      return 0
-    fi
-    if [[ -z "$found" ]] && path_is_dir "$candidate"; then
-      found="$candidate"
-    fi
-  done < <(bench_dir_candidates | awk '!seen[$0]++')
-
-  if path_is_dir "$FRAPPE_HOME"; then
-    if [[ "${SUDO:-}" == "sudo" ]]; then
-      candidate="$($SUDO find "$FRAPPE_HOME" -maxdepth 3 -type d -name "$BENCH_NAME" 2>/dev/null | head -n 1 || true)"
-    else
-      candidate="$(find "$FRAPPE_HOME" -maxdepth 3 -type d -name "$BENCH_NAME" 2>/dev/null | head -n 1 || true)"
-    fi
-    if [[ -n "$candidate" ]]; then
-      echo "$candidate"
-      return 0
-    fi
-  fi
-
-  if [[ -n "$found" ]]; then
-    echo "$found"
-    return 0
-  fi
-
-  echo "$BENCH_DIR"
-  return 1
-}
-
-active_bench_dir() {
-  detect_bench_dir 2>/dev/null || echo "$BENCH_DIR"
-}
-
-check_bench_app_installed() {
-  local app="$1"
-  local bench_dir
-  bench_dir="$(active_bench_dir)"
-
-  path_is_dir "${bench_dir}/apps/${app}"
-}
-
-site_exists() {
-  local bench_dir
-  bench_dir="$(active_bench_dir)"
-
-  path_is_dir "${bench_dir}/sites/${SITE_NAME}"
-}
-
-site_app_installed() {
-  local app="$1"
-  local bench_dir
-  bench_dir="$(active_bench_dir)"
-
-  if ! path_is_dir "$bench_dir" || ! path_is_dir "${bench_dir}/sites/${SITE_NAME}"; then
-    return 1
-  fi
-
-  run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' list-apps" 2>/dev/null | awk '{print $1}' | grep -qx "$app"
-}
-
-install_state() {
-  local bench_dir
-  bench_dir="$(active_bench_dir)"
-
-  if path_is_dir "${bench_dir}" && path_is_dir "${bench_dir}/apps/frappe" && path_is_dir "${bench_dir}/apps/erpnext" && path_is_dir "${bench_dir}/sites/${SITE_NAME}"; then
-    if site_app_installed erpnext || [[ -f "${bench_dir}/sites/apps.txt" ]]; then
-      echo "Installed"
-    else
-      echo "Installed files found; site app not confirmed"
-    fi
-  elif path_is_dir "${bench_dir}" || path_is_dir "${FRAPPE_HOME}"; then
-    echo "Incomplete"
-  else
-    echo "Not installed"
-  fi
-}
-
-runtime_state() {
-  local ready_count
-  ready_count="$(bench_ready_count)"
-
-  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    if bench_ports_ready; then
-      echo "Running via service"
-    elif [[ "$ready_count" -gt 0 ]]; then
-      echo "Starting / partially ready via service"
-    else
-      echo "Starting via service"
-    fi
-  elif port_listens 8000; then
-    echo "Running in foreground"
-  elif id "$FRAPPE_USER" >/dev/null 2>&1 && pgrep -u "$FRAPPE_USER" -f "bench start" >/dev/null 2>&1; then
-    echo "Starting / partially running"
-  else
-    echo "Stopped"
-  fi
-}
-
-autostart_state() {
-  if service_exists && systemctl is-enabled --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; then
-    echo "Enabled"
-  elif service_exists; then
-    echo "Disabled"
-  else
-    echo "Not configured"
-  fi
-}
-
-service_state() {
-  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    echo "Running"
-  elif service_exists; then
-    echo "Stopped"
-  else
-    echo "Not configured"
-  fi
-}
-
-recommended_action() {
-  local installed runtime auto
-  installed="$1"
-  runtime="$2"
-  auto="$3"
-
-  case "$installed" in
-    "Installed"|"Installed files found; site app not confirmed")
-      if [[ "$runtime" == Running* ]]; then
-        if [[ "$auto" == "Enabled" ]]; then
-          echo "ERPNext is ready. Open the browser URL below."
-        else
-          echo "ERPNext is running. Optional: enable autostart with ./install-erpnext-dev.sh enable-autostart"
-        fi
-      else
-        echo "Start ERPNext with ./install-erpnext-dev.sh start"
-      fi
-      ;;
-    "Incomplete")
-      echo "Run ./install-erpnext-dev.sh repair, or run setup for a clean reinstall."
-      ;;
-    *)
-      echo "Run ./install-erpnext-dev.sh setup"
-      ;;
-  esac
-}
-
-run_status() {
-  require_sudo
-
-  local vm_ip installed runtime auto svc bench_dir url_status
-  vm_ip="$(get_vm_ip)"
-  installed="$(install_state)"
-  runtime="$(runtime_state)"
-  auto="$(autostart_state)"
-  svc="$(service_state)"
-  bench_dir="$(active_bench_dir)"
-
-  echo
-  echo "============================================================"
-  echo "ERPNext Developer Status"
-  echo "============================================================"
-  printf "  %-18s %s\n" "Install:" "$installed"
-  printf "  %-18s %s\n" "Runtime:" "$runtime"
-  printf "  %-18s %s\n" "Service:" "$svc"
-  printf "  %-18s %s\n" "Autostart:" "$auto"
-  printf "  %-18s %s\n" "Site:" "$SITE_NAME"
-  printf "  %-18s %s\n" "VM IP:" "$vm_ip"
-  printf "  %-18s http://%s:8000\n" "Direct URL:" "$vm_ip"
-  printf "  %-18s http://%s:8000\n" "Friendly URL:" "$SITE_NAME"
-  echo
-  echo "Recommended action:"
-  echo "  $(recommended_action "$installed" "$runtime" "$auto")"
-  echo
-  echo "Notes:"
-  echo "  - Direct URL works after ERPNext is running."
-  echo "  - Friendly URL also needs the HOST /etc/hosts entry: ${vm_ip} ${SITE_NAME}"
-  echo "  - Detailed diagnostics: ./install-erpnext-dev.sh doctor"
-  echo "============================================================"
-}
-
-run_runtime_status() {
-  require_sudo
-
-  echo
-  echo "============================================================"
-  echo "ERPNext Runtime Status"
-  echo "============================================================"
-  local runtime_status service_status autostart_status
-  runtime_status="$(runtime_state)"
-  service_status="$(service_state)"
-  autostart_status="$(autostart_state)"
-
-  if [[ "$runtime_status" == Running* ]]; then
-    status_line "Runtime" "OK" "$runtime_status"
-  elif [[ "$runtime_status" == Starting* ]]; then
-    status_line "Runtime" "WARN" "$runtime_status"
-  else
-    status_line "Runtime" "INFO" "$runtime_status"
-  fi
-
-  if [[ "$service_status" == "Running" ]]; then
-    status_line "Service" "OK" "$service_status"
-  elif [[ "$service_status" == "Not configured" ]]; then
-    status_line "Service" "WARN" "$service_status"
-  else
-    status_line "Service" "INFO" "$service_status"
-  fi
-
-  if [[ "$autostart_status" == "Enabled" ]]; then
-    status_line "Autostart" "OK" "$autostart_status"
-  else
-    status_line "Autostart" "WARN" "$autostart_status"
-  fi
-
-  local item port label
-  local port_checks=(
-    "8000:Bench web"
-    "9000:Socket.io"
-    "11000:Bench Redis queue"
-    "13000:Bench Redis cache"
-  )
-
-  for item in "${port_checks[@]}"; do
-    port="${item%%:*}"
-    label="${item#*:}"
-    if port_listens "$port"; then
-      status_line "$label" "OK" "port ${port} listening"
-    elif [[ "$service_status" == "Running" ]]; then
-      status_line "$label" "WARN" "port ${port} not listening yet"
-    else
-      status_line "$label" "INFO" "port ${port} not listening"
-    fi
-  done
-
-  echo
-  if [[ "$runtime_status" == Starting* ]]; then
-    echo "ERPNext was recently started/restarted. If ports are still waiting, run:"
-    echo "  sleep 30 && ./install-erpnext-dev.sh runtime-status"
-    echo "  ./install-erpnext-dev.sh logs"
-  else
-    echo "If installed but stopped, run: ./install-erpnext-dev.sh start"
-  fi
-  echo "============================================================"
-}
-
-run_installation_status() {
-  require_sudo
-
-  local bench_dir
-  bench_dir="$(active_bench_dir)"
-
-  echo
-  echo "============================================================"
-  echo "ERPNext Installation Status"
-  echo "============================================================"
-  local install_status
-  install_status="$(install_state)"
-  if [[ "$install_status" == "Installed" ]]; then
-    status_line "Install status" "OK" "$install_status"
-  elif [[ "$install_status" == "Installed files found; site app not confirmed" ]]; then
-    status_line "Install status" "WARN" "$install_status"
-  else
-    status_line "Install status" "FAIL" "$install_status"
-  fi
-
-  if id "$FRAPPE_USER" >/dev/null 2>&1; then
-    status_line "frappe user" "OK" "$FRAPPE_USER exists"
-  else
-    status_line "frappe user" "FAIL" "$FRAPPE_USER missing"
-  fi
-
-  if path_is_dir "$bench_dir"; then
-    status_line "Bench folder" "OK" "$bench_dir"
-  else
-    status_line "Bench folder" "FAIL" "$bench_dir missing"
-  fi
-
-  if check_bench_app_installed frappe; then
-    status_line "Frappe app files" "OK" "apps/frappe exists"
-  else
-    status_line "Frappe app files" "FAIL" "apps/frappe missing"
-  fi
-
-  if check_bench_app_installed erpnext; then
-    status_line "ERPNext app files" "OK" "apps/erpnext exists"
-  else
-    status_line "ERPNext app files" "WARN" "apps/erpnext missing"
-  fi
-
-  if site_exists; then
-    status_line "Site folder" "OK" "${SITE_NAME} exists"
-  else
-    status_line "Site folder" "WARN" "${SITE_NAME} missing"
-  fi
-
-  if site_app_installed frappe; then
-    status_line "Site app: frappe" "OK" "installed on ${SITE_NAME}"
-  else
-    status_line "Site app: frappe" "WARN" "not confirmed on ${SITE_NAME}"
-  fi
-
-  if site_app_installed erpnext; then
-    status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
-  else
-    status_line "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
-  fi
-
-  echo "============================================================"
-}
-
-run_service_summary() {
-  require_sudo
-
-  echo
-  echo "============================================================"
-  echo "ERPNext Service / Autostart Status"
-  echo "============================================================"
-  local service_status autostart_status
-  service_status="$(service_state)"
-  autostart_status="$(autostart_state)"
-
-  if service_exists; then
-    status_line "Service file" "OK" "$(erpnext_service_path)"
-  else
-    status_line "Service file" "WARN" "not created: $(erpnext_service_path)"
-  fi
-
-  if [[ "$service_status" == "Running" ]]; then
-    status_line "Service" "OK" "$service_status"
-  elif [[ "$service_status" == "Not configured" ]]; then
-    status_line "Service" "WARN" "$service_status"
-  else
-    status_line "Service" "INFO" "$service_status"
-  fi
-
-  if [[ "$autostart_status" == "Enabled" ]]; then
-    status_line "Autostart" "OK" "$autostart_status"
-  else
-    status_line "Autostart" "WARN" "$autostart_status"
-  fi
-  echo
-  echo "Useful commands:"
-  echo "  ./install-erpnext-dev.sh enable-autostart"
-  echo "  ./install-erpnext-dev.sh disable-autostart"
-  echo "  ./install-erpnext-dev.sh service-start"
-  echo "  ./install-erpnext-dev.sh service-stop"
-  echo "  ./install-erpnext-dev.sh logs"
-  echo "============================================================"
-}
-
 show_status_menu() {
   while true; do
     echo
@@ -3938,13 +3732,18 @@ show_advanced_menu() {
     echo "12) SSL/HTTPS Roadmap"
     echo "13) Local SSL Status"
     echo "14) Local SSL Guide"
-    echo "15) Create Self-Signed Local Cert"
-    echo "16) Configure Local SSL"
-    echo "17) Disable Local SSL"
-    echo "18) Start Bench in Foreground"
-    echo "19) Show Service Logs"
-    echo "20) Access Submenu"
-    echo "21) Back"
+    echo "15) Trusted mkcert SSL Guide"
+    echo "16) Browser Trust Check Guide"
+    echo "17) Install/Replace Local SSL Cert"
+    echo "18) Verify Local SSL"
+    echo "19) Create Self-Signed Local Cert"
+    echo "20) Configure Local SSL"
+    echo "21) Disable Local SSL"
+    echo "22) Verify SSL Rollback"
+    echo "23) Start Bench in Foreground"
+    echo "24) Show Service Logs"
+    echo "25) Access Submenu"
+    echo "26) Back"
     echo
     read -r -p "Choose an option: " advanced_choice
 
@@ -3964,19 +3763,21 @@ show_advanced_menu() {
       13) show_ssl_status ;;
       14) show_local_ssl_guide ;;
       15) show_mkcert_local_ssl_guide ;;
-      16) verify_local_ssl ;;
-      17) create_self_signed_local_cert ;;
-      18) configure_local_ssl ;;
-      19) disable_local_ssl ;;
-      20) run_foreground_start ;;
-      21) show_erpnext_service_logs ;;
-      22) show_access_menu ;;
-      23) return 0 ;;
+      16) show_browser_trust_check_guide ;;
+      17) install_local_ssl_cert ;;
+      18) verify_local_ssl ;;
+      19) create_self_signed_local_cert ;;
+      20) configure_local_ssl ;;
+      21) disable_local_ssl ;;
+      22) verify_ssl_rollback ;;
+      23) run_foreground_start ;;
+      24) show_erpnext_service_logs ;;
+      25) show_access_menu ;;
+      26) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
 }
-
 show_help() {
   cat <<EOF_HELP
 ${APP_NAME} v${SCRIPT_VERSION}
@@ -4006,6 +3807,8 @@ Basic actions:
   local-ssl-guide Show local SSL overview and quick test guide
   mkcert-guide  Show trusted browser SSL workflow with mkcert
   verify-local-ssl Verify local SSL status and show host tests
+  browser-trust-guide Show how to confirm browser/curl trust from the host
+  install-local-ssl-cert Install/replace cert/key from /tmp or env paths
   create-self-signed-local-cert Create quick self-signed cert for local SSL testing
   backup        Create database backup
   backup-files  Create database + files backup
@@ -4055,7 +3858,10 @@ Advanced actions:
   ssl-roadmap         Show future SSL/HTTPS implementation roadmap
   mkcert-guide        Show trusted local SSL workflow with mkcert
   ssl-rollback-guide  Show local SSL rollback/disable guide
+  verify-ssl-rollback Verify SSL rollback/disable state
   verify-local-ssl    Verify local SSL status and show host tests
+  browser-trust-guide Show trusted/untrusted certificate host checks
+  install-local-ssl-cert Install/replace local SSL cert/key safely
   create-self-signed-local-cert Create quick local SSL test certificate
   configure-local-ssl Configure Nginx local HTTPS reverse proxy
   disable-local-ssl   Disable local HTTPS reverse proxy site
@@ -4078,6 +3884,11 @@ Environment overrides:
   INSIGHTS_BRANCH=main
   AUTO_START=true|false|prompt
   ENABLE_AUTOSTART=true|false|prompt
+  SSL_CERT_PATH=/custom/path/site.crt
+  SSL_KEY_PATH=/custom/path/site.key
+  LOCAL_SSL_CERT_SOURCE=/tmp/site.crt
+  LOCAL_SSL_KEY_SOURCE=/tmp/site.key
+  SSL_REDIRECT_HTTP=true|false
 
 Browser access:
   Direct IP URL works while ERPNext is running: http://VM_IP:8000
@@ -4144,7 +3955,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|ssl-rollback-guide|verify-local-ssl|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -4214,8 +4025,11 @@ main() {
     ssl-status) show_ssl_status ;;
     local-ssl-guide) show_local_ssl_guide ;;
     mkcert-guide|trusted-local-ssl-guide) show_mkcert_local_ssl_guide ;;
+    browser-trust-guide|trust-check-guide) show_browser_trust_check_guide ;;
     ssl-rollback-guide) show_ssl_rollback_guide ;;
+    verify-ssl-rollback) verify_ssl_rollback ;;
     verify-local-ssl) verify_local_ssl ;;
+    install-local-ssl-cert|replace-local-ssl-cert) install_local_ssl_cert ;;
     create-self-signed-local-cert|self-signed-local-cert) create_self_signed_local_cert ;;
     configure-local-ssl) configure_local_ssl ;;
     disable-local-ssl) disable_local_ssl ;;

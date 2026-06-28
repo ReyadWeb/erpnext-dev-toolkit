@@ -1,28 +1,34 @@
 # Changelog
 
-## v0.8.2 - Trusted local SSL polish
+## v0.8.3
+
+Final local SSL hardening release.
 
 ### Added
 
-- `mkcert-guide` command for browser-trusted local SSL workflow.
-- `trusted-local-ssl-guide` alias for `mkcert-guide`.
-- `verify-local-ssl` command to summarize SSL status and host test commands.
-- `ssl-rollback-guide` command for safe local HTTPS rollback instructions.
-- Advanced and Access menu entries for trusted SSL, verification, and rollback.
+- `install-local-ssl-cert` command.
+- `replace-local-ssl-cert` alias.
+- `browser-trust-guide` command.
+- `verify-ssl-rollback` command.
+- Safe cert/key installation from `/tmp` or `LOCAL_SSL_CERT_SOURCE` / `LOCAL_SSL_KEY_SOURCE`.
+- Automatic backup of existing local SSL cert/key before replacement.
+- Nginx reload after certificate replacement when the local SSL site is enabled.
+- Clear host-side trusted certificate checks.
 
 ### Improved
 
-- `ssl-status` now includes stronger certificate diagnostics:
-  - certificate type indicator
-  - self-signed detection
-  - expiry/remaining days
-  - private-key permission warning
-- `local-ssl-guide` now points users to the dedicated mkcert workflow.
-- SSL documentation now separates quick self-signed testing from trusted mkcert usage.
+- Corrected SSL entries in the Advanced menu.
+- Expanded Access menu SSL options.
+- Improved mkcert workflow to use the installer cert import helper.
+- Added trust guidance to `ssl-status`.
+- Improved rollback guidance and verification.
 
-### Unchanged by design
+### Preserved
 
-- Existing ERPNext dev systemd service is not replaced.
-- Bench direct access on `:8000` remains available.
-- v0.8.0 Nginx reverse-proxy behavior remains intact.
-- Production SSL remains a future separate production track.
+- Existing `http://erp.test:8000` direct Bench access.
+- Existing Nginx reverse proxy behavior.
+- Existing full app stack support.
+
+## v0.8.2
+
+Trusted local SSL polish with mkcert guide, richer certificate diagnostics, expiry checks, and rollback guide.

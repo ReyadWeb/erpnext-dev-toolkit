@@ -1,89 +1,75 @@
-# ERPNext Developer Installer v0.8.2
+# ERPNext Developer Installer v0.8.3
 
-Public beta local developer installer for ERPNext/Frappe environments on Ubuntu VMs.
+Beta-quality local developer VM installer for ERPNext/Frappe on Ubuntu-based VMs.
 
-## Status
+This release keeps the v0.8.x local HTTPS reverse proxy workflow and adds final SSL hardening: trusted certificate install helpers, host/browser trust checks, rollback verification, and corrected SSL menu numbering.
 
-**Beta-quality for local developer VM use.**
+## Current verified stack
 
-This script is intended for local learning, development, testing, and VM-based ERPNext experimentation. It is **not a production installer**.
-
-## Verified local stack
-
-The installer has been validated with:
-
-- Frappe Framework v16
-- ERPNext v16
-- Frappe CRM
-- Frappe HR / HRMS
-- Frappe Telephony
-- Frappe Helpdesk
-- Frappe Insights
-- Local systemd service/autostart
-- Backups and maintenance commands
-- App registry repair
-- KVM/libvirt networking diagnostics
-- Local HTTPS via Nginx reverse proxy
+- Frappe / ERPNext development install
+- systemd service and autostart
+- readiness wait for web/socket/Redis ports
+- backups and maintenance commands
+- optional App Library: CRM, HRMS, Telephony, Helpdesk, Insights
+- VM networking diagnostics
+- local HTTPS reverse proxy with Nginx
+- self-signed and mkcert/trusted local SSL workflows
 
 ## Quick start
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh" -o install-erpnext-dev.sh
+curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh
 chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh setup
 ```
 
-Then start ERPNext:
-
-```bash
-./install-erpnext-dev.sh start
-./install-erpnext-dev.sh access
-```
-
-## Core commands
-
-```bash
-./install-erpnext-dev.sh status
-./install-erpnext-dev.sh doctor
-./install-erpnext-dev.sh start
-./install-erpnext-dev.sh stop
-./install-erpnext-dev.sh restart
-./install-erpnext-dev.sh access
-./install-erpnext-dev.sh network-status
-```
-
-## App Library
-
-```bash
-./install-erpnext-dev.sh app-library
-./install-erpnext-dev.sh app-status
-./install-erpnext-dev.sh install-crm
-./install-erpnext-dev.sh install-hrms
-./install-erpnext-dev.sh install-helpdesk
-./install-erpnext-dev.sh install-insights
-./install-erpnext-dev.sh list-apps
-```
-
-Helpdesk dependency handling includes Telephony.
-
-## Local HTTPS / SSL
-
-v0.8.x adds optional local HTTPS while keeping direct Bench access unchanged.
-
-Current direct access remains available:
+Then open the direct developer URL while Bench is running:
 
 ```text
-http://erp.test:8000
 http://VM_IP:8000
+http://erp.test:8000
 ```
 
-Optional local HTTPS target:
+For local HTTPS after SSL configuration:
 
 ```text
 https://erp.test
 ```
 
-Architecture:
+## Common commands
+
+```bash
+./install-erpnext-dev.sh status
+./install-erpnext-dev.sh doctor
+./install-erpnext-dev.sh start
+./install-erpnext-dev.sh restart
+./install-erpnext-dev.sh access
+./install-erpnext-dev.sh app-library
+./install-erpnext-dev.sh backup-files
+```
+
+## App Library
+
+Verified optional apps:
+
+| App | Command | Status |
+|---|---|---|
+| Frappe CRM | `install-crm` | Verified |
+| Frappe HR / HRMS | `install-hrms` | Verified |
+| Frappe Telephony | `install-telephony` | Verified |
+| Frappe Helpdesk | `install-helpdesk` | Verified; installs Telephony dependency |
+| Frappe Insights | `install-insights` | Verified |
+
+Check apps:
+
+```bash
+./install-erpnext-dev.sh list-apps
+./install-erpnext-dev.sh app-status
+```
+
+## Local HTTPS / SSL
+
+Local HTTPS uses Nginx inside the VM as a reverse proxy:
 
 ```text
 Browser HTTPS :443
@@ -92,7 +78,9 @@ Browser HTTPS :443
     -> Socket.io 127.0.0.1:9000
 ```
 
-SSL commands:
+Direct Bench access remains available on `:8000`.
+
+Useful SSL commands:
 
 ```bash
 ./install-erpnext-dev.sh ssl-status
@@ -101,13 +89,13 @@ SSL commands:
 ./install-erpnext-dev.sh configure-local-ssl
 ./install-erpnext-dev.sh verify-local-ssl
 ./install-erpnext-dev.sh mkcert-guide
-./install-erpnext-dev.sh ssl-rollback-guide
+./install-erpnext-dev.sh browser-trust-guide
+./install-erpnext-dev.sh install-local-ssl-cert
 ./install-erpnext-dev.sh disable-local-ssl
+./install-erpnext-dev.sh verify-ssl-rollback
 ```
 
-### Quick self-signed test
-
-Inside the VM:
+### Self-signed quick test
 
 ```bash
 ./install-erpnext-dev.sh create-self-signed-local-cert
@@ -115,7 +103,7 @@ Inside the VM:
 ./install-erpnext-dev.sh ssl-status
 ```
 
-From the host:
+Host test:
 
 ```bash
 curl -I http://erp.test
@@ -123,43 +111,37 @@ curl -kI https://erp.test
 curl -I http://erp.test:8000
 ```
 
-Expected:
+A browser warning is expected with self-signed certificates.
 
-```text
-http://erp.test        -> 301 redirect to https://erp.test/
-https://erp.test       -> 200 OK through Nginx HTTPS reverse proxy
-http://erp.test:8000   -> 200 OK direct Bench fallback
-```
+### Trusted mkcert workflow
 
-Self-signed certificates require browser exceptions. For trusted browser SSL, use:
+Run the guide:
 
 ```bash
 ./install-erpnext-dev.sh mkcert-guide
 ```
 
-## KVM/libvirt networking
+Generate the certificate on the host, copy it into the VM, then install it safely:
+
+```bash
+./install-erpnext-dev.sh install-local-ssl-cert
+./install-erpnext-dev.sh configure-local-ssl
+./install-erpnext-dev.sh verify-local-ssl
+```
+
+Trust must be installed on the host/browser machine, not only inside the VM.
+
+## VM networking
 
 ```bash
 ./install-erpnext-dev.sh network-status
 ./install-erpnext-dev.sh hosts-command
 ./install-erpnext-dev.sh host-test
 ./install-erpnext-dev.sh kvm-identify
-./install-erpnext-dev.sh kvm-guide
-./install-erpnext-dev.sh multi-env-guide
 ```
 
-## Backups and maintenance
+Use `.test` names for local environments and avoid `.local`.
 
-```bash
-./install-erpnext-dev.sh backup
-./install-erpnext-dev.sh backup-files
-./install-erpnext-dev.sh list-backups
-./install-erpnext-dev.sh maintenance
-./install-erpnext-dev.sh migrate
-./install-erpnext-dev.sh build
-./install-erpnext-dev.sh clear-cache
-```
+## Scope
 
-## Important limitation
-
-This is a developer installer. Production should be a separate track with production-ready Nginx/Supervisor/systemd worker configuration, firewall rules, domain/DNS validation, SSL renewal, backup/restore testing, monitoring, and a defined update strategy.
+This project is for local development, learning, and VM-based testing. It is not a production installer. Production should use a separate architecture with Nginx, Supervisor/systemd production workers, firewalling, backups, SSL renewal, monitoring, and a real domain.

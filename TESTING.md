@@ -1,15 +1,13 @@
-# Testing Guide v0.8.2
+# Testing Guide v0.8.3
 
-## Syntax test
+## Syntax and help
 
 ```bash
 bash -n install-erpnext-dev.sh
 ./install-erpnext-dev.sh help
 ```
 
-## Existing environment health
-
-Inside the VM:
+## Core health
 
 ```bash
 ./install-erpnext-dev.sh doctor
@@ -17,35 +15,37 @@ Inside the VM:
 ./install-erpnext-dev.sh list-apps
 ```
 
-Expected:
+Expected optional apps when fully installed:
 
-- ERPNext service running.
-- Ports 8000, 9000, 11000, 13000 listening.
-- Optional apps show OK if installed.
-- App registry shows no downloaded-but-not-installed apps unless intentionally testing a partial install.
+```text
+crm
+hrms
+telephony
+helpdesk
+insights
+```
 
-## SSL status and guides
-
-Inside the VM:
+## SSL status
 
 ```bash
 ./install-erpnext-dev.sh ssl-status
-./install-erpnext-dev.sh local-ssl-guide
-./install-erpnext-dev.sh mkcert-guide
 ./install-erpnext-dev.sh verify-local-ssl
-./install-erpnext-dev.sh ssl-rollback-guide
 ```
 
-Expected:
+Expected when local SSL is enabled:
 
-- Commands display guidance/status without breaking ERPNext.
-- `ssl-status` shows cert/key/config/port status.
-- `mkcert-guide` shows host-side trust workflow.
-- `ssl-rollback-guide` shows safe rollback steps.
+```text
+Nginx service                OK
+Nginx SSL config             OK
+Nginx SSL enabled            OK
+SSL certificate              OK
+SSL private key              OK
+HTTPS reverse proxy          OK
+Bench web                    OK
+Socket.io                    OK
+```
 
-## Self-signed SSL quick test
-
-Inside the VM:
+## Self-signed SSL test
 
 ```bash
 ./install-erpnext-dev.sh create-self-signed-local-cert
@@ -53,7 +53,7 @@ Inside the VM:
 ./install-erpnext-dev.sh ssl-status
 ```
 
-From the host:
+Host tests:
 
 ```bash
 curl -I http://erp.test
@@ -64,42 +64,54 @@ curl -I http://erp.test:8000
 Expected:
 
 ```text
-http://erp.test        -> 301 redirect to https://erp.test/
-https://erp.test       -> 200 OK through Nginx HTTPS reverse proxy
+http://erp.test        -> 301 redirect
+https://erp.test       -> 200 OK with curl -k
 http://erp.test:8000   -> 200 OK direct Bench fallback
 ```
 
-## Trusted mkcert test
+## Trusted certificate replacement test
 
-Run `./install-erpnext-dev.sh mkcert-guide` and follow the host-to-VM instructions.
+Copy trusted cert/key into the VM as `/tmp/erp.test.crt` and `/tmp/erp.test.key`, then run:
 
-After installing mkcert-generated cert/key in the VM and re-running `configure-local-ssl`, test from the host:
+```bash
+./install-erpnext-dev.sh install-local-ssl-cert
+./install-erpnext-dev.sh ssl-status
+./install-erpnext-dev.sh verify-local-ssl
+```
+
+Host trusted test:
 
 ```bash
 curl -I https://erp.test
 ```
 
-Expected:
+Expected for a trusted mkcert cert: `200 OK` without `-k`.
 
-- 200 OK without `-k`.
-- Browser should not show a certificate warning if mkcert CA is trusted on the host/browser profile.
+## Browser trust guide
+
+```bash
+./install-erpnext-dev.sh browser-trust-guide
+```
+
+Use this when HTTPS works with `curl -k` but the browser still shows a certificate warning.
 
 ## Rollback test
 
-Inside the VM:
-
 ```bash
 ./install-erpnext-dev.sh disable-local-ssl
-./install-erpnext-dev.sh ssl-status
-```
-
-From the host:
-
-```bash
-curl -I http://erp.test:8000
+./install-erpnext-dev.sh verify-ssl-rollback
+./install-erpnext-dev.sh runtime-status
 ```
 
 Expected:
 
-- Direct Bench access still works.
-- HTTPS site is disabled or no longer responds through the local SSL Nginx site.
+- Managed Nginx site disabled.
+- Certificate files kept for reuse.
+- Direct Bench fallback remains available on `:8000`.
+
+Re-enable:
+
+```bash
+./install-erpnext-dev.sh configure-local-ssl
+./install-erpnext-dev.sh verify-local-ssl
+```
