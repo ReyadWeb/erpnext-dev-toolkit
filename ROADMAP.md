@@ -1,18 +1,19 @@
 # ERPNext Developer Installer Roadmap
 
-This roadmap tracks the planned development path after the verified v0.5.7/v0.5.8 App Library milestone.
+This roadmap tracks development after the verified full App Library milestone and the v0.6.0 public beta documentation release.
 
-## Project status
+## Current project status
 
-Current maturity: beta-quality for local developer VMs.
-
-Target use case: Ubuntu-based local development, testing, and learning environments for ERPNext and selected Frappe apps.
-
-Not yet targeted: production servers. Production should become a separate installer or separate mode after the developer workflow is stable.
+```text
+Current release: v0.6.0
+Maturity: public beta for local developer VMs
+Target: Ubuntu-based local development, testing, and learning environments
+Production status: not production-ready
+```
 
 ## Verified baseline
 
-The current validated stack is:
+Validated local stack:
 
 - Frappe Framework v16
 - ERPNext v16
@@ -22,45 +23,35 @@ The current validated stack is:
 - Frappe Helpdesk
 - Frappe Insights
 
-Core workflows validated so far:
+Validated workflows:
 
-- Fresh ERPNext developer environment setup
+- Fresh ERPNext developer setup
 - systemd service creation
 - autostart on VM boot
 - start / stop / restart
-- service readiness wait
+- visible readiness wait
 - browser access guidance
-- backup with files
+- database backup
+- database + files backup
 - app registry repair for `sites/apps.txt`
 - optional Frappe App Library installs
-
-## v0.5.8 — App Library polish
-
-Goal: improve the already verified v0.5.7 App Library workflow before wider testing.
-
-Included / planned items:
-
-- Add compact optional app status command: `app-status`
-- Add optional app status to the doctor/full health report
-- Reduce repeated browser instructions after start/restart
-- Keep `sites/apps.txt` in a predictable order
-- Add this roadmap file
-- Keep v0.5.7 Helpdesk dependency handling through Telephony
+- optional app status in doctor report
 
 ## v0.6.0 — Public beta documentation
 
-Goal: prepare the project for public developer use.
+Included:
 
-Planned items:
-
-- Rewrite README for public clarity
-- Add a verified app matrix
-- Add screenshots or terminal examples
-- Add a known warnings section
-- Add a troubleshooting section based on real test failures
-- Add release notes / changelog
-- Add clear “development only, not production” warnings
-- Add fresh Ubuntu 24.04 and Ubuntu 26.04 regression checklist
+- Public-facing README rewrite
+- Verified app matrix
+- Quick start section
+- VM access notes
+- App Library documentation
+- Known warnings section
+- Troubleshooting section
+- Fresh VM regression checklist
+- CHANGELOG.md
+- TESTING.md
+- Updated ROADMAP.md
 
 ## v0.7.0 — VM and networking improvements
 
@@ -71,9 +62,10 @@ Planned items:
 - Improve KVM fixed-IP guide
 - Add host `/etc/hosts` helper output
 - Add multi-environment naming guide
-- Add clearer direct-IP vs friendly-hostname checks
+- Add direct-IP vs friendly-hostname diagnostics
 - Document NAT vs bridged networking
-- Improve local DNS guidance for multiple ERPNext VMs
+- Add guidance for multiple local ERPNext VMs
+- Consider host-side helper script or generated commands for libvirt DHCP reservations
 
 ## v0.8.0 — Backup and restore hardening
 
@@ -83,12 +75,13 @@ Planned items:
 
 - Fully test `restore-db`
 - Fully test `restore-full`
-- Add restore dry-run where possible
+- Add restore dry-run where practical
 - Group backup sets by timestamp
 - Add backup cleanup option
 - Add backup export option
 - Add stronger warnings before destructive restore actions
 - Add app-install rollback guidance
+- Add restore regression checklist
 
 ## v0.9.0 — Production planning branch
 
@@ -96,10 +89,10 @@ Goal: research and design production support without destabilizing the developer
 
 Important direction:
 
-- Keep the local development installer separate from production automation.
+- Keep local development automation separate from production automation.
 - Consider a separate script later, for example `install-erpnext-prod.sh`.
 
-Production topics to research and design:
+Production topics to research:
 
 - Nginx / reverse proxy
 - SSL / Let’s Encrypt
@@ -108,7 +101,7 @@ Production topics to research and design:
 - production process management
 - MariaDB hardening
 - Redis hardening
-- backups and offsite backup policy
+- scheduled backups and offsite backup policy
 - update strategy
 - monitoring
 - disaster recovery
