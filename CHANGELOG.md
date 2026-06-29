@@ -1,28 +1,20 @@
-# Changelog v0.8.9
+# Changelog v0.8.10
 
-## Added
+## Fixed
 
-- Generic root storage status command:
-  - `storage-status`
-- Generic root storage expansion command:
-  - `expand-root-storage`
-- Storage verification command:
-  - `verify-storage`
-- Setup-time storage check for cloned/resized VMs where the virtual disk is larger than the root filesystem.
-- Support for common Ubuntu storage layouts:
-  - LVM root on a partition
-  - direct ext4 root partition
-  - direct XFS root partition
-- `AUTO_EXPAND_ROOT=true|false|prompt` environment control.
+- Fixed root storage detection for common Ubuntu LVM installs where `/` is mounted from `/dev/mapper/<vg>--<lv>`.
+- Added fallback LVM detection by scanning all logical volumes and matching canonical device paths such as `/dev/dm-*`.
+- Improved PV detection for LVM roots by parsing the actual LV backing device before falling back to VG-level PV lookup.
 
 ## Improved
 
-- Setup can now offer to expand root storage before ERPNext installation consumes disk space.
-- The storage expansion logic is detector-based and avoids hardcoded devices such as `/dev/vda3`.
-- Unknown/risky layouts are detected and skipped safely.
+- `storage-status` should now correctly detect layouts like:
+  - `/dev/vda3 -> LVM PV -> /dev/ubuntu-vg/ubuntu-lv -> /`
+- `expand-root-storage` can now offer the quick storage fix for more fresh/cloned Ubuntu VMs.
+- Storage output now shows the detected root logical volume when available.
 
 ## Safety
 
-- Automatic expansion only runs when the root disk layout is clearly detected.
-- Unsupported layouts show a warning and make no changes.
-- The command remains interactive unless `AUTO_EXPAND_ROOT=true` or `--yes` is used.
+- Still only expands when a single growable backing partition is detected.
+- Multi-PV or unclear LVM layouts remain non-automatic.
+- Unknown layouts are skipped with no destructive changes.

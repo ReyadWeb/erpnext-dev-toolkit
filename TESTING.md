@@ -1,4 +1,4 @@
-# Testing v0.8.9
+# Testing v0.8.10
 
 ## Version check
 
@@ -74,4 +74,31 @@ From HOST:
 curl -I http://YOUR-SITE.test
 curl -kI https://YOUR-SITE.test
 curl -I http://YOUR-SITE.test:8000
+```
+
+
+## v0.8.10 LVM regression test
+
+On a fresh/cloned Ubuntu VM, run:
+
+```bash
+./install-erpnext-dev.sh storage-status
+```
+
+For common Ubuntu LVM layouts, expected output should identify:
+
+```text
+Layout: lvm
+Backing disk: /dev/vda or equivalent
+Root partition/PV: /dev/vda3 or equivalent
+Root LV: /dev/<vg>/<lv>
+Expansion: recommended, if free disk/VG space exists
+```
+
+Then test:
+
+```bash
+./install-erpnext-dev.sh expand-root-storage
+df -h /
+./install-erpnext-dev.sh verify-storage
 ```

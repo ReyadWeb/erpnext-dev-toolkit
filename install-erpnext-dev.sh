@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.9"
+SCRIPT_VERSION="0.8.10"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1119,7 +1119,9 @@ storage_parent_disk() {
 }
 
 storage_detect_layout() {
-  local root_source root_source_real root_fstype root_type lv_path vg_name pv_lines pv_count pv_dev disk_dev part_num
+  local root_source root_source_real root_fstype root_type
+  local lv_path vg_name pv_lines pv_count pv_dev disk_dev part_num
+  local cand_lv cand_vg cand_devices cand_real
 
   root_source="$(findmnt -n -o SOURCE / 2>/dev/null | head -n 1 || true)"
   root_fstype="$(findmnt -n -o FSTYPE / 2>/dev/null | head -n 1 || true)"
@@ -1128,15 +1130,45 @@ storage_detect_layout() {
 
   [[ -n "$root_source" ]] || return 1
 
-  if command -v lvs >/dev/null 2>&1; then
+  # LVM root detection must handle /dev/mapper/<vg>--<lv>, /dev/<vg>/<lv>, and /dev/dm-*.
+  # Some versions of lvs do not resolve all aliases when queried directly, so we also scan all LVs
+  # and compare their canonical readlink target to the root mount device.
+  if command -v lvs >/dev/null 2>&1 && command -v pvs >/dev/null 2>&1; then
     lv_path="$(lvs --noheadings -o lv_path "$root_source" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
     if [[ -z "$lv_path" && "$root_source_real" != "$root_source" ]]; then
       lv_path="$(lvs --noheadings -o lv_path "$root_source_real" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
     fi
 
+    if [[ -z "$lv_path" ]]; then
+      while IFS='|' read -r cand_lv cand_vg cand_devices; do
+        cand_lv="$(printf '%s' "$cand_lv" | xargs)"
+        cand_vg="$(printf '%s' "$cand_vg" | xargs)"
+        [[ -n "$cand_lv" ]] || continue
+        cand_real="$(readlink -f "$cand_lv" 2>/dev/null || printf '%s\n' "$cand_lv")"
+        if [[ "$cand_lv" == "$root_source" || "$cand_lv" == "$root_source_real" || "$cand_real" == "$root_source_real" ]]; then
+          lv_path="$cand_lv"
+          vg_name="$cand_vg"
+          break
+        fi
+      done < <(lvs --noheadings --separator '|' -o lv_path,vg_name,devices 2>/dev/null || true)
+    fi
+
     if [[ -n "$lv_path" ]]; then
-      vg_name="$(lvs --noheadings -o vg_name "$lv_path" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
-      pv_lines="$(pvs --noheadings --separator '|' -o pv_name,vg_name 2>/dev/null | awk -F'|' -v vg="$vg_name" '{gsub(/^[ \t]+|[ \t]+$/, "", $1); gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == vg) print $1}' || true)"
+      vg_name="${vg_name:-$(lvs --noheadings -o vg_name "$lv_path" 2>/dev/null | awk 'NF {print $1; exit}' || true)}"
+
+      # Prefer the actual PV devices used by this LV. Fallback to all PVs in the VG.
+      pv_lines="$(lvs --noheadings -o devices "$lv_path" 2>/dev/null \
+        | tr ', ' '\n\n' \
+        | sed -E 's/\([0-9]+\)//g' \
+        | awk '/^\/dev\// {print}' \
+        | sort -u || true)"
+
+      if [[ -z "$pv_lines" && -n "$vg_name" ]]; then
+        pv_lines="$(pvs --noheadings --separator '|' -o pv_name,vg_name 2>/dev/null \
+          | awk -F'|' -v vg="$vg_name" '{gsub(/^[ \t]+|[ \t]+$/, "", $1); gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == vg) print $1}' \
+          | sort -u || true)"
+      fi
+
       pv_count="$(printf '%s\n' "$pv_lines" | awk 'NF {c++} END {print c+0}')"
 
       if [[ "$pv_count" -eq 1 ]]; then
@@ -1227,7 +1259,7 @@ storage_eval() {
 }
 
 show_storage_status() {
-  local data layout root_source root_fs disk_dev part_dev root_bytes disk_bytes can_expand reason
+  local data layout root_source root_fs disk_dev part_dev lv_path root_bytes disk_bytes can_expand reason
 
   data="$(storage_eval)"
   while IFS='=' read -r k v; do
@@ -1237,6 +1269,7 @@ show_storage_status() {
       ROOT_FS) root_fs="$v" ;;
       DISK_DEV) disk_dev="$v" ;;
       PART_DEV) part_dev="$v" ;;
+      LV_PATH) lv_path="$v" ;;
       ROOT_BYTES) root_bytes="$v" ;;
       DISK_BYTES) disk_bytes="$v" ;;
       CAN_EXPAND) can_expand="$v" ;;
@@ -1252,6 +1285,7 @@ show_storage_status() {
   status_line "Root filesystem" "INFO" "${root_source:-unknown} (${root_fs:-unknown})"
   [[ -n "${disk_dev:-}" ]] && status_line "Backing disk" "INFO" "${disk_dev} ($(bytes_to_gib "${disk_bytes:-0}"))"
   [[ -n "${part_dev:-}" ]] && status_line "Root partition/PV" "INFO" "${part_dev}"
+  [[ -n "${lv_path:-}" ]] && status_line "Root LV" "INFO" "${lv_path}"
   status_line "Root size" "INFO" "$(bytes_to_gib "${root_bytes:-0}")"
 
   if [[ "${can_expand:-no}" == "yes" ]]; then
