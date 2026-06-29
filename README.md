@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v0.8.14
+# ERPNext Developer Installer v0.8.15
 
 Local ERPNext/Frappe developer VM installer for Ubuntu 24.04/26.04.
 
