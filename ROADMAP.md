@@ -1,50 +1,42 @@
-# Roadmap v0.8.14
+# Roadmap v0.8.16
 
-## Completed in v0.8.14
+## Completed in v0.8.15
 
-- Generic root storage detection.
-- Generic root storage expansion for common Ubuntu VM layouts.
-- Setup-time expansion prompt.
-- Storage status and verification commands.
+- Fresh VM storage expansion prompt before disk-space resource check.
+- Generic Ubuntu LVM expansion flow confirmed on a resized/cloned VM.
+- Runtime and doctor checks passed after install and reboot.
 
-## Next recommended patch
+## Completed in v0.8.16
 
-### v0.9.0 Guided Install Workflow
+- Private installer logs.
+- No generated password printed in terminal/log summary.
+- Installer lock for mutating operations.
+- Post-install validation summary.
+- Clean release packaging direction.
+- Stale docs updated.
 
-Planned flow:
+## Next: v0.8.17 candidate
 
-1. Install ERPNext.
-2. Register local domain on the HOST `/etc/hosts`.
-3. Verify HTTP access.
-4. Configure local SSL.
-5. Verify HTTPS.
-6. Configure trusted browser SSL with mkcert guidance.
-7. Install optional apps after the base system is confirmed.
+Focus on guided setup and smoother user progression:
 
-The goal is a step-by-step installer that tells the user exactly when to run commands inside the VM and when to run commands on the HOST.
+1. Guided install checkpoints.
+2. Host `/etc/hosts` verification workflow.
+3. Local SSL wizard/checklist.
+4. Optional app installation only after base access is confirmed.
+5. More compact terminal messaging for small windows.
 
-## Later production track
+## Later production planning track
 
-- Keep the developer installer separate from production automation.
-- Reuse the same domain-first design for future production domain and SSL workflows.
+Production automation should remain separate from the local development installer.
 
+Planned production topics:
 
-## v0.8.14 Storage Expansion Fix
-
-This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
-
-```bash
-sgdisk -e <disk> || true
-partprobe <disk> || true
-growpart <disk> <partition-number>
-pvresize <physical-volume-partition>
-lvextend -r -l +100%FREE <root-logical-volume>
-```
-
-The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
-
-New diagnostic command:
-
-```bash
-./install-erpnext-dev.sh storage-debug
-```
+- Real domain configuration.
+- Nginx production reverse proxy.
+- Supervisor/systemd production services.
+- Let's Encrypt HTTP-01.
+- Let's Encrypt DNS-01 with Cloudflare.
+- Cloudflare Origin CA.
+- Firewall rules.
+- Backups and restore testing.
+- Monitoring and update strategy.

@@ -1,50 +1,35 @@
+# Changelog
 
-## v0.8.15 - LVM storage detector fallback and order fix
+## v0.8.16 - Security, reliability, and release hygiene
 
-- Improved generic LVM root detection for common Ubuntu layouts.
-- Added lsblk PKNAME fallback for `/dev/mapper/<vg>--<lv>` root devices.
-- Keeps storage expansion generic: no hardcoded `/dev/vda3` or Ubuntu LV names.
-- `expand-root-storage` now reports unsupported layouts as WARN instead of incorrectly saying no expansion is needed.
-- Setup can now ask the user to expand root storage when a larger VM disk is detected.
+### Security
 
-# Changelog v0.8.14
+- Installer logs are now created with private `600` permissions.
+- Generated ERPNext Administrator passwords are no longer printed in the terminal summary.
+- The terminal summary points users to the protected credentials file instead.
 
-## Fixed
+### Reliability
 
-- Fixed root storage detection for common Ubuntu LVM installs where `/` is mounted from `/dev/mapper/<vg>--<lv>`.
-- Added fallback LVM detection by scanning all logical volumes and matching canonical device paths such as `/dev/dm-*`.
-- Improved PV detection for LVM roots by parsing the actual LV backing device before falling back to VG-level PV lookup.
+- Added an installer lock file to prevent overlapping setup/repair/service operations from changing the same VM at the same time.
+- Added a compact post-install validation summary for storage, service state, autostart, and credentials file presence.
 
-## Improved
+### Release hygiene
 
-- `storage-status` should now correctly detect layouts like:
-  - `/dev/vda3 -> LVM PV -> /dev/ubuntu-vg/ubuntu-lv -> /`
-- `expand-root-storage` can now offer the quick storage fix for more fresh/cloned Ubuntu VMs.
-- Storage output now shows the detected root logical volume when available.
+- Updated stale documentation references from older versions.
+- Clean release ZIP should exclude `.git` and only include the distributable files.
 
-## Safety
+## v0.8.15 - Storage expansion setup fix
 
-- Still only expands when a single growable backing partition is detected.
-- Multi-PV or unclear LVM layouts remain non-automatic.
-- Unknown layouts are skipped with no destructive changes.
+- Fixed setup order so storage expansion is offered before the main disk-space resource warning.
+- Fixed LVM expansion decision logic so existing VG free space and larger backing disks trigger expansion.
+- Confirmed on a fresh Ubuntu LVM VM that root storage can expand before ERPNext install.
 
+## v0.8.14 - Proven generic LVM root expansion flow
 
-## v0.8.14 Storage Expansion Fix
-
-This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
-
-```bash
-sgdisk -e <disk> || true
-partprobe <disk> || true
-growpart <disk> <partition-number>
-pvresize <physical-volume-partition>
-lvextend -r -l +100%FREE <root-logical-volume>
-```
-
-The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
-
-New diagnostic command:
-
-```bash
-./install-erpnext-dev.sh storage-debug
-```
+- Added generic storage expansion workflow based on the proven Ubuntu LVM resize sequence:
+  - `sgdisk -e <disk> || true`
+  - `partprobe <disk> || true`
+  - `growpart <disk> <partition-number>`
+  - `pvresize <physical-volume-partition>`
+  - `lvextend -r -l +100%FREE <root-logical-volume>`
+- Added `storage-debug` diagnostics.

@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.15"
+SCRIPT_VERSION="0.8.16"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -51,7 +51,9 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
 ASSUME_YES=0
 ACTION=""
-LOG_FILE="/tmp/erpnext-dev-installer-$(date +%Y%m%d-%H%M%S).log"
+LOG_DIR="${LOG_DIR:-/tmp}"
+LOG_FILE="${LOG_FILE:-${LOG_DIR}/erpnext-dev-installer-$(date +%Y%m%d-%H%M%S).log}"
+LOCK_FILE="${LOCK_FILE:-/tmp/erpnext-dev-installer.lock}"
 
 if [[ -t 1 ]]; then
   BOLD="\033[1m"
@@ -71,6 +73,11 @@ else
   RESET=""
 fi
 
+# Keep logs private because install output may include sensitive operational details.
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+: > "$LOG_FILE" || { echo "ERROR: Cannot write log file: $LOG_FILE" >&2; exit 1; }
+chmod 600 "$LOG_FILE" 2>/dev/null || true
+
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 log() { echo -e "\n${BLUE}==>${RESET} ${BOLD}$*${RESET}"; }
@@ -78,6 +85,30 @@ ok() { echo -e "${GREEN}OK:${RESET} $*"; }
 warn() { echo -e "${YELLOW}WARN:${RESET} $*"; }
 err() { echo -e "${RED}ERROR:${RESET} $*" >&2; }
 fail() { err "$*"; echo "Log file: $LOG_FILE" >&2; exit 1; }
+
+acquire_installer_lock() {
+  # Prevent two setup/repair/service commands from changing the same VM at once.
+  exec 200>"$LOCK_FILE"
+  chmod 600 "$LOCK_FILE" 2>/dev/null || true
+  if ! flock -n 200; then
+    err "Another installer task is already running."
+    echo "Lock file: $LOCK_FILE" >&2
+    echo "Wait for it to finish, or remove the lock only if you are sure no installer is running." >&2
+    exit 1
+  fi
+}
+
+action_requires_lock() {
+  local action="${1:-menu}"
+  case "$action" in
+    ""|menu|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|repair-site-config|expand-root-storage|app-library|apps|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 
 
 status_line() {
@@ -3458,6 +3489,44 @@ show_access_menu() {
   done
 }
 
+post_install_validation_summary() {
+  local free_gb service_status autostart_status
+  free_gb="$(df -BG / | awk 'NR==2 {gsub("G", "", $4); print $4}' 2>/dev/null || echo 0)"
+  service_status="$(service_state 2>/dev/null || echo unknown)"
+  autostart_status="$(autostart_state 2>/dev/null || echo unknown)"
+
+  echo
+  echo "============================================================"
+  echo "Post-Install Validation"
+  echo "============================================================"
+
+  if [[ "$free_gb" =~ ^[0-9]+$ && "$free_gb" -ge 30 ]]; then
+    status_line "Root free space" "OK" "${free_gb}G available"
+  else
+    status_line "Root free space" "WARN" "${free_gb}G available; 60G+ recommended"
+  fi
+
+  if [[ "$service_status" == "Running" ]]; then
+    status_line "ERPNext service" "OK" "$service_status"
+  else
+    status_line "ERPNext service" "INFO" "$service_status"
+  fi
+
+  if [[ "$autostart_status" == "Enabled" ]]; then
+    status_line "Autostart" "OK" "$autostart_status"
+  else
+    status_line "Autostart" "WARN" "$autostart_status"
+  fi
+
+  if path_is_file "${FRAPPE_HOME}/erpnext-dev-credentials.txt"; then
+    status_line "Credentials file" "OK" "${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  else
+    status_line "Credentials file" "WARN" "missing at ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  fi
+
+  echo "============================================================"
+}
+
 print_summary() {
   local vm_ip bench_dir
   vm_ip="$(get_vm_ip)"
@@ -3473,7 +3542,8 @@ print_summary() {
   echo
   echo "Login:"
   echo "  Username: Administrator"
-  echo "  Password: ${ADMIN_PASSWORD}"
+  echo "  Password: saved in the credentials file"
+  echo "  View with: sudo cat ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
   echo
   echo "Start ERPNext:"
   echo "  ./install-erpnext-dev.sh start"
@@ -5333,6 +5403,7 @@ run_install() {
       echo "  ./install-erpnext-dev.sh start"
     fi
   fi
+  post_install_validation_summary
 }
 
 soft_uninstall() {
@@ -5755,6 +5826,10 @@ parse_args() {
 
 main() {
   parse_args "$@"
+
+  if action_requires_lock "${ACTION:-menu}"; then
+    acquire_installer_lock
+  fi
 
   case "${ACTION:-menu}" in
     ""|menu) show_menu ;;

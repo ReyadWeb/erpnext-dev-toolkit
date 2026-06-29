@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v0.8.15
+# ERPNext Developer Installer v0.8.16
 
 Local ERPNext/Frappe developer VM installer for Ubuntu 24.04/26.04.
 
@@ -20,19 +20,44 @@ Local site name [erp.test]:
 
 Press Enter for `erp.test`, or enter a custom local name such as `erp08.test`.
 
-## v0.8.14 highlights
+## v0.8.16 highlights
 
-- Generic root storage detection and expansion.
-- Improved Ubuntu LVM root detection for `/dev/mapper/*`, `/dev/<vg>/<lv>`, and `/dev/dm-*` aliases.
-- Setup can detect when a cloned VM disk is larger than the Ubuntu root filesystem.
-- Supports common Ubuntu layouts:
-  - LVM + ext4 root
-  - direct ext4 partition root
-  - direct XFS partition root
-- Adds clear storage commands:
+- Keeps the v0.8.15 storage expansion fix as the stable baseline.
+- Adds safer private installer logs with `600` permissions.
+- Stops printing generated passwords in the terminal summary/log.
+- Adds an installer lock to reduce conflicting simultaneous setup/repair/service runs.
+- Adds a compact post-install validation summary.
+- Updates stale test/release documentation.
+- Release ZIP should be clean and should not include `.git`.
+
+## Storage expansion flow
+
+The installer checks storage before the main disk-space resource check.
+
+If a cloned/resized VM has a larger virtual disk than Ubuntu is using, setup can prompt:
+
+```text
+Storage: root uses 39G of 260G disk.
+Expand root storage now? [Y/n]:
+```
+
+For common Ubuntu LVM roots, the generic flow is:
+
+```bash
+sgdisk -e <disk> || true
+partprobe <disk> || true
+growpart <disk> <partition-number>
+pvresize <physical-volume-partition>
+lvextend -r -l +100%FREE <root-logical-volume>
+```
+
+The script derives the disk, partition number, physical volume, and logical volume from the VM. It does not hardcode `/dev/vda3` or `ubuntu-vg`.
+
+Useful storage commands:
 
 ```bash
 ./install-erpnext-dev.sh storage-status
+./install-erpnext-dev.sh storage-debug
 ./install-erpnext-dev.sh expand-root-storage
 ./install-erpnext-dev.sh verify-storage
 ```
@@ -79,6 +104,22 @@ For browser-trusted local SSL, use:
 ./install-erpnext-dev.sh browser-trust-guide
 ```
 
+## Credentials and logs
+
+The installer saves credentials in:
+
+```text
+/home/frappe/erpnext-dev-credentials.txt
+```
+
+View them inside the VM with:
+
+```bash
+sudo cat /home/frappe/erpnext-dev-credentials.txt
+```
+
+Installer logs are written to `/tmp/erpnext-dev-installer-*.log` with private permissions.
+
 ## Optional apps
 
 Install optional apps only after the base install and access are verified:
@@ -102,27 +143,7 @@ Available app commands include:
 ./install-erpnext-dev.sh site-config
 ./install-erpnext-dev.sh storage-status
 ./install-erpnext-dev.sh runtime-status
+./install-erpnext-dev.sh service-summary
 ./install-erpnext-dev.sh ssl-status
 ./install-erpnext-dev.sh doctor
-```
-
-
-## v0.8.14 Storage Expansion Fix
-
-This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
-
-```bash
-sgdisk -e <disk> || true
-partprobe <disk> || true
-growpart <disk> <partition-number>
-pvresize <physical-volume-partition>
-lvextend -r -l +100%FREE <root-logical-volume>
-```
-
-The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
-
-New diagnostic command:
-
-```bash
-./install-erpnext-dev.sh storage-debug
 ```

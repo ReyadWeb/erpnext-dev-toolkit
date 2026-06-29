@@ -1,139 +1,107 @@
-# Testing v0.8.14
+# Testing v0.8.16
 
-## Version check
+## 1. Syntax check
 
 ```bash
+bash -n install-erpnext-dev.sh
 grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 ```
 
 Expected:
 
 ```text
-SCRIPT_VERSION="0.8.9"
+SCRIPT_VERSION="0.8.16"
 ```
 
-## Storage tests
+## 2. Fresh VM storage test
 
-Inside the VM:
+Run inside a fresh Ubuntu VM:
 
 ```bash
 ./install-erpnext-dev.sh storage-status
-./install-erpnext-dev.sh verify-storage
-```
-
-If expansion is recommended:
-
-```bash
-./install-erpnext-dev.sh expand-root-storage
-./install-erpnext-dev.sh storage-status
-./install-erpnext-dev.sh verify-storage
-```
-
-Expected after expansion:
-
-```text
-Expansion OK not needed
-```
-
-or root storage should show a larger size than before.
-
-## Fresh install test
-
-```bash
+./install-erpnext-dev.sh storage-debug
 ./install-erpnext-dev.sh setup
 ```
 
-Expected behavior:
+Expected behavior when the VM disk is larger than the root filesystem:
 
-- Checks RAM and disk.
-- If the VM disk is larger than root, offers to expand storage.
-- Prompts for local site name.
-- Installs ERPNext.
-- Starts service and waits for ports.
+```text
+Storage: root uses 39G of 260G disk.
+Expand root storage now? [Y/n]:
+```
 
-## Post-install checks
+After choosing `Y`, setup should continue and the resource check should show enough free disk:
+
+```text
+OK: Available disk: 200+ GB
+```
+
+## 3. Runtime validation
+
+After setup:
 
 ```bash
-./install-erpnext-dev.sh site-config
 ./install-erpnext-dev.sh runtime-status
+./install-erpnext-dev.sh doctor
 ./install-erpnext-dev.sh service-summary
+```
+
+Expected:
+
+```text
+Runtime                      OK      Running via service
+Service                      OK      Running
+Autostart                    OK      Enabled
+Bench web                    OK      port 8000 listening
+Socket.io                    OK      port 9000 listening
+Bench Redis queue            OK      port 11000 listening
+Bench Redis cache            OK      port 13000 listening
+```
+
+## 4. Reboot test
+
+```bash
+sudo reboot
+```
+
+After reconnecting:
+
+```bash
+./install-erpnext-dev.sh runtime-status
 ./install-erpnext-dev.sh doctor
 ```
 
-## Local SSL test
+Expected: service is running and all required development ports are listening.
 
-```bash
-./install-erpnext-dev.sh create-self-signed-local-cert
-./install-erpnext-dev.sh configure-local-ssl
-./install-erpnext-dev.sh verify-local-ssl
-```
+## 5. Security regression test
 
-From HOST:
+The install summary must not print the generated Administrator password.
 
-```bash
-curl -I http://YOUR-SITE.test
-curl -kI https://YOUR-SITE.test
-curl -I http://YOUR-SITE.test:8000
-```
-
-
-## v0.8.14 LVM regression test
-
-On a fresh/cloned Ubuntu VM, run:
-
-```bash
-./install-erpnext-dev.sh storage-status
-```
-
-For common Ubuntu LVM layouts, expected output should identify:
+Expected summary wording:
 
 ```text
-Layout: lvm
-Backing disk: /dev/vda or equivalent
-Root partition/PV: /dev/vda3 or equivalent
-Root LV: /dev/<vg>/<lv>
-Expansion: recommended, if free disk/VG space exists
+Password: saved in the credentials file
+View with: sudo cat /home/frappe/erpnext-dev-credentials.txt
 ```
 
-Then test:
+Check log permissions:
 
 ```bash
-./install-erpnext-dev.sh expand-root-storage
-df -h /
-./install-erpnext-dev.sh verify-storage
+ls -l /tmp/erpnext-dev-installer-*.log | tail -1
 ```
 
-### v0.8.14 LVM storage test
+Expected permissions should not be world-readable:
 
-On a fresh Ubuntu VM with a larger virtual disk than root filesystem:
-
-```bash
-./install-erpnext-dev.sh storage-status
-./install-erpnext-dev.sh expand-root-storage
-./install-erpnext-dev.sh storage-status
-df -h /
+```text
+-rw-------
 ```
 
-Expected: layout should be `lvm`, expansion should be recommended, and `/` should grow after confirmation.
+## 6. Lock test
 
+Start a mutating command in one terminal, then quickly run another mutating command in a second terminal.
 
+Expected:
 
-## v0.8.14 Storage Expansion Fix
-
-This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
-
-```bash
-sgdisk -e <disk> || true
-partprobe <disk> || true
-growpart <disk> <partition-number>
-pvresize <physical-volume-partition>
-lvextend -r -l +100%FREE <root-logical-volume>
-```
-
-The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
-
-New diagnostic command:
-
-```bash
-./install-erpnext-dev.sh storage-debug
+```text
+ERROR: Another installer task is already running.
 ```
