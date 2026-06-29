@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v0.8.13
+# ERPNext Developer Installer v0.8.14
 
 Local ERPNext/Frappe developer VM installer for Ubuntu 24.04/26.04.
 
@@ -20,7 +20,7 @@ Local site name [erp.test]:
 
 Press Enter for `erp.test`, or enter a custom local name such as `erp08.test`.
 
-## v0.8.13 highlights
+## v0.8.14 highlights
 
 - Generic root storage detection and expansion.
 - Improved Ubuntu LVM root detection for `/dev/mapper/*`, `/dev/<vg>/<lv>`, and `/dev/dm-*` aliases.
@@ -104,4 +104,25 @@ Available app commands include:
 ./install-erpnext-dev.sh runtime-status
 ./install-erpnext-dev.sh ssl-status
 ./install-erpnext-dev.sh doctor
+```
+
+
+## v0.8.14 Storage Expansion Fix
+
+This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
+
+```bash
+sgdisk -e <disk> || true
+partprobe <disk> || true
+growpart <disk> <partition-number>
+pvresize <physical-volume-partition>
+lvextend -r -l +100%FREE <root-logical-volume>
+```
+
+The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
+
+New diagnostic command:
+
+```bash
+./install-erpnext-dev.sh storage-debug
 ```

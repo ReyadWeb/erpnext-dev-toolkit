@@ -1,4 +1,4 @@
-# Testing v0.8.13
+# Testing v0.8.14
 
 ## Version check
 
@@ -77,7 +77,7 @@ curl -I http://YOUR-SITE.test:8000
 ```
 
 
-## v0.8.13 LVM regression test
+## v0.8.14 LVM regression test
 
 On a fresh/cloned Ubuntu VM, run:
 
@@ -103,7 +103,7 @@ df -h /
 ./install-erpnext-dev.sh verify-storage
 ```
 
-### v0.8.13 LVM storage test
+### v0.8.14 LVM storage test
 
 On a fresh Ubuntu VM with a larger virtual disk than root filesystem:
 
@@ -116,3 +116,24 @@ df -h /
 
 Expected: layout should be `lvm`, expansion should be recommended, and `/` should grow after confirmation.
 
+
+
+## v0.8.14 Storage Expansion Fix
+
+This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
+
+```bash
+sgdisk -e <disk> || true
+partprobe <disk> || true
+growpart <disk> <partition-number>
+pvresize <physical-volume-partition>
+lvextend -r -l +100%FREE <root-logical-volume>
+```
+
+The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
+
+New diagnostic command:
+
+```bash
+./install-erpnext-dev.sh storage-debug
+```

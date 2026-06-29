@@ -1,6 +1,6 @@
-# Roadmap v0.8.13
+# Roadmap v0.8.14
 
-## Completed in v0.8.13
+## Completed in v0.8.14
 
 - Generic root storage detection.
 - Generic root storage expansion for common Ubuntu VM layouts.
@@ -27,3 +27,24 @@ The goal is a step-by-step installer that tells the user exactly when to run com
 
 - Keep the developer installer separate from production automation.
 - Reuse the same domain-first design for future production domain and SSL workflows.
+
+
+## v0.8.14 Storage Expansion Fix
+
+This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
+
+```bash
+sgdisk -e <disk> || true
+partprobe <disk> || true
+growpart <disk> <partition-number>
+pvresize <physical-volume-partition>
+lvextend -r -l +100%FREE <root-logical-volume>
+```
+
+The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
+
+New diagnostic command:
+
+```bash
+./install-erpnext-dev.sh storage-debug
+```

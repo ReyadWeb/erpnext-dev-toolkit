@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.13"
+SCRIPT_VERSION="0.8.14"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1149,101 +1149,184 @@ storage_root_lsblk_value() {
 }
 
 storage_detect_layout() {
-  local root_source root_source_real root_fstype root_type
-  local lv_path vg_name pv_lines pv_count pv_dev disk_dev part_num
-  local cand_lv cand_vg cand_real source_real pv_real pv_type root_pkname root_pkdev
+  # Generic root storage detector.
+  # This intentionally uses the exact proven Ubuntu/LVM repair path when it can
+  # derive it safely:
+  #   sgdisk -e <disk>; growpart <disk> <part>; pvresize <pv>; lvextend -r <lv>
+  # It must not hardcode /dev/vda3 or ubuntu-vg names.
+  python3 <<'PY_STORAGE_DETECT'
+import os
+import re
+import shlex
+import subprocess
+import sys
 
-  root_source="$(findmnt -n -o SOURCE / 2>/dev/null | head -n 1 || true)"
-  root_fstype="$(findmnt -n -o FSTYPE / 2>/dev/null | head -n 1 || true)"
-  [[ -n "$root_source" ]] || return 1
 
-  root_source_real="$(readlink -f "$root_source" 2>/dev/null || printf '%s\n' "$root_source")"
-  source_real="$root_source_real"
-  root_type="$(lsblk -no TYPE "$root_source" 2>/dev/null | head -n 1 | tr -d '[:space:]' || true)"
-  [[ -n "$root_type" ]] || root_type="$(lsblk -no TYPE "$root_source_real" 2>/dev/null | head -n 1 | tr -d '[:space:]' || true)"
+def run(cmd):
+    try:
+        return subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return ""
 
-  # Full-tree fallback: this is reliable for common Ubuntu LVM where root is a mapper
-  # device but the lsblk tree still shows the root LV parent as the PV partition.
-  root_pkname="$(lsblk -P -o NAME,TYPE,PKNAME,MOUNTPOINTS 2>/dev/null | awk 'index($0, "MOUNTPOINTS=\"/\"") {print; exit}' | sed -n 's/.*PKNAME="\([^"]*\)".*/\1/p')"
-  if [[ -n "$root_pkname" && -b "/dev/$root_pkname" ]]; then
-    root_pkdev="/dev/$root_pkname"
-  fi
 
-  if [[ "$root_type" == "lvm" || "$root_source" == /dev/mapper/* || "$root_source_real" == /dev/dm-* ]]; then
-    if ! command -v lvs >/dev/null 2>&1 || ! command -v pvs >/dev/null 2>&1; then
-      printf 'LAYOUT=unknown\nROOT_SOURCE=%s\nROOT_FS=%s\nREASON=%s\n' "$root_source" "$root_fstype" "LVM tools are not available"
-      return 0
-    fi
+def q(v):
+    return "" if v is None else str(v).strip()
 
-    # Resolve the mounted LV by comparing real device paths.
-    while IFS='|' read -r cand_lv cand_vg; do
-      cand_lv="$(printf '%s' "$cand_lv" | awk '{$1=$1; print}')"
-      cand_vg="$(printf '%s' "$cand_vg" | awk '{$1=$1; print}')"
-      [[ -n "$cand_lv" ]] || continue
-      cand_real="$(readlink -f "$cand_lv" 2>/dev/null || printf '%s\n' "$cand_lv")"
-      if [[ "$cand_lv" == "$root_source" || "$cand_lv" == "$root_source_real" || "$cand_real" == "$source_real" ]]; then
-        lv_path="$cand_lv"
-        vg_name="$cand_vg"
+
+def emit(**kv):
+    for k, v in kv.items():
+        if v is not None and str(v) != "":
+            print(f"{k}={v}")
+
+
+def parse_lsblk_p():
+    out = run(["lsblk", "-P", "-o", "NAME,KNAME,PATH,TYPE,PKNAME,PARTN,FSTYPE,MOUNTPOINTS,SIZE"])
+    rows = []
+    for line in out.splitlines():
+        try:
+            d = dict(re.findall(r'(\w+)="([^"]*)"', line))
+        except Exception:
+            d = {}
+        if d:
+            rows.append(d)
+    return rows
+
+
+def parent_disk_and_partnum(part_dev, rows):
+    part_dev = os.path.realpath(part_dev)
+    base = os.path.basename(part_dev)
+    row = None
+    for r in rows:
+        names = {r.get("NAME",""), r.get("KNAME",""), os.path.basename(r.get("PATH","") or "")}
+        if base in names or os.path.realpath(r.get("PATH","") or "/nonexistent") == part_dev:
+            row = r
+            break
+    partn = q(row.get("PARTN")) if row else ""
+    pk = q(row.get("PKNAME")) if row else ""
+    disk = f"/dev/{pk}" if pk else ""
+    if not partn:
+        m = re.search(r'p?(\d+)$', os.path.basename(part_dev))
+        if m:
+            partn = m.group(1)
+    if not disk:
+        # /dev/vda3, /dev/sda3, /dev/xvda3
+        m = re.match(r'^(/dev/[A-Za-z]+[A-Za-z0-9]*?)(\d+)$', part_dev)
+        if m:
+            disk = m.group(1)
+        # /dev/nvme0n1p3, /dev/mmcblk0p3
+        m = re.match(r'^(/dev/(?:nvme\d+n\d+|mmcblk\d+))p(\d+)$', part_dev)
+        if m:
+            disk = m.group(1)
+            partn = partn or m.group(2)
+    return disk, partn
+
+root_source = q(run(["findmnt", "-n", "-o", "SOURCE", "/"]).splitlines()[0] if run(["findmnt", "-n", "-o", "SOURCE", "/"]) else "")
+root_fs = q(run(["findmnt", "-n", "-o", "FSTYPE", "/"]).splitlines()[0] if run(["findmnt", "-n", "-o", "FSTYPE", "/"]) else "")
+if not root_source:
+    emit(LAYOUT="unknown", ROOT_SOURCE="unknown", ROOT_FS="unknown", REASON="could not read root mount source")
+    sys.exit(0)
+
+root_real = os.path.realpath(root_source)
+rows = parse_lsblk_p()
+root_row = None
+for r in rows:
+    mp = r.get("MOUNTPOINTS", "")
+    if mp == "/" or "/" in mp.split():
+        root_row = r
         break
-      fi
-    done < <(lvs --noheadings --separator '|' -o lv_path,vg_name 2>/dev/null || true)
 
-    [[ -n "$lv_path" ]] || lv_path="$root_source"
-    [[ -n "$vg_name" ]] || vg_name="$(lvs --noheadings -o vg_name "$lv_path" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
+root_type = q(root_row.get("TYPE")) if root_row else q(run(["lsblk", "-no", "TYPE", root_source]).splitlines()[0] if run(["lsblk", "-no", "TYPE", root_source]) else "")
 
-    if [[ -n "${root_pkdev:-}" ]]; then
-      pv_lines="$root_pkdev"
-    elif [[ -n "$vg_name" ]]; then
-      pv_lines="$(pvs --noheadings --separator '|' -o pv_name,vg_name 2>/dev/null \
-        | awk -F'|' -v vg="$vg_name" '{gsub(/^[ \t]+|[ \t]+$/, "", $1); gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == vg) print $1}' \
-        | sed -E 's/\([0-9]+\)//g' | sort -u || true)"
-    fi
+is_lvm = root_type == "lvm" or root_source.startswith("/dev/mapper/") or root_real.startswith("/dev/dm-")
 
-    pv_count="$(printf '%s\n' "$pv_lines" | awk 'NF {c++} END {print c+0}')"
+if is_lvm:
+    if not run(["bash", "-lc", "command -v lvs && command -v pvs && command -v vgs"]):
+        emit(LAYOUT="unknown", ROOT_SOURCE=root_source, ROOT_FS=root_fs, REASON="LVM tools are not available")
+        sys.exit(0)
 
-    if [[ "$pv_count" -eq 1 ]]; then
-      pv_dev="$(printf '%s\n' "$pv_lines" | awk 'NF {print $1; exit}' | sed -E 's/\([0-9]+\)//g')"
-      pv_dev="$(readlink -f "$pv_dev" 2>/dev/null || printf '%s\n' "$pv_dev")"
+    # Read LVs, matching either /dev/mapper path, canonical /dev/VG/LV, or dm-* real path.
+    lv_out = run(["lvs", "--noheadings", "--separator", "|", "-o", "lv_path,vg_name,devices"])
+    lv_path = ""
+    vg_name = ""
+    devices = ""
+    first_lv = None
+    for line in lv_out.splitlines():
+        parts = [x.strip() for x in line.split("|", 2)]
+        if len(parts) < 2:
+            continue
+        cand_lv, cand_vg = parts[0], parts[1]
+        cand_devices = parts[2] if len(parts) > 2 else ""
+        if not first_lv:
+            first_lv = (cand_lv, cand_vg, cand_devices)
+        cand_real = os.path.realpath(cand_lv)
+        if cand_lv == root_source or cand_lv == root_real or cand_real == root_real:
+            lv_path, vg_name, devices = cand_lv, cand_vg, cand_devices
+            break
+    if not lv_path and first_lv:
+        # If there is only one LV on a simple dev VM, this is usually root.
+        lvs_count = len([x for x in lv_out.splitlines() if x.strip()])
+        if lvs_count == 1:
+            lv_path, vg_name, devices = first_lv
+    if not lv_path:
+        lv_path = root_source
+    if not vg_name:
+        vg_name = q(run(["lvs", "--noheadings", "-o", "vg_name", lv_path]).splitlines()[0] if run(["lvs", "--noheadings", "-o", "vg_name", lv_path]) else "")
 
-      pv_type="$(lsblk -no TYPE "$pv_dev" 2>/dev/null | head -n 1 | tr -d '[:space:]' || true)"
-      disk_dev="$(storage_parent_disk "$pv_dev" 2>/dev/null || true)"
-      part_num="$(lsblk -no PARTN "$pv_dev" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
-      [[ -n "$part_num" ]] || part_num="$(storage_part_number "$pv_dev" 2>/dev/null || true)"
-      [[ -n "$disk_dev" ]] || disk_dev="$(storage_infer_disk_from_partition "$pv_dev" 2>/dev/null || true)"
+    # Prefer the PV from LV devices, e.g. /dev/vda3(0). This is the exact value that
+    # proved correct manually on Ubuntu Server clones.
+    pv_dev = ""
+    m = re.search(r'(/dev/[^\s,()]+)(?:\(\d+\))?', devices or "")
+    if m:
+        pv_dev = m.group(1)
 
-      if [[ -n "$disk_dev" && -n "$part_num" && -b "$disk_dev" && -b "$pv_dev" ]]; then
-        printf 'LAYOUT=lvm\nROOT_SOURCE=%s\nROOT_FS=%s\nLV_PATH=%s\nVG_NAME=%s\nPV_DEV=%s\nPART_DEV=%s\nDISK_DEV=%s\nPART_NUM=%s\nPV_TYPE=%s\n' \
-          "$root_source" "$root_fstype" "$lv_path" "$vg_name" "$pv_dev" "$pv_dev" "$disk_dev" "$part_num" "${pv_type:-unknown}"
-        return 0
-      fi
+    # Fallback: root lsblk row often has PKNAME=vda3 for LVM roots.
+    if not pv_dev and root_row and q(root_row.get("PKNAME")):
+        maybe = "/dev/" + q(root_row.get("PKNAME"))
+        if os.path.exists(maybe):
+            pv_dev = maybe
 
-      # Return LVM even without a growable partition. lvextend can still use existing VG free extents.
-      printf 'LAYOUT=lvm\nROOT_SOURCE=%s\nROOT_FS=%s\nLV_PATH=%s\nVG_NAME=%s\nPV_DEV=%s\nREASON=%s\n' \
-        "$root_source" "$root_fstype" "$lv_path" "$vg_name" "$pv_dev" "LVM PV could not be tied to a disk partition; only existing VG free space can be used automatically"
-      return 0
-    fi
+    # Fallback: if the VG has exactly one PV, use it.
+    if not pv_dev and vg_name:
+        pv_out = run(["pvs", "--noheadings", "--separator", "|", "-o", "pv_name,vg_name"])
+        pvs = []
+        for line in pv_out.splitlines():
+            parts = [x.strip() for x in line.split("|")]
+            if len(parts) >= 2 and parts[1] == vg_name:
+                pvs.append(re.sub(r'\(\d+\)$', '', parts[0]))
+        if len(set(pvs)) == 1:
+            pv_dev = sorted(set(pvs))[0]
 
-    if [[ "$pv_count" -gt 1 ]]; then
-      printf 'LAYOUT=lvm\nROOT_SOURCE=%s\nROOT_FS=%s\nLV_PATH=%s\nVG_NAME=%s\nREASON=%s\n' "$root_source" "$root_fstype" "$lv_path" "$vg_name" "LVM has multiple PVs; only existing VG free space can be used automatically"
-    else
-      printf 'LAYOUT=lvm\nROOT_SOURCE=%s\nROOT_FS=%s\nLV_PATH=%s\nVG_NAME=%s\nREASON=%s\n' "$root_source" "$root_fstype" "$lv_path" "$vg_name" "could not trace LVM root to a physical partition; only existing VG free space can be used automatically"
-    fi
-    return 0
-  fi
+    disk_dev = ""
+    part_num = ""
+    if pv_dev:
+        pv_dev = os.path.realpath(pv_dev)
+        disk_dev, part_num = parent_disk_and_partnum(pv_dev, rows)
 
-  if [[ "$root_type" == "part" ]]; then
-    disk_dev="$(storage_parent_disk "$root_source_real" 2>/dev/null || true)"
-    part_num="$(lsblk -no PARTN "$root_source_real" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
-    [[ -n "$part_num" ]] || part_num="$(storage_part_number "$root_source_real" 2>/dev/null || true)"
-    [[ -n "$disk_dev" ]] || disk_dev="$(storage_infer_disk_from_partition "$root_source_real" 2>/dev/null || true)"
-    if [[ -n "$disk_dev" && -n "$part_num" ]]; then
-      printf 'LAYOUT=partition\nROOT_SOURCE=%s\nROOT_FS=%s\nPART_DEV=%s\nDISK_DEV=%s\nPART_NUM=%s\n' \
-        "$root_source_real" "$root_fstype" "$root_source_real" "$disk_dev" "$part_num"
-      return 0
-    fi
-  fi
+    # This is the supported automatic LVM path. Even if disk/part cannot be derived,
+    # lvextend can still consume existing VG free space safely.
+    emit(
+        LAYOUT="lvm",
+        ROOT_SOURCE=root_source,
+        ROOT_FS=root_fs,
+        LV_PATH=lv_path,
+        VG_NAME=vg_name,
+        PV_DEV=pv_dev,
+        PART_DEV=pv_dev,
+        DISK_DEV=disk_dev,
+        PART_NUM=part_num,
+        REASON="" if pv_dev else "could not identify LVM PV; only existing VG free space can be used automatically",
+    )
+    sys.exit(0)
 
-  printf 'LAYOUT=unknown\nROOT_SOURCE=%s\nROOT_FS=%s\nREASON=%s\n' "$root_source" "$root_fstype" "root device is not a supported partition or LVM layout"
+# Direct root partition case.
+part_dev = root_real
+if root_type == "part" or (root_row and root_row.get("TYPE") == "part"):
+    disk_dev, part_num = parent_disk_and_partnum(part_dev, rows)
+    emit(LAYOUT="partition", ROOT_SOURCE=part_dev, ROOT_FS=root_fs, PART_DEV=part_dev, DISK_DEV=disk_dev, PART_NUM=part_num)
+    sys.exit(0)
+
+emit(LAYOUT="unknown", ROOT_SOURCE=root_source, ROOT_FS=root_fs, REASON="root device is not a supported partition or LVM layout")
+PY_STORAGE_DETECT
   return 0
 }
 
@@ -1481,6 +1564,31 @@ expand_root_storage() {
 
   ok "Root storage expansion completed"
   show_storage_status
+}
+
+storage_debug() {
+  echo
+  echo "============================================================"
+  echo "Storage Debug"
+  echo "============================================================"
+  echo "findmnt:"
+  findmnt -no SOURCE,FSTYPE,SIZE,AVAIL / || true
+  echo
+  echo "lsblk:"
+  lsblk -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,PKNAME,PARTN || true
+  echo
+  echo "lvs:"
+  sudo lvs -o lv_path,vg_name,lv_size,devices 2>/dev/null || true
+  echo
+  echo "pvs:"
+  sudo pvs -o pv_name,vg_name,pv_size,pv_free 2>/dev/null || true
+  echo
+  echo "vgs:"
+  sudo vgs -o vg_name,vg_size,vg_free 2>/dev/null || true
+  echo
+  echo "detector:"
+  storage_detect_layout || true
+  echo "============================================================"
 }
 
 verify_storage() {
@@ -5505,6 +5613,7 @@ Advanced actions:
   domain-config       Show local/future production domain configuration
   repair-site-config  Repair saved site/domain config from detected Bench site
   storage-status      Show root disk/filesystem expansion status
+  storage-debug       Show storage detection diagnostics
   expand-root-storage Safely expand root filesystem when VM disk is larger
   verify-storage      Verify root storage is suitable for ERPNext
   site-name-guide     Show custom .test hostname guide
@@ -5606,7 +5715,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|expand-root-storage|verify-storage|production-readiness|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -5687,6 +5796,7 @@ main() {
     environment-check|where-am-i) show_environment_check ;;
     site-config) show_site_config ;;
     storage-status) show_storage_status ;;
+    storage-debug) storage_debug ;;
     expand-root-storage) expand_root_storage ;;
     verify-storage) verify_storage ;;
     domain-config) show_domain_config ;;

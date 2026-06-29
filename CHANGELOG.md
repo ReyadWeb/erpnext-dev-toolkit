@@ -1,5 +1,5 @@
 
-## v0.8.13 - LVM storage detector fallback fix
+## v0.8.14 - LVM storage detector fallback fix
 
 - Improved generic LVM root detection for common Ubuntu layouts.
 - Added lsblk PKNAME fallback for `/dev/mapper/<vg>--<lv>` root devices.
@@ -7,7 +7,7 @@
 - `expand-root-storage` now reports unsupported layouts as WARN instead of incorrectly saying no expansion is needed.
 - Setup can now ask the user to expand root storage when a larger VM disk is detected.
 
-# Changelog v0.8.13
+# Changelog v0.8.14
 
 ## Fixed
 
@@ -27,3 +27,24 @@
 - Still only expands when a single growable backing partition is detected.
 - Multi-PV or unclear LVM layouts remain non-automatic.
 - Unknown layouts are skipped with no destructive changes.
+
+
+## v0.8.14 Storage Expansion Fix
+
+This release changes the storage expansion workflow to follow the proven Ubuntu LVM resize sequence generically:
+
+```bash
+sgdisk -e <disk> || true
+partprobe <disk> || true
+growpart <disk> <partition-number>
+pvresize <physical-volume-partition>
+lvextend -r -l +100%FREE <root-logical-volume>
+```
+
+The script derives `<disk>`, `<partition-number>`, `<physical-volume-partition>`, and `<root-logical-volume>` from `findmnt`, `lsblk`, and `lvs`; it does not hardcode `/dev/vda3` or `ubuntu-vg`.
+
+New diagnostic command:
+
+```bash
+./install-erpnext-dev.sh storage-debug
+```
