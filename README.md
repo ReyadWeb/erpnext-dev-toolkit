@@ -1,97 +1,131 @@
-# ERPNext Developer Installer v0.8.17
+# ERPNext Developer Installer v0.8.18
 
-Developer VM installer for Frappe v16 and ERPNext v16 on Ubuntu 24.04 / 26.04 LTS.
+A guided ERPNext/Frappe developer VM installer for Ubuntu 24.04 / 26.04 LTS.
 
-This release builds on the v0.8.16 stable baseline and adds a guided setup flow so new users can follow the correct order: storage, site name, ERPNext installation, host access, and verification.
+Default stack:
+
+- Frappe v16
+- ERPNext v16
+- Local site name: `erp.test`
+- Developer runtime using `bench start`
+- Optional systemd autostart service
+- Optional local HTTPS reverse proxy
 
 ## Quick start
 
-Inside the ERPNext VM:
-
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o install-erpnext-dev.sh
+curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh
 chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh guided-setup
 ```
 
-The guided setup runs the safe installer flow and then prints access verification steps.
-
-## Recommended workflow
-
-```bash
-./install-erpnext-dev.sh guided-setup
-./install-erpnext-dev.sh verify-access
-./install-erpnext-dev.sh next-step
-```
-
-The installer handles:
-
-- Ubuntu 24.04 / 26.04 validation
-- VM root storage expansion prompt when needed
-- custom local site names, such as `erp.test` or `erp08.test`
-- ERPNext v16 installation
-- systemd service creation
-- optional autostart on boot
-- runtime and doctor checks
-- local SSL tooling
-- optional app installation workflows
-- private installer logs
-
-## Custom local site name
-
-Use a unique `.test` hostname for each local VM:
+For a custom local hostname:
 
 ```bash
 SITE_NAME=erp08.test ./install-erpnext-dev.sh guided-setup
 ```
 
-Avoid `.local` because it can conflict with mDNS/Avahi and tools such as LocalWP.
+Use `.test` for local development. Avoid `.local` because it can conflict with mDNS/Avahi.
 
-## Host access
-
-After setup, add the friendly hostname on the Linux Mint host, not inside the VM:
+## Main workflow
 
 ```bash
-echo "VM_IP erp.test" | sudo tee -a /etc/hosts
-```
-
-Then verify:
-
-```bash
+./install-erpnext-dev.sh guided-setup
 ./install-erpnext-dev.sh verify-access
+./install-erpnext-dev.sh local-ssl-wizard
+./install-erpnext-dev.sh next-step
 ```
 
-Host-side tests:
+The guided flow checks storage, installs ERPNext, starts the service, and shows the host `/etc/hosts` command.
+
+## Local HTTPS
+
+v0.8.18 adds a guided local SSL wizard:
 
 ```bash
-curl -I http://VM_IP:8000
-curl -I http://erp.test:8000
+./install-erpnext-dev.sh local-ssl-wizard
+```
+
+The wizard supports:
+
+1. Quick self-signed SSL for testing.
+2. Trusted local SSL using `mkcert` from the host.
+3. SSL status-only checks.
+
+Expected local HTTPS target:
+
+```text
+https://erp.test
+```
+
+The local HTTPS flow uses Nginx inside the VM:
+
+```text
+Browser HTTPS :443
+  -> Nginx inside VM
+    -> Bench web 127.0.0.1:8000
+    -> Socket.io 127.0.0.1:9000
+```
+
+Direct Bench access remains available:
+
+```text
+http://VM_IP:8000
+http://erp.test:8000
 ```
 
 ## Useful commands
 
 ```bash
-./install-erpnext-dev.sh next-step
 ./install-erpnext-dev.sh status
-./install-erpnext-dev.sh runtime-status
 ./install-erpnext-dev.sh doctor
+./install-erpnext-dev.sh runtime-status
+./install-erpnext-dev.sh service-summary
 ./install-erpnext-dev.sh access
 ./install-erpnext-dev.sh verify-access
-./install-erpnext-dev.sh storage-status
-./install-erpnext-dev.sh local-ssl-guide
-./install-erpnext-dev.sh app-library
+./install-erpnext-dev.sh next-step
+./install-erpnext-dev.sh local-ssl-wizard
 ```
 
-## Security notes
+## Storage expansion
 
-Generated credentials are not printed into the terminal log. They are saved to:
+The installer can detect common resized/cloned VM storage layouts and offer expansion before installing ERPNext.
+
+```bash
+./install-erpnext-dev.sh storage-status
+./install-erpnext-dev.sh expand-root-storage
+```
+
+Supported automatic cases include common Ubuntu LVM root layouts and direct ext4/XFS root partitions.
+
+## Credentials
+
+Credentials are saved to:
 
 ```text
 /home/frappe/erpnext-dev-credentials.txt
 ```
 
-The credentials file is owned by the `frappe` user and uses restrictive permissions. Installer logs are created with private `600` permissions.
+Installer logs are private by default:
 
-## Release status
+```text
+/tmp/erpnext-dev-installer-*.log
+```
 
-v0.8.17 is a guided workflow patch on top of the v0.8.16 security/reliability baseline.
+Expected permissions:
+
+```text
+-rw-------
+```
+
+## Optional apps
+
+```bash
+./install-erpnext-dev.sh app-library
+```
+
+Supported app profiles include Frappe CRM, HRMS, Helpdesk, Telephony, and Insights.
+
+## Production note
+
+This script is for local developer VMs. Production deployment should use a separate production workflow with a real domain, hardened Nginx, SSL renewal, backups, monitoring, and update strategy.

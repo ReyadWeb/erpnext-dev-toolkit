@@ -1,49 +1,48 @@
-# Roadmap
+# ERPNext Developer Installer Roadmap
 
-## Current: v0.8.17
+## Current baseline: v0.8.18
 
-Guided developer setup flow.
+v0.8.18 focuses on the local SSL wizard and improves the user path after ERPNext access is verified.
 
 Completed:
 
-- `guided-setup`
-- `next-step`
-- `verify-access`
-- improved final setup guidance
-- cleaner separation between VM-side and host-side access steps
+- Ubuntu 24.04 / 26.04 support
+- Frappe v16 + ERPNext v16 install
+- Custom `.test` site name support
+- Systemd service and autostart
+- Runtime and doctor checks
+- Generic root storage expansion
+- Private installer logs
+- Safer credential output
+- Guided setup flow
+- Verify access workflow
+- Next-step workflow
+- Local SSL wizard
 
-## Next: v0.8.18
+## Next recommended patch: v0.8.19
 
-Local SSL wizard.
+Focus: optional app checkpointing and app-install reliability.
 
-Target:
+Targets:
 
-- guided local SSL command
-- host/VM separation for mkcert steps
-- clearer self-signed vs trusted certificate path
-- SSL verification checklist
-- rollback confirmation
+- Pre-app installation validation
+- Optional app compatibility notes
+- Automatic backup checkpoint before optional apps
+- Clear app install recovery guidance
+- Better app install summary
 
-## Later: v0.8.19
+## Future v0.9.x
 
-Optional app checkpoint workflow.
+Focus: production-readiness planning without mixing dev and production automation.
 
-Target:
+Targets:
 
-- snapshot/backup reminder before optional apps
-- clearer app compatibility notes
-- better failed optional app recovery
-- optional app install summary
+- Production domain planning
+- Production SSL planning
+- Production Nginx architecture checklist
+- Backup/restore validation checklist
+- Firewall and monitoring checklist
 
-## v0.9.x
+## v1.x goal
 
-Production-readiness planning branch.
-
-Target:
-
-- production domain planning
-- production SSL planning
-- Nginx/Supervisor/systemd production model notes
-- firewall, backups, monitoring, and update strategy
-
-Production automation should remain separate from the developer `bench start` workflow.
+Stable developer installer suitable for repeated fresh VM installs, local testing, and demo environments.

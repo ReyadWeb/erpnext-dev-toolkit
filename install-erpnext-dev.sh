@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.17"
+SCRIPT_VERSION="0.8.18"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -101,7 +101,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|repair-site-config|expand-root-storage|app-library|apps|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -2229,7 +2229,7 @@ show_next_step() {
           echo "  ./install-erpnext-dev.sh enable-autostart"
         else
           echo "After access works, optional next step:"
-          echo "  ./install-erpnext-dev.sh local-ssl-guide"
+          echo "  ./install-erpnext-dev.sh local-ssl-wizard"
         fi
       fi
       ;;
@@ -2453,6 +2453,7 @@ Planned local architecture:
 Planned local SSL commands:
   ./install-erpnext-dev.sh ssl-status
   ./install-erpnext-dev.sh local-ssl-guide
+  ./install-erpnext-dev.sh local-ssl-wizard
   ./install-erpnext-dev.sh mkcert-guide
   ./install-erpnext-dev.sh verify-local-ssl
   ./install-erpnext-dev.sh configure-local-ssl
@@ -3041,6 +3042,162 @@ verify_local_ssl() {
   echo "============================================================"
 }
 
+ssl_is_configured() {
+  local cert_path key_path enabled_path https_head
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+  enabled_path="$(ssl_nginx_enabled_path)"
+
+  [[ -f "$cert_path" && -f "$key_path" ]] || return 1
+  [[ -L "$enabled_path" || -f "$enabled_path" ]] || return 1
+  port_listens 443 || return 1
+
+  https_head="$(curl_head_status "https://${SITE_NAME}/" "$SITE_NAME" 443 "127.0.0.1" || true)"
+  [[ "$https_head" == HTTP/* ]]
+}
+
+show_local_ssl_wizard_host_mkcert_steps() {
+  local vm_ip escaped_site cert_path key_path
+  vm_ip="$(get_vm_ip)"
+  escaped_site="${SITE_NAME//./\\.}"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+
+  echo
+  echo "Run these on the HOST machine:"
+  echo "  sudo apt update && sudo apt install -y libnss3-tools mkcert"
+  echo "  mkcert -install"
+  echo "  mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1"
+  echo "  scp ${SITE_NAME}.crt ${SITE_NAME}.key USER@${vm_ip}:/tmp/"
+  echo
+  echo "Then run inside this VM:"
+  echo "  ./install-erpnext-dev.sh local-ssl-wizard"
+  echo
+  echo "Target VM paths:"
+  echo "  ${cert_path}"
+  echo "  ${key_path}"
+  echo
+  echo "HOST /etc/hosts must also contain:"
+  echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
+  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+}
+
+show_local_ssl_wizard_host_tests() {
+  local vm_ip escaped_site
+  vm_ip="$(get_vm_ip)"
+  escaped_site="${SITE_NAME//./\\.}"
+
+  echo
+  echo "HOST checks:"
+  echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
+  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  echo "  curl -I http://${SITE_NAME}"
+  echo "  curl -kI https://${SITE_NAME}     # self-signed test"
+  echo "  curl -I https://${SITE_NAME}      # trusted mkcert test"
+  echo "  curl -I http://${SITE_NAME}:8000"
+}
+
+run_local_ssl_wizard() {
+  require_erpnext_vm_context "local-ssl-wizard" || return 1
+  require_sudo
+
+  local vm_ip direct_head friendly_head choice reply src_cert src_key
+  vm_ip="$(get_vm_ip)"
+  src_cert="/tmp/${SITE_NAME}.crt"
+  src_key="/tmp/${SITE_NAME}.key"
+
+  echo
+  echo "============================================================"
+  echo "Local SSL Wizard"
+  echo "============================================================"
+  echo "Goal: https://${SITE_NAME}"
+  echo "This runs inside the ERPNext VM. Browser trust is configured on the HOST."
+  echo "============================================================"
+
+  if ! port_listens 8000; then
+    status_line "Bench web" "WARN" "127.0.0.1:8000 not listening"
+    if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+      read -r -p "Start ERPNext service now? [Y/n]: " reply
+      reply="${reply:-Y}"
+      if [[ "$reply" =~ ^[Yy]$ ]]; then
+        start_erpnext_service || return 1
+      else
+        warn "Start ERPNext first, then rerun local-ssl-wizard."
+        echo "============================================================"
+        return 1
+      fi
+    else
+      start_erpnext_service || return 1
+    fi
+  fi
+
+  direct_head="$(curl_head_status "http://127.0.0.1:8000/" "" "" "" || true)"
+  friendly_head="$(curl_head_status "http://${SITE_NAME}:8000/" "$SITE_NAME" 8000 "127.0.0.1" || true)"
+
+  [[ "$direct_head" == HTTP/* ]] && status_line "Direct Bench" "OK" "$direct_head" || status_line "Direct Bench" "WARN" "no response"
+  [[ "$friendly_head" == HTTP/* ]] && status_line "Site host header" "OK" "$friendly_head" || status_line "Site host header" "WARN" "no response"
+
+  if [[ "$direct_head" != HTTP/* ]]; then
+    warn "ERPNext direct HTTP must work before SSL is configured."
+    echo "Run: ./install-erpnext-dev.sh verify-access"
+    echo "============================================================"
+    return 1
+  fi
+
+  if ssl_is_configured; then
+    status_line "Local HTTPS" "OK" "already configured"
+    show_local_ssl_wizard_host_tests
+    echo "============================================================"
+    return 0
+  fi
+
+  echo
+  echo "Choose SSL mode:"
+  echo "  1) Quick self-signed certificate"
+  echo "  2) Trusted mkcert certificate from HOST"
+  echo "  3) Show status only"
+  echo
+
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    choice="1"
+  else
+    read -r -p "Choose [1-3]: " choice
+    choice="${choice:-1}"
+  fi
+
+  case "$choice" in
+    1)
+      create_self_signed_local_cert
+      configure_local_ssl
+      verify_local_ssl
+      show_local_ssl_wizard_host_tests
+      echo
+      warn "Self-signed SSL works for testing, but browsers will show a warning."
+      echo "For trusted browser SSL, run: ./install-erpnext-dev.sh local-ssl-wizard and choose mkcert."
+      ;;
+    2)
+      if [[ -f "$src_cert" && -f "$src_key" ]]; then
+        status_line "mkcert files" "OK" "found in /tmp"
+        install_local_ssl_cert
+        configure_local_ssl
+        verify_local_ssl
+        show_local_ssl_wizard_host_tests
+      else
+        status_line "mkcert files" "INFO" "not found in /tmp"
+        show_local_ssl_wizard_host_mkcert_steps
+      fi
+      ;;
+    3)
+      show_ssl_status
+      ;;
+    *)
+      warn "Invalid choice. No changes made."
+      ;;
+  esac
+
+  echo "============================================================"
+}
+
 ssl_file_permissions() {
   local file_path="$1"
   if [[ -e "$file_path" ]]; then
@@ -3587,21 +3744,22 @@ show_access_menu() {
     echo "9) Show SSL/HTTPS roadmap"
     echo "10) Show local SSL status"
     echo "11) Show local SSL guide"
-    echo "12) Show trusted mkcert SSL guide"
-    echo "13) Show browser trust check guide"
-    echo "14) Verify local SSL"
-    echo "15) Install/replace local SSL cert"
-    echo "16) Create self-signed local cert"
-    echo "17) Configure local SSL reverse proxy"
-    echo "18) Disable local SSL reverse proxy"
-    echo "19) Verify SSL rollback"
-    echo "20) Show SSL rollback guide"
-    echo "21) Domain config"
-    echo "22) Production readiness preview"
-    echo "23) Production domain guide"
-    echo "24) Production SSL guide"
-    echo "25) Environment / location check"
-    echo "26) Back"
+    echo "12) Local SSL wizard"
+    echo "13) Show trusted mkcert SSL guide"
+    echo "14) Show browser trust check guide"
+    echo "15) Verify local SSL"
+    echo "16) Install/replace local SSL cert"
+    echo "17) Create self-signed local cert"
+    echo "18) Configure local SSL reverse proxy"
+    echo "19) Disable local SSL reverse proxy"
+    echo "20) Verify SSL rollback"
+    echo "21) Show SSL rollback guide"
+    echo "22) Domain config"
+    echo "23) Production readiness preview"
+    echo "24) Production domain guide"
+    echo "25) Production SSL guide"
+    echo "26) Environment / location check"
+    echo "27) Back"
     echo
     read -r -p "Choose an option: " access_choice
 
@@ -3617,21 +3775,22 @@ show_access_menu() {
       9) show_ssl_roadmap_guide ;;
       10) show_ssl_status ;;
       11) show_local_ssl_guide ;;
-      12) show_mkcert_local_ssl_guide ;;
-      13) show_browser_trust_check_guide ;;
-      14) verify_local_ssl ;;
-      15) install_local_ssl_cert ;;
-      16) create_self_signed_local_cert ;;
-      17) configure_local_ssl ;;
-      18) disable_local_ssl ;;
-      19) verify_ssl_rollback ;;
-      20) show_ssl_rollback_guide ;;
-      21) show_domain_config ;;
-      22) show_production_readiness ;;
-      23) show_production_domain_guide ;;
-      24) show_production_ssl_guide ;;
-      25) show_environment_check ;;
-      26) return 0 ;;
+      12) run_local_ssl_wizard ;;
+      13) show_mkcert_local_ssl_guide ;;
+      14) show_browser_trust_check_guide ;;
+      15) verify_local_ssl ;;
+      16) install_local_ssl_cert ;;
+      17) create_self_signed_local_cert ;;
+      18) configure_local_ssl ;;
+      19) disable_local_ssl ;;
+      20) verify_ssl_rollback ;;
+      21) show_ssl_rollback_guide ;;
+      22) show_domain_config ;;
+      23) show_production_readiness ;;
+      24) show_production_domain_guide ;;
+      25) show_production_ssl_guide ;;
+      26) show_environment_check ;;
+      27) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -5703,27 +5862,28 @@ show_advanced_menu() {
     echo "13) SSL/HTTPS Roadmap"
     echo "14) Local SSL Status"
     echo "15) Local SSL Guide"
-    echo "16) Trusted mkcert SSL Guide"
-    echo "17) Browser Trust Check Guide"
-    echo "18) Install/Replace Local SSL Cert"
-    echo "19) Verify Local SSL"
-    echo "20) Create Self-Signed Local Cert"
-    echo "21) Configure Local SSL"
-    echo "22) Disable Local SSL"
-    echo "23) Verify SSL Rollback"
-    echo "24) Storage Status"
-    echo "25) Expand Root Storage"
-    echo "26) Verify Storage"
-    echo "27) Domain Config"
-    echo "28) Production Readiness Preview"
-    echo "29) Production Domain Guide"
-    echo "30) Production SSL Guide"
-    echo "31) Start Bench in Foreground"
-    echo "32) Show Service Logs"
-    echo "33) Access Submenu"
-    echo "34) Next Step"
-    echo "35) Verify ERPNext HTTP Access"
-    echo "36) Back"
+    echo "16) Local SSL Wizard"
+    echo "17) Trusted mkcert SSL Guide"
+    echo "18) Browser Trust Check Guide"
+    echo "19) Install/Replace Local SSL Cert"
+    echo "20) Verify Local SSL"
+    echo "21) Create Self-Signed Local Cert"
+    echo "22) Configure Local SSL"
+    echo "23) Disable Local SSL"
+    echo "24) Verify SSL Rollback"
+    echo "25) Storage Status"
+    echo "26) Expand Root Storage"
+    echo "27) Verify Storage"
+    echo "28) Domain Config"
+    echo "29) Production Readiness Preview"
+    echo "30) Production Domain Guide"
+    echo "31) Production SSL Guide"
+    echo "32) Start Bench in Foreground"
+    echo "33) Show Service Logs"
+    echo "34) Access Submenu"
+    echo "35) Next Step"
+    echo "36) Verify ERPNext HTTP Access"
+    echo "37) Back"
     echo
     read -r -p "Choose an option: " advanced_choice
 
@@ -5743,27 +5903,28 @@ show_advanced_menu() {
       13) show_ssl_roadmap_guide ;;
       14) show_ssl_status ;;
       15) show_local_ssl_guide ;;
-      16) show_mkcert_local_ssl_guide ;;
-      17) show_browser_trust_check_guide ;;
-      18) install_local_ssl_cert ;;
-      19) verify_local_ssl ;;
-      20) create_self_signed_local_cert ;;
-      21) configure_local_ssl ;;
-      22) disable_local_ssl ;;
-      23) verify_ssl_rollback ;;
-      24) show_storage_status ;;
-      25) expand_root_storage ;;
-      26) verify_storage ;;
-      27) show_domain_config ;;
-      28) show_production_readiness ;;
-      29) show_production_domain_guide ;;
-      30) show_production_ssl_guide ;;
-      31) run_foreground_start ;;
-      32) show_erpnext_service_logs ;;
-      33) show_access_menu ;;
-      34) show_next_step ;;
-      35) verify_access ;;
-      36) return 0 ;;
+      16) run_local_ssl_wizard ;;
+      17) show_mkcert_local_ssl_guide ;;
+      18) show_browser_trust_check_guide ;;
+      19) install_local_ssl_cert ;;
+      20) verify_local_ssl ;;
+      21) create_self_signed_local_cert ;;
+      22) configure_local_ssl ;;
+      23) disable_local_ssl ;;
+      24) verify_ssl_rollback ;;
+      25) show_storage_status ;;
+      26) expand_root_storage ;;
+      27) verify_storage ;;
+      28) show_domain_config ;;
+      29) show_production_readiness ;;
+      30) show_production_domain_guide ;;
+      31) show_production_ssl_guide ;;
+      32) run_foreground_start ;;
+      33) show_erpnext_service_logs ;;
+      34) show_access_menu ;;
+      35) show_next_step ;;
+      36) verify_access ;;
+      37) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -5802,6 +5963,7 @@ Basic actions:
   mkcert-guide  Show trusted browser SSL workflow with mkcert
   browser-trust-guide Show host browser/curl trust check workflow
   verify-local-ssl Verify local SSL status and show host tests
+  local-ssl-wizard Guided local HTTPS setup after access works
   install-local-ssl-cert Install/replace local SSL cert/key inside the VM
   create-self-signed-local-cert Create quick self-signed cert for local SSL testing
   environment-check Show whether this is the host or ERPNext VM context
@@ -5862,6 +6024,7 @@ Advanced actions:
   ssl-rollback-guide  Show local SSL rollback/disable guide
   verify-ssl-rollback Verify SSL disable/rollback state
   verify-local-ssl    Verify local SSL status and show host tests
+  local-ssl-wizard    Guided local HTTPS setup after access works
   install-local-ssl-cert Install/replace local SSL cert/key inside the VM
   create-self-signed-local-cert Create quick local SSL test certificate
   environment-check   Show host vs ERPNext VM command context
@@ -5920,6 +6083,7 @@ Examples:
   ./install-erpnext-dev.sh network-status
   ./install-erpnext-dev.sh ssl-status
   ./install-erpnext-dev.sh local-ssl-guide
+  ./install-erpnext-dev.sh local-ssl-wizard
   ./install-erpnext-dev.sh mkcert-guide
   ./install-erpnext-dev.sh browser-trust-guide
   ./install-erpnext-dev.sh verify-local-ssl
@@ -5945,11 +6109,12 @@ show_menu() {
     echo "5) Access Instructions"
     echo "6) Verify Access"
     echo "7) Next Step"
-    echo "8) Backup / Maintenance"
-    echo "9) App Library"
-    echo "10) Advanced Options"
-    echo "11) Help"
-    echo "12) Exit"
+    echo "8) Local SSL Wizard"
+    echo "9) Backup / Maintenance"
+    echo "10) App Library"
+    echo "11) Advanced Options"
+    echo "12) Help"
+    echo "13) Exit"
     echo
     read -r -p "Choose an option: " choice
 
@@ -5961,11 +6126,12 @@ show_menu() {
       5) show_access_instructions ;;
       6) verify_access ;;
       7) show_next_step ;;
-      8) run_backup_maintenance_menu ;;
-      9) show_app_library_menu ;;
-      10) show_advanced_menu ;;
-      11) show_help ;;
-      12) exit 0 ;;
+      8) run_local_ssl_wizard ;;
+      9) run_backup_maintenance_menu ;;
+      10) show_app_library_menu ;;
+      11) show_advanced_menu ;;
+      12) show_help ;;
+      13) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -5978,7 +6144,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -6014,6 +6180,7 @@ main() {
     access) show_access_instructions ;;
     verify-access) verify_access ;;
     next-step) show_next_step ;;
+    local-ssl-wizard|ssl-wizard) run_local_ssl_wizard ;;
     access-menu) show_access_menu ;;
     backup-menu) run_backup_maintenance_menu ;;
     app-library|apps) show_app_library_menu ;;
