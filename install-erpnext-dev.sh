@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.5"
+SCRIPT_VERSION="0.8.8"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -24,12 +24,16 @@ if [[ -n "${SITE_NAME+x}" ]]; then
 fi
 SITE_NAME="${SITE_NAME:-erp.test}"
 SITE_NAME_SOURCE="default"
+DEPLOYMENT_MODE="${DEPLOYMENT_MODE:-development}"
+PRODUCTION_DOMAIN="${PRODUCTION_DOMAIN:-}"
+PRODUCTION_SSL_MODE="${PRODUCTION_SSL_MODE:-planned}"
 AUTO_START="${AUTO_START:-prompt}"
 ENABLE_AUTOSTART="${ENABLE_AUTOSTART:-prompt}"
 ERPNEXT_SERVICE_NAME="${ERPNEXT_SERVICE_NAME:-erpnext-dev.service}"
 READY_TIMEOUT="${READY_TIMEOUT:-90}"
 READY_INTERVAL="${READY_INTERVAL:-5}"
-CONFIG_FILE="${CONFIG_FILE:-${FRAPPE_HOME}/erpnext-dev-config.env}"
+CONFIG_FILE="${CONFIG_FILE:-/etc/erpnext-dev-installer/config.env}"
+LEGACY_CONFIG_FILE="${LEGACY_CONFIG_FILE:-${FRAPPE_HOME}/erpnext-dev-config.env}"
 
 SSL_CERT_DIR="${SSL_CERT_DIR:-/etc/erpnext-dev-ssl}"
 SSL_NGINX_CONF_DIR="${SSL_NGINX_CONF_DIR:-/etc/nginx}"
@@ -129,14 +133,74 @@ maybe_warn_site_name() {
   fi
 }
 
-read_saved_site_name() {
-  local file="$CONFIG_FILE"
+read_site_name_from_file() {
+  local file="$1"
   local value=""
 
   [[ -r "$file" ]] || return 1
   value="$(grep -E '^SITE_NAME=' "$file" 2>/dev/null | tail -n 1 | sed -E 's/^SITE_NAME=//; s/^"//; s/"$//; s/^'\''//; s/'\''$//' || true)"
   [[ -n "$value" ]] || return 1
   printf '%s\n' "$value"
+}
+
+read_config_key_from_file() {
+  local file="$1"
+  local key="$2"
+  local value=""
+
+  [[ -r "$file" ]] || return 1
+  value="$(awk -F= -v k="$key" '$1 == k {v=$0; sub("^[^=]*=", "", v)} END {print v}' "$file" 2>/dev/null || true)"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
+
+read_saved_config_value() {
+  local key="$1"
+  local file value
+  for file in "$CONFIG_FILE" "$LEGACY_CONFIG_FILE"; do
+    [[ -n "$file" ]] || continue
+    if value="$(read_config_key_from_file "$file" "$key" 2>/dev/null)" && [[ -n "$value" ]]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  done
+  return 1
+}
+
+read_saved_site_name() {
+  local file value
+  for file in "$CONFIG_FILE" "$LEGACY_CONFIG_FILE"; do
+    [[ -n "$file" ]] || continue
+    if value="$(read_site_name_from_file "$file" 2>/dev/null)" && [[ -n "$value" ]]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  done
+  return 1
+}
+
+read_saved_site_name_with_sudo() {
+  local file value
+  for file in "$CONFIG_FILE" "$LEGACY_CONFIG_FILE"; do
+    [[ -n "$file" ]] || continue
+    if [[ -r "$file" ]]; then
+      if value="$(read_site_name_from_file "$file" 2>/dev/null)" && [[ -n "$value" ]]; then
+        printf '%s\n' "$value"
+        return 0
+      fi
+    elif [[ -n "${SUDO:-}" ]]; then
+      value="$($SUDO awk -F= '/^SITE_NAME=/ {v=$2} END {gsub(/^\"|\"$/, "", v); gsub(/^'\''|'\''$/, "", v); print v}' "$file" 2>/dev/null || true)"
+      if [[ -n "$value" ]]; then
+        printf '%s\n' "$value"
+        return 0
+      fi
+    fi
+  done
+  return 1
 }
 
 load_saved_config_if_available() {
@@ -155,12 +219,53 @@ load_saved_config_if_available() {
       SITE_NAME_SOURCE="saved config"
       return 0
     else
-      warn "Saved SITE_NAME in ${CONFIG_FILE} is invalid. Falling back to ${SITE_NAME}."
+      warn "Saved SITE_NAME in config is invalid. Falling back to ${SITE_NAME}."
     fi
   fi
 
   SITE_NAME_SOURCE="default"
   validate_site_name_value "$SITE_NAME" || exit 1
+}
+
+load_future_domain_config_if_available() {
+  local saved=""
+
+  if [[ -z "$PRODUCTION_DOMAIN" ]]; then
+    if saved="$(read_saved_config_value PRODUCTION_DOMAIN 2>/dev/null)" && [[ -n "$saved" ]]; then
+      PRODUCTION_DOMAIN="$saved"
+    fi
+  fi
+
+  if saved="$(read_saved_config_value DEPLOYMENT_MODE 2>/dev/null)" && [[ -n "$saved" && "${DEPLOYMENT_MODE}" == "development" ]]; then
+    DEPLOYMENT_MODE="$saved"
+  fi
+
+  if saved="$(read_saved_config_value PRODUCTION_SSL_MODE 2>/dev/null)" && [[ -n "$saved" && "${PRODUCTION_SSL_MODE}" == "planned" ]]; then
+    PRODUCTION_SSL_MODE="$saved"
+  fi
+}
+
+validate_production_domain_value() {
+  local domain="$1"
+
+  [[ -n "$domain" ]] || return 1
+  if [[ "$domain" =~ ^https?:// ]]; then
+    err "Use only the domain, not http:// or https://."
+    return 1
+  fi
+  if [[ "$domain" == *":"* || "$domain" == *"/"* || "$domain" =~ [[:space:]] ]]; then
+    err "Domain must not contain spaces, slashes, or ports."
+    return 1
+  fi
+  if [[ "$domain" == *.local || "$domain" == *.test ]]; then
+    err "Production domain must be a real DNS name, not .local or .test."
+    return 1
+  fi
+  if ! [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$ ]]; then
+    err "Invalid production domain: ${domain}"
+    return 1
+  fi
+  return 0
 }
 
 prompt_for_site_name_if_needed() {
@@ -169,39 +274,34 @@ prompt_for_site_name_if_needed() {
   if [[ "$SITE_NAME_ENV_PROVIDED" -eq 1 ]]; then
     validate_site_name_value "$SITE_NAME" || fail "Invalid SITE_NAME override."
     maybe_warn_site_name "$SITE_NAME"
+    echo "Using site: ${SITE_NAME}"
     return 0
   fi
 
   if [[ "$SITE_NAME_SOURCE" == "saved config" ]]; then
-    ok "Using saved local site name: ${SITE_NAME}"
+    echo "Using site: ${SITE_NAME}"
     return 0
   fi
 
   if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
-    echo
-    echo "============================================================"
-    echo "Local Site Name"
-    echo "============================================================"
-    echo "Choose the friendly local hostname for this ERPNext VM."
-    echo
-    echo "Recommended examples:"
-    echo "  erp.test"
-    echo "  erp107.test"
-    echo "  school.test"
-    echo "  client-a.test"
-    echo
-    echo "Avoid .local because Linux uses it for mDNS/Avahi."
-    echo "Do not include http://, https://, or :8000."
-    echo
-    read -r -p "Local ERPNext site name [${SITE_NAME}]: " reply
-    reply="${reply:-$SITE_NAME}"
-    normalized="${reply,,}"
-    validate_site_name_value "$normalized" || fail "Invalid local site name."
-    SITE_NAME="$normalized"
-    SITE_NAME_SOURCE="setup prompt"
-    maybe_warn_site_name "$SITE_NAME"
+    while true; do
+      read -r -p "Local site name [${SITE_NAME}]: " reply
+      reply="${reply:-$SITE_NAME}"
+      normalized="${reply,,}"
+
+      if validate_site_name_value "$normalized" >/dev/null 2>&1; then
+        SITE_NAME="$normalized"
+        SITE_NAME_SOURCE="setup prompt"
+        maybe_warn_site_name "$SITE_NAME"
+        echo "Using site: ${SITE_NAME}"
+        return 0
+      fi
+
+      echo "Invalid site name. Use a hostname like erp.test, no URL or port."
+    done
   else
     validate_site_name_value "$SITE_NAME" || fail "Invalid local site name."
+    echo "Using site: ${SITE_NAME}"
   fi
 }
 
@@ -210,30 +310,64 @@ write_dev_config_file() {
 
   log "Writing ERPNext developer config"
 
-  $SUDO mkdir -p "$FRAPPE_HOME"
+  local config_dir legacy_dir
+  config_dir="$(dirname "$CONFIG_FILE")"
+  legacy_dir="$(dirname "$LEGACY_CONFIG_FILE")"
+
+  $SUDO mkdir -p "$config_dir"
   $SUDO tee "$CONFIG_FILE" >/dev/null <<EOF_DEV_CONFIG
 # ERPNext Developer Installer local configuration
-# This file lets future script commands reuse the selected site name.
+# Non-secret settings only. Credentials are stored separately.
 SITE_NAME=${SITE_NAME}
+DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
+PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN}
+PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
 FRAPPE_USER=${FRAPPE_USER}
 BENCH_PARENT=${BENCH_PARENT}
 BENCH_NAME=${BENCH_NAME}
 BENCH_DIR=${BENCH_DIR}
 EOF_DEV_CONFIG
-
-  if id "$FRAPPE_USER" >/dev/null 2>&1; then
-    $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$CONFIG_FILE" || true
-  fi
+  $SUDO chown root:root "$CONFIG_FILE" || true
   $SUDO chmod 644 "$CONFIG_FILE" || true
+
+  # Keep the legacy user-home config as a compatibility mirror for older workflows.
+  if [[ "$LEGACY_CONFIG_FILE" != "$CONFIG_FILE" ]]; then
+    $SUDO mkdir -p "$legacy_dir" || true
+    $SUDO tee "$LEGACY_CONFIG_FILE" >/dev/null <<EOF_LEGACY_DEV_CONFIG
+# ERPNext Developer Installer local configuration
+# Compatibility mirror. Primary config: ${CONFIG_FILE}
+SITE_NAME=${SITE_NAME}
+DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
+PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN}
+PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
+FRAPPE_USER=${FRAPPE_USER}
+BENCH_PARENT=${BENCH_PARENT}
+BENCH_NAME=${BENCH_NAME}
+BENCH_DIR=${BENCH_DIR}
+EOF_LEGACY_DEV_CONFIG
+    if id "$FRAPPE_USER" >/dev/null 2>&1; then
+      $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$LEGACY_CONFIG_FILE" || true
+    fi
+    $SUDO chmod 644 "$LEGACY_CONFIG_FILE" || true
+  fi
 
   ok "Config saved to ${CONFIG_FILE}"
 }
 
 show_site_config() {
-  local saved="missing" vm_ip
+  require_sudo
+
+  local saved="missing" legacy_saved="missing" vm_ip
   vm_ip="$(get_vm_ip 2>/dev/null || echo unknown)"
   if [[ -r "$CONFIG_FILE" ]]; then
     saved="present"
+  elif [[ -e "$CONFIG_FILE" ]]; then
+    saved="unreadable"
+  fi
+  if [[ -r "$LEGACY_CONFIG_FILE" ]]; then
+    legacy_saved="present"
+  elif [[ -e "$LEGACY_CONFIG_FILE" ]]; then
+    legacy_saved="unreadable"
   fi
 
   echo
@@ -243,6 +377,7 @@ show_site_config() {
   status_line "Current site" "INFO" "$SITE_NAME"
   status_line "Site source" "INFO" "$SITE_NAME_SOURCE"
   status_line "Config file" "INFO" "${CONFIG_FILE} (${saved})"
+  status_line "Legacy config" "INFO" "${LEGACY_CONFIG_FILE} (${legacy_saved})"
   status_line "Expected bench" "INFO" "$BENCH_DIR"
   status_line "VM IP" "INFO" "$vm_ip"
   echo
@@ -261,6 +396,31 @@ show_site_config() {
   echo
   echo "Or run setup interactively and answer the site-name prompt."
   echo "============================================================"
+}
+
+
+repair_site_config() {
+  require_sudo
+
+  local bench_dir
+  bench_dir="$(active_bench_dir)"
+
+  if ! validate_site_name_value "$SITE_NAME" >/dev/null 2>&1; then
+    fail "Resolved site name is invalid: ${SITE_NAME}"
+  fi
+
+  if [[ ! -d "${bench_dir}/sites/${SITE_NAME}" ]]; then
+    fail "Cannot repair config because site folder is missing: ${bench_dir}/sites/${SITE_NAME}"
+  fi
+
+  write_dev_config_file
+
+  if id "$FRAPPE_USER" >/dev/null 2>&1; then
+    run_as_frappe "cd '${bench_dir}' && bench use '${SITE_NAME}' && bench set-config -g default_site '${SITE_NAME}'" || warn "Could not update Bench default site automatically."
+  fi
+
+  ok "Site config repaired for ${SITE_NAME}"
+  show_site_config
 }
 
 show_site_name_guide() {
@@ -300,7 +460,7 @@ show_site_name_guide() {
 }
 
 load_saved_config_if_available
-
+load_future_domain_config_if_available
 
 
 start_erpnext_foreground() {
@@ -812,6 +972,12 @@ require_sudo() {
     sudo -v || fail "This command requires sudo access."
     SUDO="sudo"
   fi
+
+  # After sudo is available, resolve the real site from the readable config,
+  # the legacy config, currentsite.txt, common_site_config.json, or the single
+  # installed site folder. This prevents commands from falling back to erp.test
+  # when a custom site such as erp208.test already exists.
+  resolve_site_name_after_sudo 2>/dev/null || true
 }
 
 frappe_shell_prefix() {
@@ -1542,6 +1708,117 @@ Recommended roadmap:
 
 ============================================================
 EOF_SSL
+}
+
+show_domain_config() {
+  local prod_domain="${PRODUCTION_DOMAIN:-not set}"
+  echo
+  echo "============================================================"
+  echo "Domain Configuration"
+  echo "============================================================"
+  status_line "Mode" "INFO" "$DEPLOYMENT_MODE"
+  status_line "Local site" "INFO" "$SITE_NAME"
+  status_line "Production domain" "INFO" "$prod_domain"
+  status_line "Production SSL" "INFO" "$PRODUCTION_SSL_MODE"
+  status_line "Config file" "INFO" "$CONFIG_FILE"
+  echo
+  echo "Local URL:      http://${SITE_NAME}:8000"
+  if [[ -n "$PRODUCTION_DOMAIN" ]]; then
+    echo "Future prod URL: https://${PRODUCTION_DOMAIN}"
+  else
+    echo "Future prod URL: set PRODUCTION_DOMAIN=erp.company.com later"
+  fi
+  echo "============================================================"
+}
+
+show_production_domain_guide() {
+  cat <<EOF_PROD_DOMAIN
+
+============================================================
+Production Domain Planning
+============================================================
+
+Production should use a real DNS name, for example:
+  erp.company.com
+
+Current local site:
+  ${SITE_NAME}
+
+Future production config example:
+  PRODUCTION_DOMAIN=erp.company.com
+
+DNS requirements:
+  - Public server: DNS A/AAAA record points to the server.
+  - Local datacenter: internal DNS points to the ERPNext server.
+  - Avoid .test and .local for production.
+
+This developer installer only plans production settings.
+Production automation should be a separate track.
+============================================================
+EOF_PROD_DOMAIN
+}
+
+show_production_ssl_guide() {
+  cat <<EOF_PROD_SSL
+
+============================================================
+Production SSL Planning
+============================================================
+
+Future production SSL options:
+  1) Let's Encrypt HTTP-01 for public DNS/server.
+  2) Let's Encrypt DNS-01 for Cloudflare-managed DNS.
+  3) Cloudflare Origin CA for Cloudflare-proxied sites.
+  4) Manual certificate install for private datacenter SSL.
+
+Production needs:
+  - real domain
+  - Nginx reverse proxy
+  - port 80/443 plan
+  - renewal checks
+  - backup/restore testing
+
+Current local SSL remains separate:
+  ./install-erpnext-dev.sh configure-local-ssl
+============================================================
+EOF_PROD_SSL
+}
+
+show_production_readiness() {
+  local domain_state="not set"
+  local domain_status="WARN"
+  local nginx_state="not installed"
+  local ssl_state="local/dev only"
+
+  if [[ -n "$PRODUCTION_DOMAIN" ]]; then
+    if validate_production_domain_value "$PRODUCTION_DOMAIN" >/dev/null 2>&1; then
+      domain_state="$PRODUCTION_DOMAIN"
+      domain_status="OK"
+    else
+      domain_state="invalid: $PRODUCTION_DOMAIN"
+      domain_status="WARN"
+    fi
+  fi
+
+  if command -v nginx >/dev/null 2>&1; then
+    nginx_state="installed"
+  fi
+
+  echo
+  echo "============================================================"
+  echo "Production Readiness Preview"
+  echo "============================================================"
+  status_line "Developer mode" "OK" "active"
+  status_line "Production automation" "INFO" "planned, not enabled"
+  status_line "Local site" "INFO" "$SITE_NAME"
+  status_line "Production domain" "$domain_status" "$domain_state"
+  status_line "Nginx" "INFO" "$nginx_state"
+  status_line "SSL mode" "INFO" "$ssl_state"
+  echo
+  echo "Next planning commands:"
+  echo "  ./install-erpnext-dev.sh production-domain-guide"
+  echo "  ./install-erpnext-dev.sh production-ssl-guide"
+  echo "============================================================"
 }
 
 
@@ -2537,8 +2814,12 @@ show_access_menu() {
     echo "17) Disable local SSL reverse proxy"
     echo "18) Verify SSL rollback"
     echo "19) Show SSL rollback guide"
-    echo "20) Environment / location check"
-    echo "21) Back"
+    echo "20) Domain config"
+    echo "21) Production readiness preview"
+    echo "22) Production domain guide"
+    echo "23) Production SSL guide"
+    echo "24) Environment / location check"
+    echo "25) Back"
     echo
     read -r -p "Choose an option: " access_choice
 
@@ -2562,8 +2843,12 @@ show_access_menu() {
       17) disable_local_ssl ;;
       18) verify_ssl_rollback ;;
       19) show_ssl_rollback_guide ;;
-      20) show_environment_check ;;
-      21) return 0 ;;
+      20) show_domain_config ;;
+      21) show_production_readiness ;;
+      22) show_production_domain_guide ;;
+      23) show_production_ssl_guide ;;
+      24) show_environment_check ;;
+      25) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -2659,6 +2944,113 @@ detect_bench_dir() {
 
 active_bench_dir() {
   detect_bench_dir 2>/dev/null || echo "$BENCH_DIR"
+}
+
+
+bench_site_candidates() {
+  local bench_dir="$1"
+  local site
+
+  [[ -d "${bench_dir}/sites" ]] || return 1
+
+  if [[ -n "${SUDO:-}" && "${SUDO:-}" == "sudo" ]]; then
+    $SUDO find "${bench_dir}/sites" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" 2>/dev/null \
+      | grep -Ev "^(assets|private|public|logs|__pycache__)$" \
+      | sort
+  else
+    find "${bench_dir}/sites" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" 2>/dev/null \
+      | grep -Ev "^(assets|private|public|logs|__pycache__)$" \
+      | sort
+  fi
+}
+
+detect_site_name_from_bench() {
+  local bench_dir current_site default_site sites_count first_site
+  bench_dir="$(active_bench_dir)"
+
+  [[ -d "$bench_dir" ]] || return 1
+
+  if [[ -n "${SUDO:-}" && "${SUDO:-}" == "sudo" ]]; then
+    current_site="$($SUDO cat "${bench_dir}/sites/currentsite.txt" 2>/dev/null | head -n 1 || true)"
+  else
+    current_site="$(cat "${bench_dir}/sites/currentsite.txt" 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -n "$current_site" ]] && validate_site_name_value "$current_site" >/dev/null 2>&1; then
+    echo "$current_site"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    if [[ -n "${SUDO:-}" && "${SUDO:-}" == "sudo" ]]; then
+      default_site="$($SUDO python3 - "$bench_dir" <<'PY_SITE_DEFAULT' 2>/dev/null || true
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1]) / "sites" / "common_site_config.json"
+try:
+    print(json.loads(p.read_text()).get("default_site", ""))
+except Exception:
+    pass
+PY_SITE_DEFAULT
+)"
+    else
+      default_site="$(python3 - "$bench_dir" <<'PY_SITE_DEFAULT' 2>/dev/null || true
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1]) / "sites" / "common_site_config.json"
+try:
+    print(json.loads(p.read_text()).get("default_site", ""))
+except Exception:
+    pass
+PY_SITE_DEFAULT
+)"
+    fi
+    if [[ -n "$default_site" ]] && validate_site_name_value "$default_site" >/dev/null 2>&1; then
+      echo "$default_site"
+      return 0
+    fi
+  fi
+
+  sites_count="$(bench_site_candidates "$bench_dir" | wc -l | tr -d ' ' || echo 0)"
+  if [[ "$sites_count" == "1" ]]; then
+    first_site="$(bench_site_candidates "$bench_dir" | head -n 1)"
+    if [[ -n "$first_site" ]] && validate_site_name_value "$first_site" >/dev/null 2>&1; then
+      echo "$first_site"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+resolve_site_name_after_sudo() {
+  local saved detected
+
+  if [[ "$SITE_NAME_ENV_PROVIDED" -eq 1 ]]; then
+    SITE_NAME_SOURCE="environment"
+    return 0
+  fi
+
+  if [[ "$SITE_NAME_SOURCE" == "setup prompt" ]]; then
+    return 0
+  fi
+
+  if saved="$(read_saved_site_name_with_sudo 2>/dev/null)" && [[ -n "$saved" ]]; then
+    if validate_site_name_value "$saved" >/dev/null 2>&1; then
+      SITE_NAME="$saved"
+      SITE_NAME_SOURCE="saved config"
+      return 0
+    fi
+  fi
+
+  if detected="$(detect_site_name_from_bench 2>/dev/null)" && [[ -n "$detected" ]]; then
+    if validate_site_name_value "$detected" >/dev/null 2>&1; then
+      SITE_NAME="$detected"
+      SITE_NAME_SOURCE="detected bench site"
+      return 0
+    fi
+  fi
+
+  return 0
 }
 
 check_bench_app_installed() {
@@ -4495,10 +4887,14 @@ show_advanced_menu() {
     echo "21) Configure Local SSL"
     echo "22) Disable Local SSL"
     echo "23) Verify SSL Rollback"
-    echo "24) Start Bench in Foreground"
-    echo "25) Show Service Logs"
-    echo "26) Access Submenu"
-    echo "27) Back"
+    echo "24) Domain Config"
+    echo "25) Production Readiness Preview"
+    echo "26) Production Domain Guide"
+    echo "27) Production SSL Guide"
+    echo "28) Start Bench in Foreground"
+    echo "29) Show Service Logs"
+    echo "30) Access Submenu"
+    echo "31) Back"
     echo
     read -r -p "Choose an option: " advanced_choice
 
@@ -4526,10 +4922,14 @@ show_advanced_menu() {
       21) configure_local_ssl ;;
       22) disable_local_ssl ;;
       23) verify_ssl_rollback ;;
-      24) run_foreground_start ;;
-      25) show_erpnext_service_logs ;;
-      26) show_access_menu ;;
-      27) return 0 ;;
+      24) show_domain_config ;;
+      25) show_production_readiness ;;
+      26) show_production_domain_guide ;;
+      27) show_production_ssl_guide ;;
+      28) run_foreground_start ;;
+      29) show_erpnext_service_logs ;;
+      30) show_access_menu ;;
+      31) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -4569,6 +4969,7 @@ Basic actions:
   create-self-signed-local-cert Create quick self-signed cert for local SSL testing
   environment-check Show whether this is the host or ERPNext VM context
   site-config   Show current local site/domain configuration
+  domain-config Show local site and future production domain config
   site-name-guide Show how to choose custom .test names for multiple VMs
   backup        Create database backup
   backup-files  Create database + files backup
@@ -4625,7 +5026,12 @@ Advanced actions:
   create-self-signed-local-cert Create quick local SSL test certificate
   environment-check   Show host vs ERPNext VM command context
   site-config         Show current local site/domain configuration
+  domain-config       Show local/future production domain configuration
+  repair-site-config  Repair saved site/domain config from detected Bench site
   site-name-guide     Show custom .test hostname guide
+  production-readiness Show production readiness preview
+  production-domain-guide Show production domain planning guide
+  production-ssl-guide Show production SSL planning guide
   configure-local-ssl Configure Nginx local HTTPS reverse proxy
   disable-local-ssl   Disable local HTTPS reverse proxy site
   multi-env-guide     Show multiple local environment guide
@@ -4635,6 +5041,7 @@ Options:
 
 Environment overrides:
   SITE_NAME=erp.test               # default local site name; use SITE_NAME=erp107.test for another VM
+  PRODUCTION_DOMAIN=erp.company.com # future production planning only
   FRAPPE_USER=frappe
   ADMIN_PASSWORD='YourPassword'
   DB_ADMIN_PASSWORD='YourDbAdminPassword'
@@ -4670,6 +5077,8 @@ Examples:
   ./install-erpnext-dev.sh verify-local-ssl
   ./install-erpnext-dev.sh environment-check
   ./install-erpnext-dev.sh site-config
+  ./install-erpnext-dev.sh domain-config
+  ./install-erpnext-dev.sh production-readiness
   ./install-erpnext-dev.sh doctor
 EOF_HELP
 }
@@ -4716,7 +5125,7 @@ parse_args() {
         ASSUME_YES=1
         shift
         ;;
-      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+      setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|full-status|start|stop|uninstall|advanced|access|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|production-readiness|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -4796,6 +5205,11 @@ main() {
     disable-local-ssl) disable_local_ssl ;;
     environment-check|where-am-i) show_environment_check ;;
     site-config) show_site_config ;;
+    domain-config) show_domain_config ;;
+    production-readiness) show_production_readiness ;;
+    production-domain-guide) show_production_domain_guide ;;
+    production-ssl-guide) show_production_ssl_guide ;;
+    repair-site-config) repair_site_config ;;
     site-name-guide|custom-site-guide) show_site_name_guide ;;
     multi-env-guide) show_multi_environment_guide ;;
     help|-h|--help) show_help ;;

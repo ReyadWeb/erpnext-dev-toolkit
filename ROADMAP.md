@@ -1,47 +1,37 @@
-# ROADMAP v0.8.5
+# ROADMAP - ERPNext Developer Installer v0.8.8
 
-## Current milestone
+## Current focus
 
-v0.8.5 focuses on custom local site/domain selection and persistent config.
+v0.8.8 adds a production-domain and SSL planning foundation while keeping the current installer focused on local development.
 
-## Completed in v0.8.5
+## Completed in v0.8.x
 
-- User-selectable local site name.
-- `.test` hostname guidance for multiple ERPNext VMs.
-- Persistent config stored at `/home/frappe/erpnext-dev-config.env`.
-- `site-config` command.
-- `site-name-guide` command.
-- Safer validation for hostname input.
+- Fresh ERPNext developer VM setup
+- Service/autostart management
+- App Library for CRM, HRMS, Helpdesk, Telephony, and Insights
+- Backup and maintenance commands
+- KVM/network diagnostics
+- Local HTTPS reverse proxy workflow
+- Host/VM safety guards
+- Custom site-name support and config repair
+- Compact site-name prompt for small terminals
+- Future production domain/SSL planning commands
+
+## v0.8.8 additions
+
+- `domain-config`
+- `production-readiness`
+- `production-domain-guide`
+- `production-ssl-guide`
+- Future config fields:
+  - `DEPLOYMENT_MODE`
+  - `PRODUCTION_DOMAIN`
+  - `PRODUCTION_SSL_MODE`
 
 ## Next recommended work
 
-### v0.8.6 Restore/uninstall hardening
-
-- Regression-test database-only restore.
-- Regression-test database + files restore.
-- Confirm app registry remains clean after restore.
-- Confirm uninstall/reset flows are safe and explicit.
-- Add stronger warnings around destructive actions.
-
-### v0.9.0 Production planning release
-
-- Keep developer installer separate from production installer.
-- Draft `install-erpnext-prod.sh` architecture.
-- Production preflight design.
-- Domain/DNS validation checklist.
-- Let's Encrypt HTTP-01 plan.
-- Cloudflare DNS-01 plan.
-- Cloudflare Origin CA plan.
-- Nginx/Supervisor/systemd production model.
-- Firewall/security checklist.
-- Backup, restore, update, and monitoring strategy.
-
-### v1.0.0 Developer stable
-
-- Fresh Ubuntu 24.04 validation.
-- Fresh Ubuntu 26.04 validation.
-- Optional app stack validation.
-- Backup/restore validation.
-- SSL validation.
-- Reboot/autostart validation.
-- Documentation cleanup.
+1. Finish fresh VM regression testing with a custom `.test` site.
+2. Install optional apps one by one and verify `doctor`.
+3. Test self-signed local SSL against the custom site name.
+4. Harden restore/uninstall flows before v1.0.
+5. Start v0.9.0 production planning as a separate branch/track.

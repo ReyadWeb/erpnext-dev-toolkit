@@ -1,33 +1,27 @@
-# CHANGELOG v0.8.5
+# CHANGELOG
 
-## Added
+## v0.8.8 - Production Domain / SSL Readiness Foundation
 
-- Custom local site/domain selection during setup.
-- `SITE_NAME=custom.test ./install-erpnext-dev.sh setup` workflow documented and improved.
-- Interactive setup prompt:
-  - `Local ERPNext site name [erp.test]:`
-- Persistent local config file:
-  - `/home/frappe/erpnext-dev-config.env`
-- New command:
-  - `site-config`
-- New command:
-  - `site-name-guide`
-- Site name validation:
-  - rejects URLs
-  - rejects ports
-  - rejects spaces/slashes
-  - rejects `.local`
-  - recommends `.test`
-- Future commands reuse saved `SITE_NAME` when no environment override is provided.
+### Added
 
-## Changed
+- Added `domain-config` command.
+- Added `production-readiness` command.
+- Added `production-domain-guide` command.
+- Added `production-ssl-guide` command.
+- Added future production planning config fields:
+  - `DEPLOYMENT_MODE`
+  - `PRODUCTION_DOMAIN`
+  - `PRODUCTION_SSL_MODE`
+- Added production-domain validation helper for future use.
 
-- Setup now makes multiple local ERPNext VM environments easier to manage.
-- Access, SSL, `/etc/hosts`, and config output now reflect the selected site name.
-- `environment-check` now reports site source and config file.
-- `environment-check` avoids confusing missing-bench output when the VM context is otherwise detected.
+### Changed
 
-## Fixed
+- Developer/local `SITE_NAME` remains separate from future production domain planning.
+- Config now prepares for production-domain workflows without enabling production automation.
+- Access and Advanced menus now include production planning entries.
 
-- Clarified that `erp.test` is only the default, not a hardcoded requirement.
-- Improved multi-environment guidance to use `setup` consistently.
+### Notes
+
+- This is not a production installer.
+- Production automation should remain a separate future track.
+- Local development still uses Bench/service workflow and optional local SSL.
