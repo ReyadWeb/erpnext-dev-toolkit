@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.8.19"
+SCRIPT_VERSION="0.8.20"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1152,6 +1152,50 @@ storage_parent_disk() {
 
 
 
+
+storage_partition_tail_free_bytes() {
+  local disk_dev="$1"
+  local part_dev="$2"
+  local disk_name part_name sector_size disk_sectors part_start part_sectors part_end tail_sectors
+
+  [[ -n "$disk_dev" && -n "$part_dev" ]] || { echo 0; return 0; }
+
+  disk_name="$(basename "$disk_dev")"
+  part_name="$(basename "$part_dev")"
+
+  [[ -r "/sys/class/block/${disk_name}/size" && -r "/sys/class/block/${part_name}/start" && -r "/sys/class/block/${part_name}/size" ]] || {
+    echo 0
+    return 0
+  }
+
+  sector_size="$(cat "/sys/class/block/${disk_name}/queue/logical_block_size" 2>/dev/null || echo 512)"
+  disk_sectors="$(cat "/sys/class/block/${disk_name}/size" 2>/dev/null || echo 0)"
+  part_start="$(cat "/sys/class/block/${part_name}/start" 2>/dev/null || echo 0)"
+  part_sectors="$(cat "/sys/class/block/${part_name}/size" 2>/dev/null || echo 0)"
+
+  [[ "$sector_size" =~ ^[0-9]+$ && "$disk_sectors" =~ ^[0-9]+$ && "$part_start" =~ ^[0-9]+$ && "$part_sectors" =~ ^[0-9]+$ ]] || {
+    echo 0
+    return 0
+  }
+
+  part_end=$((part_start + part_sectors))
+  if (( disk_sectors > part_end )); then
+    tail_sectors=$((disk_sectors - part_end))
+  else
+    tail_sectors=0
+  fi
+
+  echo $((tail_sectors * sector_size))
+}
+
+storage_partition_is_growable() {
+  local disk_dev="$1"
+  local part_dev="$2"
+  local tail_free
+  tail_free="$(storage_partition_tail_free_bytes "$disk_dev" "$part_dev")"
+  [[ "$tail_free" =~ ^[0-9]+$ ]] && (( tail_free > 1073741824 ))
+}
+
 storage_infer_disk_from_partition() {
   local part_dev="$1"
   local disk_dev=""
@@ -1365,7 +1409,7 @@ PY_STORAGE_DETECT
 storage_eval() {
   local data
   local layout="" root_source="" root_fs="" disk_dev="" part_dev="" pv_dev="" lv_path="" vg_name="" reason=""
-  local root_bytes="0" disk_bytes="0" part_bytes="0" vg_free_bytes="0" can_expand="no"
+  local root_bytes="0" disk_bytes="0" part_bytes="0" vg_free_bytes="0" tail_free_bytes="0" can_expand="no"
 
   data="$(storage_detect_layout 2>/dev/null || true)"
   [[ -n "$data" ]] || {
@@ -1397,6 +1441,10 @@ storage_eval() {
     part_bytes="$(lsblk -bndo SIZE "$part_dev" 2>/dev/null | awk 'NR==1 {print $1+0}' || echo 0)"
   fi
 
+  if [[ -n "$disk_dev" && -n "$part_dev" ]]; then
+    tail_free_bytes="$(storage_partition_tail_free_bytes "$disk_dev" "$part_dev")"
+  fi
+
   if [[ "$layout" == "lvm" ]]; then
     if [[ -z "$vg_name" && -n "$lv_path" ]]; then
       vg_name="$(lvs --noheadings -o vg_name "$lv_path" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
@@ -1407,23 +1455,25 @@ storage_eval() {
     fi
   fi
 
-  # LVM expansion is recommended if:
-  # 1) VG already has free extents, OR
-  # 2) the physical disk is larger than the LVM partition/PV.
+  # Expansion is recommended only if there is usable free space:
+  # 1) LVM VG already has free extents, OR
+  # 2) the root partition/PV has free space after it at the end of the disk.
+  # Do not compare whole disk size to partition size. That falsely counts /boot,
+  # BIOS partitions, and earlier partition offsets as growable free space.
   if [[ "$layout" == "lvm" ]]; then
     if [[ "$vg_free_bytes" =~ ^[0-9]+$ ]] && (( vg_free_bytes > 1073741824 )); then
       can_expand="yes"
       reason="LVM has free space available"
-    elif [[ "$disk_bytes" =~ ^[0-9]+$ && "$part_bytes" =~ ^[0-9]+$ ]] && (( disk_bytes > part_bytes + 1073741824 )); then
+    elif [[ "$tail_free_bytes" =~ ^[0-9]+$ ]] && (( tail_free_bytes > 1073741824 )); then
       can_expand="yes"
-      reason="VM disk is larger than the LVM partition"
+      reason="LVM physical partition can grow into free disk space"
     else
       reason="root storage already appears to use available LVM/disk space"
     fi
   elif [[ "$layout" == "partition" ]]; then
-    if [[ "$disk_bytes" =~ ^[0-9]+$ && "$part_bytes" =~ ^[0-9]+$ ]] && (( disk_bytes > part_bytes + 1073741824 )); then
+    if [[ "$tail_free_bytes" =~ ^[0-9]+$ ]] && (( tail_free_bytes > 1073741824 )); then
       can_expand="yes"
-      reason="VM disk is larger than the root partition"
+      reason="root partition can grow into free disk space"
     else
       reason="root partition already appears to use available disk space"
     fi
@@ -1433,12 +1483,11 @@ storage_eval() {
   fi
 
   printf '%s\n' "$data"
-  printf 'ROOT_BYTES=%s\nDISK_BYTES=%s\nPART_BYTES=%s\nVG_FREE_BYTES=%s\nCAN_EXPAND=%s\nREASON=%s\n' \
-    "$root_bytes" "$disk_bytes" "$part_bytes" "$vg_free_bytes" "$can_expand" "$reason"
+  printf 'ROOT_BYTES=%s\nDISK_BYTES=%s\nPART_BYTES=%s\nVG_FREE_BYTES=%s\nTAIL_FREE_BYTES=%s\nCAN_EXPAND=%s\nREASON=%s\n' \
+    "$root_bytes" "$disk_bytes" "$part_bytes" "$vg_free_bytes" "$tail_free_bytes" "$can_expand" "$reason"
 }
-
 show_storage_status() {
-  local data layout root_source root_fs disk_dev part_dev lv_path root_bytes disk_bytes vg_free_bytes can_expand reason
+  local data layout root_source root_fs disk_dev part_dev lv_path root_bytes disk_bytes vg_free_bytes tail_free_bytes can_expand reason
 
   data="$(storage_eval)"
   while IFS='=' read -r k v; do
@@ -1452,6 +1501,7 @@ show_storage_status() {
       ROOT_BYTES) root_bytes="$v" ;;
       DISK_BYTES) disk_bytes="$v" ;;
       VG_FREE_BYTES) vg_free_bytes="$v" ;;
+      TAIL_FREE_BYTES) tail_free_bytes="$v" ;;
       CAN_EXPAND) can_expand="$v" ;;
       REASON) reason="$v" ;;
     esac
@@ -1468,6 +1518,9 @@ show_storage_status() {
   [[ -n "${lv_path:-}" ]] && status_line "Root LV" "INFO" "${lv_path}"
   if [[ "${layout:-}" == "lvm" && "${vg_free_bytes:-0}" =~ ^[0-9]+$ && "${vg_free_bytes:-0}" -gt 0 ]]; then
     status_line "VG free" "INFO" "$(bytes_to_gib "${vg_free_bytes:-0}")"
+  fi
+  if [[ "${tail_free_bytes:-0}" =~ ^[0-9]+$ && "${tail_free_bytes:-0}" -gt 0 ]]; then
+    status_line "Growable disk tail" "INFO" "$(bytes_to_gib "${tail_free_bytes:-0}")"
   fi
   status_line "Root size" "INFO" "$(bytes_to_gib "${root_bytes:-0}")"
 
@@ -1500,7 +1553,7 @@ ensure_storage_tools() {
 expand_root_storage() {
   require_sudo
 
-  local data layout root_fs lv_path pv_dev part_dev disk_dev part_num vg_free_bytes can_expand reason
+  local data layout root_fs lv_path pv_dev part_dev disk_dev part_num vg_free_bytes tail_free_bytes can_expand reason
 
   data="$(storage_eval)"
   while IFS='=' read -r k v; do
@@ -1513,6 +1566,7 @@ expand_root_storage() {
       DISK_DEV) disk_dev="$v" ;;
       PART_NUM) part_num="$v" ;;
       VG_FREE_BYTES) vg_free_bytes="$v" ;;
+      TAIL_FREE_BYTES) tail_free_bytes="$v" ;;
       CAN_EXPAND) can_expand="$v" ;;
       REASON) reason="$v" ;;
     esac
@@ -1576,7 +1630,7 @@ expand_root_storage() {
       $SUDO apt-get install -y lvm2
     fi
 
-    if [[ -n "${disk_dev:-}" && -n "${part_num:-}" && -n "${part_dev:-}" ]]; then
+    if [[ -n "${disk_dev:-}" && -n "${part_num:-}" && -n "${part_dev:-}" && "${tail_free_bytes:-0}" =~ ^[0-9]+$ && "${tail_free_bytes:-0}" -gt 1073741824 ]]; then
       log "Growing partition ${part_dev}"
       if command -v sgdisk >/dev/null 2>&1; then
         $SUDO sgdisk -e "$disk_dev" >/dev/null 2>&1 || true
@@ -1588,6 +1642,8 @@ expand_root_storage() {
       $SUDO partprobe "$disk_dev" >/dev/null 2>&1 || true
       log "Growing LVM physical volume"
       $SUDO pvresize "${pv_dev:-$part_dev}"
+    elif [[ "${vg_free_bytes:-0}" =~ ^[0-9]+$ && "${vg_free_bytes:-0}" -gt 1073741824 ]]; then
+      warn "No growable disk tail detected. Using existing VG free space only."
     else
       warn "Could not safely grow the LVM physical partition. Using existing VG free space only."
     fi
@@ -1595,6 +1651,13 @@ expand_root_storage() {
     log "Extending root logical volume"
     $SUDO lvextend -r -l +100%FREE "$lv_path"
   else
+    if [[ ! "${tail_free_bytes:-0}" =~ ^[0-9]+$ || "${tail_free_bytes:-0}" -le 1073741824 ]]; then
+      status_line "Storage" "OK" "no partition growth needed"
+      echo "Root partition already appears to use available disk space."
+      echo "============================================================"
+      return 0
+    fi
+
     log "Growing partition ${part_dev}"
     if command -v sgdisk >/dev/null 2>&1; then
       $SUDO sgdisk -e "$disk_dev" >/dev/null 2>&1 || true
@@ -1647,6 +1710,9 @@ storage_debug() {
   echo
   echo "detector:"
   storage_detect_layout || true
+  echo
+  echo "evaluation:"
+  storage_eval || true
   echo "============================================================"
 }
 

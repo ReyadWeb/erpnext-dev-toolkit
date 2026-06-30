@@ -1,141 +1,52 @@
-# ERPNext Developer Installer v0.8.19
+# ERPNext Developer Installer v0.8.20
 
-A guided ERPNext/Frappe developer VM installer for Ubuntu 24.04 / 26.04 LTS.
-
-Default stack:
-
-- Frappe v16
-- ERPNext v16
-- Local site name: `erp.test`
-- Developer runtime using `bench start`
-- Optional systemd autostart service
-- Optional local HTTPS reverse proxy
-- Optional app install wizard with backup checkpoints
-
-## Quick start
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh
-chmod +x install-erpnext-dev.sh
-./install-erpnext-dev.sh guided-setup
-```
-
-For a custom local hostname:
-
-```bash
-SITE_NAME=erp08.test ./install-erpnext-dev.sh guided-setup
-```
-
-Use `.test` for local development. Avoid `.local` because it can conflict with mDNS/Avahi.
+Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
 ## Main workflow
 
 ```bash
-./install-erpnext-dev.sh guided-setup
-./install-erpnext-dev.sh verify-access
-./install-erpnext-dev.sh local-ssl-wizard
-./install-erpnext-dev.sh app-install-wizard
-./install-erpnext-dev.sh next-step
+curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh -o install-erpnext-dev.sh
+chmod +x install-erpnext-dev.sh
+./install-erpnext-dev.sh setup
 ```
 
-The guided flow checks storage, installs ERPNext, starts the service, and shows the host `/etc/hosts` command.
-
-## Local HTTPS
-
-```bash
-./install-erpnext-dev.sh local-ssl-wizard
-```
-
-The wizard supports:
-
-1. Quick self-signed SSL for testing.
-2. Trusted local SSL using `mkcert` from the host.
-3. SSL status-only checks.
-
-Direct Bench access remains available:
-
-```text
-http://VM_IP:8000
-http://erp.test:8000
-```
-
-## Optional apps
-
-v0.8.19 adds a safer optional app workflow:
-
-```bash
-./install-erpnext-dev.sh app-install-wizard
-```
-
-The wizard provides:
-
-- Pre-app install checks
-- Backup checkpoint prompt before each app
-- Recommended one-app-at-a-time flow
-- Post-app validation summary
-- Rollback guidance
-
-Supported app profiles include Frappe CRM, HRMS, Helpdesk, Telephony, and Insights.
-
-Backup behavior can be controlled with:
-
-```bash
-APP_BACKUP_BEFORE_INSTALL=true|false|prompt
-```
-
-Default is `prompt`. For disposable test VMs only, you can skip app backup prompts:
-
-```bash
-APP_BACKUP_BEFORE_INSTALL=false ./install-erpnext-dev.sh app-install-wizard
-```
-
-## Useful commands
-
-```bash
-./install-erpnext-dev.sh status
-./install-erpnext-dev.sh doctor
-./install-erpnext-dev.sh runtime-status
-./install-erpnext-dev.sh service-summary
-./install-erpnext-dev.sh access
-./install-erpnext-dev.sh verify-access
-./install-erpnext-dev.sh next-step
-./install-erpnext-dev.sh local-ssl-wizard
-./install-erpnext-dev.sh app-install-wizard
-./install-erpnext-dev.sh app-status
-./install-erpnext-dev.sh app-rollback-guide
-```
-
-## Storage expansion
-
-The installer can detect common resized/cloned VM storage layouts and offer expansion before installing ERPNext.
+## Important commands
 
 ```bash
 ./install-erpnext-dev.sh storage-status
 ./install-erpnext-dev.sh expand-root-storage
+./install-erpnext-dev.sh verify-access
+./install-erpnext-dev.sh local-ssl-wizard
+./install-erpnext-dev.sh app-install-wizard
+./install-erpnext-dev.sh doctor
+./install-erpnext-dev.sh next-step
 ```
 
-Supported automatic cases include common Ubuntu LVM root layouts and direct ext4/XFS root partitions.
+## v0.8.20 focus
 
-## Credentials
+v0.8.20 fixes the post-expansion storage status decision. Previous versions could still say `Expansion recommended` after the root LV had already been expanded, because they compared the whole disk size to the partition size. That counted earlier partitions such as `/boot` as if they were growable free space.
 
-Credentials are saved to:
+The storage planner now checks actual free space after the root partition/PV at the end of the disk using sysfs sector data. Expansion is recommended only when:
 
-```text
-/home/frappe/erpnext-dev-credentials.txt
+- LVM has free VG extents, or
+- the root partition/PV has growable free space after it on disk.
+
+## Local SSL
+
+For quick local HTTPS:
+
+```bash
+./install-erpnext-dev.sh local-ssl-wizard
 ```
 
-Installer logs are private by default:
+Self-signed certificates are useful for testing. For trusted browser SSL, use `mkcert` on the host and install the generated cert/key into the VM.
 
-```text
-/tmp/erpnext-dev-installer-*.log
+## Optional apps
+
+Use the checkpoint workflow:
+
+```bash
+./install-erpnext-dev.sh app-install-wizard
 ```
 
-Expected permissions:
-
-```text
--rw-------
-```
-
-## Production note
-
-This script is for local developer VMs. Production deployment should use a separate production workflow with a real domain, hardened Nginx, SSL renewal, backups, monitoring, and update strategy.
+The wizard shows a preflight, recommends backup checkpoints, installs one optional app at a time, and runs post-app validation.
