@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v1.0.0-rc4
+
+### Improved
+
+- Replaced cloud-provider-specific firewall wording with generic cloud provider / cloud firewall wording throughout the script.
+- Updated security hardening, UFW, firewall status, production SSL, and production checklist messages so they apply to any cloud provider, not only one vendor.
+- Updated README, TESTING, ROADMAP, and CHANGELOG wording for provider-neutral public VM deployments.
+
+### Notes
+
+- This is a wording/UX patch only. It does not change firewall, SSL, UFW, Fail2Ban, backup, or install behavior.
+
 ## v1.0.0-rc3
 
 ### Added
@@ -116,7 +128,7 @@
 
 - No behavior change to firewall rules or SSL configuration.
 - UFW still keeps SSH open at the VM layer by default to avoid accidental lockout.
-- Backend ports remain blocked by UFW defaults and Hetzner Cloud Firewall rules.
+- Backend ports remain blocked by UFW defaults and cloud provider firewall rules.
 
 ## v0.9.10
 
@@ -133,7 +145,7 @@
 ### Safety
 
 - `configure-vm-firewall` keeps SSH open at the UFW layer by default to avoid lockout from dynamic admin IPs.
-- SSH source restriction remains recommended at the Hetzner Cloud Firewall layer.
+- SSH source restriction remains recommended at the cloud provider firewall layer.
 - UFW does not allow `8000`, `9000`, `11000`, or `13000` by default.
 - The advanced UFW SSH restriction requires explicit confirmation and warns about lockout risk.
 
@@ -141,7 +153,7 @@
 
 ### Improved
 
-- Improved `firewall-hardening-status` wording after real Hetzner firewall validation.
+- Improved `firewall-hardening-status` wording after real cloud firewall validation.
 - The command now separates **local listeners inside the VM** from **external public exposure controlled by the cloud firewall**.
 - Backend ports `8000` and `9000` are now described as local backend listeners that must be blocked externally, rather than automatically implying they are publicly reachable.
 - Added explicit workstation-side validation commands for checking `https://<domain>`, `http://<origin-ip>:8000`, and `http://<origin-ip>:9000`.
@@ -150,7 +162,7 @@
 ### Safety
 
 - No firewall rules are changed automatically.
-- The command remains inspection/planning only and avoids implying that a local listener bypasses the Hetzner Cloud Firewall.
+- The command remains inspection/planning only and avoids implying that a local listener bypasses the cloud provider firewall.
 
 ## v0.9.8
 
@@ -170,7 +182,7 @@
 ### Safety
 
 - No firewall rules are changed automatically. The command is inspection/planning only.
-- The output continues to recommend manual Hetzner/edge firewall changes after HTTPS is verified.
+- The output continues to recommend manual cloud/edge firewall changes after HTTPS is verified.
 
 ## v0.9.7
 
@@ -214,7 +226,7 @@
 - The script compares the certificate public key to the private key public key before writing them to `/etc/ssl/cloudflare-origin`.
 - The private key is installed with mode `0600`.
 - Paste prompts hide input and avoid printing certificate/key contents into the installer log.
-- The command does not change Cloudflare DNS/proxy settings and does not change Hetzner firewall rules.
+- The command does not change Cloudflare DNS/proxy settings and does not change cloud firewall rules.
 
 ## v0.9.5
 
@@ -232,7 +244,7 @@
 
 ### Notes
 
-- This hotfix came from the first public Hetzner VM SSL test where a staging certificate successfully routed HTTPS but was not trusted by `curl` or browsers.
+- This hotfix came from the first public cloud VM SSL test where a staging certificate successfully routed HTTPS but was not trusted by `curl` or browsers.
 
 ## v0.9.4
 
@@ -247,7 +259,7 @@
 
 - Production SSL readiness now recognizes an active Let's Encrypt/Nginx HTTPS setup as production SSL.
 - Help text and advanced menu now include production SSL implementation commands.
-- Public VM flow now moves from planning-only checks to a conservative HTTPS implementation while leaving Hetzner firewall changes manual.
+- Public VM flow now moves from planning-only checks to a conservative HTTPS implementation while leaving cloud firewall changes manual.
 
 ### Safety
 
@@ -287,7 +299,7 @@
 
 ### Notes
 
-- This is a hotfix from the first real Hetzner VM test.
+- This is a hotfix from the first real cloud VM test.
 - Production SSL planning moves to the next roadmap patch.
 
 ## v0.9.1

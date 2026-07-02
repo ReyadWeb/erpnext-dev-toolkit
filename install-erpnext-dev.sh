@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.0.0-rc3"
+SCRIPT_VERSION="1.0.0-rc4"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -3324,7 +3324,7 @@ show_production_firewall_plan() {
     status_line "Port ${port}" "INFO" "$(production_listener_detail "$port")"
   done
   echo
-  echo "Recommended Hetzner/edge firewall for first public test:"
+  echo "Recommended cloud/edge firewall for first public test:"
   echo "  22/tcp    allow only your admin IP if possible"
   echo "  80/tcp    allow public, needed for HTTP and Let's Encrypt HTTP-01"
   echo "  443/tcp   allow public, needed for HTTPS"
@@ -3381,7 +3381,7 @@ show_firewall_hardening_status() {
   echo
   echo "Local listeners inside the VM:"
   echo "  These rows show what services are bound on the server itself."
-  echo "  A service may still be blocked externally by the Hetzner Cloud Firewall."
+  echo "  A service may still be blocked externally by the cloud provider firewall."
   for port in 22 80 443 8000 9000 11000 13000; do
     pair="$(production_listener_exposure_label "$port")"
     status="${pair%%|*}"
@@ -3390,7 +3390,7 @@ show_firewall_hardening_status() {
       22)
         if [[ "$status" == "WARN" ]]; then
           status="INFO"
-          message="${detail}; local SSH listener exists. Verify Hetzner firewall allows only admin IP/VPN."
+          message="${detail}; local SSH listener exists. Verify the cloud firewall allows only admin IP/VPN."
         else
           message="$detail"
         fi
@@ -3398,7 +3398,7 @@ show_firewall_hardening_status() {
       80|443)
         if [[ "$status" == "WARN" || "$status" == "INFO" ]]; then
           if [[ "$provider" == "Cloudflare Origin CA" ]]; then
-            message="${detail}; expected local Nginx listener. Hetzner firewall should allow Cloudflare/public on this port."
+            message="${detail}; expected local Nginx listener. Cloud firewall should allow Cloudflare/public on this port."
           else
             message="${detail}; expected public HTTP/HTTPS entrypoint."
           fi
@@ -3410,7 +3410,7 @@ show_firewall_hardening_status() {
       8000|9000)
         if [[ "$status" == "WARN" && "$ssl_status" == "OK" ]]; then
           status="INFO"
-          message="${detail}; backend listener exists for Nginx/ERPNext. Verify Hetzner firewall blocks public access."
+          message="${detail}; backend listener exists for Nginx/ERPNext. Verify the cloud firewall blocks public access."
         elif [[ "$status" == "WARN" ]]; then
           status="INFO"
           message="${detail}; temporary backend listener. Close/restrict externally after HTTPS works."
@@ -3431,7 +3431,7 @@ show_firewall_hardening_status() {
     status_line "Port ${port}" "$status" "$message"
   done
   echo
-  echo "Recommended Hetzner inbound firewall:"
+  echo "Recommended cloud inbound firewall:"
   echo "  22/tcp     allow only your admin IP or VPN"
   echo "  80/tcp     allow public, or Cloudflare IP ranges if staying proxied"
   echo "  443/tcp    allow public, or Cloudflare IP ranges if staying proxied"
@@ -3477,14 +3477,14 @@ vm_firewall_plan() {
   echo "  - Do not allow 8000, 9000, 11000, or 13000"
   echo
   echo "Why SSH stays open in UFW by default:"
-  echo "  - Your admin IP may change. Restrict SSH at the Hetzner Cloud Firewall first."
+  echo "  - Your admin IP may change. Restrict SSH at the cloud provider firewall first."
   echo "  - UFW can be made stricter later with: ./install-erpnext-dev.sh ufw-ssh-admin-only"
   echo "  - That advanced SSH restriction can lock you out if the wrong IP is used."
   echo
   echo "Recommended layering:"
   echo "  Layer 1: ERPNext/Nginx service listeners"
   echo "  Layer 2: UFW inside this VM"
-  echo "  Layer 3: Hetzner Cloud Firewall"
+  echo "  Layer 3: Cloud provider firewall"
   echo "  Layer 4: Cloudflare proxy/WAF/CDN"
   echo
   echo "Commands:"
@@ -3547,7 +3547,7 @@ show_vm_firewall_status() {
       22)
         if ufw_port_has_allow 22; then
           state="OK"
-          detail="allowed at UFW layer to avoid lockout; restrict SSH at Hetzner firewall"
+          detail="allowed at UFW layer to avoid lockout; restrict SSH at cloud firewall"
         else
           state="WARN"
           detail="no UFW allow rule detected; SSH could be blocked if UFW is active"
@@ -3579,7 +3579,7 @@ show_vm_firewall_status() {
   echo "Raw UFW status:"
   ufw_status_raw | sed 's/^/  /'
   echo
-  echo "Note: UFW protects the VM itself. Hetzner Cloud Firewall should still restrict SSH and block backend ports at the edge."
+  echo "Note: UFW protects the VM itself. The cloud provider firewall should still restrict SSH and block backend ports at the edge."
   echo "============================================================"
 }
 
@@ -3597,7 +3597,7 @@ configure_vm_firewall() {
   echo "  - allow 80/tcp and 443/tcp"
   echo "  - no allow rules for 8000, 9000, 11000, or 13000"
   echo
-  echo "SSH restriction should stay in Hetzner Cloud Firewall unless you intentionally run ufw-ssh-admin-only."
+  echo "SSH restriction should stay in the cloud provider firewall unless you intentionally run ufw-ssh-admin-only."
   confirm "Configure safe UFW defaults now?" || return 1
 
   log "Installing UFW"
@@ -3623,7 +3623,7 @@ configure_vm_firewall() {
   status_line "UFW" "OK" "enabled with safe defaults"
   status_line "Incoming policy" "OK" "deny by default"
   status_line "Outgoing policy" "OK" "allow by default"
-  status_line "SSH" "OK" "22/tcp allowed in UFW; restrict at Hetzner firewall"
+  status_line "SSH" "OK" "22/tcp allowed in UFW; restrict at cloud firewall"
   status_line "HTTP/HTTPS" "OK" "80/tcp and 443/tcp allowed"
   status_line "Backend ports" "OK" "8000/9000/11000/13000 not allowed in UFW"
   ui_box_end
@@ -3648,8 +3648,8 @@ configure_ufw_ssh_admin_only() {
   echo "Advanced UFW SSH Restriction"
   echo "============================================================"
   warn "This can lock you out if your IP changes or is entered incorrectly."
-  echo "Recommended default: restrict SSH in Hetzner Cloud Firewall, not in UFW."
-  echo "Keep a second SSH session open and confirm Hetzner console/rescue access before continuing."
+  echo "Recommended default: restrict SSH in the cloud provider firewall, not in UFW."
+  echo "Keep a second SSH session open and confirm provider console/rescue access before continuing."
   echo
   echo "Detected current SSH client IP: ${detected_ip:-unknown}"
   if [[ -n "${ADMIN_SSH_SOURCE_IP:-}" ]]; then
@@ -3781,7 +3781,7 @@ security_hardening_wizard() {
     echo "7) Advanced: restrict SSH in UFW"
     echo "8) Back"
     echo
-    echo "Recommended: run 2 and 4. Keep SSH IP restriction in Hetzner firewall by default."
+    echo "Recommended: run 2 and 4. Keep SSH IP restriction in the cloud provider firewall by default."
     echo
     read -r -p "Choose an option: " choice
     case "$choice" in
@@ -4314,7 +4314,7 @@ configure_production_ssl() {
   echo "Configure Production HTTPS / Let's Encrypt"
   echo "============================================================"
   echo "This configures Nginx + Let's Encrypt for: https://${domain}"
-  echo "It does not change Hetzner firewall rules and does not stop the ERPNext service."
+  echo "It does not change cloud firewall rules and does not stop the ERPNext service."
   echo
   status_line "Domain" "$([[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] && echo OK || echo FAIL)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
   status_line "Install state" "$([[ "$install_quick" == Installed* ]] && echo OK || echo FAIL)" "$install_quick"
@@ -4372,7 +4372,7 @@ configure_production_ssl() {
   http_head="$(production_http_status_plain "$domain")"
   if [[ "$http_head" != HTTP/* ]]; then
     warn "HTTP check did not return a response before ACME: ${http_head:-no response}"
-    warn "If port 80 is blocked at the Hetzner firewall, Let's Encrypt HTTP-01 will fail."
+    warn "If port 80 is blocked at the cloud firewall, Let's Encrypt HTTP-01 will fail."
   fi
 
   email_args=(--register-unsafely-without-email)
@@ -4423,7 +4423,7 @@ configure_production_ssl() {
   echo "  ./install-erpnext-dev.sh production-ssl-status"
   echo "  ./install-erpnext-dev.sh production-firewall-plan"
   echo
-  echo "After HTTPS works, restrict/close public :8000 and :9000 at the Hetzner firewall."
+  echo "After HTTPS works, restrict/close public :8000 and :9000 at the cloud firewall."
   echo "============================================================"
 }
 
@@ -4519,7 +4519,7 @@ configure_cloudflare_origin_ssl() {
   echo "Configure Cloudflare Origin CA HTTPS"
   echo "============================================================"
   echo "This installs a Cloudflare Origin CA certificate and configures Nginx for ${domain}."
-  echo "It does not change Cloudflare DNS/proxy settings and does not change Hetzner firewall rules."
+  echo "It does not change Cloudflare DNS/proxy settings and does not change cloud firewall rules."
   echo
   status_line "Domain" "$([[ -n "$dns_ip" ]] && echo OK || echo WARN)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
   status_line "Install state" "$([[ "$install_quick" == Installed* ]] && echo OK || echo FAIL)" "$install_quick"
@@ -9674,7 +9674,7 @@ show_production_checklist() {
   echo
   echo "Remaining production decisions:"
   echo "  - Confirm off-VM backup location and restore rehearsal."
-  echo "  - Confirm Hetzner firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
+  echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
   echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
   echo "  - Create named cloud snapshot after final validation."
   ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh backup-verify" "./install-erpnext-dev.sh support-bundle"
@@ -9770,7 +9770,7 @@ show_release_notes_guide() {
   echo "  - Public VM quickstart path"
   echo "  - Let's Encrypt production HTTPS path"
   echo "  - Cloudflare Origin CA / Full strict path"
-  echo "  - Hetzner firewall + UFW + Fail2Ban hardening"
+  echo "  - Cloud firewall + UFW + Fail2Ban hardening"
   echo "  - Backup inventory and readable-file verification"
   echo
   echo "Known production responsibility:"

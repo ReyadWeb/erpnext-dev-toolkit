@@ -1,6 +1,6 @@
 # TESTING
 
-## v1.0.0-rc3 validation
+## v1.0.0-rc4 validation
 
 ```bash
 chmod +x install-erpnext-dev.sh
@@ -11,7 +11,7 @@ grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="1.0.0-rc3"
+SCRIPT_VERSION="1.0.0-rc4"
 ```
 
 Final QA commands:
@@ -235,7 +235,7 @@ Expected:
 - The key is installed under `/etc/ssl/cloudflare-origin` with mode `0600`.
 - Existing managed production Nginx config is backed up.
 - Nginx is rewritten to use the Cloudflare Origin CA certificate.
-- The command does not alter Cloudflare DNS/proxy settings or Hetzner firewall rules.
+- The command does not alter Cloudflare DNS/proxy settings or cloud firewall rules.
 
 Paste-input configuration test:
 
@@ -598,7 +598,7 @@ Expected:
 - `production-ssl-status` does not warn merely because DNS returns Cloudflare IPs while Cloudflare Origin CA is active.
 - `cloudflare-origin-ssl-status` reports Cloudflare proxy as likely active.
 - `firewall-hardening-status` should label listener rows as local VM listeners.
-- It should not imply Hetzner firewall is bypassed when `8000/9000` are locally bound.
+- It should not imply cloud firewall is bypassed when `8000/9000` are locally bound.
 - It should print external tests to run from the workstation: `curl -I https://erp.flowmaya.com`, `curl -I --connect-timeout 10 http://ORIGIN_IP:8000`, and `curl -I --connect-timeout 10 http://ORIGIN_IP:9000`.
 - Redis ports `11000/13000` are reported as OK when local-only or closed.
 - No command changes firewall rules automatically.
@@ -638,7 +638,7 @@ Expected after configuration:
 - UFW has no explicit allow rules for `8000`, `9000`, `11000`, or `13000`.
 - Fail2Ban service is running.
 - The `sshd` jail is active.
-- SSH remains open at the UFW layer by default; admin-IP SSH restriction is handled in Hetzner Cloud Firewall unless the advanced `ufw-ssh-admin-only` command is intentionally used.
+- SSH remains open at the UFW layer by default; admin-IP SSH restriction is handled in cloud provider firewall unless the advanced `ufw-ssh-admin-only` command is intentionally used.
 
 ## Terminal UX checks
 

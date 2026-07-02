@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v1.0.0-rc3
+# ERPNext Developer Installer v1.0.0-rc4
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
@@ -62,9 +62,9 @@ chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh next-step
 ```
 
-## v1.0.0-rc3 focus
+## v1.0.0-rc4 focus
 
-v1.0.0-rc3 is the final QA polish release before v1.0.0. It adds compact release-readiness checks, a command audit, a final QA wizard, and a release-notes guide. It keeps the rc2 backup verification fixes and production checklist behavior.
+v1.0.0-rc4 is a final wording polish release before v1.0.0. It replaces cloud-provider-specific firewall wording with generic cloud firewall wording across the script and documentation, while keeping rc3 release-readiness checks and rc2 backup verification fixes.
 
 New final QA commands:
 
@@ -156,7 +156,7 @@ Important UX/status commands:
 
 ## v0.9.10 focus
 
-v0.9.10 adds optional VM-level hardening with UFW and Fail2Ban. The new safe default UFW profile denies incoming traffic by default, allows outgoing traffic, allows `22/80/443`, and does not allow backend ports `8000/9000/11000/13000`. SSH remains open at the UFW layer by default to avoid lockout caused by dynamic admin IPs; SSH IP restriction should normally be enforced in the Hetzner Cloud Firewall. Fail2Ban can be enabled for the `sshd` jail to reduce repeated unauthorized SSH login attempts.
+v0.9.10 adds optional VM-level hardening with UFW and Fail2Ban. The new safe default UFW profile denies incoming traffic by default, allows outgoing traffic, allows `22/80/443`, and does not allow backend ports `8000/9000/11000/13000`. SSH remains open at the UFW layer by default to avoid lockout caused by dynamic admin IPs; SSH IP restriction should normally be enforced in the cloud provider firewall. Fail2Ban can be enabled for the `sshd` jail to reduce repeated unauthorized SSH login attempts.
 
 New commands:
 
@@ -170,7 +170,7 @@ New commands:
 ./install-erpnext-dev.sh ufw-ssh-admin-only   # advanced, lockout risk
 ```
 
-v0.9.9 improves firewall hardening output after the first real Hetzner + Cloudflare production test. `firewall-hardening-status` now clearly separates **local listeners inside the VM** from **external exposure controlled by the Hetzner Cloud Firewall**. It no longer implies that `8000/9000` are publicly reachable just because Bench and Socket.io are bound locally; instead it gives workstation-side validation commands to confirm those ports are blocked externally.
+v0.9.9 improves firewall hardening output after the first real cloud VM + Cloudflare production test. `firewall-hardening-status` now clearly separates **local listeners inside the VM** from **external exposure controlled by the cloud provider firewall**. It no longer implies that `8000/9000` are publicly reachable just because Bench and Socket.io are bound locally; instead it gives workstation-side validation commands to confirm those ports are blocked externally.
 
 v0.9.8 added Cloudflare-aware SSL status and post-HTTPS firewall hardening checks. When Cloudflare Origin CA is active and DNS returns Cloudflare IPs instead of the origin VM IP, `production-ssl-status` now treats that as expected instead of warning.
 
@@ -182,7 +182,7 @@ The Cloudflare Origin CA path can prompt for the Origin Certificate and Private 
 
 v0.9.5 remains included as the Let's Encrypt staging-to-production hotfix. It detects installed Let's Encrypt staging certificates and forces replacement with a real production certificate when `LETSENCRYPT_STAGING` is not enabled.
 
-It still does **not** change DNS or firewall rules automatically. Keep Hetzner firewall changes manual: allow `80/443`, then restrict/close public `8000/9000` only after HTTPS is verified.
+It still does **not** change DNS or firewall rules automatically. Keep cloud firewall changes manual: allow `80/443`, then restrict/close public `8000/9000` only after HTTPS is verified.
 
 Run:
 
@@ -235,9 +235,9 @@ Run:
 
 `production-ssl-plan` separates development SSL from production SSL and explains the recommended path for a public VM: DNS-only first, Let's Encrypt for the real domain, Nginx on `80/443`, then closing or restricting public `:8000`.
 
-`production-firewall-plan` prints the intended Hetzner/edge firewall posture: SSH restricted, `80/443` public, `8000` temporary/restricted, and Redis/socket/internal ports closed publicly.
+`production-firewall-plan` prints the intended cloud/edge firewall posture: SSH restricted, `80/443` public, `8000` temporary/restricted, and Redis/socket/internal ports closed publicly.
 
-`firewall-hardening-status` checks local listeners after HTTPS is working and explains that the Hetzner Cloud Firewall controls external exposure. It confirms Redis ports are local-only or closed, marks backend `8000/9000` listeners as internal backend listeners to validate externally, and prints workstation-side curl tests for the origin IP. It does not change firewall rules automatically.
+`firewall-hardening-status` checks local listeners after HTTPS is working and explains that the cloud provider firewall controls external exposure. It confirms Redis ports are local-only or closed, marks backend `8000/9000` listeners as internal backend listeners to validate externally, and prints workstation-side curl tests for the origin IP. It does not change firewall rules automatically.
 
 ## v0.8.24 optional app compatibility
 
@@ -389,7 +389,7 @@ Rollback the managed Nginx site without deleting certificates or stopping ERPNex
 SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh disable-production-ssl
 ```
 
-After `https://erp.flowmaya.com` works, restrict or close public access to `8000` and `9000` at the Hetzner firewall.
+After `https://erp.flowmaya.com` works, restrict or close public access to `8000` and `9000` at the cloud firewall.
 
 ## Support bundle
 
