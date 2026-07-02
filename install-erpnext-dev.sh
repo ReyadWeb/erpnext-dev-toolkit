@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.0.0-rc5"
+SCRIPT_VERSION="1.0.0"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -9859,7 +9859,7 @@ show_release_readiness() {
   status_line "UFW" "${ufw_status%%|*}" "${ufw_status#*|}"
   status_line "Fail2Ban" "${fail2ban_status%%|*}" "${fail2ban_status#*|}"
   status_line "Latest backup" "$([[ "$completeness" == "complete" ]] && echo OK || echo WARN)" "${completeness:-none}"
-  status_line "Release state" "$release_state" "$([[ "$release_state" == OK ]] && echo "ready for final QA review" || echo "review WARN rows before v1.0.0")"
+  status_line "Release state" "$release_state" "$([[ "$release_state" == OK ]] && echo "ready for v1.0.0 release" || echo "review WARN rows before production use")"
   ui_box_end
 
   ui_next "./install-erpnext-dev.sh production-checklist" "./install-erpnext-dev.sh support-bundle"
@@ -9907,7 +9907,7 @@ final_qa_wizard() {
 
   while true; do
     ui_box_start "Final QA / Release Readiness"
-    echo "Compact checks before tagging v1.0.0."
+    echo "Compact checks before production handoff or release validation."
     echo
     echo "1) Release readiness summary"
     echo "2) Command audit"

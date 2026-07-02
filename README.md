@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v1.0.0-rc5
+# ERPNext Developer Installer v1.0.0
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
@@ -64,11 +64,13 @@ chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh next-step
 ```
 
-## v1.0.0-rc5 focus
+## v1.0.0 focus
 
-v1.0.0-rc5 is quickstart finalization polish before v1.0.0. It copies one-command quickstart runs to `/root/install-erpnext-dev.sh` for future commands, offers an initial full backup during public VM final status, improves public-mode access guidance so users do not rely on backend ports, and keeps provider-neutral firewall wording.
+v1.0.0 is the first stable release candidate promoted to final after a fresh public VM rebuild validation. It provides one-command public and local quickstarts, guided domain setup, ERPNext/Frappe v16 installation, production HTTPS choices, Cloudflare Origin CA support, UFW/Fail2Ban hardening, optional app installation, backup verification, release readiness checks, and redacted support bundles.
 
-New final QA commands:
+The public VM path was validated with Cloudflare Origin CA HTTPS, backend ports blocked externally, optional apps installed, and complete backups verified.
+
+Final QA commands:
 
 ```bash
 ./install-erpnext-dev.sh release-readiness

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v1.0.0
+
+### Stable release
+
+- Promoted v1.0.0-rc5 to v1.0.0 after clean public VM quickstart validation.
+- Validated public VM flow: domain setup, ERPNext install, Cloudflare Origin CA HTTPS, UFW, Fail2Ban, optional apps, backup creation, backup verification, and release readiness.
+- Validated that backend ports 8000 and 9000 remain blocked externally while HTTPS works through Cloudflare/Nginx.
+- Keeps the stable reusable installer path at `/root/install-erpnext-dev.sh` after one-command quickstart runs.
+- Keeps provider-neutral cloud firewall wording.
+
+### Production note
+
+- Backup verification confirms files are readable; a real restore rehearsal on a disposable VM is still required before relying on backups for production recovery.
+
 ## v1.0.0-rc5
 
 ### Improved

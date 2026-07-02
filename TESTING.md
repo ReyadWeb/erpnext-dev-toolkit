@@ -1,6 +1,6 @@
 # TESTING
 
-## v1.0.0-rc5 validation
+## v1.0.0 validation
 
 ```bash
 chmod +x install-erpnext-dev.sh
@@ -11,7 +11,7 @@ grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="1.0.0-rc5"
+SCRIPT_VERSION="1.0.0"
 ```
 
 Quickstart/final QA commands:
@@ -34,6 +34,7 @@ Expected:
 - `final-qa` opens and exits cleanly.
 - In public VM mode, `verify-access` shows HTTPS and backend-port blocking tests.
 - After a one-command quickstart run, `/root/install-erpnext-dev.sh` exists and is executable.
+- Public VM validation should confirm HTTPS returns HTTP/2 200 and backend ports 8000/9000 time out externally.
 
 ## v1.0.0-rc2 validation
 
