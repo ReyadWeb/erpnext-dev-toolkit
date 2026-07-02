@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v0.9.5
+# ERPNext Developer Installer v0.9.6
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
@@ -28,13 +28,13 @@ chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh next-step
 ```
 
-## v0.9.5 focus
+## v0.9.6 focus
 
-v0.9.5 is a focused Let's Encrypt hotfix. It improves the public VM HTTPS workflow after a staging certificate test by detecting installed Let's Encrypt staging certificates and forcing replacement with a real production certificate when `LETSENCRYPT_STAGING` is not enabled.
+v0.9.6 adds a guided production SSL provider workflow. The installer can now help choose between direct Let's Encrypt HTTPS and Cloudflare Origin CA for Cloudflare Full (strict).
 
-It also improves `production-ssl-status` by showing the certificate issuer and warning clearly when a staging certificate is installed.
+The new Cloudflare Origin CA path can prompt for the Origin Certificate and Private Key, validate that they match, install them safely under `/etc/ssl/cloudflare-origin`, back up the existing managed Nginx production config, and switch Nginx to the Cloudflare origin certificate.
 
-v0.9.4 added the conservative production HTTPS implementation for the public VM path. It can install Nginx/Certbot, issue a Let's Encrypt certificate with HTTP-01 webroot validation, and proxy `https://DOMAIN` to the running ERPNext Bench service.
+v0.9.5 remains included as the Let's Encrypt staging-to-production hotfix. It detects installed Let's Encrypt staging certificates and forces replacement with a real production certificate when `LETSENCRYPT_STAGING` is not enabled.
 
 It still does **not** change DNS or firewall rules automatically. Keep Hetzner firewall changes manual: allow `80/443`, then restrict/close public `8000/9000` only after HTTPS is verified.
 
@@ -47,7 +47,10 @@ Run:
 ./install-erpnext-dev.sh public-vm-readiness
 ./install-erpnext-dev.sh production-ssl-plan
 ./install-erpnext-dev.sh production-firewall-plan
+./install-erpnext-dev.sh production-ssl-wizard
 ./install-erpnext-dev.sh configure-production-ssl
+./install-erpnext-dev.sh configure-cloudflare-origin-ssl
+./install-erpnext-dev.sh cloudflare-origin-ssl-status
 ./install-erpnext-dev.sh production-ssl-status
 ```
 
@@ -90,6 +93,63 @@ HELPDESK_BRANCH=main
 TELEPHONY_BRANCH=develop
 INSIGHTS_BRANCH=main
 ```
+
+
+## Production SSL provider wizard
+
+Use the provider wizard when you want a smooth SSL choice instead of remembering separate commands:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh production-ssl-wizard
+```
+
+Options:
+
+1. Let's Encrypt directly on the VM. Best when `erp.flowmaya.com` is DNS-only while issuing the certificate.
+2. Cloudflare Origin CA. Best when Cloudflare will stay proxied/orange-cloud and Cloudflare SSL/TLS mode will be `Full (strict)`.
+
+### Cloudflare Origin CA path
+
+First create an Origin CA certificate in Cloudflare:
+
+```text
+Cloudflare dashboard -> SSL/TLS -> Origin Server -> Create Certificate
+Hostname: erp.flowmaya.com
+```
+
+Cloudflare shows two values:
+
+- Origin Certificate
+- Private Key
+
+Then run:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh configure-cloudflare-origin-ssl
+```
+
+The script will ask you to confirm that the certificate has been generated, then prompts you to paste the certificate and private key. The pasted input is not printed to the installer log. End each paste with the marker shown by the script, such as `END_CERT` or `END_KEY`.
+
+For file-based input instead of paste prompts:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com CLOUDFLARE_ORIGIN_CERT_FILE=/root/cf-origin.pem CLOUDFLARE_ORIGIN_KEY_FILE=/root/cf-origin.key ./install-erpnext-dev.sh configure-cloudflare-origin-ssl
+```
+
+After installation, set Cloudflare:
+
+```text
+DNS record: erp.flowmaya.com -> Proxied / orange-cloud
+SSL/TLS mode: Full (strict)
+```
+
+Check with:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh cloudflare-origin-ssl-status
+```
+
+Cloudflare Origin CA certificates are not meant to be trusted directly by browsers. Direct DNS-only access to the origin may show a certificate warning; browser traffic should go through Cloudflare.
 
 ## Production HTTPS on a public VM
 

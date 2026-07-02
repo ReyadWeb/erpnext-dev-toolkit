@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## v0.9.6
+
+### Added
+
+- Added `production-ssl-wizard` / `ssl-provider-wizard` to choose between Let's Encrypt and Cloudflare Origin CA.
+- Added `configure-cloudflare-origin-ssl` with aliases `install-cloudflare-origin-cert` and `switch-to-cloudflare-origin-ssl`.
+- Added `cloudflare-origin-ssl-status` for Cloudflare Origin CA certificate, key, Nginx, proxy-hint, and HTTPS checks.
+- Added `cloudflare-origin-guide` with the dashboard workflow for Origin CA and Full (strict).
+- Added optional file-based inputs: `CLOUDFLARE_ORIGIN_CERT_FILE` and `CLOUDFLARE_ORIGIN_KEY_FILE`.
+
+### Improved
+
+- `production-ssl-status` now detects the active Nginx certificate provider rather than assuming Let's Encrypt only.
+- Production SSL runtime status now recognizes Cloudflare Origin CA and explains why direct DNS-only browser/curl trust may fail until Cloudflare proxy is enabled.
+- Existing managed Nginx production config is backed up before switching to Cloudflare Origin CA.
+
+### Safety
+
+- Cloudflare Origin certificate and key are validated before installation.
+- The script compares the certificate public key to the private key public key before writing them to `/etc/ssl/cloudflare-origin`.
+- The private key is installed with mode `0600`.
+- Paste prompts hide input and avoid printing certificate/key contents into the installer log.
+- The command does not change Cloudflare DNS/proxy settings and does not change Hetzner firewall rules.
+
 ## v0.9.5
 
 ### Fixed

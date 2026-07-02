@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.9.5"
+SCRIPT_VERSION="0.9.6"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -42,6 +42,9 @@ SSL_REDIRECT_HTTP="${SSL_REDIRECT_HTTP:-true}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 LETSENCRYPT_STAGING="${LETSENCRYPT_STAGING:-false}"
 PRODUCTION_SSL_WEBROOT="${PRODUCTION_SSL_WEBROOT:-/var/www/erpnext-production-acme}"
+CLOUDFLARE_ORIGIN_DIR="${CLOUDFLARE_ORIGIN_DIR:-/etc/ssl/cloudflare-origin}"
+CLOUDFLARE_ORIGIN_CERT_FILE="${CLOUDFLARE_ORIGIN_CERT_FILE:-}"
+CLOUDFLARE_ORIGIN_KEY_FILE="${CLOUDFLARE_ORIGIN_KEY_FILE:-}"
 
 FRAPPE_BRANCH="${FRAPPE_BRANCH:-version-16}"
 ERPNEXT_BRANCH="${ERPNEXT_BRANCH:-version-16}"
@@ -106,7 +109,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|disable-production-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -2865,7 +2868,9 @@ show_public_vm_readiness() {
   echo "Recommended next commands:"
   echo "  ./install-erpnext-dev.sh backup-files"
   echo "  ./install-erpnext-dev.sh production-ssl-plan"
+  echo "  ./install-erpnext-dev.sh production-ssl-wizard"
   echo "  ./install-erpnext-dev.sh configure-production-ssl"
+  echo "  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
   echo "  ./install-erpnext-dev.sh production-ssl-status"
   echo "  ./install-erpnext-dev.sh production-firewall-plan"
   echo "  ./install-erpnext-dev.sh support-bundle"
@@ -2940,7 +2945,9 @@ show_production_ssl_plan() {
   echo "  curl -Ik https://${domain}"
   echo
   echo "Related commands:"
+  echo "  ./install-erpnext-dev.sh production-ssl-wizard"
   echo "  ./install-erpnext-dev.sh configure-production-ssl"
+  echo "  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
   echo "  ./install-erpnext-dev.sh production-ssl-status"
   echo "  ./install-erpnext-dev.sh production-firewall-plan"
   echo "  ./install-erpnext-dev.sh public-vm-readiness"
@@ -3038,6 +3045,116 @@ production_letsencrypt_key_path() {
   echo "$(production_letsencrypt_live_dir)/privkey.pem"
 }
 
+
+cloudflare_origin_dir() {
+  echo "$CLOUDFLARE_ORIGIN_DIR"
+}
+
+cloudflare_origin_cert_path() {
+  local domain
+  domain="$(production_ssl_domain)" || return 1
+  echo "$(cloudflare_origin_dir)/${domain}.pem"
+}
+
+cloudflare_origin_key_path() {
+  local domain
+  domain="$(production_ssl_domain)" || return 1
+  echo "$(cloudflare_origin_dir)/${domain}.key"
+}
+
+production_nginx_active_cert_path() {
+  local enabled_path
+  enabled_path="$(production_nginx_enabled_path)"
+  [[ -r "$enabled_path" ]] || return 1
+  awk '/^[[:space:]]*ssl_certificate[[:space:]]+/ && $1 == "ssl_certificate" {gsub(";", "", $2); print $2; exit}' "$enabled_path" 2>/dev/null
+}
+
+production_nginx_active_key_path() {
+  local enabled_path
+  enabled_path="$(production_nginx_enabled_path)"
+  [[ -r "$enabled_path" ]] || return 1
+  awk '/^[[:space:]]*ssl_certificate_key[[:space:]]+/ {gsub(";", "", $2); print $2; exit}' "$enabled_path" 2>/dev/null
+}
+
+production_ssl_provider_from_cert_path() {
+  local cert_path="${1:-}"
+  case "$cert_path" in
+    /etc/letsencrypt/live/*) echo "Let's Encrypt" ;;
+    /etc/ssl/cloudflare-origin/*|*cloudflare-origin*) echo "Cloudflare Origin CA" ;;
+    "") echo "not configured" ;;
+    *) echo "custom/origin certificate" ;;
+  esac
+}
+
+certificate_issuer_for_file() {
+  local cert_path="$1"
+  [[ -n "$cert_path" && -f "$cert_path" ]] || return 1
+  openssl x509 -in "$cert_path" -noout -issuer 2>/dev/null | sed 's/^issuer=//' || return 1
+}
+
+certificate_subject_for_file() {
+  local cert_path="$1"
+  [[ -n "$cert_path" && -f "$cert_path" ]] || return 1
+  openssl x509 -in "$cert_path" -noout -subject 2>/dev/null | sed 's/^subject=//' || return 1
+}
+
+certificate_dates_for_file() {
+  local cert_path="$1"
+  [[ -n "$cert_path" && -f "$cert_path" ]] || return 1
+  openssl x509 -in "$cert_path" -noout -dates 2>/dev/null | paste -sd '; ' - || return 1
+}
+
+certificate_detail_for_file() {
+  local cert_path="$1" provider issuer dates subject
+  provider="$(production_ssl_provider_from_cert_path "$cert_path")"
+  issuer="$(certificate_issuer_for_file "$cert_path" 2>/dev/null || true)"
+  subject="$(certificate_subject_for_file "$cert_path" 2>/dev/null || true)"
+  dates="$(certificate_dates_for_file "$cert_path" 2>/dev/null || true)"
+  if [[ -z "$issuer" ]]; then
+    echo "missing or unreadable"
+  elif [[ "$issuer" == *STAGING* || "$issuer" == *staging* ]]; then
+    echo "${provider}; STAGING certificate; issuer=${issuer}; subject=${subject}; ${dates}"
+  else
+    echo "${provider}; issuer=${issuer}; subject=${subject}; ${dates}"
+  fi
+}
+
+certificate_file_is_staging() {
+  local cert_path="$1" issuer
+  issuer="$(certificate_issuer_for_file "$cert_path" 2>/dev/null || true)"
+  [[ "$issuer" == *STAGING* || "$issuer" == *staging* ]]
+}
+
+validate_certificate_and_key_pair() {
+  local cert_path="$1" key_path="$2" cert_pub key_pub
+  openssl x509 -in "$cert_path" -noout >/dev/null 2>&1 || return 1
+  openssl pkey -in "$key_path" -noout >/dev/null 2>&1 || return 1
+  cert_pub="$(openssl x509 -in "$cert_path" -pubkey -noout 2>/dev/null | openssl sha256 2>/dev/null | awk '{print $2}')"
+  key_pub="$(openssl pkey -in "$key_path" -pubout 2>/dev/null | openssl sha256 2>/dev/null | awk '{print $2}')"
+  [[ -n "$cert_pub" && -n "$key_pub" && "$cert_pub" == "$key_pub" ]]
+}
+
+read_multiline_secret_to_file() {
+  local label="$1" end_marker="$2" output_file="$3" line had_tty=0
+  echo
+  echo "Paste the ${label}. End with a line containing only: ${end_marker}"
+  echo "Input is hidden while you paste. Nothing is printed to the installer log."
+  : > "$output_file"
+  chmod 600 "$output_file" 2>/dev/null || true
+  if [[ -t 0 ]]; then
+    had_tty=1
+    stty -echo 2>/dev/null || true
+  fi
+  while IFS= read -r line; do
+    [[ "$line" == "$end_marker" ]] && break
+    printf '%s\n' "$line" >> "$output_file"
+  done
+  if [[ "$had_tty" -eq 1 ]]; then
+    stty echo 2>/dev/null || true
+    echo
+  fi
+}
+
 production_https_status() {
   local domain="$1"
   curl -fsSI --max-time 10 "https://${domain}/" 2>/dev/null | awk 'NR==1 {print; exit}' || true
@@ -3051,22 +3168,19 @@ production_http_status_plain() {
 production_certificate_issuer() {
   local fullchain
   fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
-  [[ -n "$fullchain" && -f "$fullchain" ]] || return 1
-  openssl x509 -in "$fullchain" -noout -issuer 2>/dev/null | sed 's/^issuer=//' || return 1
+  certificate_issuer_for_file "$fullchain"
 }
 
 production_certificate_subject() {
   local fullchain
   fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
-  [[ -n "$fullchain" && -f "$fullchain" ]] || return 1
-  openssl x509 -in "$fullchain" -noout -subject 2>/dev/null | sed 's/^subject=//' || return 1
+  certificate_subject_for_file "$fullchain"
 }
 
 production_certificate_dates() {
   local fullchain
   fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
-  [[ -n "$fullchain" && -f "$fullchain" ]] || return 1
-  openssl x509 -in "$fullchain" -noout -dates 2>/dev/null | paste -sd '; ' - || return 1
+  certificate_dates_for_file "$fullchain"
 }
 
 production_certificate_is_staging() {
@@ -3104,7 +3218,7 @@ production_ssl_is_configured() {
 }
 
 production_ssl_runtime_detail() {
-  local domain fullchain enabled_path https_head
+  local domain active_cert active_key fullchain enabled_path https_head provider
   domain="$(production_ssl_domain 2>/dev/null || true)"
   if [[ -z "$domain" ]]; then
     echo "WARN|no valid production domain set"
@@ -3113,34 +3227,41 @@ production_ssl_runtime_detail() {
 
   fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
   enabled_path="$(production_nginx_enabled_path)"
+  active_cert="$(production_nginx_active_cert_path 2>/dev/null || true)"
+  active_key="$(production_nginx_active_key_path 2>/dev/null || true)"
+  provider="$(production_ssl_provider_from_cert_path "$active_cert")"
 
-  if [[ -f "$fullchain" && ( -L "$enabled_path" || -f "$enabled_path" ) ]]; then
-    if production_certificate_is_staging; then
-      echo "WARN|Let's Encrypt staging certificate is installed; replace with production certificate before trusting HTTPS"
+  if [[ -n "$active_cert" && -n "$active_key" && -f "$active_cert" && -f "$active_key" && ( -L "$enabled_path" || -f "$enabled_path" ) ]]; then
+    if certificate_file_is_staging "$active_cert"; then
+      echo "WARN|${provider} staging certificate is installed; replace with production certificate before trusting HTTPS"
       return 0
     fi
     https_head="$(production_https_status "$domain")"
     if [[ "$https_head" == HTTP/* ]]; then
-      echo "OK|Let's Encrypt/Nginx HTTPS responding: ${https_head}"
+      echo "OK|${provider}/Nginx HTTPS responding: ${https_head}"
+    elif [[ "$provider" == "Cloudflare Origin CA" ]]; then
+      echo "WARN|Cloudflare Origin CA is installed, but trusted HTTPS did not respond. If DNS is grey-cloud/DNS-only, this is expected; switch Cloudflare proxy on and use Full (strict)."
     else
       echo "WARN|certificate/config present, but HTTPS did not respond"
     fi
   elif [[ -f "$fullchain" ]]; then
     echo "WARN|Let's Encrypt certificate exists, but production Nginx site is not enabled"
   elif command -v nginx >/dev/null 2>&1; then
-    echo "WARN|Nginx installed, but no production Let's Encrypt certificate is configured"
+    echo "WARN|Nginx installed, but no production HTTPS certificate is configured"
   else
     echo "WARN|not configured for production"
   fi
 }
 
 write_production_nginx_config() {
-  local mode="$1" domain available_path webroot fullchain key ssl_block redirect_block
+  local mode="$1" domain available_path webroot fullchain key cert_provider ssl_block redirect_block
   domain="$(production_ssl_domain)" || return 1
   available_path="$(production_nginx_available_path)"
   webroot="$PRODUCTION_SSL_WEBROOT"
-  fullchain="$(production_letsencrypt_fullchain_path)"
-  key="$(production_letsencrypt_key_path)"
+  fullchain="${2:-$(production_letsencrypt_fullchain_path)}"
+  key="${3:-$(production_letsencrypt_key_path)}"
+  cert_provider="${4:-}"
+  [[ -n "$cert_provider" ]] || cert_provider="Let's Encrypt"
 
   $SUDO mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled "$webroot/.well-known/acme-challenge"
   $SUDO chown -R root:root "$webroot"
@@ -3204,6 +3325,7 @@ server {
   $SUDO tee "$available_path" >/dev/null <<EOF_PROD_NGINX
 # Managed by ERPNext Developer Installer.
 # Production HTTPS reverse proxy for ${domain}.
+# Certificate provider: ${cert_provider}.
 # ERPNext Bench remains on localhost :8000/:9000 behind Nginx.
 
 server {
@@ -3239,6 +3361,7 @@ EOF_PROD_NGINX
 
 show_production_ssl_status() {
   local domain vm_ip dns_ip nginx_state certbot_state cert_state cert_detail cert_line_status enabled_state http_head https_head ssl_pair ssl_status ssl_detail
+  local active_cert active_key provider
 
   require_sudo
   vm_ip="$(get_vm_ip)"
@@ -3248,17 +3371,24 @@ show_production_ssl_status() {
   command -v nginx >/dev/null 2>&1 && nginx_state="installed: $(nginx -v 2>&1 | sed 's/^nginx version: //')"
   certbot_state="not installed"
   command -v certbot >/dev/null 2>&1 && certbot_state="installed: $(certbot --version 2>&1 | head -n 1)"
+  active_cert="$(production_nginx_active_cert_path 2>/dev/null || true)"
+  active_key="$(production_nginx_active_key_path 2>/dev/null || true)"
+  provider="$(production_ssl_provider_from_cert_path "$active_cert")"
   cert_state="missing"
   cert_detail="missing"
   cert_line_status="WARN"
-  if production_ssl_domain >/dev/null 2>&1 && [[ -f "$(production_letsencrypt_fullchain_path 2>/dev/null || true)" ]]; then
-    cert_state="present: $(production_letsencrypt_fullchain_path)"
-    cert_detail="$(production_certificate_detail 2>/dev/null || echo 'present, but issuer could not be read')"
-    if production_certificate_is_staging; then
+  if [[ -n "$active_cert" && -f "$active_cert" ]]; then
+    cert_state="active: ${active_cert}"
+    cert_detail="$(certificate_detail_for_file "$active_cert" 2>/dev/null || echo 'present, but issuer could not be read')"
+    if certificate_file_is_staging "$active_cert"; then
       cert_line_status="WARN"
     else
       cert_line_status="OK"
     fi
+  elif production_ssl_domain >/dev/null 2>&1 && [[ -f "$(production_letsencrypt_fullchain_path 2>/dev/null || true)" ]]; then
+    cert_state="present: $(production_letsencrypt_fullchain_path)"
+    cert_detail="$(production_certificate_detail 2>/dev/null || echo 'present, but issuer could not be read')"
+    if production_certificate_is_staging; then cert_line_status="WARN"; else cert_line_status="OK"; fi
   fi
   enabled_state="not enabled"
   if [[ -L "$(production_nginx_enabled_path)" || -f "$(production_nginx_enabled_path)" ]]; then
@@ -3275,10 +3405,12 @@ show_production_ssl_status() {
   echo "Production SSL Status"
   echo "============================================================"
   status_line "Domain" "$([[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] && echo OK || echo WARN)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
+  status_line "Provider" "$([[ "$provider" != "not configured" ]] && echo OK || echo WARN)" "$provider"
   status_line "Nginx" "$([[ "$nginx_state" == installed* ]] && echo OK || echo WARN)" "$nginx_state"
-  status_line "Certbot" "$([[ "$certbot_state" == installed* ]] && echo OK || echo WARN)" "$certbot_state"
+  status_line "Certbot" "$([[ "$certbot_state" == installed* ]] && echo OK || echo INFO)" "$certbot_state"
   status_line "Certificate" "$cert_line_status" "$cert_state"
   status_line "Certificate issuer" "$cert_line_status" "$cert_detail"
+  status_line "Certificate key" "$([[ -n "$active_key" && -f "$active_key" ]] && echo OK || echo WARN)" "${active_key:-missing}"
   status_line "Nginx site" "$([[ "$enabled_state" == enabled* ]] && echo OK || echo WARN)" "$enabled_state"
   status_line "Port 80" "INFO" "$(production_listener_detail 80)"
   status_line "Port 443" "INFO" "$(production_listener_detail 443)"
@@ -3423,6 +3555,233 @@ configure_production_ssl() {
   echo
   echo "After HTTPS works, restrict/close public :8000 and :9000 at the Hetzner firewall."
   echo "============================================================"
+}
+
+
+show_cloudflare_origin_guide() {
+  local domain vm_ip
+  vm_ip="$(get_vm_ip)"
+  domain="$(production_ssl_domain 2>/dev/null || echo "${PRODUCTION_DOMAIN:-$SITE_NAME}")"
+  echo
+  echo "============================================================"
+  echo "Cloudflare Origin CA Guide"
+  echo "============================================================"
+  echo "Use this path when Cloudflare will stay proxied/orange-cloud."
+  echo
+  echo "Cloudflare dashboard steps:"
+  echo "  1) SSL/TLS -> Origin Server -> Create Certificate."
+  echo "  2) Hostname: ${domain}"
+  echo "  3) Key type: RSA or ECC."
+  echo "  4) Save both the Origin Certificate and Private Key. Cloudflare shows the private key only once."
+  echo "  5) Keep DNS record ${domain} pointed to ${vm_ip}."
+  echo "  6) After installing the origin cert here, turn proxy ON/orange-cloud."
+  echo "  7) Set SSL/TLS encryption mode to Full (strict)."
+  echo
+  echo "Installer commands:"
+  echo "  ./install-erpnext-dev.sh production-ssl-wizard"
+  echo "  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
+  echo "  ./install-erpnext-dev.sh cloudflare-origin-ssl-status"
+  echo
+  echo "Important: Cloudflare Origin CA certificates are trusted by Cloudflare, not by browsers directly."
+  echo "With DNS-only/grey-cloud, direct curl/browser checks may show a certificate trust warning."
+  echo "============================================================"
+}
+
+install_cloudflare_origin_material() {
+  local domain tmp_dir tmp_cert tmp_key src_cert src_key dest_dir dest_cert dest_key cert_status key_status
+  domain="$(production_ssl_domain)" || return 1
+  tmp_dir="$(mktemp -d)"
+  tmp_cert="${tmp_dir}/cloudflare-origin.pem"
+  tmp_key="${tmp_dir}/cloudflare-origin.key"
+
+  if [[ -n "$CLOUDFLARE_ORIGIN_CERT_FILE" && -n "$CLOUDFLARE_ORIGIN_KEY_FILE" ]]; then
+    src_cert="$CLOUDFLARE_ORIGIN_CERT_FILE"
+    src_key="$CLOUDFLARE_ORIGIN_KEY_FILE"
+    [[ -f "$src_cert" ]] || fail "CLOUDFLARE_ORIGIN_CERT_FILE not found: ${src_cert}"
+    [[ -f "$src_key" ]] || fail "CLOUDFLARE_ORIGIN_KEY_FILE not found: ${src_key}"
+    cp "$src_cert" "$tmp_cert"
+    cp "$src_key" "$tmp_key"
+  else
+    echo
+    echo "Cloudflare should have shown you two PEM blocks:"
+    echo "  - Origin Certificate"
+    echo "  - Private Key"
+    echo
+    confirm "Have you generated and copied both values from Cloudflare Origin Server?" || return 1
+    read_multiline_secret_to_file "Cloudflare Origin Certificate" "END_CERT" "$tmp_cert"
+    read_multiline_secret_to_file "Cloudflare Origin Private Key" "END_KEY" "$tmp_key"
+  fi
+
+  validate_certificate_and_key_pair "$tmp_cert" "$tmp_key" || fail "Cloudflare origin certificate/key validation failed. Confirm the private key matches the certificate."
+
+  dest_dir="$(cloudflare_origin_dir)"
+  dest_cert="$(cloudflare_origin_cert_path)"
+  dest_key="$(cloudflare_origin_key_path)"
+  $SUDO mkdir -p "$dest_dir"
+  $SUDO install -m 0644 -o root -g root "$tmp_cert" "$dest_cert"
+  $SUDO install -m 0600 -o root -g root "$tmp_key" "$dest_key"
+  rm -rf "$tmp_dir"
+
+  cert_status="$(certificate_detail_for_file "$dest_cert" 2>/dev/null || echo 'installed')"
+  key_status="private key installed with mode 0600"
+  ok "Cloudflare Origin certificate installed: ${dest_cert}"
+  ok "${key_status}"
+  status_line "Certificate detail" "INFO" "$cert_status"
+}
+
+configure_cloudflare_origin_ssl() {
+  require_erpnext_vm_context "configure-cloudflare-origin-ssl" || return 1
+  require_sudo
+
+  local domain vm_ip dns_ip install_quick runtime backup_count available_path backup_path https_head provider cert_path key_path
+  domain="$(production_ssl_domain 2>/dev/null || true)"
+  [[ -n "$domain" ]] || fail "Set PRODUCTION_DOMAIN and SITE_NAME, for example: SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
+  vm_ip="$(get_vm_ip)"
+  dns_ip="$(resolve_ipv4_first "$domain")"
+  install_quick="$(production_quick_install_state)"
+  runtime="$(runtime_state 2>/dev/null || echo Stopped)"
+  backup_count="$(production_backup_count)"
+
+  echo
+  echo "============================================================"
+  echo "Configure Cloudflare Origin CA HTTPS"
+  echo "============================================================"
+  echo "This installs a Cloudflare Origin CA certificate and configures Nginx for ${domain}."
+  echo "It does not change Cloudflare DNS/proxy settings and does not change Hetzner firewall rules."
+  echo
+  status_line "Domain" "$([[ -n "$dns_ip" ]] && echo OK || echo WARN)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
+  status_line "Install state" "$([[ "$install_quick" == Installed* ]] && echo OK || echo FAIL)" "$install_quick"
+  status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo FAIL)" "$runtime"
+  if [[ "$backup_count" =~ ^[0-9]+$ && "$backup_count" -gt 0 ]]; then
+    status_line "Backup" "OK" "${backup_count} local backup file(s) found; off-VM copy still recommended"
+  else
+    status_line "Backup" "WARN" "no local backup detected; create one before production changes"
+  fi
+  status_line "Current SSL" "INFO" "$(production_ssl_runtime_detail | cut -d'|' -f2-)"
+  echo
+  echo "Recommended Cloudflare settings after this command succeeds:"
+  echo "  DNS record ${domain}: Proxied / orange-cloud"
+  echo "  SSL/TLS encryption mode: Full (strict)"
+  echo
+
+  [[ "$install_quick" == Installed* ]] || fail "ERPNext is not fully installed. Run guided setup first."
+  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: ./install-erpnext-dev.sh start"
+
+  if [[ "$ASSUME_YES" -ne 1 ]]; then
+    echo "Before continuing, confirm you have a snapshot and the Cloudflare Origin certificate/private key."
+    confirm "Configure Cloudflare Origin CA SSL for ${domain} now?" || return 1
+  fi
+
+  log "Installing Nginx if needed"
+  $SUDO apt-get update
+  $SUDO apt-get install -y nginx
+
+  install_cloudflare_origin_material
+  cert_path="$(cloudflare_origin_cert_path)"
+  key_path="$(cloudflare_origin_key_path)"
+
+  available_path="$(production_nginx_available_path)"
+  if [[ -f "$available_path" ]]; then
+    backup_path="${available_path}.bak-$(date +%Y%m%d-%H%M%S)"
+    $SUDO cp -a "$available_path" "$backup_path"
+    ok "Existing production Nginx config backed up: ${backup_path}"
+  fi
+
+  if [[ -L /etc/nginx/sites-enabled/default || -f /etc/nginx/sites-enabled/default ]]; then
+    $SUDO rm -f /etc/nginx/sites-enabled/default
+  fi
+
+  log "Writing Cloudflare Origin CA Nginx config"
+  write_production_nginx_config https "$cert_path" "$key_path" "Cloudflare Origin CA"
+  $SUDO ln -sfn "$(production_nginx_available_path)" "$(production_nginx_enabled_path)"
+
+  log "Testing and reloading Nginx"
+  $SUDO nginx -t || fail "Nginx config test failed. The previous config backup is available if needed."
+  $SUDO systemctl enable --now nginx
+  $SUDO systemctl reload nginx
+
+  PRODUCTION_SSL_MODE="cloudflare-origin-ca"
+  write_dev_config_file >/dev/null || true
+
+  provider="$(production_ssl_provider_from_cert_path "$cert_path")"
+  https_head="$(production_https_status "$domain")"
+  if [[ "$https_head" == HTTP/* ]]; then
+    ok "${provider} HTTPS path is responding through the current DNS route: ${https_head}"
+  else
+    warn "Cloudflare Origin CA is installed. Direct curl may fail until Cloudflare proxy is ON and SSL/TLS mode is Full (strict)."
+  fi
+
+  echo
+  echo "Next steps in Cloudflare:"
+  echo "  1) Set ${domain} DNS record to Proxied / orange-cloud."
+  echo "  2) Set SSL/TLS mode to Full (strict)."
+  echo "  3) Test: curl -I https://${domain}"
+  echo "  4) Run: ./install-erpnext-dev.sh cloudflare-origin-ssl-status"
+  echo "============================================================"
+}
+
+show_cloudflare_origin_ssl_status() {
+  local domain vm_ip dns_ip cert_path key_path enabled_path provider https_head ssl_pair ssl_status ssl_detail proxied_note
+  require_sudo
+  domain="$(production_ssl_domain 2>/dev/null || echo "${PRODUCTION_DOMAIN:-$SITE_NAME}")"
+  vm_ip="$(get_vm_ip)"
+  dns_ip="$(resolve_ipv4_first "$domain")"
+  cert_path="$(cloudflare_origin_cert_path 2>/dev/null || true)"
+  key_path="$(cloudflare_origin_key_path 2>/dev/null || true)"
+  enabled_path="$(production_nginx_enabled_path)"
+  provider="$(production_ssl_provider_from_cert_path "$(production_nginx_active_cert_path 2>/dev/null || true)")"
+  https_head="$(production_https_status "$domain")"
+  ssl_pair="$(production_ssl_runtime_detail)"
+  ssl_status="${ssl_pair%%|*}"
+  ssl_detail="${ssl_pair#*|}"
+  proxied_note="DNS resolves to origin IP; Cloudflare proxy may be DNS-only/grey-cloud"
+  if [[ -n "$dns_ip" && "$dns_ip" != "$vm_ip" ]]; then
+    proxied_note="DNS does not resolve directly to origin IP; Cloudflare proxy may be ON"
+  fi
+
+  echo
+  echo "============================================================"
+  echo "Cloudflare Origin SSL Status"
+  echo "============================================================"
+  status_line "Domain" "$([[ -n "$dns_ip" ]] && echo OK || echo WARN)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
+  status_line "Cloudflare proxy hint" "INFO" "$proxied_note"
+  status_line "Active provider" "$([[ "$provider" == "Cloudflare Origin CA" ]] && echo OK || echo WARN)" "$provider"
+  status_line "Origin certificate" "$([[ -f "$cert_path" ]] && echo OK || echo WARN)" "${cert_path:-missing}"
+  status_line "Origin private key" "$([[ -f "$key_path" ]] && echo OK || echo WARN)" "${key_path:-missing}"
+  if [[ -f "$cert_path" ]]; then
+    status_line "Origin cert detail" "INFO" "$(certificate_detail_for_file "$cert_path")"
+  fi
+  status_line "Nginx site" "$([[ -L "$enabled_path" || -f "$enabled_path" ]] && echo OK || echo WARN)" "$enabled_path"
+  status_line "HTTPS" "$([[ "$https_head" == HTTP/* ]] && echo OK || echo WARN)" "${https_head:-no response/trust warning}"
+  status_line "Overall" "$ssl_status" "$ssl_detail"
+  echo
+  echo "Cloudflare dashboard target: DNS Proxied/orange-cloud + SSL/TLS Full (strict)."
+  echo "============================================================"
+}
+
+production_ssl_wizard() {
+  local choice
+  echo
+  echo "============================================================"
+  echo "Production SSL Provider Wizard"
+  echo "============================================================"
+  echo "Choose how this public ERPNext VM should handle HTTPS."
+  echo
+  echo "1) Let's Encrypt certificate directly on this VM"
+  echo "2) Cloudflare Origin CA certificate for Cloudflare Full (strict)"
+  echo "3) Show current production SSL status"
+  echo "4) Show Cloudflare Origin CA guide"
+  echo "5) Back"
+  echo
+  read -r -p "Choose an option: " choice
+  case "$choice" in
+    1) configure_production_ssl ;;
+    2) configure_cloudflare_origin_ssl ;;
+    3) show_production_ssl_status ;;
+    4) show_cloudflare_origin_guide ;;
+    5|"") return 0 ;;
+    *) warn "Invalid option: ${choice}" ; return 1 ;;
+  esac
 }
 
 disable_production_ssl() {
@@ -8431,8 +8790,12 @@ Advanced actions:
   public-vm-readiness Show public VM DNS/access/listener readiness
   production-ssl-plan Show production SSL readiness and recommended path
   production-firewall-plan Show public VM firewall exposure plan
+  production-ssl-wizard Choose Let's Encrypt or Cloudflare Origin CA HTTPS
   configure-production-ssl Configure Nginx + Let's Encrypt for production HTTPS
-  production-ssl-status Show production HTTPS/Nginx/Let's Encrypt status
+  configure-cloudflare-origin-ssl Configure Nginx + Cloudflare Origin CA HTTPS
+  cloudflare-origin-ssl-status Show Cloudflare Origin CA HTTPS status
+  cloudflare-origin-guide Show Cloudflare Origin CA setup guide
+  production-ssl-status Show production HTTPS/Nginx/certificate status
   disable-production-ssl Disable managed production HTTPS Nginx site
   production-domain-guide Show production domain planning guide
   production-ssl-guide Show production SSL planning guide
@@ -8499,7 +8862,9 @@ Examples:
   ./install-erpnext-dev.sh public-vm-readiness
   ./install-erpnext-dev.sh production-ssl-plan
   ./install-erpnext-dev.sh production-firewall-plan
+  ./install-erpnext-dev.sh production-ssl-wizard
   ./install-erpnext-dev.sh configure-production-ssl
+  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl
   ./install-erpnext-dev.sh production-ssl-status
   ./install-erpnext-dev.sh doctor
   ./install-erpnext-dev.sh doctor --plain
@@ -8564,7 +8929,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|configure-production-ssl|production-ssl-status|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -8678,7 +9043,11 @@ main() {
     public-vm-readiness|public-readiness) show_public_vm_readiness ;;
     production-ssl-plan|prod-ssl-plan) show_production_ssl_plan ;;
     production-firewall-plan|prod-firewall-plan) show_production_firewall_plan ;;
+    production-ssl-wizard|ssl-provider-wizard) production_ssl_wizard ;;
     configure-production-ssl) configure_production_ssl ;;
+    configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl) configure_cloudflare_origin_ssl ;;
+    cloudflare-origin-ssl-status) show_cloudflare_origin_ssl_status ;;
+    cloudflare-origin-guide) show_cloudflare_origin_guide ;;
     production-ssl-status) show_production_ssl_status ;;
     disable-production-ssl) disable_production_ssl ;;
     production-domain-guide) show_production_domain_guide ;;

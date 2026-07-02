@@ -1,4 +1,4 @@
-# TESTING v0.9.5
+# TESTING v0.9.6
 
 ## Syntax
 
@@ -11,13 +11,13 @@ grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="0.9.5"
+SCRIPT_VERSION="0.9.6"
 ```
 
 ## Help command
 
 ```bash
-./install-erpnext-dev.sh help | grep -E "doctor --plain|doctor --json|support-bundle|app-compatibility|production-plan|production-domain-plan|public-vm-readiness|production-ssl-plan|production-firewall-plan|configure-production-ssl|production-ssl-status|disable-production-ssl"
+./install-erpnext-dev.sh help | grep -E "doctor --plain|doctor --json|support-bundle|app-compatibility|production-plan|production-domain-plan|public-vm-readiness|production-ssl-plan|production-firewall-plan|production-ssl-wizard|configure-production-ssl|configure-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|disable-production-ssl"
 ```
 
 Expected:
@@ -31,7 +31,11 @@ Expected:
 - Help lists `public-vm-readiness`.
 - Help lists `production-ssl-plan`.
 - Help lists `production-firewall-plan`.
+- Help lists `production-ssl-wizard`.
 - Help lists `configure-production-ssl`.
+- Help lists `configure-cloudflare-origin-ssl`.
+- Help lists `cloudflare-origin-ssl-status`.
+- Help lists `cloudflare-origin-guide`.
 - Help lists `production-ssl-status`.
 - Help lists `disable-production-ssl`.
 
@@ -67,6 +71,50 @@ Expected:
 - `production-ssl-plan` prints the planning-only SSL path and distinguishes local/dev SSL from production SSL.
 - `production-firewall-plan` prints the temporary test exposure and long-term production exposure recommendations.
 - New aliases run the same corresponding commands.
+
+
+## Cloudflare Origin CA SSL workflow
+
+Guide/status checks:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh cloudflare-origin-guide
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh cloudflare-origin-ssl-status
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh production-ssl-wizard
+```
+
+Expected:
+
+- The guide explains Origin Server certificate creation, proxied/orange-cloud DNS, and Full (strict).
+- `cloudflare-origin-ssl-status` reports missing cert/key before configuration.
+- The wizard offers Let's Encrypt, Cloudflare Origin CA, status, and guide options.
+
+File-input configuration test:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com CLOUDFLARE_ORIGIN_CERT_FILE=/root/cf-origin.pem CLOUDFLARE_ORIGIN_KEY_FILE=/root/cf-origin.key ./install-erpnext-dev.sh configure-cloudflare-origin-ssl
+```
+
+Expected:
+
+- The certificate and key are validated as a pair.
+- The key is installed under `/etc/ssl/cloudflare-origin` with mode `0600`.
+- Existing managed production Nginx config is backed up.
+- Nginx is rewritten to use the Cloudflare Origin CA certificate.
+- The command does not alter Cloudflare DNS/proxy settings or Hetzner firewall rules.
+
+Paste-input configuration test:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh configure-cloudflare-origin-ssl
+```
+
+Expected:
+
+- The command asks whether the Cloudflare Origin CA certificate/private key have been generated.
+- The command prompts for the certificate and private key using `END_CERT` and `END_KEY` markers.
+- Input is hidden and not printed into the installer log.
+- Invalid or mismatched key material fails before Nginx is changed.
 
 ## Production HTTPS implementation
 
