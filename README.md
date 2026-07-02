@@ -2,6 +2,21 @@
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
+## v1.1.0 production operations
+
+After v1.0.0 deployment is validated, v1.1.0 adds safer production operations:
+
+```bash
+/root/install-erpnext-dev.sh production-ops-wizard
+/root/install-erpnext-dev.sh backup-schedule-plan
+/root/install-erpnext-dev.sh configure-backup-schedule
+/root/install-erpnext-dev.sh backup-schedule-status
+/root/install-erpnext-dev.sh restore-preflight
+```
+
+Scheduled backups use a local systemd timer. They create database + files backups inside the VM. You still need an off-VM backup copy and a restore rehearsal on a disposable VM before trusting production data.
+
+
 ## One-command start
 
 Public VM / production-candidate setup:

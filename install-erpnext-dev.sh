@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.1.0"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -63,6 +63,10 @@ LOG_DIR="${LOG_DIR:-/tmp}"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/erpnext-dev-installer-$(date +%Y%m%d-%H%M%S).log}"
 LOCK_FILE="${LOCK_FILE:-/tmp/erpnext-dev-installer.lock}"
 INSTALLER_CANONICAL_PATH="${INSTALLER_CANONICAL_PATH:-/root/install-erpnext-dev.sh}"
+BACKUP_SCHEDULE_SERVICE="${BACKUP_SCHEDULE_SERVICE:-erpnext-dev-backup.service}"
+BACKUP_SCHEDULE_TIMER="${BACKUP_SCHEDULE_TIMER:-erpnext-dev-backup.timer}"
+BACKUP_SCHEDULE_ON_CALENDAR="${BACKUP_SCHEDULE_ON_CALENDAR:-daily}"
+BACKUP_SCHEDULE_RANDOM_DELAY="${BACKUP_SCHEDULE_RANDOM_DELAY:-30m}"
 
 if [[ -t 1 ]]; then
   BOLD="\033[1m"
@@ -110,7 +114,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -9751,6 +9755,209 @@ show_restore_rehearsal_guide() {
   ui_box_end
 }
 
+
+backup_schedule_unit_paths() {
+  echo "/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}"
+  echo "/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
+}
+
+backup_schedule_timer_active() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl is-active --quiet "$BACKUP_SCHEDULE_TIMER" 2>/dev/null
+}
+
+backup_schedule_timer_enabled() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl is-enabled --quiet "$BACKUP_SCHEDULE_TIMER" 2>/dev/null
+}
+
+show_backup_schedule_plan() {
+  require_sudo
+  ui_box_start "Scheduled Backup Plan"
+  status_line "Mode" "INFO" "planning only; no timer changes are applied"
+  status_line "Site" "INFO" "$SITE_NAME"
+  status_line "Service" "INFO" "$BACKUP_SCHEDULE_SERVICE"
+  status_line "Timer" "INFO" "$BACKUP_SCHEDULE_TIMER"
+  status_line "Schedule" "INFO" "OnCalendar=${BACKUP_SCHEDULE_ON_CALENDAR}"
+  status_line "Random delay" "INFO" "$BACKUP_SCHEDULE_RANDOM_DELAY"
+  status_line "Command" "INFO" "${INSTALLER_CANONICAL_PATH} backup-files"
+  echo
+  echo "What this does:"
+  echo "  - Creates a systemd timer inside the VM."
+  echo "  - Runs database + files backup using the same installer script."
+  echo "  - Keeps backups in the site's private/backups folder."
+  echo
+  echo "What this does not do:"
+  echo "  - It does not copy backups off the VM."
+  echo "  - It does not replace cloud snapshots."
+  echo "  - It does not prove restore works; use restore rehearsal for that."
+  ui_next "./install-erpnext-dev.sh configure-backup-schedule" "./install-erpnext-dev.sh backup-schedule-status"
+  ui_box_end
+}
+
+configure_backup_schedule() {
+  require_sudo
+  require_site_environment >/dev/null || return 1
+  install_self_for_reuse
+
+  ui_box_start "Configure Scheduled Backups"
+  status_line "Site" "INFO" "$SITE_NAME"
+  status_line "Schedule" "INFO" "OnCalendar=${BACKUP_SCHEDULE_ON_CALENDAR}"
+  status_line "Random delay" "INFO" "$BACKUP_SCHEDULE_RANDOM_DELAY"
+  status_line "Command" "INFO" "${INSTALLER_CANONICAL_PATH} backup-files"
+  echo
+  echo "This creates a local VM systemd timer for database + files backups."
+  echo "Off-VM backup copy is still required for production."
+  if ! confirm "Configure scheduled local backups now?"; then
+    warn "Scheduled backup configuration skipped."
+    ui_box_end
+    return 0
+  fi
+
+  log "Writing scheduled backup systemd units"
+  cat > /tmp/erpnext-dev-backup.service <<EOF_SERVICE
+[Unit]
+Description=ERPNext scheduled backup for ${SITE_NAME}
+Wants=network-online.target
+After=network-online.target mariadb.service redis-server.service
+
+[Service]
+Type=oneshot
+Environment=SITE_NAME=${SITE_NAME}
+Environment=PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN:-}
+Environment=DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-development}
+ExecStart=${INSTALLER_CANONICAL_PATH} backup-files
+EOF_SERVICE
+
+  cat > /tmp/erpnext-dev-backup.timer <<EOF_TIMER
+[Unit]
+Description=Run ERPNext scheduled backup for ${SITE_NAME}
+
+[Timer]
+OnCalendar=${BACKUP_SCHEDULE_ON_CALENDAR}
+RandomizedDelaySec=${BACKUP_SCHEDULE_RANDOM_DELAY}
+Persistent=true
+Unit=${BACKUP_SCHEDULE_SERVICE}
+
+[Install]
+WantedBy=timers.target
+EOF_TIMER
+
+  $SUDO mv /tmp/erpnext-dev-backup.service "/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}"
+  $SUDO mv /tmp/erpnext-dev-backup.timer "/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
+  $SUDO chmod 0644 "/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}" "/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable --now "$BACKUP_SCHEDULE_TIMER"
+
+  ui_box_start "Result Summary"
+  status_line "Scheduled backups" "OK" "timer enabled"
+  status_line "Timer" "INFO" "$BACKUP_SCHEDULE_TIMER"
+  status_line "Schedule" "INFO" "OnCalendar=${BACKUP_SCHEDULE_ON_CALENDAR}"
+  status_line "Backup type" "INFO" "database + public/private files"
+  status_line "Off-VM copy" "WARN" "still required"
+  ui_next "./install-erpnext-dev.sh backup-schedule-status" "./install-erpnext-dev.sh off-vm-backup-guide"
+  ui_box_end
+}
+
+show_backup_schedule_status() {
+  require_sudo
+  local service_path timer_path enabled active next_line latest_lines completeness
+  service_path="/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}"
+  timer_path="/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
+  enabled="disabled"
+  active="inactive"
+  backup_schedule_timer_enabled && enabled="enabled"
+  backup_schedule_timer_active && active="active"
+  next_line="$($SUDO systemctl list-timers "$BACKUP_SCHEDULE_TIMER" --all --no-pager 2>/dev/null | awk 'NR==2 {print $1" "$2" "$3" "$4}' || true)"
+  latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
+  completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
+
+  ui_box_start "Scheduled Backup Status"
+  status_line "Service file" "$([[ -f "$service_path" ]] && echo OK || echo WARN)" "$service_path"
+  status_line "Timer file" "$([[ -f "$timer_path" ]] && echo OK || echo WARN)" "$timer_path"
+  status_line "Timer enabled" "$([[ "$enabled" == enabled ]] && echo OK || echo WARN)" "$enabled"
+  status_line "Timer active" "$([[ "$active" == active ]] && echo OK || echo WARN)" "$active"
+  status_line "Schedule" "INFO" "${BACKUP_SCHEDULE_ON_CALENDAR}"
+  status_line "Latest backup" "$([[ "$completeness" == complete ]] && echo OK || echo WARN)" "${completeness:-none}"
+  if [[ -n "$next_line" ]]; then
+    status_line "Next run" "INFO" "$next_line"
+  fi
+  echo
+  echo "Useful commands:"
+  echo "  systemctl list-timers ${BACKUP_SCHEDULE_TIMER} --all"
+  echo "  journalctl -u ${BACKUP_SCHEDULE_SERVICE} --no-pager -n 80"
+  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh backup-verify"
+  ui_box_end
+}
+
+disable_backup_schedule() {
+  require_sudo
+  ui_box_start "Disable Scheduled Backups"
+  status_line "Timer" "INFO" "$BACKUP_SCHEDULE_TIMER"
+  echo
+  echo "This stops and disables the local VM backup timer."
+  echo "Existing backup files are not deleted."
+  if ! confirm "Disable scheduled local backups now?"; then
+    warn "Scheduled backup disable skipped."
+    ui_box_end
+    return 0
+  fi
+  $SUDO systemctl disable --now "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 || true
+  $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
+  status_line "Scheduled backups" "OK" "timer disabled"
+  ui_next "./install-erpnext-dev.sh backup-schedule-status"
+  ui_box_end
+}
+
+show_restore_preflight() {
+  require_sudo
+  ui_box_start "Restore Preflight"
+  status_line "Mode" "INFO" "check only; no restore is performed"
+  status_line "Site" "INFO" "$SITE_NAME"
+  if verify_latest_backup_set; then
+    echo
+    status_line "Preflight" "OK" "latest backup files are readable"
+  else
+    echo
+    status_line "Preflight" "WARN" "backup verification did not fully pass"
+  fi
+  echo
+  echo "Restore safety rules:"
+  echo "  - Rehearse restore on a disposable VM first."
+  echo "  - Take a cloud snapshot before any live restore."
+  echo "  - Use restore-full only when you intentionally want database + files restored."
+  ui_next "./install-erpnext-dev.sh restore-rehearsal-guide" "./install-erpnext-dev.sh restore-full"
+  ui_box_end
+}
+
+production_ops_wizard() {
+  require_sudo
+  while true; do
+    ui_box_start "Production Operations"
+    echo "1) Release readiness"
+    echo "2) Scheduled backup plan"
+    echo "3) Configure scheduled backups"
+    echo "4) Scheduled backup status"
+    echo "5) Backup verify"
+    echo "6) Restore preflight"
+    echo "7) Support bundle"
+    echo "8) Back"
+    echo
+    read -r -p "Choose an option: " ops_choice
+    case "$ops_choice" in
+      1) show_release_readiness; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      2) show_backup_schedule_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      3) configure_backup_schedule; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      4) show_backup_schedule_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      5) verify_latest_backup_set; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      6) show_restore_preflight; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      7) create_support_bundle; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      8) return 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
 show_production_checklist() {
   require_sudo
   ui_box_start "Production Checklist"
@@ -9790,14 +9997,20 @@ show_production_checklist() {
   else
     status_line "Local backups" "WARN" "no local backup files detected"
   fi
+  if backup_schedule_timer_active; then
+    status_line "Scheduled backups" "OK" "local timer active"
+  else
+    status_line "Scheduled backups" "INFO" "not configured; optional but recommended"
+  fi
   status_line "Snapshot" "INFO" "take/verify cloud snapshot before go-live"
   echo
   echo "Remaining production decisions:"
   echo "  - Confirm off-VM backup location and restore rehearsal."
+  echo "  - Configure scheduled local backups if this VM will remain active."
   echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
   echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
   echo "  - Create named cloud snapshot after final validation."
-  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh backup-verify" "./install-erpnext-dev.sh support-bundle"
+  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh backup-schedule-status" "./install-erpnext-dev.sh support-bundle"
   ui_box_end
 }
 
@@ -9875,15 +10088,16 @@ show_command_audit() {
   status_line "Security" "OK" "security-hardening-wizard, vm-firewall-status, fail2ban-status"
   status_line "Firewall" "OK" "firewall-hardening-status, production-firewall-plan"
   status_line "Backups" "OK" "backup-files, backup-status, backup-verify, backup-hardening-wizard"
-  status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-db, restore-full"
+  status_line "Scheduled backups" "OK" "backup-schedule-plan, configure-backup-schedule, backup-schedule-status"
+  status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-preflight, restore-db, restore-full"
   status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility"
   ui_box_end
   ui_next "./install-erpnext-dev.sh release-readiness" "./install-erpnext-dev.sh help"
 }
 
 show_release_notes_guide() {
-  ui_box_start "v1.0.0 Release Notes Draft"
-  echo "Release focus: guided ERPNext VM setup with production-candidate hardening."
+  ui_box_start "v1.1.0 Release Notes Draft"
+  echo "Release focus: production operations after a successful ERPNext deployment."
   echo
   echo "Validated paths:"
   echo "  - Local VM quickstart path"
@@ -9892,6 +10106,8 @@ show_release_notes_guide() {
   echo "  - Cloudflare Origin CA / Full strict path"
   echo "  - Cloud firewall + UFW + Fail2Ban hardening"
   echo "  - Backup inventory and readable-file verification"
+  echo "  - Scheduled local backups with systemd timer"
+  echo "  - Restore preflight and production operations wizard"
   echo
   echo "Known production responsibility:"
   echo "  - Copy backups off the VM"
@@ -9946,7 +10162,10 @@ backup_hardening_wizard() {
     echo "5) Restore rehearsal guide"
     echo "6) Production checklist"
     echo "7) List backups"
-    echo "8) Back"
+    echo "8) Scheduled backup plan"
+    echo "9) Configure scheduled backups"
+    echo "10) Scheduled backup status"
+    echo "11) Back"
     echo
     read -r -p "Choose an option: " backup_harden_choice
     case "$backup_harden_choice" in
@@ -9957,7 +10176,10 @@ backup_hardening_wizard() {
       5) show_restore_rehearsal_guide; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
       6) show_production_checklist; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
       7) list_site_backups; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      8) return 0 ;;
+      8) show_backup_schedule_plan; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
+      9) configure_backup_schedule; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
+      10) show_backup_schedule_status; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
+      11) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -9978,8 +10200,11 @@ run_backup_maintenance_menu() {
     echo "7) List backups"
     echo "8) Restore database backup"
     echo "9) Restore database + files backup"
-    echo "10) Maintenance tasks"
-    echo "11) Back"
+    echo "10) Scheduled backup status"
+    echo "11) Configure scheduled backups"
+    echo "12) Disable scheduled backups"
+    echo "13) Maintenance tasks"
+    echo "14) Back"
     echo
     read -r -p "Choose an option: " backup_choice
 
@@ -9993,8 +10218,11 @@ run_backup_maintenance_menu() {
       7) list_site_backups; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
       8) restore_site_database; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
       9) restore_site_full; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      10) run_maintenance_menu ;;
-      11) return 0 ;;
+      10) show_backup_schedule_status; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
+      11) configure_backup_schedule; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
+      12) disable_backup_schedule; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
+      13) run_maintenance_menu ;;
+      14) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10389,7 +10617,11 @@ Backup / Restore:
   backup-files        Database + files backup
   backup-status       Backup inventory and latest-set status
   backup-verify       Verify latest backup files without restoring
+  backup-schedule-plan Show scheduled-backup design
+  configure-backup-schedule Enable local scheduled backups with systemd
+  backup-schedule-status Show scheduled backup timer status
   off-vm-backup-guide Commands to copy backups off this VM
+  restore-preflight   Safe restore readiness check
   restore-rehearsal-guide Safe restore test plan
   backup-hardening-wizard Backup and restore readiness workflow
 
@@ -10397,6 +10629,7 @@ Production checklist:
   production-checklist  Go-live readiness checklist
   release-readiness    Compact final QA readiness summary
   final-qa             Final QA / release-readiness wizard
+  production-ops-wizard Scheduled backup / restore / support operations
 
 Apps:
   app-install-wizard  Optional Frappe app installer
@@ -10421,6 +10654,7 @@ Examples:
   ./install-erpnext-dev.sh production-ssl-wizard
   ./install-erpnext-dev.sh security-hardening-wizard
   ./install-erpnext-dev.sh final-qa
+  ./install-erpnext-dev.sh production-ops-wizard
 
 Options:
   -y, --yes  Assume yes for supported confirmations
@@ -10440,6 +10674,8 @@ Common environment overrides:
   FAIL2BAN_SSH_BANTIME=1h
   FAIL2BAN_SSH_FINDTIME=10m
   FAIL2BAN_SSH_MAXRETRY=5
+  BACKUP_SCHEDULE_ON_CALENDAR=daily
+  BACKUP_SCHEDULE_RANDOM_DELAY=30m
 
 Use ./install-erpnext-dev.sh advanced for the complete command menu.
 EOF_HELP
@@ -10464,8 +10700,9 @@ show_menu() {
     echo "11) Optional apps"
     echo "12) Advanced"
     echo "13) Final QA"
-    echo "14) Help"
-    echo "15) Exit"
+    echo "14) Production operations"
+    echo "15) Help"
+    echo "16) Exit"
     echo
     read -r -p "Choose an option: " choice
 
@@ -10483,8 +10720,9 @@ show_menu() {
       11) show_app_library_menu ;;
       12) show_advanced_menu ;;
       13) final_qa_wizard ;;
-      14) show_help ;;
-      15) exit 0 ;;
+      14) production_ops_wizard ;;
+      15) show_help ;;
+      16) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10586,6 +10824,12 @@ main() {
     release-notes-guide) show_release_notes_guide ;;
     final-qa|final-qa-wizard) final_qa_wizard ;;
     backup-hardening-wizard|backup-wizard) backup_hardening_wizard ;;
+    backup-schedule-plan|scheduled-backups) show_backup_schedule_plan ;;
+    configure-backup-schedule) configure_backup_schedule ;;
+    backup-schedule-status) show_backup_schedule_status ;;
+    disable-backup-schedule) disable_backup_schedule ;;
+    restore-preflight) show_restore_preflight ;;
+    production-ops-wizard|operations-wizard|ops-wizard) production_ops_wizard ;;
     list-backups|backups) list_site_backups ;;
     restore-db) restore_site_database ;;
     restore-full) restore_site_full ;;

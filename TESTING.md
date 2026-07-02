@@ -692,3 +692,25 @@ Expected:
 - Public/private file backups are detected as `.tar` or `.tar.gz`.
 - `backup-verify` reads database gzip, public tar archive, private tar archive, and site config JSON.
 - `production-checklist` shows HTTPS OK when Cloudflare Origin CA / Nginx HTTPS is responding.
+
+## v1.1.0 scheduled backup validation
+
+```bash
+bash -n install-erpnext-dev.sh
+./install-erpnext-dev.sh backup-schedule-plan
+./install-erpnext-dev.sh backup-schedule-status
+./install-erpnext-dev.sh production-ops-wizard
+./install-erpnext-dev.sh restore-preflight
+./install-erpnext-dev.sh command-audit
+./install-erpnext-dev.sh production-checklist
+```
+
+After enabling scheduled backups:
+
+```bash
+systemctl list-timers erpnext-dev-backup.timer --all
+journalctl -u erpnext-dev-backup.service --no-pager -n 80
+./install-erpnext-dev.sh backup-status
+./install-erpnext-dev.sh backup-verify
+```
+

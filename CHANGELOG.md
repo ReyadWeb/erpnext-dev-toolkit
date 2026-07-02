@@ -1,3 +1,13 @@
+# Changelog
+
+## v1.1.0
+
+- Added scheduled local backups using a systemd service and timer.
+- Added `backup-schedule-plan`, `configure-backup-schedule`, `backup-schedule-status`, and `disable-backup-schedule`.
+- Added `production-ops-wizard` for release readiness, scheduled backup operations, restore preflight, and support bundle creation.
+- Added `restore-preflight` as a safe check-only restore readiness command.
+- Updated production checklist and command audit to include scheduled backup operations.
+
 # CHANGELOG
 
 ## v1.0.0

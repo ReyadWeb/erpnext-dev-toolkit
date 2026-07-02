@@ -1,3 +1,20 @@
+# Roadmap
+
+## v1.1.0 — Production operations
+
+Status: built.
+
+- Scheduled local backups with systemd timer.
+- Production operations wizard.
+- Restore preflight and restore rehearsal guidance.
+- Production checklist includes scheduled-backup status.
+
+## Next candidates
+
+- Off-VM backup automation targets such as rsync/SFTP or object storage.
+- Safer restore automation on disposable VM targets.
+- Monitoring and alerting integration.
+
 # ROADMAP
 
 ## Current: v1.0.0
