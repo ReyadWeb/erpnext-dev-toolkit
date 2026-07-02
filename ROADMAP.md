@@ -1,6 +1,6 @@
 # ROADMAP
 
-## Current: v0.9.7
+## Current: v0.9.8
 
 Stable developer installer baseline with production readiness/planning classification, structured production domain planning, public VM readiness checks, production SSL/firewall planning, conservative Nginx/Let's Encrypt HTTPS implementation, staging-to-production certificate replacement hotfix, Cloudflare Origin CA SSL provider workflow, Cloudflare PEM paste UX hotfix, share-safe diagnostics, redacted support bundles, optional app compatibility preflight checks, and the first public cloud VM install hotfix.
 
@@ -28,6 +28,8 @@ Completed:
 - Let’s Encrypt staging-to-production replacement detection
 - Cloudflare Origin CA SSL provider workflow
 - Cloudflare Origin CA PEM paste UX hotfix
+- Cloudflare-aware production SSL status
+- `firewall-hardening-status` post-HTTPS listener exposure checks
 - SSL provider wizard
 - certificate issuer/status reporting for production SSL
 - root storage expansion
@@ -41,7 +43,7 @@ Completed:
 
 ## Next recommended work
 
-### v0.9.8
+### v0.9.9
 
 - backup/restore hardening
 - backup verification, restore warnings, off-VM backup guidance, and retention planning

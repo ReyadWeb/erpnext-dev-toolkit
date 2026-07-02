@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.9.7"
+SCRIPT_VERSION="0.9.8"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -2785,6 +2785,58 @@ production_listener_detail() {
   fi
 }
 
+production_listener_is_public() {
+  local port="$1" detail
+  detail="$(production_listener_detail "$port")"
+  [[ "$detail" == *"0.0.0.0:"* || "$detail" == "*:"* || "$detail" == "*:${port}"* || "$detail" == *"[::]:"* ]]
+}
+
+production_listener_is_local_only() {
+  local port="$1" detail
+  detail="$(production_listener_detail "$port")"
+  [[ "$detail" == *"127.0.0.1:"* || "$detail" == *"[::1]:"* ]]
+}
+
+production_listener_exposure_label() {
+  local port="$1" detail
+  detail="$(production_listener_detail "$port")"
+  if [[ "$detail" == "not listening" ]]; then
+    echo "OK|not listening"
+  elif production_listener_is_local_only "$port" && ! production_listener_is_public "$port"; then
+    echo "OK|local-only: ${detail}"
+  elif production_listener_is_public "$port"; then
+    echo "WARN|public interface: ${detail}"
+  else
+    echo "INFO|${detail}"
+  fi
+}
+
+production_domain_status_for_provider() {
+  local domain="$1" vm_ip="$2" dns_ip="$3" provider="$4"
+  if [[ -z "$dns_ip" ]]; then
+    echo "WARN|${domain}; DNS=unresolved; VM=${vm_ip}"
+  elif [[ "$dns_ip" == "$vm_ip" ]]; then
+    echo "OK|${domain}; DNS=${dns_ip}; VM=${vm_ip}"
+  elif [[ "$provider" == "Cloudflare Origin CA" ]]; then
+    echo "OK|${domain}; DNS=${dns_ip}; VM=${vm_ip}; Cloudflare proxy likely active"
+  else
+    echo "WARN|${domain}; DNS=${dns_ip}; VM=${vm_ip}"
+  fi
+}
+
+production_cloudflare_proxy_hint() {
+  local dns_ip="$1" vm_ip="$2" provider="$3"
+  if [[ "$provider" == "Cloudflare Origin CA" && -n "$dns_ip" && "$dns_ip" != "$vm_ip" ]]; then
+    echo "OK|DNS does not resolve directly to origin IP; Cloudflare proxy appears active"
+  elif [[ "$provider" == "Cloudflare Origin CA" ]]; then
+    echo "INFO|DNS resolves to origin IP; Cloudflare proxy may be DNS-only/grey-cloud"
+  elif [[ -n "$dns_ip" && "$dns_ip" != "$vm_ip" ]]; then
+    echo "INFO|DNS does not resolve directly to origin IP"
+  else
+    echo "INFO|DNS resolves directly to origin IP"
+  fi
+}
+
 production_http_status() {
   local url="$1"
   curl -fsSI --max-time 8 "$url" 2>/dev/null | awk 'NR==1 {print; exit}' || true
@@ -2792,7 +2844,7 @@ production_http_status() {
 
 show_public_vm_readiness() {
   local vm_ip domain dns_ip install_quick runtime service auto nginx_state ssl_pair ssl_status ssl_detail backup_count
-  local http_ip http_domain public_note dns_status dns_detail
+  local http_ip http_domain public_note dns_status dns_detail active_provider domain_pair
 
   require_sudo
 
@@ -2807,18 +2859,12 @@ show_public_vm_readiness() {
     public_note="public-looking IPv4 detected; confirm this is the intended cloud VM IP"
   fi
 
+  active_provider="$(production_ssl_provider_from_cert_path "$(production_nginx_active_cert_path 2>/dev/null || true)")"
   if validate_production_domain_value "$domain" >/dev/null 2>&1; then
     dns_ip="$(resolve_ipv4_first "$domain")"
-    if [[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]]; then
-      dns_status="OK"
-      dns_detail="${domain} resolves to ${dns_ip}"
-    elif [[ -n "$dns_ip" ]]; then
-      dns_status="WARN"
-      dns_detail="${domain} resolves to ${dns_ip}, expected ${vm_ip}"
-    else
-      dns_status="WARN"
-      dns_detail="could not resolve ${domain}; check DNS propagation"
-    fi
+    domain_pair="$(production_domain_status_for_provider "$domain" "$vm_ip" "$dns_ip" "$active_provider")"
+    dns_status="${domain_pair%%|*}"
+    dns_detail="${domain_pair#*|}"
   fi
 
   install_quick="$(production_quick_install_state)"
@@ -2873,6 +2919,7 @@ show_public_vm_readiness() {
   echo "  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
   echo "  ./install-erpnext-dev.sh production-ssl-status"
   echo "  ./install-erpnext-dev.sh production-firewall-plan"
+  echo "  ./install-erpnext-dev.sh firewall-hardening-status"
   echo "  ./install-erpnext-dev.sh support-bundle"
   echo "============================================================"
 }
@@ -3000,6 +3047,97 @@ show_production_firewall_plan() {
   echo "  ss -lntp"
   echo "  ./install-erpnext-dev.sh public-vm-readiness"
   echo "  ./install-erpnext-dev.sh production-ssl-plan"
+  echo "============================================================"
+}
+
+show_firewall_hardening_status() {
+  local vm_ip domain dns_ip active_cert provider proxy_pair proxy_status proxy_detail ssl_pair ssl_status ssl_detail
+  local detail pair status message
+
+  require_sudo
+
+  vm_ip="$(get_vm_ip)"
+  domain="${PRODUCTION_DOMAIN:-$SITE_NAME}"
+  dns_ip="$(resolve_ipv4_first "$domain")"
+  active_cert="$(production_nginx_active_cert_path 2>/dev/null || true)"
+  provider="$(production_ssl_provider_from_cert_path "$active_cert")"
+  proxy_pair="$(production_cloudflare_proxy_hint "$dns_ip" "$vm_ip" "$provider")"
+  proxy_status="${proxy_pair%%|*}"
+  proxy_detail="${proxy_pair#*|}"
+  ssl_pair="$(production_ssl_runtime_detail)"
+  ssl_status="${ssl_pair%%|*}"
+  ssl_detail="${ssl_pair#*|}"
+
+  echo
+  echo "============================================================"
+  echo "Firewall Hardening Status"
+  echo "============================================================"
+  status_line "Mode" "INFO" "check only; no firewall changes are applied"
+  status_line "Domain" "INFO" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
+  status_line "SSL provider" "$([[ "$provider" != "not configured" ]] && echo OK || echo WARN)" "$provider"
+  status_line "HTTPS entrypoint" "$ssl_status" "$ssl_detail"
+  status_line "Cloudflare proxy" "$proxy_status" "$proxy_detail"
+  echo
+  echo "Local listener exposure:"
+  for port in 22 80 443 8000 9000 11000 13000; do
+    pair="$(production_listener_exposure_label "$port")"
+    status="${pair%%|*}"
+    detail="${pair#*|}"
+    case "$port" in
+      22)
+        if [[ "$status" == "WARN" ]]; then
+          message="${detail}; restrict SSH to your admin IP/VPN at the Hetzner firewall"
+        else
+          message="$detail"
+        fi
+        ;;
+      80|443)
+        if [[ "$status" == "WARN" || "$status" == "INFO" ]]; then
+          if [[ "$provider" == "Cloudflare Origin CA" ]]; then
+            message="${detail}; acceptable for now, later restrict to Cloudflare IP ranges if desired"
+          else
+            message="${detail}; public entrypoint for HTTP/HTTPS"
+          fi
+          status="OK"
+        else
+          message="$detail"
+        fi
+        ;;
+      8000|9000)
+        if [[ "$status" == "WARN" && "$ssl_status" == "OK" ]]; then
+          message="${detail}; safe to close/restrict now because HTTPS is working"
+        elif [[ "$status" == "WARN" ]]; then
+          message="${detail}; temporary only, close after HTTPS works"
+        else
+          message="$detail"
+        fi
+        ;;
+      11000|13000)
+        if [[ "$status" == "WARN" ]]; then
+          status="FAIL"
+          message="${detail}; Redis must never be public"
+        else
+          message="$detail"
+        fi
+        ;;
+      *) message="$detail" ;;
+    esac
+    status_line "Port ${port}" "$status" "$message"
+  done
+  echo
+  echo "Recommended Hetzner firewall after HTTPS is confirmed:"
+  echo "  22/tcp     allow only your admin IP or VPN"
+  echo "  80/tcp     allow public, or Cloudflare IP ranges if staying proxied"
+  echo "  443/tcp    allow public, or Cloudflare IP ranges if staying proxied"
+  echo "  8000/tcp   block public access"
+  echo "  9000/tcp   block public access"
+  echo "  11000/tcp  block public access"
+  echo "  13000/tcp  block public access"
+  echo
+  echo "Validation after firewall changes:"
+  echo "  curl -I https://${domain}"
+  echo "  ./install-erpnext-dev.sh firewall-hardening-status"
+  echo "  ./install-erpnext-dev.sh public-vm-readiness"
   echo "============================================================"
 }
 
@@ -3465,7 +3603,11 @@ show_production_ssl_status() {
   echo "============================================================"
   echo "Production SSL Status"
   echo "============================================================"
-  status_line "Domain" "$([[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] && echo OK || echo WARN)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
+  local domain_pair domain_status domain_detail
+  domain_pair="$(production_domain_status_for_provider "$domain" "$vm_ip" "$dns_ip" "$provider")"
+  domain_status="${domain_pair%%|*}"
+  domain_detail="${domain_pair#*|}"
+  status_line "Domain" "$domain_status" "$domain_detail"
   status_line "Provider" "$([[ "$provider" != "not configured" ]] && echo OK || echo WARN)" "$provider"
   status_line "Nginx" "$([[ "$nginx_state" == installed* ]] && echo OK || echo WARN)" "$nginx_state"
   status_line "Certbot" "$([[ "$certbot_state" == installed* ]] && echo OK || echo INFO)" "$certbot_state"
@@ -8667,17 +8809,18 @@ show_advanced_menu() {
     echo "32) Public VM Readiness"
     echo "33) Production SSL Plan"
     echo "34) Production Firewall Plan"
-    echo "35) Configure Production SSL"
-    echo "36) Production SSL Status"
-    echo "37) Disable Production SSL"
-    echo "38) Start Bench in Foreground"
-    echo "39) Show Service Logs"
-    echo "40) Access Submenu"
-    echo "41) Next Step"
-    echo "42) Verify ERPNext HTTP Access"
-    echo "43) App Install Wizard"
-    echo "44) App Rollback Guide"
-    echo "45) Back"
+    echo "35) Firewall Hardening Status"
+    echo "36) Configure Production SSL"
+    echo "37) Production SSL Status"
+    echo "38) Disable Production SSL"
+    echo "39) Start Bench in Foreground"
+    echo "40) Show Service Logs"
+    echo "41) Access Submenu"
+    echo "42) Next Step"
+    echo "43) Verify ERPNext HTTP Access"
+    echo "44) App Install Wizard"
+    echo "45) App Rollback Guide"
+    echo "46) Back"
     echo
     read -r -p "Choose an option: " advanced_choice
 
@@ -8716,17 +8859,18 @@ show_advanced_menu() {
       32) show_public_vm_readiness ;;
       33) show_production_ssl_plan ;;
       34) show_production_firewall_plan ;;
-      35) configure_production_ssl ;;
-      36) show_production_ssl_status ;;
-      37) disable_production_ssl ;;
-      38) run_foreground_start ;;
-      39) show_erpnext_service_logs ;;
-      40) show_access_menu ;;
-      41) show_next_step ;;
-      42) verify_access ;;
-      43) run_app_install_wizard ;;
-      44) show_app_rollback_guide ;;
-      45) return 0 ;;
+      35) show_firewall_hardening_status ;;
+      36) configure_production_ssl ;;
+      37) show_production_ssl_status ;;
+      38) disable_production_ssl ;;
+      39) run_foreground_start ;;
+      40) show_erpnext_service_logs ;;
+      41) show_access_menu ;;
+      42) show_next_step ;;
+      43) verify_access ;;
+      44) run_app_install_wizard ;;
+      45) show_app_rollback_guide ;;
+      46) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -8853,6 +8997,7 @@ Advanced actions:
   public-vm-readiness Show public VM DNS/access/listener readiness
   production-ssl-plan Show production SSL readiness and recommended path
   production-firewall-plan Show public VM firewall exposure plan
+  firewall-hardening-status Show post-HTTPS backend port hardening status
   production-ssl-wizard Choose Let's Encrypt or Cloudflare Origin CA HTTPS
   configure-production-ssl Configure Nginx + Let's Encrypt for production HTTPS
   configure-cloudflare-origin-ssl Configure Nginx + Cloudflare Origin CA HTTPS
@@ -8992,7 +9137,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -9106,6 +9251,7 @@ main() {
     public-vm-readiness|public-readiness) show_public_vm_readiness ;;
     production-ssl-plan|prod-ssl-plan) show_production_ssl_plan ;;
     production-firewall-plan|prod-firewall-plan) show_production_firewall_plan ;;
+    firewall-hardening-status|firewall-status|hardening-status) show_firewall_hardening_status ;;
     production-ssl-wizard|ssl-provider-wizard) production_ssl_wizard ;;
     configure-production-ssl) configure_production_ssl ;;
     configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl) configure_cloudflare_origin_ssl ;;

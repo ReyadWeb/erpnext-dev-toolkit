@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v0.9.8
+
+### Added
+
+- Added `firewall-hardening-status` with aliases `firewall-status` and `hardening-status`.
+- The new status command checks local listener exposure for `22`, `80`, `443`, `8000`, `9000`, `11000`, and `13000`.
+- It marks `8000` and `9000` as safe to close or restrict once HTTPS is working.
+- It warns if Redis ports `11000` or `13000` are ever listening on public interfaces.
+
+### Improved
+
+- `production-ssl-status` is now Cloudflare-aware. When the active provider is Cloudflare Origin CA and DNS returns Cloudflare IPs instead of the origin VM IP, the domain row is treated as expected/OK.
+- `public-vm-readiness` now uses the same Cloudflare-aware domain interpretation.
+- Help text and advanced menu now include the firewall hardening status command.
+
+### Safety
+
+- No firewall rules are changed automatically. The command is inspection/planning only.
+- The output continues to recommend manual Hetzner/edge firewall changes after HTTPS is verified.
+
 ## v0.9.7
 
 ### Fixed

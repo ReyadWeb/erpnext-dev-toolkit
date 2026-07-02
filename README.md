@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v0.9.7
+# ERPNext Developer Installer v0.9.8
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
@@ -28,9 +28,11 @@ chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh next-step
 ```
 
-## v0.9.7 focus
+## v0.9.8 focus
 
-v0.9.7 fixes and improves the Cloudflare Origin CA paste workflow. The installer now stops reading the certificate automatically at `-----END CERTIFICATE-----` and stops reading the private key automatically at `-----END PRIVATE KEY-----`, `-----END RSA PRIVATE KEY-----`, or `-----END EC PRIVATE KEY-----`. Artificial `END_CERT` and `END_KEY` markers are no longer required.
+v0.9.8 adds Cloudflare-aware SSL status and post-HTTPS firewall hardening checks. When Cloudflare Origin CA is active and DNS returns Cloudflare IPs instead of the origin VM IP, `production-ssl-status` now treats that as expected instead of warning. A new `firewall-hardening-status` command reviews backend listener exposure after HTTPS is working and clearly marks `8000/9000` as safe to close or restrict.
+
+v0.9.7 fixed and improved the Cloudflare Origin CA paste workflow. The installer now stops reading the certificate automatically at `-----END CERTIFICATE-----` and stops reading the private key automatically at `-----END PRIVATE KEY-----`, `-----END RSA PRIVATE KEY-----`, or `-----END EC PRIVATE KEY-----`. Artificial `END_CERT` and `END_KEY` markers are no longer required.
 
 v0.9.6 added the guided production SSL provider workflow. The installer can help choose between direct Let's Encrypt HTTPS and Cloudflare Origin CA for Cloudflare Full (strict).
 
@@ -49,6 +51,7 @@ Run:
 ./install-erpnext-dev.sh public-vm-readiness
 ./install-erpnext-dev.sh production-ssl-plan
 ./install-erpnext-dev.sh production-firewall-plan
+./install-erpnext-dev.sh firewall-hardening-status
 ./install-erpnext-dev.sh production-ssl-wizard
 ./install-erpnext-dev.sh configure-production-ssl
 ./install-erpnext-dev.sh configure-cloudflare-origin-ssl
@@ -67,6 +70,8 @@ Run:
 `production-ssl-plan` separates development SSL from production SSL and explains the recommended path for a public VM: DNS-only first, Let's Encrypt for the real domain, Nginx on `80/443`, then closing or restricting public `:8000`.
 
 `production-firewall-plan` prints the intended Hetzner/edge firewall posture: SSH restricted, `80/443` public, `8000` temporary/restricted, and Redis/socket/internal ports closed publicly.
+
+`firewall-hardening-status` checks the current local listener exposure after HTTPS is working. It warns if `8000` or `9000` are still listening on public interfaces and confirms Redis ports are local-only or closed. It does not change firewall rules automatically.
 
 ## v0.8.24 optional app compatibility
 

@@ -1,4 +1,4 @@
-# TESTING v0.9.7
+# TESTING v0.9.8
 
 ## Syntax
 
@@ -11,13 +11,13 @@ grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="0.9.7"
+SCRIPT_VERSION="0.9.8"
 ```
 
 ## Help command
 
 ```bash
-./install-erpnext-dev.sh help | grep -E "doctor --plain|doctor --json|support-bundle|app-compatibility|production-plan|production-domain-plan|public-vm-readiness|production-ssl-plan|production-firewall-plan|production-ssl-wizard|configure-production-ssl|configure-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|disable-production-ssl"
+./install-erpnext-dev.sh help | grep -E "doctor --plain|doctor --json|support-bundle|app-compatibility|production-plan|production-domain-plan|public-vm-readiness|production-ssl-plan|production-firewall-plan|firewall-hardening-status|production-ssl-wizard|configure-production-ssl|configure-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|disable-production-ssl"
 ```
 
 Expected:
@@ -31,6 +31,7 @@ Expected:
 - Help lists `public-vm-readiness`.
 - Help lists `production-ssl-plan`.
 - Help lists `production-firewall-plan`.
+- Help lists `firewall-hardening-status`.
 - Help lists `production-ssl-wizard`.
 - Help lists `configure-production-ssl`.
 - Help lists `configure-cloudflare-origin-ssl`.
@@ -55,6 +56,9 @@ Expected:
 ./install-erpnext-dev.sh prod-ssl-plan
 ./install-erpnext-dev.sh production-firewall-plan
 ./install-erpnext-dev.sh prod-firewall-plan
+./install-erpnext-dev.sh firewall-hardening-status
+./install-erpnext-dev.sh firewall-status
+./install-erpnext-dev.sh hardening-status
 ```
 
 Expected:
@@ -70,6 +74,8 @@ Expected:
 - `public-vm-readiness` reports DNS match/mismatch, install/runtime/service state, Nginx, SSL, backups, HTTP `:8000` checks, and listener summary.
 - `production-ssl-plan` prints the planning-only SSL path and distinguishes local/dev SSL from production SSL.
 - `production-firewall-plan` prints the temporary test exposure and long-term production exposure recommendations.
+- `firewall-hardening-status` prints listener exposure and warns when `8000/9000` remain public after HTTPS is working.
+- `firewall-status` and `hardening-status` work as aliases.
 - New aliases run the same corresponding commands.
 
 
@@ -447,3 +453,22 @@ bash -n install-erpnext-dev.sh
 ./install-erpnext-dev.sh doctor --json > /tmp/doctor.json
 python3 -m json.tool /tmp/doctor.json
 ```
+
+
+## v0.9.8 Cloudflare/firewall validation
+
+On a Cloudflare Origin CA deployment where DNS returns Cloudflare IPs instead of the origin VM IP:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh production-ssl-status
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh cloudflare-origin-ssl-status
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh firewall-hardening-status
+```
+
+Expected:
+
+- `production-ssl-status` does not warn merely because DNS returns Cloudflare IPs while Cloudflare Origin CA is active.
+- `cloudflare-origin-ssl-status` reports Cloudflare proxy as likely active.
+- `firewall-hardening-status` warns if `8000` or `9000` are still listening on public interfaces after HTTPS is OK.
+- Redis ports `11000/13000` are reported as OK when local-only or closed.
+- No command changes firewall rules automatically.
