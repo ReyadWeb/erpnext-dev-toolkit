@@ -475,3 +475,11 @@
 
 - Added optional app checkpoint workflow.
 - Added app install wizard and rollback guidance.
+
+## v1.1.3 - Off-VM backup automation
+
+- Added rsync-over-SSH off-VM backup workflow.
+- Added `off-vm-backup-plan`, `configure-rsync-backup-target`, `off-vm-backup-dry-run`, `run-off-vm-backup`, `off-vm-backup-status`, `disable-off-vm-backup`, and `off-vm-backup-wizard`.
+- Integrated off-VM backup status into the production checklist.
+- Added off-VM backup options to the Production Operations wizard.
+- Keeps safe defaults: dry-run before sync, no remote deletion by default, and no secrets printed to logs.

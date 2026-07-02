@@ -110,3 +110,11 @@ Completed:
 - off-VM backup automation
 - restore automation improvements after additional rehearsal testing
 - health monitoring and log review
+
+## v1.1.3 Completed - Off-VM Backup Automation
+
+- rsync-over-SSH off-VM backup target configuration.
+- Off-VM backup dry run and manual sync.
+- Off-VM backup status and production checklist integration.
+
+Next recommended phase: v1.1.4 health monitoring and service watchdog.

@@ -496,3 +496,31 @@ The wizard shows a preflight, a compatibility snapshot, backup checkpoint prompt
 For public VM setups, the quickstart reads the saved config from `/etc/erpnext-dev-installer/config.env`. If an older install saved `DEPLOYMENT_MODE=development` but also has a valid `PRODUCTION_DOMAIN`, the script treats the current session as a public VM workflow. This avoids confusing status cards on upgraded installations.
 
 Interactive wizards expect menu numbers only. If a shell command is pasted into a wizard prompt by mistake, the wizard exits so the command can be run normally at the shell.
+
+## Off-VM Backup Automation
+
+v1.1.3 adds an rsync-over-SSH workflow for copying local ERPNext backups to another Linux server.
+
+Recommended flow:
+
+```bash
+/root/install-erpnext-dev.sh off-vm-backup-plan
+/root/install-erpnext-dev.sh configure-rsync-backup-target
+/root/install-erpnext-dev.sh off-vm-backup-dry-run
+/root/install-erpnext-dev.sh run-off-vm-backup
+/root/install-erpnext-dev.sh off-vm-backup-status
+```
+
+Example target:
+
+```text
+backup@example-backup-server:/srv/erpnext-backups/erp.example.com/
+```
+
+Safety defaults:
+
+- Uses rsync over SSH.
+- Requires a complete local backup before copying.
+- Runs dry-run mode before real sync.
+- Does not use `--delete` unless explicitly configured.
+- Does not replace restore rehearsal or cloud snapshots.

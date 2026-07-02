@@ -752,3 +752,25 @@ Expected:
 - Retention status shows complete backup set count, cleanup candidates, backup folder size, and disk usage.
 - Dry run lists old complete backup sets without deleting files.
 - `cleanup-old-backups` requires confirmation before deleting old complete sets.
+
+## v1.1.3 Off-VM Backup Test Checklist
+
+```bash
+bash -n install-erpnext-dev.sh
+./install-erpnext-dev.sh help | grep -E "off-vm|rsync"
+./install-erpnext-dev.sh production-ops-wizard
+./install-erpnext-dev.sh off-vm-backup-plan
+./install-erpnext-dev.sh off-vm-backup-status
+```
+
+On a real VM with a configured backup server:
+
+```bash
+/root/install-erpnext-dev.sh configure-rsync-backup-target
+/root/install-erpnext-dev.sh off-vm-backup-dry-run
+/root/install-erpnext-dev.sh run-off-vm-backup
+/root/install-erpnext-dev.sh off-vm-backup-status
+/root/install-erpnext-dev.sh production-checklist
+```
+
+Expected: dry run completes first; real sync completes after confirmation; production checklist reports off-VM backup configured/last-run state.

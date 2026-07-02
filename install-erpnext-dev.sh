@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.2"
+SCRIPT_VERSION="1.1.3"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -69,6 +69,11 @@ BACKUP_SCHEDULE_ON_CALENDAR="${BACKUP_SCHEDULE_ON_CALENDAR:-daily}"
 BACKUP_SCHEDULE_RANDOM_DELAY="${BACKUP_SCHEDULE_RANDOM_DELAY:-30m}"
 BACKUP_RETENTION_KEEP_COMPLETE="${BACKUP_RETENTION_KEEP_COMPLETE:-14}"
 BACKUP_RETENTION_WARN_DISK_PERCENT="${BACKUP_RETENTION_WARN_DISK_PERCENT:-80}"
+OFF_VM_BACKUP_CONFIG_FILE="${OFF_VM_BACKUP_CONFIG_FILE:-/etc/erpnext-dev-installer/off-vm-backup.env}"
+OFF_VM_BACKUP_STATE_FILE="${OFF_VM_BACKUP_STATE_FILE:-/etc/erpnext-dev-installer/off-vm-backup.state}"
+OFF_VM_BACKUP_TARGET="${OFF_VM_BACKUP_TARGET:-}"
+OFF_VM_BACKUP_SSH_IDENTITY="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
+OFF_VM_BACKUP_RSYNC_DELETE="${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
 
 if [[ -t 1 ]]; then
   BOLD="\033[1m"
@@ -116,7 +121,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -10114,6 +10119,334 @@ show_restore_preflight() {
   ui_box_end
 }
 
+
+off_vm_backup_load_config() {
+  local value
+  if [[ -z "${OFF_VM_BACKUP_TARGET:-}" ]]; then
+    if value="$(read_config_key_from_file "$OFF_VM_BACKUP_CONFIG_FILE" OFF_VM_BACKUP_TARGET 2>/dev/null)" && [[ -n "$value" ]]; then
+      OFF_VM_BACKUP_TARGET="$value"
+    fi
+  fi
+  if [[ -z "${OFF_VM_BACKUP_SSH_IDENTITY:-}" ]]; then
+    if value="$(read_config_key_from_file "$OFF_VM_BACKUP_CONFIG_FILE" OFF_VM_BACKUP_SSH_IDENTITY 2>/dev/null)" && [[ -n "$value" ]]; then
+      OFF_VM_BACKUP_SSH_IDENTITY="$value"
+    fi
+  fi
+  if value="$(read_config_key_from_file "$OFF_VM_BACKUP_CONFIG_FILE" OFF_VM_BACKUP_RSYNC_DELETE 2>/dev/null)" && [[ -n "$value" && "${OFF_VM_BACKUP_RSYNC_DELETE}" == "false" ]]; then
+    OFF_VM_BACKUP_RSYNC_DELETE="$value"
+  fi
+}
+
+validate_off_vm_backup_target() {
+  local target="$1"
+  [[ -n "$target" ]] || return 1
+  [[ "$target" == *:* ]] || return 1
+  [[ "$target" != *[[:space:]]* ]] || return 1
+  [[ "$target" != *"'"* ]] || return 1
+  [[ "$target" != -* ]] || return 1
+  return 0
+}
+
+off_vm_backup_target_display() {
+  off_vm_backup_load_config
+  if [[ -n "${OFF_VM_BACKUP_TARGET:-}" ]]; then
+    printf '%s\n' "$OFF_VM_BACKUP_TARGET"
+  else
+    printf '%s\n' "not configured"
+  fi
+}
+
+off_vm_backup_configured() {
+  off_vm_backup_load_config
+  validate_off_vm_backup_target "${OFF_VM_BACKUP_TARGET:-}"
+}
+
+off_vm_backup_last_state() {
+  local key="$1" value=""
+  if value="$(read_config_key_from_file "$OFF_VM_BACKUP_STATE_FILE" "$key" 2>/dev/null)" && [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+  return 1
+}
+
+off_vm_backup_write_state() {
+  local status="$1" detail="$2" now config_dir
+  require_sudo
+  now="$(date -Is 2>/dev/null || date)"
+  config_dir="$(dirname "$OFF_VM_BACKUP_STATE_FILE")"
+  $SUDO mkdir -p "$config_dir"
+  $SUDO tee "$OFF_VM_BACKUP_STATE_FILE" >/dev/null <<EOF_OFF_VM_STATE
+LAST_RUN_AT=${now}
+LAST_STATUS=${status}
+LAST_DETAIL=${detail}
+LAST_TARGET=${OFF_VM_BACKUP_TARGET:-}
+SITE_NAME=${SITE_NAME}
+EOF_OFF_VM_STATE
+  $SUDO chown root:root "$OFF_VM_BACKUP_STATE_FILE" || true
+  $SUDO chmod 600 "$OFF_VM_BACKUP_STATE_FILE" || true
+}
+
+off_vm_backup_ensure_rsync() {
+  if command -v rsync >/dev/null 2>&1; then
+    return 0
+  fi
+  log "Installing rsync"
+  $SUDO apt-get update
+  $SUDO apt-get install -y rsync
+}
+
+off_vm_backup_rsync_command() {
+  local mode="$1" backup_dir ssh_cmd=() rsync_cmd=()
+  backup_dir="$(site_backup_dir)"
+  ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
+  if [[ -n "${OFF_VM_BACKUP_SSH_IDENTITY:-}" ]]; then
+    ssh_cmd+=(-i "$OFF_VM_BACKUP_SSH_IDENTITY")
+  fi
+  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "${ssh_cmd[*]}")
+  [[ "$mode" == "dry-run" ]] && rsync_cmd+=(--dry-run)
+  if [[ "${OFF_VM_BACKUP_RSYNC_DELETE:-false}" == "true" ]]; then
+    rsync_cmd+=(--delete)
+  fi
+  rsync_cmd+=("${backup_dir}/" "${OFF_VM_BACKUP_TARGET}")
+  printf '%q ' "${rsync_cmd[@]}"
+  printf '\n'
+}
+
+run_off_vm_backup_rsync() {
+  local mode="$1" backup_dir latest_lines completeness ssh_cmd=() rsync_cmd=()
+  require_sudo
+  require_site_environment >/dev/null || return 1
+  off_vm_backup_load_config
+  validate_off_vm_backup_target "${OFF_VM_BACKUP_TARGET:-}" || fail "Off-VM backup target is not configured or invalid. Run configure-rsync-backup-target first."
+  backup_dir="$(site_backup_dir)"
+  latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
+  completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
+  [[ "$completeness" == "complete" ]] || fail "Latest local backup set is not complete. Run backup-files first."
+  off_vm_backup_ensure_rsync
+
+  ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
+  if [[ -n "${OFF_VM_BACKUP_SSH_IDENTITY:-}" ]]; then
+    [[ -r "$OFF_VM_BACKUP_SSH_IDENTITY" ]] || fail "SSH identity file is not readable: $OFF_VM_BACKUP_SSH_IDENTITY"
+    ssh_cmd+=(-i "$OFF_VM_BACKUP_SSH_IDENTITY")
+  fi
+
+  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "${ssh_cmd[*]}")
+  [[ "$mode" == "dry-run" ]] && rsync_cmd+=(--dry-run)
+  if [[ "${OFF_VM_BACKUP_RSYNC_DELETE:-false}" == "true" ]]; then
+    rsync_cmd+=(--delete)
+  fi
+  rsync_cmd+=("${backup_dir}/" "${OFF_VM_BACKUP_TARGET}")
+
+  if [[ "$mode" == "dry-run" ]]; then
+    ui_box_start "Off-VM Backup Dry Run"
+    status_line "Site" "INFO" "$SITE_NAME"
+    status_line "Target" "INFO" "$OFF_VM_BACKUP_TARGET"
+    status_line "Source" "INFO" "$backup_dir/"
+    status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE}"
+    echo
+    echo "Running rsync dry run. No files will be copied or deleted."
+  else
+    ui_box_start "Run Off-VM Backup"
+    status_line "Site" "INFO" "$SITE_NAME"
+    status_line "Target" "INFO" "$OFF_VM_BACKUP_TARGET"
+    status_line "Source" "INFO" "$backup_dir/"
+    status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE}"
+    echo
+    echo "This copies local ERPNext backup files to the configured off-VM target."
+    echo "It does not remove local backups."
+    if ! confirm "Run off-VM rsync backup now?"; then
+      warn "Off-VM backup cancelled."
+      ui_box_end
+      return 0
+    fi
+  fi
+
+  echo
+  log "Starting rsync ${mode}"
+  if "${rsync_cmd[@]}"; then
+    if [[ "$mode" == "dry-run" ]]; then
+      status_line "Dry run" "OK" "rsync dry run completed"
+    else
+      off_vm_backup_write_state "OK" "rsync completed"
+      status_line "Off-VM backup" "OK" "rsync completed"
+    fi
+  else
+    if [[ "$mode" != "dry-run" ]]; then
+      off_vm_backup_write_state "FAIL" "rsync failed"
+    fi
+    status_line "Off-VM backup" "FAIL" "rsync command failed"
+  fi
+  ui_next "./install-erpnext-dev.sh off-vm-backup-status" "./install-erpnext-dev.sh production-checklist"
+  ui_box_end
+}
+
+show_off_vm_backup_plan() {
+  require_sudo
+  require_site_environment >/dev/null || return 1
+  off_vm_backup_load_config
+  ui_box_start "Off-VM Backup Plan"
+  status_line "Mode" "INFO" "planning only; no files are copied"
+  status_line "Site" "INFO" "$SITE_NAME"
+  status_line "Local backup folder" "INFO" "$(site_backup_dir)"
+  status_line "Target" "$([[ -n "${OFF_VM_BACKUP_TARGET:-}" ]] && echo INFO || echo WARN)" "$(off_vm_backup_target_display)"
+  status_line "Transport" "INFO" "rsync over SSH"
+  status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE}"
+  echo
+  echo "Recommended first setup:"
+  echo "  1) Create a backup user/folder on another Linux server."
+  echo "  2) Make SSH key login work from this VM to the backup server."
+  echo "  3) Configure the rsync target here."
+  echo "  4) Run dry-run first, then the real off-VM backup."
+  echo
+  echo "Example target:"
+  echo "  backup@example-backup-server:/srv/erpnext-backups/${SITE_NAME}/"
+  echo
+  echo "Safety defaults:"
+  echo "  - No remote deletion by default."
+  echo "  - No passwords or private keys are printed in logs."
+  echo "  - Off-VM backup does not replace restore rehearsal."
+  ui_next "./install-erpnext-dev.sh configure-rsync-backup-target" "./install-erpnext-dev.sh off-vm-backup-dry-run"
+  ui_box_end
+}
+
+configure_rsync_backup_target() {
+  require_sudo
+  local target identity delete_mode config_dir
+  ui_box_start "Configure Rsync Off-VM Backup Target"
+  status_line "Site" "INFO" "$SITE_NAME"
+  echo
+  echo "Enter the rsync SSH target for off-VM backups."
+  echo "Example: backup@example-backup-server:/srv/erpnext-backups/${SITE_NAME}/"
+  echo
+  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+    read -r -p "Rsync target: " target
+    if ! validate_off_vm_backup_target "$target"; then
+      fail "Invalid target. Use user@host:/absolute/or/remote/path with no spaces."
+    fi
+    read -r -p "SSH identity file on this VM [default SSH config]: " identity
+    if [[ -n "$identity" && ! -r "$identity" ]]; then
+      warn "Identity file is not readable now: $identity"
+      warn "Dry run will fail until the file exists and is readable."
+    fi
+    read -r -p "Enable rsync --delete on remote target? [y/N]: " delete_mode
+    if [[ "$delete_mode" =~ ^[Yy]$|^[Yy][Ee][Ss]$ ]]; then
+      delete_mode="true"
+    else
+      delete_mode="false"
+    fi
+  else
+    target="${OFF_VM_BACKUP_TARGET:-}"
+    validate_off_vm_backup_target "$target" || fail "Set OFF_VM_BACKUP_TARGET=user@host:/path before using --yes."
+    identity="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
+    delete_mode="${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
+  fi
+
+  config_dir="$(dirname "$OFF_VM_BACKUP_CONFIG_FILE")"
+  $SUDO mkdir -p "$config_dir"
+  $SUDO tee "$OFF_VM_BACKUP_CONFIG_FILE" >/dev/null <<EOF_OFF_VM_CONFIG
+# ERPNext Developer Installer off-VM backup configuration
+# Non-secret settings only. Use SSH keys/agent for authentication.
+OFF_VM_BACKUP_TARGET=${target}
+OFF_VM_BACKUP_SSH_IDENTITY=${identity}
+OFF_VM_BACKUP_RSYNC_DELETE=${delete_mode}
+SITE_NAME=${SITE_NAME}
+EOF_OFF_VM_CONFIG
+  $SUDO chown root:root "$OFF_VM_BACKUP_CONFIG_FILE" || true
+  $SUDO chmod 600 "$OFF_VM_BACKUP_CONFIG_FILE" || true
+
+  OFF_VM_BACKUP_TARGET="$target"
+  OFF_VM_BACKUP_SSH_IDENTITY="$identity"
+  OFF_VM_BACKUP_RSYNC_DELETE="$delete_mode"
+
+  ui_box_start "Result Summary"
+  status_line "Off-VM target" "OK" "$OFF_VM_BACKUP_TARGET"
+  status_line "Config file" "OK" "$OFF_VM_BACKUP_CONFIG_FILE"
+  status_line "Delete mode" "INFO" "$OFF_VM_BACKUP_RSYNC_DELETE"
+  status_line "Next test" "INFO" "run dry-run before real sync"
+  ui_next "./install-erpnext-dev.sh off-vm-backup-dry-run" "./install-erpnext-dev.sh off-vm-backup-status"
+  ui_box_end
+}
+
+show_off_vm_backup_status() {
+  require_sudo
+  local target_status target_detail last_status last_run last_detail latest_lines completeness
+  off_vm_backup_load_config
+  if off_vm_backup_configured; then
+    target_status="OK"; target_detail="$OFF_VM_BACKUP_TARGET"
+  else
+    target_status="WARN"; target_detail="not configured"
+  fi
+  last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
+  last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
+  last_detail="$(off_vm_backup_last_state LAST_DETAIL 2>/dev/null || echo "no previous run")"
+  latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
+  completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
+
+  ui_box_start "Off-VM Backup Status"
+  status_line "Target" "$target_status" "$target_detail"
+  status_line "Config file" "$([[ -f "$OFF_VM_BACKUP_CONFIG_FILE" ]] && echo OK || echo WARN)" "$OFF_VM_BACKUP_CONFIG_FILE"
+  status_line "Latest local backup" "$([[ "$completeness" == complete ]] && echo OK || echo WARN)" "${completeness:-none}"
+  case "$last_status" in
+    OK) status_line "Last off-VM run" "OK" "${last_run}; ${last_detail}" ;;
+    FAIL) status_line "Last off-VM run" "FAIL" "${last_run}; ${last_detail}" ;;
+    *) status_line "Last off-VM run" "INFO" "${last_run}; ${last_detail}" ;;
+  esac
+  status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE}"
+  echo
+  echo "Off-VM backup protects against VM/disk loss only if the target is outside this VM/account."
+  ui_next "./install-erpnext-dev.sh off-vm-backup-dry-run" "./install-erpnext-dev.sh run-off-vm-backup"
+  ui_box_end
+}
+
+disable_off_vm_backup() {
+  require_sudo
+  ui_box_start "Disable Off-VM Backup Config"
+  status_line "Config file" "INFO" "$OFF_VM_BACKUP_CONFIG_FILE"
+  status_line "State file" "INFO" "$OFF_VM_BACKUP_STATE_FILE"
+  echo
+  echo "This removes the local off-VM backup target configuration only."
+  echo "It does not delete any remote backup files."
+  if ! confirm "Remove off-VM backup configuration now?"; then
+    warn "Disable cancelled."
+    ui_box_end
+    return 0
+  fi
+  $SUDO rm -f "$OFF_VM_BACKUP_CONFIG_FILE" "$OFF_VM_BACKUP_STATE_FILE"
+  OFF_VM_BACKUP_TARGET=""
+  OFF_VM_BACKUP_SSH_IDENTITY=""
+  OFF_VM_BACKUP_RSYNC_DELETE="false"
+  status_line "Off-VM backup" "OK" "configuration removed"
+  ui_next "./install-erpnext-dev.sh off-vm-backup-status"
+  ui_box_end
+}
+
+off_vm_backup_wizard() {
+  require_sudo
+  while true; do
+    ui_box_start "Off-VM Backup"
+    echo "1) Off-VM backup plan"
+    echo "2) Configure rsync target"
+    echo "3) Off-VM backup dry run"
+    echo "4) Run off-VM backup"
+    echo "5) Off-VM backup status"
+    echo "6) Disable off-VM backup config"
+    echo "7) Back"
+    echo
+    read -r -p "Choose an option: " off_choice
+    case "$off_choice" in
+      1) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      2) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      3) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      4) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      5) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      6) disable_off_vm_backup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      7) return 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
 production_ops_wizard() {
   require_sudo
   while true; do
@@ -10126,10 +10459,15 @@ production_ops_wizard() {
     echo "6) Backup retention status"
     echo "7) Cleanup old backups dry run"
     echo "8) Cleanup old backups"
-    echo "9) Backup verify"
-    echo "10) Restore preflight"
-    echo "11) Support bundle"
-    echo "12) Back"
+    echo "9) Off-VM backup plan"
+    echo "10) Configure off-VM rsync target"
+    echo "11) Off-VM backup dry run"
+    echo "12) Run off-VM backup"
+    echo "13) Off-VM backup status"
+    echo "14) Backup verify"
+    echo "15) Restore preflight"
+    echo "16) Support bundle"
+    echo "17) Back"
     echo
     read -r -p "Choose an option: " ops_choice
     case "$ops_choice" in
@@ -10141,10 +10479,15 @@ production_ops_wizard() {
       6) show_backup_retention_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
       7) cleanup_old_backups dry-run; pause_after_screen "Press Enter to return to Production Operations..." ;;
       8) cleanup_old_backups prompt; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      9) verify_latest_backup_set; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      10) show_restore_preflight; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      11) create_support_bundle; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      12) return 0 ;;
+      9) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      10) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      11) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      12) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      13) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      14) verify_latest_backup_set; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      15) show_restore_preflight; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      16) create_support_bundle; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      17) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10197,16 +10540,24 @@ show_production_checklist() {
   local retention_candidates
   retention_candidates="$(backup_retention_candidate_sets 2>/dev/null | wc -l | awk '{print $1+0}')"
   status_line "Retention candidates" "$([[ "$retention_candidates" -gt 0 ]] && echo WARN || echo OK)" "${retention_candidates} old backup set(s)"
+  if off_vm_backup_configured; then
+    local off_last_status off_last_run
+    off_last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
+    off_last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
+    status_line "Off-VM backup" "$([[ "$off_last_status" == OK ]] && echo OK || echo INFO)" "configured; last run ${off_last_status} at ${off_last_run}"
+  else
+    status_line "Off-VM backup" "WARN" "not configured"
+  fi
   status_line "Snapshot" "INFO" "take/verify cloud snapshot before go-live"
   echo
   echo "Remaining production decisions:"
-  echo "  - Confirm off-VM backup location and restore rehearsal."
-  echo "  - Configure scheduled local backups if this VM will remain active."
-  echo "  - Review backup retention before local backups grow too large."
+  echo "  - Confirm off-VM backup target and restore rehearsal."
+  echo "  - Confirm scheduled local backups and retention policy."
+  echo "  - Run/test off-VM backup after local backup verification."
   echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
   echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
   echo "  - Create named cloud snapshot after final validation."
-  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh backup-retention-status" "./install-erpnext-dev.sh support-bundle"
+  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh off-vm-backup-status" "./install-erpnext-dev.sh support-bundle"
   ui_box_end
 }
 
@@ -10286,6 +10637,7 @@ show_command_audit() {
   status_line "Backups" "OK" "backup-files, backup-status, backup-verify, backup-hardening-wizard"
   status_line "Scheduled backups" "OK" "backup-schedule-plan, configure-backup-schedule, backup-schedule-status"
   status_line "Backup retention" "OK" "backup-retention-plan, backup-retention-status, cleanup-old-backups"
+  status_line "Off-VM backup" "OK" "off-vm-backup-plan, configure-rsync-backup-target, run-off-vm-backup"
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-preflight, restore-db, restore-full"
   status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility"
   ui_box_end
@@ -10305,6 +10657,7 @@ show_release_notes_guide() {
   echo "  - Backup inventory and readable-file verification"
   echo "  - Scheduled local backups with systemd timer"
   echo "  - Backup retention plan and cleanup dry run"
+  echo "  - Off-VM rsync backup dry run and manual sync"
   echo "  - Restore preflight and production operations wizard"
   echo
   echo "Known production responsibility:"
@@ -10828,6 +11181,13 @@ Backup / Restore:
   backup-schedule-plan Show scheduled-backup design
   configure-backup-schedule Enable local scheduled backups with systemd
   backup-schedule-status Show scheduled backup timer status
+  backup-retention-plan Show local backup retention policy
+  cleanup-old-backups-dry-run Preview old backup cleanup
+  off-vm-backup-plan  Show rsync off-VM backup plan
+  configure-rsync-backup-target Save off-VM rsync target
+  off-vm-backup-dry-run Preview off-VM rsync copy
+  run-off-vm-backup   Copy backups to configured off-VM target
+  off-vm-backup-status Show off-VM backup configuration/status
   off-vm-backup-guide Commands to copy backups off this VM
   restore-preflight   Safe restore readiness check
   restore-rehearsal-guide Safe restore test plan
@@ -10888,6 +11248,9 @@ Common environment overrides:
   BACKUP_SCHEDULE_RANDOM_DELAY=30m
   BACKUP_RETENTION_KEEP_COMPLETE=14
   BACKUP_RETENTION_WARN_DISK_PERCENT=80
+  OFF_VM_BACKUP_TARGET=backup@example.com:/srv/erpnext-backups/site/
+  OFF_VM_BACKUP_SSH_IDENTITY=/root/.ssh/id_ed25519
+  OFF_VM_BACKUP_RSYNC_DELETE=false
 
 Use ./install-erpnext-dev.sh advanced for the complete command menu.
 EOF_HELP
@@ -10955,7 +11318,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -11044,6 +11407,13 @@ main() {
     backup-retention-status) show_backup_retention_status ;;
     cleanup-old-backups|backup-cleanup) cleanup_old_backups prompt ;;
     cleanup-old-backups-dry-run|backup-cleanup-dry-run) cleanup_old_backups dry-run ;;
+    off-vm-backup-plan) show_off_vm_backup_plan ;;
+    configure-rsync-backup-target) configure_rsync_backup_target ;;
+    off-vm-backup-dry-run) run_off_vm_backup_rsync dry-run ;;
+    run-off-vm-backup) run_off_vm_backup_rsync run ;;
+    off-vm-backup-status) show_off_vm_backup_status ;;
+    disable-off-vm-backup) disable_off_vm_backup ;;
+    off-vm-backup-wizard) off_vm_backup_wizard ;;
     restore-preflight) show_restore_preflight ;;
     production-ops-wizard|operations-wizard|ops-wizard) production_ops_wizard ;;
     list-backups|backups) list_site_backups ;;
