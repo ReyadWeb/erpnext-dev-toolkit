@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v1.0.0-rc1
+# ERPNext Developer Installer v1.0.0-rc2
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
@@ -60,9 +60,9 @@ chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh next-step
 ```
 
-## v1.0.0-rc1 focus
+## v1.0.0-rc2 focus
 
-v1.0.0-rc1 adds backup/restore hardening and production checklist commands. It does not make restore automatic or silent; it verifies latest backup files, explains off-VM backup copying, and provides a safe restore rehearsal workflow for disposable test VMs.
+v1.0.0-rc2 fixes backup verification for Bench `.tar` file archives, prefers the latest complete backup set, and makes the production checklist Cloudflare-aware. v1.0.0-rc1 added the backup/restore hardening and production checklist commands. It does not make restore automatic or silent; it verifies latest backup files, explains off-VM backup copying, and provides a safe restore rehearsal workflow for disposable test VMs.
 
 New commands:
 
@@ -74,6 +74,12 @@ New commands:
 ./install-erpnext-dev.sh production-checklist
 ./install-erpnext-dev.sh backup-hardening-wizard
 ```
+
+Production backup verification model:
+
+- Prefer the newest complete backup set containing database, public files, private files, and site config.
+- Accept both Bench file archive formats: `.tar` and `.tar.gz`.
+- Verify archive readability only; a real restore rehearsal is still required before relying on backups.
 
 Production backup model:
 

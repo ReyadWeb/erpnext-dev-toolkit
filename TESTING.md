@@ -1,6 +1,6 @@
 # TESTING
 
-## v1.0.0-rc1 validation
+## v1.0.0-rc2 validation
 
 ```bash
 chmod +x install-erpnext-dev.sh
@@ -638,3 +638,21 @@ Expected:
 - Each action ends with a compact `Result Summary` box.
 - The bottom of the output shows the next command to run.
 - The user does not need to scroll up to confirm whether the action succeeded.
+
+
+## v1.0.0-rc2 backup verification hotfix checks
+
+```bash
+bash -n install-erpnext-dev.sh
+./install-erpnext-dev.sh backup-status
+./install-erpnext-dev.sh backup-verify
+./install-erpnext-dev.sh production-checklist
+./install-erpnext-dev.sh backup-hardening-wizard
+```
+
+Expected:
+
+- `backup-status` shows the latest complete set when available.
+- Public/private file backups are detected as `.tar` or `.tar.gz`.
+- `backup-verify` reads database gzip, public tar archive, private tar archive, and site config JSON.
+- `production-checklist` shows HTTPS OK when Cloudflare Origin CA / Nginx HTTPS is responding.

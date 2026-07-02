@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v1.0.0-rc2
+
+### Fixed
+
+- Fixed backup status/verification to prefer the latest complete backup set instead of selecting a newer database-only partial set.
+- Fixed public/private file archive detection to support both Bench formats: `-files.tar` / `-private-files.tar` and `-files.tar.gz` / `-private-files.tar.gz`.
+- Fixed backup archive verification to use gzip-aware tar listing for `.tar.gz` archives and plain tar listing for `.tar` archives.
+- Fixed `production-checklist` HTTPS detection so Cloudflare Origin CA / Nginx HTTPS can show `OK` instead of `WARN not confirmed`.
+
+### Improved
+
+- Added `Latest set state` to backup status and verification output, showing `complete` or `partial`.
+- Added a compact bottom `Backup Result Summary` after database + files backup creation.
+
 ## v1.0.0-rc1
 
 ### Added

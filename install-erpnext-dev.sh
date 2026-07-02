@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.0.0-rc1"
+SCRIPT_VERSION="1.0.0-rc2"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -4893,6 +4893,16 @@ production_ssl_readiness_detail() {
   fi
 }
 
+production_ssl_ok_detail() {
+  local pair
+  pair="$(production_ssl_readiness_detail 2>/dev/null || true)"
+  if [[ "$pair" == OK\|* ]]; then
+    echo "${pair#*|}"
+    return 0
+  fi
+  return 1
+}
+
 production_classification() {
   local install_state="$1"
   local cpu_count="$2"
@@ -9028,6 +9038,36 @@ create_site_backup() {
   rm -f "$tmp_output"
   ok "Backup completed"
   show_latest_backups
+  if [[ "$include_files" == "true" ]]; then
+    show_backup_result_summary || true
+  fi
+}
+
+show_backup_result_summary() {
+  local latest_lines prefix db_file public_file private_file config_file completeness
+  latest_lines="$(backup_latest_set_paths || true)"
+  [[ -n "$latest_lines" ]] || return 0
+  prefix="$(printf '%s
+' "$latest_lines" | sed -n '1p')"
+  db_file="$(printf '%s
+' "$latest_lines" | sed -n '2p')"
+  public_file="$(printf '%s
+' "$latest_lines" | sed -n '3p')"
+  private_file="$(printf '%s
+' "$latest_lines" | sed -n '4p')"
+  config_file="$(printf '%s
+' "$latest_lines" | sed -n '5p')"
+  completeness="$(printf '%s
+' "$latest_lines" | sed -n '6p')"
+
+  ui_box_start "Backup Result Summary"
+  status_line "Latest set" "$([[ "$completeness" == complete ]] && echo OK || echo WARN)" "${prefix} (${completeness})"
+  status_line "Database" "$([[ -f "$db_file" ]] && echo OK || echo FAIL)" "$(basename "$db_file")"
+  status_line "Public files" "$([[ -f "$public_file" ]] && echo OK || echo WARN)" "$(basename "$public_file")"
+  status_line "Private files" "$([[ -f "$private_file" ]] && echo OK || echo WARN)" "$(basename "$private_file")"
+  status_line "Site config" "$([[ -f "$config_file" ]] && echo OK || echo WARN)" "$(basename "$config_file")"
+  ui_next "./install-erpnext-dev.sh backup-verify" "./install-erpnext-dev.sh off-vm-backup-guide"
+  ui_box_end
 }
 
 print_backup_results() {
@@ -9322,23 +9362,85 @@ backup_latest_prefix_from_db() {
   echo "$base"
 }
 
-backup_latest_set_paths() {
-  local db_file prefix backup_dir public_file private_file config_file
+backup_candidate_public_file() {
+  local backup_dir="$1" prefix="$2" candidate
+  for candidate in "${backup_dir}/${prefix}-files.tar" "${backup_dir}/${prefix}-files.tar.gz"; do
+    if [[ -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  echo "${backup_dir}/${prefix}-files.tar"
+  return 1
+}
+
+backup_candidate_private_file() {
+  local backup_dir="$1" prefix="$2" candidate
+  for candidate in "${backup_dir}/${prefix}-private-files.tar" "${backup_dir}/${prefix}-private-files.tar.gz"; do
+    if [[ -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  echo "${backup_dir}/${prefix}-private-files.tar"
+  return 1
+}
+
+backup_set_paths_for_db() {
+  local db_file="$1" backup_dir prefix public_file private_file config_file completeness
   backup_dir="$(site_backup_dir)"
-  db_file="$(backup_find_latest '*-database.sql.gz' || backup_find_latest '*.sql.gz' || true)"
-  [[ -n "$db_file" ]] || return 1
   prefix="$(backup_latest_prefix_from_db "$db_file")"
-  public_file="${backup_dir}/${prefix}-files.tar"
-  [[ -f "$public_file" ]] || public_file="${backup_dir}/${prefix}-files.tar.gz"
-  private_file="${backup_dir}/${prefix}-private-files.tar"
-  [[ -f "$private_file" ]] || private_file="${backup_dir}/${prefix}-private-files.tar.gz"
+  public_file="$(backup_candidate_public_file "$backup_dir" "$prefix" || true)"
+  private_file="$(backup_candidate_private_file "$backup_dir" "$prefix" || true)"
   config_file="${backup_dir}/${prefix}-site_config_backup.json"
-  printf '%s\n%s\n%s\n%s\n%s\n' "$prefix" "$db_file" "$public_file" "$private_file" "$config_file"
+  completeness="partial"
+  if [[ -f "$db_file" && -f "$public_file" && -f "$private_file" && -f "$config_file" ]]; then
+    completeness="complete"
+  fi
+  printf '%s
+%s
+%s
+%s
+%s
+%s
+' "$prefix" "$db_file" "$public_file" "$private_file" "$config_file" "$completeness"
+}
+
+backup_latest_set_paths() {
+  local backup_dir db_file latest_db="" latest_partial="" candidate completeness
+  backup_dir="$(site_backup_dir)"
+  if ! path_is_dir "$backup_dir"; then
+    return 1
+  fi
+
+  while IFS= read -r db_file; do
+    [[ -n "$db_file" ]] || continue
+    candidate="$(backup_set_paths_for_db "$db_file")"
+    completeness="$(printf '%s
+' "$candidate" | sed -n '6p')"
+    if [[ -z "$latest_partial" ]]; then
+      latest_partial="$candidate"
+    fi
+    if [[ "$completeness" == "complete" ]]; then
+      printf '%s
+' "$candidate"
+      return 0
+    fi
+  done < <($SUDO find "$backup_dir" -maxdepth 1 -type f \( -name '*-database.sql.gz' -o -name '*.sql.gz' \) -printf '%T@ %p
+' 2>/dev/null | sort -nr | cut -d' ' -f2-)
+
+  if [[ -n "$latest_partial" ]]; then
+    printf '%s
+' "$latest_partial"
+    return 0
+  fi
+
+  return 1
 }
 
 show_backup_status() {
   require_sudo
-  local bench_dir backup_dir count_all count_db count_public count_private latest_lines prefix db_file public_file private_file config_file backup_total
+  local bench_dir backup_dir count_all count_db count_public count_private latest_lines prefix db_file public_file private_file config_file backup_total completeness
   bench_dir="$(require_site_environment)" || return 1
   backup_dir="$(site_backup_dir)"
 
@@ -9371,7 +9473,9 @@ show_backup_status() {
     public_file="$(printf '%s\n' "$latest_lines" | sed -n '3p')"
     private_file="$(printf '%s\n' "$latest_lines" | sed -n '4p')"
     config_file="$(printf '%s\n' "$latest_lines" | sed -n '5p')"
+    completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
     status_line "Latest set" "INFO" "$prefix"
+    status_line "Latest set state" "$([[ "$completeness" == complete ]] && echo OK || echo WARN)" "${completeness:-partial}"
     status_line "Latest database" "$([[ -f "$db_file" ]] && echo OK || echo FAIL)" "$(basename "$db_file") ($(backup_file_size_human "$db_file"))"
     status_line "Latest public files" "$([[ -f "$public_file" ]] && echo OK || echo WARN)" "$(basename "$public_file") ($(backup_file_size_human "$public_file"))"
     status_line "Latest private files" "$([[ -f "$private_file" ]] && echo OK || echo WARN)" "$(basename "$private_file") ($(backup_file_size_human "$private_file"))"
@@ -9404,9 +9508,16 @@ verify_backup_file() {
       return 1
       ;;
     tar)
-      if tar -tf "$file" >/dev/null 2>&1; then
-        status_line "$label" "OK" "tar readable; $(backup_file_size_human "$file")"
-        return 0
+      if [[ "$file" == *.tar.gz || "$file" == *.tgz ]]; then
+        if tar -tzf "$file" >/dev/null 2>&1; then
+          status_line "$label" "OK" "tar.gz readable; $(backup_file_size_human "$file")"
+          return 0
+        fi
+      else
+        if tar -tf "$file" >/dev/null 2>&1; then
+          status_line "$label" "OK" "tar readable; $(backup_file_size_human "$file")"
+          return 0
+        fi
       fi
       status_line "$label" "FAIL" "tar list failed"
       return 1
@@ -9424,7 +9535,7 @@ verify_backup_file() {
 
 verify_latest_backup_set() {
   require_sudo
-  local latest_lines prefix db_file public_file private_file config_file ok_count fail_count
+  local latest_lines prefix db_file public_file private_file config_file completeness ok_count fail_count
   require_site_environment >/dev/null || return 1
 
   ui_box_start "Backup Verification"
@@ -9444,8 +9555,10 @@ verify_latest_backup_set() {
   public_file="$(printf '%s\n' "$latest_lines" | sed -n '3p')"
   private_file="$(printf '%s\n' "$latest_lines" | sed -n '4p')"
   config_file="$(printf '%s\n' "$latest_lines" | sed -n '5p')"
+  completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
 
   status_line "Latest set" "INFO" "$prefix"
+  status_line "Latest set state" "$([[ "$completeness" == complete ]] && echo OK || echo WARN)" "${completeness:-partial}"
   ok_count=0
   fail_count=0
 
