@@ -1,5 +1,18 @@
 # Roadmap
 
+## v1.1.4 — Off-VM rsync hotfix
+
+Status: built.
+
+- Fixed rsync SSH command construction for off-VM backup dry-runs and real runs.
+- Placeholder backup targets are rejected so the example target is not saved/tested as real configuration.
+
+## v1.1.3 — Off-VM backup automation
+
+Status: superseded by v1.1.4 hotfix.
+
+- Added rsync-over-SSH off-VM backup planning, configuration, dry-run, run, status, and wizard commands.
+
 ## v1.1.1 — Production operations command hotfix
 
 Status: built.

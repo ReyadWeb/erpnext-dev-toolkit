@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.4
+
+- Hotfix: fixed off-VM rsync SSH command construction when Bash IFS does not use spaces.
+- `off-vm-backup-dry-run` and `run-off-vm-backup` now pass a valid `ssh -o ...` command to `rsync -e`.
+- Reject documentation placeholder targets such as `backup@example-backup-server:/path/` during target validation.
+- Improved guidance to configure a real backup server before testing off-VM backup.
+
 ## v1.1.2
 
 - Added backup retention planning for scheduled/local backups.

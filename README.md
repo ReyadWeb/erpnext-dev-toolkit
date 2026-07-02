@@ -1,6 +1,20 @@
-# ERPNext Developer Installer v1.1.2
+# ERPNext Developer Installer v1.1.4
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
+
+## v1.1.4 off-VM rsync SSH hotfix
+
+v1.1.4 fixes the off-VM backup rsync SSH command construction used by `off-vm-backup-dry-run` and `run-off-vm-backup`. It also rejects documentation placeholder targets such as `backup@example-backup-server:/path/` so users must configure a real backup server before testing.
+
+Key commands:
+
+```bash
+/root/install-erpnext-dev.sh off-vm-backup-plan
+/root/install-erpnext-dev.sh configure-rsync-backup-target
+/root/install-erpnext-dev.sh off-vm-backup-dry-run
+/root/install-erpnext-dev.sh run-off-vm-backup
+/root/install-erpnext-dev.sh off-vm-backup-status
+```
 
 ## v1.1.2 production operations
 

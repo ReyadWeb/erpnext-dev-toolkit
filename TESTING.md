@@ -1,5 +1,34 @@
 # TESTING
 
+## v1.1.4 validation
+
+```bash
+chmod +x install-erpnext-dev.sh
+bash -n install-erpnext-dev.sh
+grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
+./install-erpnext-dev.sh help | grep -E "off-vm-backup|run-off-vm-backup"
+printf '17\n' | ./install-erpnext-dev.sh production-ops-wizard
+```
+
+Expected:
+
+```text
+SCRIPT_VERSION="1.1.4"
+production-ops-wizard opens
+off-VM backup commands are accepted
+```
+
+On a VM with a real backup target configured, validate:
+
+```bash
+/root/install-erpnext-dev.sh configure-rsync-backup-target
+/root/install-erpnext-dev.sh off-vm-backup-dry-run
+/root/install-erpnext-dev.sh run-off-vm-backup
+/root/install-erpnext-dev.sh off-vm-backup-status
+```
+
+Expected: rsync uses a valid SSH transport command. If the remote host is unreachable, the error should be a normal SSH/DNS/authentication error, not `Failed to exec ssh#012-o...`.
+
 ## v1.1.1 validation
 
 ```bash

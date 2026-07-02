@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.3"
+SCRIPT_VERSION="1.1.4"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -10144,7 +10144,25 @@ validate_off_vm_backup_target() {
   [[ "$target" != *[[:space:]]* ]] || return 1
   [[ "$target" != *"'"* ]] || return 1
   [[ "$target" != -* ]] || return 1
+  case "$target" in
+    *example-backup-server*|*example.com*|backup@*)
+      # Reject documentation placeholders so users do not save/test the example target.
+      [[ "$target" != *example-backup-server* && "$target" != *example.com* ]] || return 1
+      ;;
+  esac
   return 0
+}
+
+off_vm_backup_ssh_command_string() {
+  local ssh_cmd=() identity="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
+  ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
+  if [[ -n "$identity" ]]; then
+    [[ "$identity" != *[[:space:]]* ]] || fail "SSH identity file path must not contain spaces: $identity"
+    [[ -r "$identity" ]] || fail "SSH identity file is not readable: $identity"
+    ssh_cmd+=(-i "$identity")
+  fi
+  local IFS=' '
+  printf '%s' "${ssh_cmd[*]}"
 }
 
 off_vm_backup_target_display() {
@@ -10197,13 +10215,10 @@ off_vm_backup_ensure_rsync() {
 }
 
 off_vm_backup_rsync_command() {
-  local mode="$1" backup_dir ssh_cmd=() rsync_cmd=()
+  local mode="$1" backup_dir ssh_cmd_str rsync_cmd=()
   backup_dir="$(site_backup_dir)"
-  ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
-  if [[ -n "${OFF_VM_BACKUP_SSH_IDENTITY:-}" ]]; then
-    ssh_cmd+=(-i "$OFF_VM_BACKUP_SSH_IDENTITY")
-  fi
-  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "${ssh_cmd[*]}")
+  ssh_cmd_str="$(off_vm_backup_ssh_command_string)"
+  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "$ssh_cmd_str")
   [[ "$mode" == "dry-run" ]] && rsync_cmd+=(--dry-run)
   if [[ "${OFF_VM_BACKUP_RSYNC_DELETE:-false}" == "true" ]]; then
     rsync_cmd+=(--delete)
@@ -10214,7 +10229,7 @@ off_vm_backup_rsync_command() {
 }
 
 run_off_vm_backup_rsync() {
-  local mode="$1" backup_dir latest_lines completeness ssh_cmd=() rsync_cmd=()
+  local mode="$1" backup_dir latest_lines completeness ssh_cmd_str rsync_cmd=()
   require_sudo
   require_site_environment >/dev/null || return 1
   off_vm_backup_load_config
@@ -10225,13 +10240,9 @@ run_off_vm_backup_rsync() {
   [[ "$completeness" == "complete" ]] || fail "Latest local backup set is not complete. Run backup-files first."
   off_vm_backup_ensure_rsync
 
-  ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
-  if [[ -n "${OFF_VM_BACKUP_SSH_IDENTITY:-}" ]]; then
-    [[ -r "$OFF_VM_BACKUP_SSH_IDENTITY" ]] || fail "SSH identity file is not readable: $OFF_VM_BACKUP_SSH_IDENTITY"
-    ssh_cmd+=(-i "$OFF_VM_BACKUP_SSH_IDENTITY")
-  fi
+  ssh_cmd_str="$(off_vm_backup_ssh_command_string)"
 
-  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "${ssh_cmd[*]}")
+  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "$ssh_cmd_str")
   [[ "$mode" == "dry-run" ]] && rsync_cmd+=(--dry-run)
   if [[ "${OFF_VM_BACKUP_RSYNC_DELETE:-false}" == "true" ]]; then
     rsync_cmd+=(--delete)
