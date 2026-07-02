@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v0.9.4
+
+### Added
+
+- Added `configure-production-ssl` to configure Nginx + Let's Encrypt for a public ERPNext domain.
+- Added `production-ssl-status` to inspect DNS, Nginx, Certbot, certificate files, HTTP, HTTPS, and listener state.
+- Added `disable-production-ssl` to disable the managed production Nginx site without deleting Let's Encrypt certificates or stopping ERPNext.
+- Added `LETSENCRYPT_EMAIL`, `LETSENCRYPT_STAGING`, and `PRODUCTION_SSL_WEBROOT` environment overrides.
+
+### Improved
+
+- Production SSL readiness now recognizes an active Let's Encrypt/Nginx HTTPS setup as production SSL.
+- Help text and advanced menu now include production SSL implementation commands.
+- Public VM flow now moves from planning-only checks to a conservative HTTPS implementation while leaving Hetzner firewall changes manual.
+
+### Safety
+
+- `configure-production-ssl` validates that the production domain resolves to the current VM IP before requesting a certificate.
+- The command requires ERPNext to be installed and running before configuring Nginx.
+- The command prompts for confirmation unless `--yes` is used.
+- The command does not automatically close ports `8000` or `9000`; firewall changes remain explicit/manual after HTTPS verification.
+
 ## v0.9.3
 
 ### Added

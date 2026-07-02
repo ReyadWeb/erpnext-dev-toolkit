@@ -1,4 +1,4 @@
-# TESTING v0.9.3
+# TESTING v0.9.4
 
 ## Syntax
 
@@ -11,13 +11,13 @@ grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="0.9.3"
+SCRIPT_VERSION="0.9.4"
 ```
 
 ## Help command
 
 ```bash
-./install-erpnext-dev.sh help | grep -E "doctor --plain|doctor --json|support-bundle|app-compatibility|production-plan|production-domain-plan|public-vm-readiness|production-ssl-plan|production-firewall-plan"
+./install-erpnext-dev.sh help | grep -E "doctor --plain|doctor --json|support-bundle|app-compatibility|production-plan|production-domain-plan|public-vm-readiness|production-ssl-plan|production-firewall-plan|configure-production-ssl|production-ssl-status|disable-production-ssl"
 ```
 
 Expected:
@@ -31,6 +31,9 @@ Expected:
 - Help lists `public-vm-readiness`.
 - Help lists `production-ssl-plan`.
 - Help lists `production-firewall-plan`.
+- Help lists `configure-production-ssl`.
+- Help lists `production-ssl-status`.
+- Help lists `disable-production-ssl`.
 
 
 
@@ -64,6 +67,48 @@ Expected:
 - `production-ssl-plan` prints the planning-only SSL path and distinguishes local/dev SSL from production SSL.
 - `production-firewall-plan` prints the temporary test exposure and long-term production exposure recommendations.
 - New aliases run the same corresponding commands.
+
+## Production HTTPS implementation
+
+Planning/status checks:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh production-ssl-plan
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh production-ssl-status
+```
+
+Expected before configuration:
+
+- `production-ssl-status` reports Nginx/Certbot/certificate as missing or not enabled.
+- It does not modify the VM.
+
+Real public VM configuration test:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh configure-production-ssl
+curl -I https://erp.flowmaya.com
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh production-ssl-status
+```
+
+Expected after configuration:
+
+- Nginx is installed and active.
+- Certbot is installed.
+- Let's Encrypt certificate exists under `/etc/letsencrypt/live/erp.flowmaya.com/`.
+- `https://erp.flowmaya.com` returns an HTTP status.
+- `production-readiness` recognizes production SSL as OK.
+
+Rollback test:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh disable-production-ssl
+```
+
+Expected:
+
+- Managed production Nginx site symlink is removed.
+- Let's Encrypt certificate files are not deleted.
+- ERPNext on `:8000` is not stopped.
 
 ## Optional app compatibility
 

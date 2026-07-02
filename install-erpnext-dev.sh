@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="0.9.3"
+SCRIPT_VERSION="0.9.4"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -39,6 +39,9 @@ LEGACY_CONFIG_FILE="${LEGACY_CONFIG_FILE:-${FRAPPE_HOME}/erpnext-dev-config.env}
 SSL_CERT_DIR="${SSL_CERT_DIR:-/etc/erpnext-dev-ssl}"
 SSL_NGINX_CONF_DIR="${SSL_NGINX_CONF_DIR:-/etc/nginx}"
 SSL_REDIRECT_HTTP="${SSL_REDIRECT_HTTP:-true}"
+LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
+LETSENCRYPT_STAGING="${LETSENCRYPT_STAGING:-false}"
+PRODUCTION_SSL_WEBROOT="${PRODUCTION_SSL_WEBROOT:-/var/www/erpnext-production-acme}"
 
 FRAPPE_BRANCH="${FRAPPE_BRANCH:-version-16}"
 ERPNEXT_BRANCH="${ERPNEXT_BRANCH:-version-16}"
@@ -103,7 +106,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|disable-production-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -2862,6 +2865,8 @@ show_public_vm_readiness() {
   echo "Recommended next commands:"
   echo "  ./install-erpnext-dev.sh backup-files"
   echo "  ./install-erpnext-dev.sh production-ssl-plan"
+  echo "  ./install-erpnext-dev.sh configure-production-ssl"
+  echo "  ./install-erpnext-dev.sh production-ssl-status"
   echo "  ./install-erpnext-dev.sh production-firewall-plan"
   echo "  ./install-erpnext-dev.sh support-bundle"
   echo "============================================================"
@@ -2935,6 +2940,8 @@ show_production_ssl_plan() {
   echo "  curl -Ik https://${domain}"
   echo
   echo "Related commands:"
+  echo "  ./install-erpnext-dev.sh configure-production-ssl"
+  echo "  ./install-erpnext-dev.sh production-ssl-status"
   echo "  ./install-erpnext-dev.sh production-firewall-plan"
   echo "  ./install-erpnext-dev.sh public-vm-readiness"
   echo "  ./install-erpnext-dev.sh production-ssl-guide"
@@ -2986,6 +2993,396 @@ show_production_firewall_plan() {
   echo "  ss -lntp"
   echo "  ./install-erpnext-dev.sh public-vm-readiness"
   echo "  ./install-erpnext-dev.sh production-ssl-plan"
+  echo "============================================================"
+}
+
+
+production_ssl_domain() {
+  local domain="${PRODUCTION_DOMAIN:-$SITE_NAME}"
+  if validate_production_domain_value "$domain" >/dev/null 2>&1; then
+    printf '%s\n' "$domain"
+    return 0
+  fi
+  return 1
+}
+
+production_ssl_site_slug() {
+  local domain
+  domain="$(production_ssl_domain 2>/dev/null || echo "$SITE_NAME")"
+  printf '%s' "$domain" | tr -c 'A-Za-z0-9._-' '-'
+}
+
+production_nginx_site_name() {
+  echo "erpnext-production-$(production_ssl_site_slug)"
+}
+
+production_nginx_available_path() {
+  echo "/etc/nginx/sites-available/$(production_nginx_site_name).conf"
+}
+
+production_nginx_enabled_path() {
+  echo "/etc/nginx/sites-enabled/$(production_nginx_site_name).conf"
+}
+
+production_letsencrypt_live_dir() {
+  local domain
+  domain="$(production_ssl_domain)" || return 1
+  echo "/etc/letsencrypt/live/${domain}"
+}
+
+production_letsencrypt_fullchain_path() {
+  echo "$(production_letsencrypt_live_dir)/fullchain.pem"
+}
+
+production_letsencrypt_key_path() {
+  echo "$(production_letsencrypt_live_dir)/privkey.pem"
+}
+
+production_https_status() {
+  local domain="$1"
+  curl -fsSI --max-time 10 "https://${domain}/" 2>/dev/null | awk 'NR==1 {print; exit}' || true
+}
+
+production_http_status_plain() {
+  local domain="$1"
+  curl -fsSI --max-time 10 "http://${domain}/" 2>/dev/null | awk 'NR==1 {print; exit}' || true
+}
+
+production_ssl_is_configured() {
+  local domain fullchain key enabled_path https_head
+  domain="$(production_ssl_domain 2>/dev/null || true)"
+  [[ -n "$domain" ]] || return 1
+  fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
+  key="$(production_letsencrypt_key_path 2>/dev/null || true)"
+  enabled_path="$(production_nginx_enabled_path)"
+
+  [[ -f "$fullchain" && -f "$key" ]] || return 1
+  [[ -L "$enabled_path" || -f "$enabled_path" ]] || return 1
+  port_listens 443 || return 1
+  https_head="$(production_https_status "$domain")"
+  [[ "$https_head" == HTTP/* ]]
+}
+
+production_ssl_runtime_detail() {
+  local domain fullchain enabled_path https_head
+  domain="$(production_ssl_domain 2>/dev/null || true)"
+  if [[ -z "$domain" ]]; then
+    echo "WARN|no valid production domain set"
+    return 0
+  fi
+
+  fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
+  enabled_path="$(production_nginx_enabled_path)"
+
+  if [[ -f "$fullchain" && ( -L "$enabled_path" || -f "$enabled_path" ) ]]; then
+    https_head="$(production_https_status "$domain")"
+    if [[ "$https_head" == HTTP/* ]]; then
+      echo "OK|Let's Encrypt/Nginx HTTPS responding: ${https_head}"
+    else
+      echo "WARN|certificate/config present, but HTTPS did not respond"
+    fi
+  elif [[ -f "$fullchain" ]]; then
+    echo "WARN|Let's Encrypt certificate exists, but production Nginx site is not enabled"
+  elif command -v nginx >/dev/null 2>&1; then
+    echo "WARN|Nginx installed, but no production Let's Encrypt certificate is configured"
+  else
+    echo "WARN|not configured for production"
+  fi
+}
+
+write_production_nginx_config() {
+  local mode="$1" domain available_path webroot fullchain key ssl_block redirect_block
+  domain="$(production_ssl_domain)" || return 1
+  available_path="$(production_nginx_available_path)"
+  webroot="$PRODUCTION_SSL_WEBROOT"
+  fullchain="$(production_letsencrypt_fullchain_path)"
+  key="$(production_letsencrypt_key_path)"
+
+  $SUDO mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled "$webroot/.well-known/acme-challenge"
+  $SUDO chown -R root:root "$webroot"
+  $SUDO chmod -R 755 "$webroot"
+
+  if [[ "$mode" == "https" ]]; then
+    ssl_block="
+server {
+    listen 443 ssl;
+    server_name ${domain};
+
+    ssl_certificate     ${fullchain};
+    ssl_certificate_key ${key};
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 100m;
+
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+
+    location /socket.io {
+        proxy_pass http://127.0.0.1:9000/socket.io;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;
+    }
+}
+"
+    redirect_block="return 301 https://\$host\$request_uri;"
+  else
+    ssl_block=""
+    redirect_block="proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;"
+  fi
+
+  $SUDO tee "$available_path" >/dev/null <<EOF_PROD_NGINX
+# Managed by ERPNext Developer Installer.
+# Production HTTPS reverse proxy for ${domain}.
+# ERPNext Bench remains on localhost :8000/:9000 behind Nginx.
+
+server {
+    listen 80;
+    server_name ${domain};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root ${webroot};
+        default_type "text/plain";
+        try_files \$uri =404;
+    }
+
+    location /socket.io {
+        proxy_pass http://127.0.0.1:9000/socket.io;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location / {
+        ${redirect_block}
+    }
+}
+${ssl_block}
+EOF_PROD_NGINX
+}
+
+show_production_ssl_status() {
+  local domain vm_ip dns_ip nginx_state certbot_state cert_state enabled_state http_head https_head ssl_pair ssl_status ssl_detail
+
+  require_sudo
+  vm_ip="$(get_vm_ip)"
+  domain="$(production_ssl_domain 2>/dev/null || echo "${PRODUCTION_DOMAIN:-$SITE_NAME}")"
+  dns_ip="$(resolve_ipv4_first "$domain")"
+  nginx_state="not installed"
+  command -v nginx >/dev/null 2>&1 && nginx_state="installed: $(nginx -v 2>&1 | sed 's/^nginx version: //')"
+  certbot_state="not installed"
+  command -v certbot >/dev/null 2>&1 && certbot_state="installed: $(certbot --version 2>&1 | head -n 1)"
+  cert_state="missing"
+  if production_ssl_domain >/dev/null 2>&1 && [[ -f "$(production_letsencrypt_fullchain_path 2>/dev/null || true)" ]]; then
+    cert_state="present: $(production_letsencrypt_fullchain_path)"
+  fi
+  enabled_state="not enabled"
+  if [[ -L "$(production_nginx_enabled_path)" || -f "$(production_nginx_enabled_path)" ]]; then
+    enabled_state="enabled: $(production_nginx_enabled_path)"
+  fi
+  http_head="$(production_http_status_plain "$domain")"
+  https_head="$(production_https_status "$domain")"
+  ssl_pair="$(production_ssl_runtime_detail)"
+  ssl_status="${ssl_pair%%|*}"
+  ssl_detail="${ssl_pair#*|}"
+
+  echo
+  echo "============================================================"
+  echo "Production SSL Status"
+  echo "============================================================"
+  status_line "Domain" "$([[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] && echo OK || echo WARN)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
+  status_line "Nginx" "$([[ "$nginx_state" == installed* ]] && echo OK || echo WARN)" "$nginx_state"
+  status_line "Certbot" "$([[ "$certbot_state" == installed* ]] && echo OK || echo WARN)" "$certbot_state"
+  status_line "Certificate" "$([[ "$cert_state" == present* ]] && echo OK || echo WARN)" "$cert_state"
+  status_line "Nginx site" "$([[ "$enabled_state" == enabled* ]] && echo OK || echo WARN)" "$enabled_state"
+  status_line "Port 80" "INFO" "$(production_listener_detail 80)"
+  status_line "Port 443" "INFO" "$(production_listener_detail 443)"
+  status_line "HTTP" "$([[ "$http_head" == HTTP/* ]] && echo OK || echo WARN)" "${http_head:-no response}"
+  status_line "HTTPS" "$([[ "$https_head" == HTTP/* ]] && echo OK || echo WARN)" "${https_head:-no response}"
+  status_line "Overall" "$ssl_status" "$ssl_detail"
+  echo
+  echo "Useful tests:"
+  echo "  curl -I http://${domain}"
+  echo "  curl -I https://${domain}"
+  echo "  ./install-erpnext-dev.sh public-vm-readiness"
+  echo "============================================================"
+}
+
+configure_production_ssl() {
+  require_erpnext_vm_context "configure-production-ssl" || return 1
+  require_sudo
+
+  local domain vm_ip dns_ip install_quick runtime backup_count email_args staging_args http_head https_head
+  domain="$(production_ssl_domain 2>/dev/null || true)"
+  [[ -n "$domain" ]] || fail "Set a valid PRODUCTION_DOMAIN or SITE_NAME, for example: PRODUCTION_DOMAIN=erp.flowmaya.com SITE_NAME=erp.flowmaya.com ./install-erpnext-dev.sh configure-production-ssl"
+
+  vm_ip="$(get_vm_ip)"
+  dns_ip="$(resolve_ipv4_first "$domain")"
+  install_quick="$(production_quick_install_state)"
+  runtime="$(runtime_state 2>/dev/null || echo Stopped)"
+  backup_count="$(production_backup_count)"
+
+  echo
+  echo "============================================================"
+  echo "Configure Production HTTPS / Let's Encrypt"
+  echo "============================================================"
+  echo "This configures Nginx + Let's Encrypt for: https://${domain}"
+  echo "It does not change Hetzner firewall rules and does not stop the ERPNext service."
+  echo
+  status_line "Domain" "$([[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] && echo OK || echo FAIL)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
+  status_line "Install state" "$([[ "$install_quick" == Installed* ]] && echo OK || echo FAIL)" "$install_quick"
+  status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo FAIL)" "$runtime"
+  if [[ "$backup_count" =~ ^[0-9]+$ && "$backup_count" -gt 0 ]]; then
+    status_line "Backup" "OK" "${backup_count} local backup file(s) found; off-VM copy still recommended"
+  else
+    status_line "Backup" "WARN" "no local backup detected; create one before production changes"
+  fi
+  status_line "Port 80" "INFO" "$(production_listener_detail 80)"
+  status_line "Port 443" "INFO" "$(production_listener_detail 443)"
+  echo
+
+  [[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] || fail "DNS for ${domain} must resolve to ${vm_ip} before issuing Let's Encrypt. Use DNS-only first if behind Cloudflare."
+  [[ "$install_quick" == Installed* ]] || fail "ERPNext is not fully installed. Run guided setup first."
+  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: ./install-erpnext-dev.sh start"
+
+  if [[ "$backup_count" =~ ^[0-9]+$ && "$backup_count" -eq 0 ]]; then
+    warn "No local backup detected. Recommended: ./install-erpnext-dev.sh backup-files"
+  fi
+
+  if [[ "$ASSUME_YES" -ne 1 ]]; then
+    echo "Before continuing, confirm you already took a snapshot or are ready to change Nginx/SSL."
+    confirm "Configure production HTTPS for ${domain} now?" || return 1
+  fi
+
+  log "Installing Nginx and Certbot"
+  $SUDO apt-get update
+  $SUDO apt-get install -y nginx certbot
+
+  # Disable the default site to avoid accidental default landing pages on the production domain.
+  if [[ -L /etc/nginx/sites-enabled/default || -f /etc/nginx/sites-enabled/default ]]; then
+    $SUDO rm -f /etc/nginx/sites-enabled/default
+  fi
+
+  log "Writing temporary HTTP reverse proxy for ACME challenge"
+  write_production_nginx_config http
+  $SUDO ln -sfn "$(production_nginx_available_path)" "$(production_nginx_enabled_path)"
+
+  log "Testing and starting Nginx"
+  $SUDO nginx -t || fail "Nginx config test failed before certificate issuance."
+  $SUDO systemctl enable --now nginx
+  $SUDO systemctl reload nginx
+
+  http_head="$(production_http_status_plain "$domain")"
+  if [[ "$http_head" != HTTP/* ]]; then
+    warn "HTTP check did not return a response before ACME: ${http_head:-no response}"
+    warn "If port 80 is blocked at the Hetzner firewall, Let's Encrypt HTTP-01 will fail."
+  fi
+
+  email_args=(--register-unsafely-without-email)
+  if [[ -n "$LETSENCRYPT_EMAIL" ]]; then
+    email_args=(--email "$LETSENCRYPT_EMAIL")
+  fi
+  staging_args=()
+  if [[ "$LETSENCRYPT_STAGING" == "true" ]]; then
+    staging_args=(--staging)
+  fi
+
+  log "Requesting Let's Encrypt certificate"
+  $SUDO certbot certonly \
+    --non-interactive \
+    --agree-tos \
+    "${email_args[@]}" \
+    "${staging_args[@]}" \
+    --webroot \
+    -w "$PRODUCTION_SSL_WEBROOT" \
+    -d "$domain" || fail "Let's Encrypt certificate request failed. Check DNS, Cloudflare DNS-only/proxy status, and port 80 firewall."
+
+  log "Writing HTTPS reverse proxy config"
+  write_production_nginx_config https
+
+  log "Testing and reloading Nginx"
+  $SUDO nginx -t || fail "Nginx config test failed after certificate issuance."
+  $SUDO systemctl reload nginx
+
+  https_head="$(production_https_status "$domain")"
+  if [[ "$https_head" == HTTP/* ]]; then
+    ok "Production HTTPS is responding: ${https_head}"
+  else
+    warn "Certificate and Nginx config were installed, but HTTPS did not respond from this VM."
+  fi
+
+  echo
+  echo "Next steps:"
+  echo "  curl -I https://${domain}"
+  echo "  ./install-erpnext-dev.sh production-ssl-status"
+  echo "  ./install-erpnext-dev.sh production-firewall-plan"
+  echo
+  echo "After HTTPS works, restrict/close public :8000 and :9000 at the Hetzner firewall."
+  echo "============================================================"
+}
+
+disable_production_ssl() {
+  require_erpnext_vm_context "disable-production-ssl" || return 1
+  require_sudo
+
+  local enabled_path available_path domain
+  domain="$(production_ssl_domain 2>/dev/null || echo "${PRODUCTION_DOMAIN:-$SITE_NAME}")"
+  enabled_path="$(production_nginx_enabled_path)"
+  available_path="$(production_nginx_available_path)"
+
+  echo
+  echo "============================================================"
+  echo "Disable Production HTTPS Reverse Proxy"
+  echo "============================================================"
+  echo "This disables the managed production Nginx site for ${domain}."
+  echo "It does not delete Let's Encrypt certificate files and does not stop ERPNext :8000."
+  echo
+
+  if [[ "$ASSUME_YES" -ne 1 ]]; then
+    confirm "Disable production HTTPS Nginx site now?" || return 1
+  fi
+
+  $SUDO rm -f "$enabled_path"
+  if command -v nginx >/dev/null 2>&1; then
+    $SUDO nginx -t || warn "Nginx config test failed after disabling the production site."
+    $SUDO systemctl reload nginx || true
+  fi
+
+  ok "Production HTTPS site disabled"
+  echo "Config file kept for review: ${available_path}"
+  echo "Certificate files, if present, are kept under: /etc/letsencrypt/live/${domain}"
   echo "============================================================"
 }
 
@@ -3049,7 +3446,13 @@ production_domain_readiness_status() {
 }
 
 production_ssl_readiness_detail() {
-  local cert_path
+  local prod_pair cert_path
+
+  if prod_pair="$(production_ssl_runtime_detail 2>/dev/null)" && [[ "$prod_pair" == OK\|* ]]; then
+    echo "$prod_pair"
+    return 0
+  fi
+
   cert_path="$(ssl_cert_path 2>/dev/null || true)"
 
   if ssl_is_configured 2>/dev/null; then
@@ -3058,6 +3461,8 @@ production_ssl_readiness_detail() {
     else
       echo "INFO|local HTTPS configured; still verify production certificate plan"
     fi
+  elif [[ -n "${prod_pair:-}" ]]; then
+    echo "$prod_pair"
   else
     echo "WARN|not configured for production"
   fi
@@ -7768,14 +8173,17 @@ show_advanced_menu() {
     echo "32) Public VM Readiness"
     echo "33) Production SSL Plan"
     echo "34) Production Firewall Plan"
-    echo "35) Start Bench in Foreground"
-    echo "36) Show Service Logs"
-    echo "37) Access Submenu"
-    echo "38) Next Step"
-    echo "39) Verify ERPNext HTTP Access"
-    echo "40) App Install Wizard"
-    echo "41) App Rollback Guide"
-    echo "42) Back"
+    echo "35) Configure Production SSL"
+    echo "36) Production SSL Status"
+    echo "37) Disable Production SSL"
+    echo "38) Start Bench in Foreground"
+    echo "39) Show Service Logs"
+    echo "40) Access Submenu"
+    echo "41) Next Step"
+    echo "42) Verify ERPNext HTTP Access"
+    echo "43) App Install Wizard"
+    echo "44) App Rollback Guide"
+    echo "45) Back"
     echo
     read -r -p "Choose an option: " advanced_choice
 
@@ -7814,14 +8222,17 @@ show_advanced_menu() {
       32) show_public_vm_readiness ;;
       33) show_production_ssl_plan ;;
       34) show_production_firewall_plan ;;
-      35) run_foreground_start ;;
-      36) show_erpnext_service_logs ;;
-      37) show_access_menu ;;
-      38) show_next_step ;;
-      39) verify_access ;;
-      40) run_app_install_wizard ;;
-      41) show_app_rollback_guide ;;
-      42) return 0 ;;
+      35) configure_production_ssl ;;
+      36) show_production_ssl_status ;;
+      37) disable_production_ssl ;;
+      38) run_foreground_start ;;
+      39) show_erpnext_service_logs ;;
+      40) show_access_menu ;;
+      41) show_next_step ;;
+      42) verify_access ;;
+      43) run_app_install_wizard ;;
+      44) show_app_rollback_guide ;;
+      45) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -7948,6 +8359,9 @@ Advanced actions:
   public-vm-readiness Show public VM DNS/access/listener readiness
   production-ssl-plan Show production SSL readiness and recommended path
   production-firewall-plan Show public VM firewall exposure plan
+  configure-production-ssl Configure Nginx + Let's Encrypt for production HTTPS
+  production-ssl-status Show production HTTPS/Nginx/Let's Encrypt status
+  disable-production-ssl Disable managed production HTTPS Nginx site
   production-domain-guide Show production domain planning guide
   production-ssl-guide Show production SSL planning guide
   configure-local-ssl Configure Nginx local HTTPS reverse proxy
@@ -7959,7 +8373,9 @@ Options:
 
 Environment overrides:
   SITE_NAME=erp.test               # default local site name; use SITE_NAME=erp107.test for another VM
-  PRODUCTION_DOMAIN=erp.company.com # future production planning only
+  PRODUCTION_DOMAIN=erp.company.com # production planning / SSL hostname
+  LETSENCRYPT_EMAIL=admin@example.com # optional for configure-production-ssl
+  LETSENCRYPT_STAGING=true|false      # optional dry-run against Let's Encrypt staging
   FRAPPE_USER=frappe
   ADMIN_PASSWORD='YourPassword'
   DB_ADMIN_PASSWORD='YourDbAdminPassword'
@@ -8011,6 +8427,8 @@ Examples:
   ./install-erpnext-dev.sh public-vm-readiness
   ./install-erpnext-dev.sh production-ssl-plan
   ./install-erpnext-dev.sh production-firewall-plan
+  ./install-erpnext-dev.sh configure-production-ssl
+  ./install-erpnext-dev.sh production-ssl-status
   ./install-erpnext-dev.sh doctor
   ./install-erpnext-dev.sh doctor --plain
   ./install-erpnext-dev.sh doctor --json
@@ -8074,7 +8492,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|configure-production-ssl|production-ssl-status|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -8188,6 +8606,9 @@ main() {
     public-vm-readiness|public-readiness) show_public_vm_readiness ;;
     production-ssl-plan|prod-ssl-plan) show_production_ssl_plan ;;
     production-firewall-plan|prod-firewall-plan) show_production_firewall_plan ;;
+    configure-production-ssl) configure_production_ssl ;;
+    production-ssl-status) show_production_ssl_status ;;
+    disable-production-ssl) disable_production_ssl ;;
     production-domain-guide) show_production_domain_guide ;;
     production-ssl-guide) show_production_ssl_guide ;;
     repair-site-config) repair_site_config ;;

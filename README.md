@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v0.9.3
+# ERPNext Developer Installer v0.9.4
 
 Local developer installer for ERPNext/Frappe on Ubuntu 24.04/26.04 VMs.
 
@@ -28,11 +28,11 @@ chmod +x install-erpnext-dev.sh
 ./install-erpnext-dev.sh next-step
 ```
 
-## v0.9.3 focus
+## v0.9.4 focus
 
-v0.9.3 adds public VM hardening and production SSL planning commands after the first successful Hetzner public VM install test. It is still planning/check-only: it does not issue certificates, change DNS, or alter firewall rules automatically.
+v0.9.4 adds conservative production HTTPS implementation for the public VM path. It can install Nginx/Certbot, issue a Let's Encrypt certificate with HTTP-01 webroot validation, and proxy `https://DOMAIN` to the running ERPNext Bench service.
 
-It keeps the v0.9.2 root-run guided setup hotfix for fresh cloud VMs.
+It still does **not** change DNS or firewall rules automatically. Keep Hetzner firewall changes manual: allow `80/443`, then restrict/close public `8000/9000` only after HTTPS is verified.
 
 Run:
 
@@ -43,6 +43,8 @@ Run:
 ./install-erpnext-dev.sh public-vm-readiness
 ./install-erpnext-dev.sh production-ssl-plan
 ./install-erpnext-dev.sh production-firewall-plan
+./install-erpnext-dev.sh configure-production-ssl
+./install-erpnext-dev.sh production-ssl-status
 ```
 
 `production-readiness` checks CPU, RAM, disk, install/runtime/service state, production domain configuration, local SSL assumptions, and backup readiness. It classifies the VM as dev-only, production candidate, or not recommended.
@@ -84,6 +86,35 @@ HELPDESK_BRANCH=main
 TELEPHONY_BRANCH=develop
 INSIGHTS_BRANCH=main
 ```
+
+## Production HTTPS on a public VM
+
+After the public VM is installed, DNS points to the VM, backups are created, and a provider snapshot exists, configure HTTPS with:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh configure-production-ssl
+```
+
+Optional environment variables:
+
+```bash
+LETSENCRYPT_EMAIL=admin@example.com
+LETSENCRYPT_STAGING=true   # dry-run/staging certificate test
+```
+
+Check status with:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh production-ssl-status
+```
+
+Rollback the managed Nginx site without deleting certificates or stopping ERPNext:
+
+```bash
+SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh disable-production-ssl
+```
+
+After `https://erp.flowmaya.com` works, restrict or close public access to `8000` and `9000` at the Hetzner firewall.
 
 ## Support bundle
 
