@@ -1,3 +1,36 @@
+# v1.1.8 validation
+
+Validate the credential-info command and docs update:
+
+```bash
+chmod +x install-erpnext-dev.sh
+bash -n install-erpnext-dev.sh
+grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
+./install-erpnext-dev.sh help | grep -E "credentials-info|verify-access"
+./install-erpnext-dev.sh command-audit | grep -E "Credentials|credentials-info"
+./install-erpnext-dev.sh credentials-info
+```
+
+Expected:
+
+```text
+SCRIPT_VERSION="1.1.8"
+credentials-info is accepted by the dispatcher
+credentials-info shows the credentials file path
+credentials-info does not print the generated password
+README contains the credential lookup section
+```
+
+On an installed VM, validate:
+
+```bash
+/root/install-erpnext-dev.sh credentials-info
+sudo test -f /home/frappe/erpnext-dev-credentials.txt
+sudo cat /home/frappe/erpnext-dev-credentials.txt
+```
+
+Expected: `credentials-info` explains where the login password is stored, and the direct `sudo cat` command shows the generated credentials only when the admin intentionally asks for them.
+
 
 ## Local VM quickstart validation
 

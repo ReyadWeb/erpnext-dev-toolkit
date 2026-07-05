@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.7"
+SCRIPT_VERSION="1.1.8"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -127,7 +127,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -751,7 +751,7 @@ show_ready_summary() {
   echo "  Friendly URL: http://${SITE_NAME}:8000"
   echo
   echo "Friendly URL note: your HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."
-  echo "For full access instructions, run: ./install-erpnext-dev.sh access"
+  echo "For full access instructions, run: $(installer_cmd access)"
   echo "============================================================"
 }
 
@@ -807,7 +807,7 @@ require_bench_dir() {
 
   err "Bench folder not found. Expected one of:"
   bench_dir_candidates | awk '{print "  - " $0}' >&2
-  err "Run Recommended Setup first, or run: ./install-erpnext-dev.sh install-status"
+  err "Run Recommended Setup first, or run: $(installer_cmd install-status)"
   return 1
 }
 
@@ -2279,7 +2279,7 @@ show_access_instructions() {
   echo "ERPNext must be running before any browser URL will work."
   echo
   echo "Start ERPNext inside the VM with:"
-  echo "  ./install-erpnext-dev.sh start"
+  echo "  $(installer_cmd start)"
   echo
   echo "Or manually:"
   echo "  sudo -iu ${FRAPPE_USER}"
@@ -5621,7 +5621,7 @@ configure_local_ssl() {
     warn "Certificate or key is missing."
     echo
     echo "Create/copy the certificate files first, then rerun this command."
-    echo "For instructions, run: ./install-erpnext-dev.sh local-ssl-guide"
+    echo "For instructions, run: $(installer_cmd local-ssl-guide)"
     echo
     echo "Quick target paths:"
     echo "  ${cert_path}"
@@ -5922,10 +5922,11 @@ print_summary() {
   echo "Login:"
   echo "  Username: Administrator"
   echo "  Password: saved in the credentials file"
-  echo "  View with: sudo cat ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  echo "  Credentials help: $(installer_cmd credentials-info)"
+  echo "  View password: sudo cat ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
   echo
   echo "Start ERPNext:"
-  echo "  ./install-erpnext-dev.sh start"
+  echo "  $(installer_cmd start)"
   echo
   echo "Manual start command:"
   echo "  sudo -iu ${FRAPPE_USER}"
@@ -5938,10 +5939,10 @@ print_summary() {
   echo "  Friendly URL: http://${SITE_NAME}:8000"
   echo
   echo "Run this on the HOST for the friendly URL:"
-  echo "  echo "${vm_ip} ${SITE_NAME}" | sudo tee -a /etc/hosts"
+  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
   echo
   echo "Verify access after setup:"
-  echo "  ./install-erpnext-dev.sh verify-access"
+  echo "  $(installer_cmd verify-access)"
   echo
   echo "Credentials file:"
   echo "  ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
@@ -5949,6 +5950,46 @@ print_summary() {
   echo "Install log:"
   echo "  ${LOG_FILE}"
   echo
+  echo "============================================================"
+}
+
+show_credentials_info() {
+  local cred_file bench_dir current_site reset_site
+  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  bench_dir="$(active_bench_dir 2>/dev/null || printf '%s' "${BENCH_DIR}")"
+  current_site="${PRODUCTION_DOMAIN:-${SITE_NAME}}"
+  reset_site="${SITE_NAME}"
+
+  echo
+  echo "============================================================"
+  echo "ERPNext Credentials / Login Info"
+  echo "============================================================"
+  echo
+  status_line "ERPNext username" "INFO" "Administrator"
+  if path_is_file "$cred_file"; then
+    status_line "Credentials file" "OK" "$cred_file"
+  else
+    status_line "Credentials file" "WARN" "missing at $cred_file"
+  fi
+  status_line "Site" "INFO" "$current_site"
+  status_line "Bench" "INFO" "$bench_dir"
+  echo
+  echo "To view the generated password on the VM:"
+  echo "  sudo cat ${cred_file}"
+  echo
+  echo "Use this for the ERPNext web login:"
+  echo "  Username: Administrator"
+  echo "  Password: value shown in ${cred_file}"
+  echo
+  echo "Security note:"
+  echo "  The installer does not print the password in diagnostics, support bundles, or shared logs."
+  echo "  Share the credentials file only through a secure channel."
+  echo
+  echo "If the Administrator password needs to be reset:"
+  echo "  cd ${bench_dir}"
+  echo "  sudo -u ${FRAPPE_USER} bench --site ${reset_site} set-admin-password"
+  echo
+  echo "For a public/production site, replace ${reset_site} with the actual site name if different."
   echo "============================================================"
 }
 
@@ -10313,6 +10354,7 @@ show_command_audit() {
   status_line "Start here" "OK" "first-run, public-vm-quickstart, local-dev-quickstart"
   status_line "Config" "OK" "set-domain, show-config, setup-effort-guide"
   status_line "Install/status" "OK" "guided-setup, status, doctor, support-bundle"
+  status_line "Credentials" "OK" "credentials-info, sudo cat /home/frappe/erpnext-dev-credentials.txt"
   status_line "Production SSL" "OK" "production-ssl-wizard, production-ssl-status, ssl-mode-status"
   status_line "Cloudflare" "OK" "cloudflare-origin-guide, configure-cloudflare-origin-ssl"
   status_line "Security" "OK" "security-hardening-wizard, vm-firewall-status, fail2ban-status"
@@ -10568,7 +10610,7 @@ run_install() {
   elif [[ "${AUTO_START}" == "false" ]]; then
     echo
     echo "You can start ERPNext later with:"
-    echo "  ./install-erpnext-dev.sh start"
+    echo "  $(installer_cmd start)"
   elif [[ -t 0 ]]; then
     echo
     read -r -p "Start ERPNext now in the background service? [Y/n]: " start_now
@@ -10581,7 +10623,7 @@ run_install() {
     else
       echo
       echo "You can start ERPNext later with:"
-      echo "  ./install-erpnext-dev.sh start"
+      echo "  $(installer_cmd start)"
     fi
   fi
   post_install_validation_summary
@@ -10841,6 +10883,7 @@ Core:
   guided-setup        Guided install / repair workflow
   status              Compact ERPNext status
   verify-access       HTTP access checks
+  credentials-info    Show where credentials are stored and how to reset admin password
   next-step           Recommended next action
   doctor --plain      Safe diagnostics
   support-bundle      Redacted troubleshooting archive
@@ -11007,7 +11050,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|credentials-info|credentials|login-info|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -11058,6 +11101,7 @@ main() {
     advanced) show_advanced_menu ;;
     access) show_access_instructions ;;
     verify-access) verify_access ;;
+    credentials-info|credentials|login-info) show_credentials_info ;;
     next-step) show_next_step ;;
     local-ssl-wizard|ssl-wizard) run_local_ssl_wizard ;;
     access-menu) show_access_menu ;;

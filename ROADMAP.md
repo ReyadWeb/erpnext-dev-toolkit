@@ -1,5 +1,13 @@
 # Roadmap
 
+## v1.1.8 credentials documentation and helper command
+
+Status: built.
+
+- Added credential lookup guidance to README.
+- Added `credentials-info` / `credentials` / `login-info` helper command.
+- The helper command shows where credentials are stored without printing passwords by default.
+
 ## v1.1.7 documentation cleanup
 
 - Keep README focused on setup, local VM testing, public VM setup, production operations, backup workflows, SSL modes, security hardening, and diagnostics.

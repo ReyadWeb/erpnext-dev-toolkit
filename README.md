@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v1.1.7
+# ERPNext Developer Installer v1.1.8
 
 A guided installer and operations toolkit for ERPNext/Frappe on Ubuntu VMs.
 
@@ -68,6 +68,7 @@ After the installer finishes, validate inside the VM:
 /root/install-erpnext-dev.sh backup-files
 /root/install-erpnext-dev.sh backup-status
 /root/install-erpnext-dev.sh backup-verify
+/root/install-erpnext-dev.sh credentials-info
 ```
 
 From the host machine, add a hosts entry. Replace `LOCAL_VM_IP` with the local VM IP:
@@ -206,6 +207,46 @@ Use this stable path for follow-up commands:
 /root/install-erpnext-dev.sh production-ops-wizard
 ```
 
+
+---
+
+## Accessing ERPNext credentials
+
+After installation, the installer saves the generated ERPNext and database credentials on the VM.
+
+Run this inside the VM to see where the credentials are stored and how to reset the Administrator password:
+
+```bash
+/root/install-erpnext-dev.sh credentials-info
+```
+
+To view the generated password directly on the VM:
+
+```bash
+sudo cat /home/frappe/erpnext-dev-credentials.txt
+```
+
+The ERPNext web login normally uses:
+
+```text
+Username: Administrator
+Password: value shown in /home/frappe/erpnext-dev-credentials.txt
+```
+
+The credentials file is intentionally excluded from diagnostics, support bundles, shared logs, and generated support archives. Do not paste the file contents into public tickets or GitHub issues.
+
+If the Administrator password needs to be reset, run this inside the VM:
+
+```bash
+cd /home/frappe/frappe/frappe-bench
+sudo -u frappe bench --site erp.test set-admin-password
+```
+
+For a public/production site, replace `erp.test` with the actual site name or domain, for example:
+
+```bash
+sudo -u frappe bench --site erp.example.com set-admin-password
+```
 ---
 
 ## Production operations
@@ -363,6 +404,7 @@ UFW keeps SSH open by default to reduce lockout risk. Restrict SSH at the cloud 
 /root/install-erpnext-dev.sh doctor --json
 /root/install-erpnext-dev.sh support-bundle
 /root/install-erpnext-dev.sh command-audit
+/root/install-erpnext-dev.sh credentials-info
 /root/install-erpnext-dev.sh next-step
 ```
 

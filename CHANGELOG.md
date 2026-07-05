@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.8
+
+- Added clear credential-access documentation to `README.md`.
+- Added `credentials-info`, `credentials`, and `login-info` commands.
+- `credentials-info` shows the ERPNext username, credentials-file path, and safe password-reset commands without printing the password.
+- Post-install summary now points users to `credentials-info` and the stable `/root/install-erpnext-dev.sh` follow-up path.
+- Updated help output, command audit, and testing documentation for credential lookup.
+
 ## v1.1.7
 
 - Improved local SSL and mkcert guide wording.
