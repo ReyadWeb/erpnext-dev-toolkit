@@ -1,3 +1,36 @@
+
+## Local VM quickstart validation
+
+Use this scenario for a fresh local VM test. Do not use a production domain.
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh
+chmod +x /tmp/install-erpnext-dev.sh
+sudo /tmp/install-erpnext-dev.sh local-dev-quickstart
+```
+
+Recommended site: `erp.test`.
+
+Validate inside the VM:
+
+```bash
+/root/install-erpnext-dev.sh doctor --plain
+/root/install-erpnext-dev.sh verify-access
+/root/install-erpnext-dev.sh backup-files
+/root/install-erpnext-dev.sh backup-status
+/root/install-erpnext-dev.sh backup-verify
+```
+
+Validate from the host after adding a hosts entry:
+
+```bash
+curl -I http://LOCAL_VM_IP:8000
+curl -I http://erp.test:8000
+curl -Ik https://erp.test
+```
+
+Expected: install OK, runtime via service, direct HTTP working, friendly hostname working, and local HTTPS optional.
+
 # TESTING
 
 ## v1.1.4 validation
@@ -803,3 +836,26 @@ On a real VM with a configured backup server:
 ```
 
 Expected: dry run completes first; real sync completes after confirmation; production checklist reports off-VM backup configured/last-run state.
+
+
+## v1.1.5 Health Monitoring Validation
+
+```bash
+bash -n install-erpnext-dev.sh
+./install-erpnext-dev.sh help | grep -E "health-check|service-recovery|production-ops"
+printf '21\n' | ./install-erpnext-dev.sh production-ops-wizard
+./install-erpnext-dev.sh health-check
+./install-erpnext-dev.sh health-check-status
+./install-erpnext-dev.sh service-recovery-plan
+```
+
+On a production VM, optionally enable and validate the timer:
+
+```bash
+/root/install-erpnext-dev.sh configure-health-check-timer
+/root/install-erpnext-dev.sh health-check-status
+systemctl list-timers erpnext-dev-health-check.timer --all
+journalctl -u erpnext-dev-health-check.service --no-pager -n 80
+```
+
+Expected: health check returns a compact status table; timer status shows enabled/active after configuration; service recovery plan is guidance-only and does not restart services.

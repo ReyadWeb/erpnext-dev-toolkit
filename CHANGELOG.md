@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.1.6
+
+- Reorganized `README.md` into a usage-focused guide instead of a version-history document.
+- Moved release/history information fully into `CHANGELOG.md`.
+- Added clear local VM testing instructions, including `local-dev-quickstart`, `erp.test`, host-file mapping, and validation commands.
+- Kept production quickstart, backup, SSL, security, operations, and optional-app instructions in the README.
+- Clarified documentation file responsibilities for README, CHANGELOG, TESTING, ROADMAP, and `docs/assets/`.
+
+## v1.1.5
+
+- Added production health check workflow.
+- Added `health-check`, `configure-health-check-timer`, `health-check-status`, `disable-health-check-timer`, and `service-recovery-plan`.
+- Added hourly systemd timer option for read-only local health checks.
+- Health check summarizes install/runtime, ERPNext service, Nginx, MariaDB, Redis, HTTPS, disk usage, latest backup age/completeness, UFW, Fail2Ban, scheduled backup timer, and off-VM backup state.
+- Updated production operations wizard, command audit, help output, and production checklist to include health monitoring.
+
 ## v1.1.4
 
 - Hotfix: fixed off-VM rsync SSH command construction when Bash IFS does not use spaces.

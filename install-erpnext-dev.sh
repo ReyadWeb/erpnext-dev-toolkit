@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.4"
+SCRIPT_VERSION="1.1.6"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -74,6 +74,12 @@ OFF_VM_BACKUP_STATE_FILE="${OFF_VM_BACKUP_STATE_FILE:-/etc/erpnext-dev-installer
 OFF_VM_BACKUP_TARGET="${OFF_VM_BACKUP_TARGET:-}"
 OFF_VM_BACKUP_SSH_IDENTITY="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
 OFF_VM_BACKUP_RSYNC_DELETE="${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
+HEALTH_CHECK_SERVICE="${HEALTH_CHECK_SERVICE:-erpnext-dev-health-check.service}"
+HEALTH_CHECK_TIMER="${HEALTH_CHECK_TIMER:-erpnext-dev-health-check.timer}"
+HEALTH_CHECK_ON_CALENDAR="${HEALTH_CHECK_ON_CALENDAR:-hourly}"
+HEALTH_CHECK_RANDOM_DELAY="${HEALTH_CHECK_RANDOM_DELAY:-10m}"
+HEALTH_CHECK_DISK_WARN_PERCENT="${HEALTH_CHECK_DISK_WARN_PERCENT:-80}"
+HEALTH_CHECK_BACKUP_MAX_AGE_HOURS="${HEALTH_CHECK_BACKUP_MAX_AGE_HOURS:-30}"
 
 if [[ -t 1 ]]; then
   BOLD="\033[1m"
@@ -121,7 +127,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -10458,47 +10464,344 @@ off_vm_backup_wizard() {
   done
 }
 
+
+health_check_unit_paths() {
+  echo "/etc/systemd/system/${HEALTH_CHECK_SERVICE}"
+  echo "/etc/systemd/system/${HEALTH_CHECK_TIMER}"
+}
+
+health_check_timer_enabled() {
+  systemctl is-enabled --quiet "${HEALTH_CHECK_TIMER}" 2>/dev/null
+}
+
+health_check_timer_active() {
+  systemctl is-active --quiet "${HEALTH_CHECK_TIMER}" 2>/dev/null
+}
+
+systemd_service_active_detail() {
+  local svc="$1"
+  if systemctl list-unit-files "${svc}" >/dev/null 2>&1 && systemctl is-active --quiet "${svc}" 2>/dev/null; then
+    echo "OK|running"
+  elif systemctl list-unit-files "${svc}" >/dev/null 2>&1; then
+    echo "WARN|not running"
+  else
+    echo "WARN|not found"
+  fi
+}
+
+health_backup_age_hours() {
+  local latest_lines db_file now file_epoch
+  latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
+  [[ -n "$latest_lines" ]] || { echo "unknown"; return 0; }
+  db_file="$(printf '%s\n' "$latest_lines" | sed -n '2p')"
+  [[ -n "$db_file" && -f "$db_file" ]] || { echo "unknown"; return 0; }
+  now="$(date +%s)"
+  file_epoch="$(stat -c %Y "$db_file" 2>/dev/null || echo 0)"
+  if [[ "$file_epoch" =~ ^[0-9]+$ && "$file_epoch" -gt 0 ]]; then
+    echo $(( (now - file_epoch) / 3600 ))
+  else
+    echo "unknown"
+  fi
+}
+
+run_health_check() {
+  require_sudo
+
+  local overall="OK" installed runtime ssl_pair ssl_status ssl_detail disk_percent disk_state
+  local latest_lines completeness backup_age backup_state backup_msg svc_pair redis_pair mariadb_pair nginx_pair
+  local off_last_status off_last_run
+
+  installed="$(install_state 2>/dev/null || echo "Unknown")"
+  runtime="$(runtime_state 2>/dev/null || echo "Unknown")"
+
+  if is_public_vm_workflow; then
+    ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo "WARN|not confirmed")"
+  else
+    ssl_pair="INFO|production HTTPS not required for local mode"
+  fi
+  ssl_status="${ssl_pair%%|*}"
+  ssl_detail="${ssl_pair#*|}"
+
+  disk_percent="$(df -P / 2>/dev/null | awk 'NR==2 {gsub("%", "", $5); print $5+0}' || echo 0)"
+  if [[ "$disk_percent" =~ ^[0-9]+$ && "$disk_percent" -ge "${HEALTH_CHECK_DISK_WARN_PERCENT}" ]]; then
+    disk_state="WARN"; overall="WARN"
+  else
+    disk_state="OK"
+  fi
+
+  latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
+  if [[ -n "$latest_lines" ]]; then
+    completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
+  else
+    completeness="none"
+  fi
+  backup_age="$(health_backup_age_hours)"
+  backup_state="WARN"
+  backup_msg="${completeness}"
+  if [[ "$completeness" == "complete" ]]; then
+    backup_state="OK"
+    backup_msg="complete"
+    if [[ "$backup_age" =~ ^[0-9]+$ ]]; then
+      backup_msg="complete; ${backup_age}h old"
+      if [[ "$backup_age" -gt "${HEALTH_CHECK_BACKUP_MAX_AGE_HOURS}" ]]; then
+        backup_state="WARN"; overall="WARN"
+      fi
+    fi
+  else
+    overall="WARN"
+  fi
+
+  [[ "$installed" == "Installed" ]] || overall="WARN"
+  [[ "$runtime" == Running* ]] || overall="WARN"
+  [[ "$ssl_status" == "OK" || "$ssl_status" == "INFO" ]] || overall="WARN"
+
+  ui_box_start "Health Check"
+  status_line "Site" "INFO" "$SITE_NAME"
+  status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
+  status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
+
+  if service_exists; then
+    if systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; then
+      status_line "ERPNext service" "OK" "running"
+    else
+      status_line "ERPNext service" "WARN" "not running"
+      overall="WARN"
+    fi
+  else
+    status_line "ERPNext service" "WARN" "not configured"
+    overall="WARN"
+  fi
+
+  nginx_pair="$(systemd_service_active_detail nginx.service)"
+  mariadb_pair="$(systemd_service_active_detail mariadb.service)"
+  redis_pair="$(systemd_service_active_detail redis-server.service)"
+  status_line "Nginx" "${nginx_pair%%|*}" "${nginx_pair#*|}"
+  status_line "MariaDB" "${mariadb_pair%%|*}" "${mariadb_pair#*|}"
+  status_line "Redis" "${redis_pair%%|*}" "${redis_pair#*|}"
+  [[ "${nginx_pair%%|*}" == "OK" || ! is_public_vm_workflow ]] || overall="WARN"
+  [[ "${mariadb_pair%%|*}" == "OK" ]] || overall="WARN"
+  [[ "${redis_pair%%|*}" == "OK" ]] || overall="WARN"
+
+  if port_listens 8000; then
+    status_line "Bench web" "OK" "port 8000 listening"
+  else
+    status_line "Bench web" "WARN" "port 8000 not listening"
+    overall="WARN"
+  fi
+  if port_listens 9000; then
+    status_line "Socket.io" "OK" "port 9000 listening"
+  else
+    status_line "Socket.io" "WARN" "port 9000 not listening"
+    overall="WARN"
+  fi
+  status_line "HTTPS" "$ssl_status" "$ssl_detail"
+  status_line "Disk usage" "$disk_state" "${disk_percent}% used; warn at ${HEALTH_CHECK_DISK_WARN_PERCENT}%"
+  status_line "Latest backup" "$backup_state" "$backup_msg"
+
+  if backup_schedule_timer_active; then
+    status_line "Backup timer" "OK" "active"
+  else
+    status_line "Backup timer" "INFO" "not active"
+  fi
+
+  if ufw_is_active; then
+    status_line "UFW" "OK" "active"
+  else
+    status_line "UFW" "WARN" "not active"
+    overall="WARN"
+  fi
+  if command -v fail2ban-client >/dev/null 2>&1 && $SUDO fail2ban-client status sshd >/dev/null 2>&1; then
+    status_line "Fail2Ban" "OK" "sshd jail enabled"
+  else
+    status_line "Fail2Ban" "WARN" "sshd jail not confirmed"
+    overall="WARN"
+  fi
+
+  if off_vm_backup_configured; then
+    off_last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
+    off_last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
+    status_line "Off-VM backup" "$([[ "$off_last_status" == OK ]] && echo OK || echo INFO)" "configured; last run ${off_last_status} at ${off_last_run}"
+  else
+    status_line "Off-VM backup" "INFO" "not configured"
+  fi
+
+  status_line "Overall" "$overall" "$([[ "$overall" == OK ]] && echo "healthy" || echo "review WARN rows")"
+  ui_box_end
+  ui_next "./install-erpnext-dev.sh health-check-status" "./install-erpnext-dev.sh production-checklist"
+}
+
+configure_health_check_timer() {
+  require_sudo
+  install_self_for_reuse
+  local service_file timer_file
+  service_file="$(health_check_unit_paths | sed -n '1p')"
+  timer_file="$(health_check_unit_paths | sed -n '2p')"
+
+  ui_box_start "Configure Health Check Timer"
+  status_line "Service" "INFO" "${HEALTH_CHECK_SERVICE}"
+  status_line "Timer" "INFO" "${HEALTH_CHECK_TIMER}"
+  status_line "Schedule" "INFO" "OnCalendar=${HEALTH_CHECK_ON_CALENDAR}"
+  status_line "Random delay" "INFO" "${HEALTH_CHECK_RANDOM_DELAY}"
+  status_line "Command" "INFO" "${INSTALLER_CANONICAL_PATH} health-check"
+  echo
+  echo "This creates a local systemd timer that periodically runs a read-only health check."
+  if ! confirm "Configure health check timer now?" "n"; then
+    ui_box_end
+    return 0
+  fi
+
+  log "Writing health check systemd units"
+  cat > "$service_file" <<EOF_HEALTH_SERVICE
+[Unit]
+Description=ERPNext Developer Installer health check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=${INSTALLER_CANONICAL_PATH} health-check
+EOF_HEALTH_SERVICE
+
+  cat > "$timer_file" <<EOF_HEALTH_TIMER
+[Unit]
+Description=Run ERPNext Developer Installer health check periodically
+
+[Timer]
+OnCalendar=${HEALTH_CHECK_ON_CALENDAR}
+RandomizedDelaySec=${HEALTH_CHECK_RANDOM_DELAY}
+Persistent=true
+Unit=${HEALTH_CHECK_SERVICE}
+
+[Install]
+WantedBy=timers.target
+EOF_HEALTH_TIMER
+
+  systemctl daemon-reload
+  systemctl enable --now "${HEALTH_CHECK_TIMER}"
+
+  ui_box_start "Result Summary"
+  status_line "Health timer" "OK" "enabled"
+  status_line "Timer" "INFO" "${HEALTH_CHECK_TIMER}"
+  status_line "Schedule" "INFO" "${HEALTH_CHECK_ON_CALENDAR}"
+  ui_box_end
+  ui_next "./install-erpnext-dev.sh health-check-status" "systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
+}
+
+show_health_check_status() {
+  require_sudo
+  local service_file timer_file enabled active next_line last_status
+  service_file="$(health_check_unit_paths | sed -n '1p')"
+  timer_file="$(health_check_unit_paths | sed -n '2p')"
+  enabled="disabled"
+  active="inactive"
+  health_check_timer_enabled && enabled="enabled"
+  health_check_timer_active && active="active"
+  next_line="$(systemctl list-timers "${HEALTH_CHECK_TIMER}" --all --no-pager 2>/dev/null | awk 'NR==2 {print $1" "$2" "$3" "$4}' || true)"
+  last_status="$(systemctl show "${HEALTH_CHECK_SERVICE}" -p Result --value 2>/dev/null || echo unknown)"
+
+  ui_box_start "Health Check Timer Status"
+  status_line "Service file" "$([[ -f "$service_file" ]] && echo OK || echo WARN)" "$service_file"
+  status_line "Timer file" "$([[ -f "$timer_file" ]] && echo OK || echo WARN)" "$timer_file"
+  status_line "Timer enabled" "$([[ "$enabled" == enabled ]] && echo OK || echo WARN)" "$enabled"
+  status_line "Timer active" "$([[ "$active" == active ]] && echo OK || echo WARN)" "$active"
+  status_line "Schedule" "INFO" "${HEALTH_CHECK_ON_CALENDAR}"
+  status_line "Last service result" "INFO" "${last_status:-unknown}"
+  status_line "Next run" "INFO" "${next_line:-not scheduled}"
+  echo
+  echo "Useful commands:"
+  echo "  systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
+  echo "  journalctl -u ${HEALTH_CHECK_SERVICE} --no-pager -n 80"
+  ui_next "./install-erpnext-dev.sh health-check" "./install-erpnext-dev.sh service-recovery-plan"
+  ui_box_end
+}
+
+disable_health_check_timer() {
+  require_sudo
+  ui_box_start "Disable Health Check Timer"
+  status_line "Timer" "INFO" "${HEALTH_CHECK_TIMER}"
+  if ! confirm "Disable health check timer now?" "n"; then
+    ui_box_end
+    return 0
+  fi
+  systemctl disable --now "${HEALTH_CHECK_TIMER}" 2>/dev/null || true
+  systemctl daemon-reload || true
+  status_line "Health timer" "OK" "disabled"
+  ui_box_end
+  ui_next "./install-erpnext-dev.sh health-check-status"
+}
+
+show_service_recovery_plan() {
+  require_sudo
+  ui_box_start "Service Recovery Plan"
+  status_line "Mode" "INFO" "planning only; no services are restarted"
+  status_line "ERPNext service" "INFO" "${ERPNEXT_SERVICE_NAME}"
+  echo
+  echo "Recommended manual recovery order:"
+  echo "  1) Run health-check and review WARN/FAIL rows."
+  echo "  2) Check service logs before restarting."
+  echo "  3) Restart only the affected service if clear."
+  echo "  4) Re-run health-check and verify HTTPS."
+  echo "  5) Create support bundle if the issue repeats."
+  echo
+  echo "Useful commands:"
+  echo "  /root/install-erpnext-dev.sh health-check"
+  echo "  systemctl status ${ERPNEXT_SERVICE_NAME} --no-pager"
+  echo "  journalctl -u ${ERPNEXT_SERVICE_NAME} --no-pager -n 120"
+  echo "  systemctl restart ${ERPNEXT_SERVICE_NAME}"
+  echo "  systemctl status nginx mariadb redis-server --no-pager"
+  echo "  /root/install-erpnext-dev.sh support-bundle"
+  ui_box_end
+}
+
 production_ops_wizard() {
   require_sudo
   while true; do
     ui_box_start "Production Operations"
     echo "1) Release readiness"
-    echo "2) Scheduled backup plan"
-    echo "3) Configure scheduled backups"
-    echo "4) Scheduled backup status"
-    echo "5) Backup retention plan"
-    echo "6) Backup retention status"
-    echo "7) Cleanup old backups dry run"
-    echo "8) Cleanup old backups"
-    echo "9) Off-VM backup plan"
-    echo "10) Configure off-VM rsync target"
-    echo "11) Off-VM backup dry run"
-    echo "12) Run off-VM backup"
-    echo "13) Off-VM backup status"
-    echo "14) Backup verify"
-    echo "15) Restore preflight"
-    echo "16) Support bundle"
-    echo "17) Back"
+    echo "2) Health check"
+    echo "3) Configure health timer"
+    echo "4) Health timer status"
+    echo "5) Service recovery plan"
+    echo "6) Scheduled backup plan"
+    echo "7) Configure scheduled backups"
+    echo "8) Scheduled backup status"
+    echo "9) Backup retention plan"
+    echo "10) Backup retention status"
+    echo "11) Cleanup old backups dry run"
+    echo "12) Cleanup old backups"
+    echo "13) Off-VM backup plan"
+    echo "14) Configure off-VM rsync target"
+    echo "15) Off-VM backup dry run"
+    echo "16) Run off-VM backup"
+    echo "17) Off-VM backup status"
+    echo "18) Backup verify"
+    echo "19) Restore preflight"
+    echo "20) Support bundle"
+    echo "21) Back"
     echo
     read -r -p "Choose an option: " ops_choice
     case "$ops_choice" in
       1) show_release_readiness; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      2) show_backup_schedule_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      3) configure_backup_schedule; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      4) show_backup_schedule_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      5) show_backup_retention_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      6) show_backup_retention_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      7) cleanup_old_backups dry-run; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      8) cleanup_old_backups prompt; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      9) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      10) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      11) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      12) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      13) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      14) verify_latest_backup_set; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      15) show_restore_preflight; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      16) create_support_bundle; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      17) return 0 ;;
+      2) run_health_check; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      3) configure_health_check_timer; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      4) show_health_check_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      5) show_service_recovery_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      6) show_backup_schedule_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      7) configure_backup_schedule; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      8) show_backup_schedule_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      9) show_backup_retention_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      10) show_backup_retention_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      11) cleanup_old_backups dry-run; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      12) cleanup_old_backups prompt; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      13) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      14) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      15) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      16) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      17) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      18) verify_latest_backup_set; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      19) show_restore_preflight; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      20) create_support_bundle; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      21) return 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10559,12 +10862,18 @@ show_production_checklist() {
   else
     status_line "Off-VM backup" "WARN" "not configured"
   fi
+  if health_check_timer_active; then
+    status_line "Health timer" "OK" "active"
+  else
+    status_line "Health timer" "INFO" "not configured; optional"
+  fi
   status_line "Snapshot" "INFO" "take/verify cloud snapshot before go-live"
   echo
   echo "Remaining production decisions:"
   echo "  - Confirm off-VM backup target and restore rehearsal."
   echo "  - Confirm scheduled local backups and retention policy."
   echo "  - Run/test off-VM backup after local backup verification."
+  echo "  - Configure health timer if ongoing monitoring is required."
   echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
   echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
   echo "  - Create named cloud snapshot after final validation."
@@ -10630,7 +10939,7 @@ show_release_readiness() {
   status_line "UFW" "${ufw_status%%|*}" "${ufw_status#*|}"
   status_line "Fail2Ban" "${fail2ban_status%%|*}" "${fail2ban_status#*|}"
   status_line "Latest backup" "$([[ "$completeness" == "complete" ]] && echo OK || echo WARN)" "${completeness:-none}"
-  status_line "Release state" "$release_state" "$([[ "$release_state" == OK ]] && echo "ready for v1.0.0 release" || echo "review WARN rows before production use")"
+  status_line "Release state" "$release_state" "$([[ "$release_state" == OK ]] && echo "ready for production use" || echo "review WARN rows before production use")"
   ui_box_end
 
   ui_next "./install-erpnext-dev.sh production-checklist" "./install-erpnext-dev.sh support-bundle"
@@ -10649,6 +10958,7 @@ show_command_audit() {
   status_line "Scheduled backups" "OK" "backup-schedule-plan, configure-backup-schedule, backup-schedule-status"
   status_line "Backup retention" "OK" "backup-retention-plan, backup-retention-status, cleanup-old-backups"
   status_line "Off-VM backup" "OK" "off-vm-backup-plan, configure-rsync-backup-target, run-off-vm-backup"
+  status_line "Health monitoring" "OK" "health-check, configure-health-check-timer, health-check-status"
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-preflight, restore-db, restore-full"
   status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility"
   ui_box_end
@@ -10656,8 +10966,8 @@ show_command_audit() {
 }
 
 show_release_notes_guide() {
-  ui_box_start "v1.1.2 Release Notes Draft"
-  echo "Release focus: production operations, scheduled backups, and backup retention."
+  ui_box_start "v1.1.5 Release Notes Draft"
+  echo "Release focus: production operations, health monitoring, service recovery planning, scheduled backups, and backup retention."
   echo
   echo "Validated paths:"
   echo "  - Local VM quickstart path"
@@ -10669,6 +10979,7 @@ show_release_notes_guide() {
   echo "  - Scheduled local backups with systemd timer"
   echo "  - Backup retention plan and cleanup dry run"
   echo "  - Off-VM rsync backup dry run and manual sync"
+  echo "  - Health check and optional health-check timer"
   echo "  - Restore preflight and production operations wizard"
   echo
   echo "Known production responsibility:"
@@ -11200,6 +11511,10 @@ Backup / Restore:
   run-off-vm-backup   Copy backups to configured off-VM target
   off-vm-backup-status Show off-VM backup configuration/status
   off-vm-backup-guide Commands to copy backups off this VM
+  health-check       Compact production health check
+  configure-health-check-timer Enable periodic health checks with systemd
+  health-check-status Show health check timer status
+  service-recovery-plan Manual service recovery checklist
   restore-preflight   Safe restore readiness check
   restore-rehearsal-guide Safe restore test plan
   backup-hardening-wizard Backup and restore readiness workflow
@@ -11208,7 +11523,7 @@ Production checklist:
   production-checklist  Go-live readiness checklist
   release-readiness    Compact final QA readiness summary
   final-qa             Final QA / release-readiness wizard
-  production-ops-wizard Scheduled backup / restore / support operations
+  production-ops-wizard Health, backup, restore, and support operations
   backup-retention-plan Backup retention and cleanup plan
   cleanup-old-backups-dry-run Preview old backup cleanup
 
@@ -11329,7 +11644,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -11425,6 +11740,11 @@ main() {
     off-vm-backup-status) show_off_vm_backup_status ;;
     disable-off-vm-backup) disable_off_vm_backup ;;
     off-vm-backup-wizard) off_vm_backup_wizard ;;
+    health-check) run_health_check ;;
+    configure-health-check-timer) configure_health_check_timer ;;
+    health-check-status) show_health_check_status ;;
+    disable-health-check-timer) disable_health_check_timer ;;
+    service-recovery-plan) show_service_recovery_plan ;;
     restore-preflight) show_restore_preflight ;;
     production-ops-wizard|operations-wizard|ops-wizard) production_ops_wizard ;;
     list-backups|backups) list_site_backups ;;
