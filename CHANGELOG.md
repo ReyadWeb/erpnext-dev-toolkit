@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.1.9
+
+- Standardized interactive menu navigation controls.
+- Action choices remain numeric, while submenu navigation now uses `b/B` for Back and `q/Q` for Quit.
+- Added a separated navigation footer under menu items:
+
+  ```text
+  -----------------------------
+  b) Back                        q) Quit
+  ```
+
+- Main menu now shows `q) Quit` only, because there is no parent menu.
+- Removed numbered Back/Exit items from interactive menus to keep menu navigation stable as features are added.
+- Updated README and TESTING documentation for the new menu pattern.
+
 ## v1.1.8
 
 - Added clear credential-access documentation to `README.md`.

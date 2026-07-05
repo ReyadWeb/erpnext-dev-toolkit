@@ -1,12 +1,23 @@
 # Roadmap
 
-## v1.1.8 credentials documentation and helper command
+
+Current focus: make the installer interface more predictable by standardizing menu navigation as numeric actions plus `b/B` for Back and `q/Q` for Quit.
+
+Completed in v1.1.9:
+
+- Consistent menu footer for submenus.
+- Main menu quit-only footer.
+- Numbered Back/Exit entries removed from active menus.
+- Documentation and validation tests for the menu pattern.
+
+## v1.1.9 menu navigation consistency
 
 Status: built.
 
-- Added credential lookup guidance to README.
-- Added `credentials-info` / `credentials` / `login-info` helper command.
-- The helper command shows where credentials are stored without printing passwords by default.
+- Standardize all interactive submenu navigation with `b/B` for Back and `q/Q` for Quit.
+- Keep numbered choices reserved for actions only.
+- Use a separated footer under menu items for clear terminal UX.
+- Keep the main menu quit-only with `q) Quit`.
 
 ## v1.1.7 documentation cleanup
 

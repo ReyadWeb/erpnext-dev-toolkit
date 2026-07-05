@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v1.1.8
+# ERPNext Developer Installer v1.1.9
 
 A guided installer and operations toolkit for ERPNext/Frappe on Ubuntu VMs.
 
@@ -35,6 +35,30 @@ The project also includes production operations helpers for SSL, firewall harden
 | Optional Frappe apps | `app-install-wizard` | existing site |
 
 Do not use a production domain for a local-only test VM unless you intentionally want that VM to act as a public deployment.
+
+---
+
+## Interactive menu navigation
+
+Interactive menus use numbers for actions and letters for navigation:
+
+```text
+1) Run an action
+2) Run another action
+...
+-----------------------------
+b) Back                        q) Quit
+```
+
+Use:
+
+```text
+number = run the selected action
+b or B = back to the previous menu
+q or Q = quit the installer
+```
+
+The main menu shows only `q) Quit` because there is no parent menu to return to.
 
 ---
 

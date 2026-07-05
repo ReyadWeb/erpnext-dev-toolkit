@@ -1,4 +1,4 @@
-# v1.1.8 validation
+# v1.1.9 validation
 
 Validate the credential-info command and docs update:
 
@@ -14,7 +14,7 @@ grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="1.1.8"
+SCRIPT_VERSION="1.1.9"
 credentials-info is accepted by the dispatcher
 credentials-info shows the credentials file path
 credentials-info does not print the generated password
@@ -911,3 +911,32 @@ HOST commands and VM commands are separated clearly
 No `USER@VM_IP` placeholder is shown for the scp example
 HOST wording is generic and does not mention a specific Linux distribution
 ```
+---
+
+## Interactive menu navigation validation
+
+Validate that Back/Quit controls use letters instead of numbered menu items:
+
+```bash
+printf 'q\n' | ./install-erpnext-dev.sh menu
+printf '12\nb\nq\n' | ./install-erpnext-dev.sh menu
+printf '14\nb\nq\n' | ./install-erpnext-dev.sh menu
+```
+
+Expected:
+
+```text
+Main menu: q) Quit
+Submenus: b) Back                        q) Quit
+No numbered Back/Exit entries in menus
+```
+
+Also check the script source:
+
+```bash
+grep -nE 'echo "[0-9]+\) (Back|Exit|Quit)"' install-erpnext-dev.sh || true
+bash -n install-erpnext-dev.sh
+```
+
+Expected: no numbered `Back`, `Exit`, or `Quit` menu entries are printed from active menu definitions.
+

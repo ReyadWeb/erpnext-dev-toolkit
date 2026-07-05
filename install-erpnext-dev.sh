@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.8"
+SCRIPT_VERSION="1.1.9"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -171,6 +171,22 @@ ui_next() {
   done
 }
 
+menu_footer() {
+  # Keep navigation controls consistent across all interactive menus.
+  # Numbers run actions. b/B returns to the previous menu. q/Q exits the installer.
+  local mode="${1:-back}"
+  echo
+  echo "-----------------------------"
+  if [[ "$mode" == "quit-only" ]]; then
+    printf 'q) Quit
+'
+  else
+    printf 'b) Back                        q) Quit
+'
+  fi
+  echo
+}
+
 ui_note() {
   echo
   echo "Note:"
@@ -226,10 +242,10 @@ menu_invalid_choice() {
   local choice="${1:-}" exit_hint="${2:-type the menu number}"
   if [[ "$choice" == *install-erpnext-dev.sh* || "$choice" == ./* || "$choice" == sudo\ * || "$choice" == curl\ * ]]; then
     warn "A shell command was pasted into an interactive menu."
-    echo "This menu expects a number only. ${exit_hint}, then run commands at the shell prompt."
+    echo "This menu expects a number, b/B, or q/Q. ${exit_hint}, then run commands at the shell prompt."
     return 2
   fi
-  warn "Invalid option. Type a menu number only."
+  warn "Invalid option. Type a menu number, b/B for Back, or q/Q for Quit."
   return 1
 }
 
@@ -2791,8 +2807,7 @@ run_public_vm_quickstart() {
     echo "5) Security hardening"
     echo "6) Final status / support bundle"
     echo "7) SSL mode guide / setup steps"
-    echo "8) Exit"
-    echo
+    menu_footer
     read -r -p "Choose an option: " choice
 
     case "$choice" in
@@ -2803,9 +2818,10 @@ run_public_vm_quickstart() {
       5) security_hardening_wizard ;;
       6) public_quickstart_final_status ;;
       7) show_ssl_mode_status; show_setup_effort_guide ;;
-      8) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *)
-        if menu_invalid_choice "$choice" "type 8 to exit"; then :; else
+        if menu_invalid_choice "$choice" "type b to go back or q to quit"; then :; else
           [[ $? -eq 2 ]] && return 0
         fi
         ;;
@@ -2829,8 +2845,7 @@ run_first_run_wizard() {
     echo "3) Existing install / maintenance menu"
     echo "4) Show saved config"
     echo "5) Setup effort / SSL mode guide"
-    echo "6) Exit"
-    echo
+    menu_footer
     read -r -p "Choose an option: " choice
 
     case "$choice" in
@@ -2839,9 +2854,10 @@ run_first_run_wizard() {
       3) show_menu ;;
       4) show_config_summary ;;
       5) show_setup_effort_guide; show_ssl_mode_guide ;;
-      6) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *)
-        if menu_invalid_choice "$choice" "type 6 to exit"; then :; else
+        if menu_invalid_choice "$choice" "type b to go back or q to quit"; then :; else
           [[ $? -eq 2 ]] && return 0
         fi
         ;;
@@ -3934,10 +3950,9 @@ security_hardening_wizard() {
     echo "5) Fail2Ban status"
     echo "6) Public firewall status"
     echo "7) Advanced: restrict SSH in UFW"
-    echo "8) Back"
     echo
     echo "Recommended: run 2 and 4. Keep SSH IP restriction in the cloud provider firewall by default."
-    echo
+    menu_footer
     read -r -p "Choose an option: " choice
     case "$choice" in
       1) vm_firewall_plan ;;
@@ -3947,7 +3962,8 @@ security_hardening_wizard() {
       5) show_fail2ban_status ;;
       6) show_firewall_hardening_status ;;
       7) configure_ufw_ssh_admin_only ;;
-      8|q|Q) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option." ;;
     esac
   done
@@ -4919,8 +4935,7 @@ production_ssl_wizard() {
   echo "3) Show current production SSL status"
   echo "4) Show Cloudflare Origin CA guide"
   echo "5) Show SSL mode guide/status"
-  echo "6) Back"
-  echo
+  menu_footer
   read -r -p "Choose an option: " choice
   case "$choice" in
     1) configure_production_ssl ;;
@@ -4928,7 +4943,8 @@ production_ssl_wizard() {
     3) show_production_ssl_status ;;
     4) show_cloudflare_origin_guide ;;
     5) show_ssl_mode_status; show_ssl_mode_guide ;;
-    6|"") return 0 ;;
+    b|B|"") return 0 ;;
+    q|Q) exit 0 ;;
     *) warn "Invalid option: ${choice}" ; return 1 ;;
   esac
 }
@@ -5831,8 +5847,7 @@ show_access_menu() {
     echo "24) Production domain guide"
     echo "25) Production SSL guide"
     echo "26) Environment / location check"
-    echo "27) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " access_choice
 
     case "$access_choice" in
@@ -5862,7 +5877,8 @@ show_access_menu() {
       24) show_production_domain_guide ;;
       25) show_production_ssl_guide ;;
       26) show_environment_check ;;
-      27) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -6483,8 +6499,7 @@ show_status_menu() {
     echo "4) Service / Autostart Status"
     echo "5) Optional App Status"
     echo "6) Full Health Report"
-    echo "7) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " status_choice
 
     case "$status_choice" in
@@ -6494,7 +6509,8 @@ show_status_menu() {
       4) run_service_summary; pause_after_screen "Press Enter to return to Status Menu..." ;;
       5) run_app_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
       6) run_full_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      7) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
     esac
   done
@@ -8302,10 +8318,9 @@ run_app_install_wizard() {
     echo "7) Install Frappe Helpdesk"
     echo "8) Install custom app from Git URL"
     echo "9) Rollback guide"
-    echo "10) Back"
     echo
     echo "Install one app at a time. The wizard will offer a backup checkpoint first."
-    echo
+    menu_footer
     read -r -p "Choose an option: " choice
 
     case "$choice" in
@@ -8318,7 +8333,8 @@ run_app_install_wizard() {
       7) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
       8) install_custom_app_interactive; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
       9) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
-      10) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -8481,10 +8497,9 @@ show_app_library_menu() {
     echo "10) Install Frappe Telephony"
     echo "11) Install Frappe Insights"
     echo "12) Install custom app from Git URL"
-    echo "13) Back"
     echo
     echo "Notes: install one app at a time and keep a backup checkpoint."
-    echo
+    menu_footer
     read -r -p "Choose an option: " app_choice
 
     case "$app_choice" in
@@ -8500,7 +8515,8 @@ show_app_library_menu() {
       10) install_app_profile telephony; pause_after_screen "Press Enter to return to App Library..." ;;
       11) install_app_profile insights; pause_after_screen "Press Enter to return to App Library..." ;;
       12) install_custom_app_interactive; pause_after_screen "Press Enter to return to App Library..." ;;
-      13) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -8853,8 +8869,7 @@ run_maintenance_menu() {
     echo "4) Restart ERPNext service"
     echo "5) Run safe repair"
     echo "6) Show recent service logs"
-    echo "7) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " maintenance_choice
 
     case "$maintenance_choice" in
@@ -8864,7 +8879,8 @@ run_maintenance_menu() {
       4) maintenance_restart; pause_after_screen "Press Enter to return to Maintenance..." ;;
       5) run_repair; pause_after_screen "Press Enter to return to Maintenance..." ;;
       6) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      7) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -9852,8 +9868,7 @@ off_vm_backup_wizard() {
     echo "4) Run off-VM backup"
     echo "5) Off-VM backup status"
     echo "6) Disable off-VM backup config"
-    echo "7) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " off_choice
     case "$off_choice" in
       1) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
@@ -9862,7 +9877,8 @@ off_vm_backup_wizard() {
       4) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
       5) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
       6) disable_off_vm_backup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      7) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10181,8 +10197,7 @@ production_ops_wizard() {
     echo "18) Backup verify"
     echo "19) Restore preflight"
     echo "20) Support bundle"
-    echo "21) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " ops_choice
     case "$ops_choice" in
       1) show_release_readiness; pause_after_screen "Press Enter to return to Production Operations..." ;;
@@ -10205,7 +10220,8 @@ production_ops_wizard() {
       18) verify_latest_backup_set; pause_after_screen "Press Enter to return to Production Operations..." ;;
       19) show_restore_preflight; pause_after_screen "Press Enter to return to Production Operations..." ;;
       20) create_support_bundle; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      21) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10409,8 +10425,7 @@ final_qa_wizard() {
     echo "4) Backup verify"
     echo "5) Release notes draft"
     echo "6) Create support bundle"
-    echo "7) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " choice
 
     case "$choice" in
@@ -10420,9 +10435,10 @@ final_qa_wizard() {
       4) verify_latest_backup_set; pause_after_screen "Press Enter to return to Final QA..." ;;
       5) show_release_notes_guide; pause_after_screen "Press Enter to return to Final QA..." ;;
       6) create_support_bundle; pause_after_screen "Press Enter to return to Final QA..." ;;
-      7) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *)
-        if menu_invalid_choice "$choice" "type 7 to exit"; then :; else
+        if menu_invalid_choice "$choice" "type b to go back or q to quit"; then :; else
           [[ $? -eq 2 ]] && return 0
         fi
         ;;
@@ -10446,8 +10462,7 @@ backup_hardening_wizard() {
     echo "11) Backup retention plan"
     echo "12) Retention status"
     echo "13) Cleanup dry run"
-    echo "14) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " backup_harden_choice
     case "$backup_harden_choice" in
       1) create_site_backup true; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
@@ -10463,7 +10478,8 @@ backup_hardening_wizard() {
       11) show_backup_retention_plan; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
       12) show_backup_retention_status; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
       13) cleanup_old_backups dry-run; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      14) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10490,8 +10506,7 @@ run_backup_maintenance_menu() {
     echo "13) Backup retention status"
     echo "14) Cleanup old backups dry run"
     echo "15) Maintenance tasks"
-    echo "16) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " backup_choice
 
     case "$backup_choice" in
@@ -10510,7 +10525,8 @@ run_backup_maintenance_menu() {
       13) show_backup_retention_status; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
       14) cleanup_old_backups dry-run; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
       15) run_maintenance_menu ;;
-      16) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10688,15 +10704,15 @@ run_uninstall_menu() {
   echo "1) Soft uninstall: stop Bench and archive ${BENCH_PARENT}"
   echo "2) Remove bench files only"
   echo "3) Full purge: remove bench, frappe user, MariaDB/Redis packages"
-  echo "4) Back"
-  echo
+  menu_footer
   read -r -p "Choose an option: " choice
 
   case "$choice" in
     1) soft_uninstall ;;
     2) remove_bench_files ;;
     3) full_purge ;;
-    4) return 0 ;;
+    b|B|"") return 0 ;;
+    q|Q) exit 0 ;;
     *) warn "Invalid option" ;;
   esac
 }
@@ -10738,8 +10754,7 @@ show_service_menu() {
     echo "6) Show service status"
     echo "7) Show recent service logs"
     echo "8) Follow service logs"
-    echo "9) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " service_choice
 
     case "$service_choice" in
@@ -10751,7 +10766,8 @@ show_service_menu() {
       6) show_erpnext_service_status ;;
       7) show_erpnext_service_logs ;;
       8) follow_erpnext_service_logs ;;
-      9) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -10808,8 +10824,7 @@ show_advanced_menu() {
     echo "43) Verify ERPNext HTTP Access"
     echo "44) App Install Wizard"
     echo "45) App Rollback Guide"
-    echo "46) Back"
-    echo
+    menu_footer
     read -r -p "Choose an option: " advanced_choice
 
     case "$advanced_choice" in
@@ -10858,7 +10873,8 @@ show_advanced_menu() {
       43) verify_access ;;
       44) run_app_install_wizard ;;
       45) show_app_rollback_guide ;;
-      46) return 0 ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -11009,8 +11025,7 @@ show_menu() {
     echo "13) Final QA"
     echo "14) Production operations"
     echo "15) Help"
-    echo "16) Exit"
-    echo
+    menu_footer quit-only
     read -r -p "Choose an option: " choice
 
     case "$choice" in
@@ -11029,7 +11044,7 @@ show_menu() {
       13) final_qa_wizard ;;
       14) production_ops_wizard ;;
       15) show_help ;;
-      16) exit 0 ;;
+      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
