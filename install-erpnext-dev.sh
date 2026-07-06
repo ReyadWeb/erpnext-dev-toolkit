@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.13"
+SCRIPT_VERSION="1.1.14"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -225,21 +225,59 @@ is_public_vm_workflow() {
   return 1
 }
 
+active_installer_path() {
+  # Commands printed to users must work whether the one-command installer was
+  # downloaded into /tmp, copied into /root, or run from a project checkout.
+  local src
+
+  if [[ -x "${INSTALLER_CANONICAL_PATH:-}" ]]; then
+    printf '%s' "$INSTALLER_CANONICAL_PATH"
+    return 0
+  fi
+
+  src="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+  if [[ -n "$src" && -f "$src" ]]; then
+    printf '%s' "$src"
+    return 0
+  fi
+
+  printf '%s' "./install-erpnext-dev.sh"
+}
+
 installer_display_item() {
   local item="$1"
-  if [[ -x "${INSTALLER_CANONICAL_PATH:-}" && "$item" == .\/install-erpnext-dev.sh* ]]; then
-    item="${item/#.\/install-erpnext-dev.sh/${INSTALLER_CANONICAL_PATH}}"
+  local suffix
+
+  if [[ "$item" == .\/install-erpnext-dev.sh* ]]; then
+    suffix="${item#.\/install-erpnext-dev.sh}"
+    suffix="${suffix# }"
+    installer_cmd "$suffix"
+    return 0
   fi
+
+  if [[ -n "${INSTALLER_CANONICAL_PATH:-}" && "$item" == "${INSTALLER_CANONICAL_PATH}"* ]]; then
+    suffix="${item#${INSTALLER_CANONICAL_PATH}}"
+    suffix="${suffix# }"
+    installer_cmd "$suffix"
+    return 0
+  fi
+
   printf '%s' "$item"
 }
 
 installer_cmd() {
   local subcmd="${1:-}"
-  if [[ -x "${INSTALLER_CANONICAL_PATH:-}" ]]; then
-    printf '%s' "${INSTALLER_CANONICAL_PATH}${subcmd:+ $subcmd}"
-  else
-    printf '%s' "./install-erpnext-dev.sh${subcmd:+ $subcmd}"
-  fi
+  local script_path
+  script_path="$(active_installer_path)"
+  printf '%s' "sudo ${script_path}${subcmd:+ $subcmd}"
+}
+
+installer_cmd_env() {
+  local env_args="${1:-}"
+  local subcmd="${2:-}"
+  local script_path
+  script_path="$(active_installer_path)"
+  printf '%s' "sudo ${env_args:+$env_args }${script_path}${subcmd:+ $subcmd}"
 }
 
 suggested_vm_ssh_user() {
@@ -575,7 +613,7 @@ show_site_config() {
   echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
   echo
   echo "To choose a custom site during a fresh setup:"
-  echo "  SITE_NAME=erp107.test ./install-erpnext-dev.sh setup"
+  echo "  $(installer_cmd_env "SITE_NAME=erp107.test" setup)"
   echo
   echo "Or run setup interactively and answer the site-name prompt."
   echo "============================================================"
@@ -621,7 +659,7 @@ show_site_name_guide() {
   echo "  client-a.test"
   echo
   echo "Fresh install with a custom name:"
-  echo "  SITE_NAME=erp107.test ./install-erpnext-dev.sh setup"
+  echo "  $(installer_cmd_env "SITE_NAME=erp107.test" setup)"
   echo
   echo "During interactive setup, you can also type the site name when prompted."
   echo
@@ -667,7 +705,7 @@ start_erpnext_foreground() {
   echo "  http://${SITE_NAME}:8000"
   echo
   echo "If ${SITE_NAME} does not open, use the direct IP URL first, then run:"
-  echo "  ./install-erpnext-dev.sh access"
+  echo "  $(installer_cmd access)"
   echo
 
   $SUDO -iu "$FRAPPE_USER" bash -lc "
@@ -748,8 +786,8 @@ wait_for_erpnext_ready() {
   warn "ERPNext did not become fully ready within ${timeout}s."
   echo
   echo "Useful checks:"
-  echo "  ./install-erpnext-dev.sh runtime-status"
-  echo "  ./install-erpnext-dev.sh logs"
+  echo "  $(installer_cmd runtime-status)"
+  echo "  $(installer_cmd logs)"
   echo "  sudo systemctl status ${ERPNEXT_SERVICE_NAME} --no-pager -l"
   return 1
 }
@@ -760,7 +798,7 @@ show_access_when_ready() {
   else
     warn "Browser access was not shown because web port 8000 is not listening yet."
     echo "Run this after a few seconds:"
-    echo "  ./install-erpnext-dev.sh runtime-status"
+    echo "  $(installer_cmd runtime-status)"
   fi
 }
 
@@ -938,7 +976,7 @@ show_vm_only_guard_message() {
   else
     echo "  ssh test@VM_IP"
   fi
-  echo "  ./install-erpnext-dev.sh ${action}"
+  echo "  $(installer_cmd "${action}")"
   echo
   echo "Commands that belong on the HOST:"
   echo "  mkcert -install"
@@ -949,7 +987,7 @@ show_vm_only_guard_message() {
   echo "  curl -kI https://${SITE_NAME}"
   echo
   echo "To check where you are, run:"
-  echo "  ./install-erpnext-dev.sh environment-check"
+  echo "  $(installer_cmd environment-check)"
   echo "============================================================"
 }
 
@@ -1041,7 +1079,7 @@ start_erpnext_service() {
       return 1
     fi
   else
-    err "Could not start ${ERPNEXT_SERVICE_NAME}. Check logs with: ./install-erpnext-dev.sh logs"
+    err "Could not start ${ERPNEXT_SERVICE_NAME}. Check logs with: $(installer_cmd logs)"
     return 1
   fi
 }
@@ -1079,7 +1117,7 @@ restart_erpnext_service() {
       return 1
     fi
   else
-    err "Could not restart ${ERPNEXT_SERVICE_NAME}. Check logs with: ./install-erpnext-dev.sh logs"
+    err "Could not restart ${ERPNEXT_SERVICE_NAME}. Check logs with: $(installer_cmd logs)"
     return 1
   fi
 }
@@ -1354,11 +1392,23 @@ check_resources() {
 
 run_install_preflight() {
   require_sudo
+  install_self_for_reuse
   check_os
   check_internet
   check_resources
   echo
   ok "This VM is safe to continue with ERPNext installation."
+
+  if [[ -t 0 ]]; then
+    echo
+    echo "Next step: start the local VM quickstart."
+    echo "This will first offer to expand root storage if extra VM disk capacity is detected."
+    if confirm "Start local ERPNext installation now?"; then
+      run_local_dev_quickstart
+      return 0
+    fi
+  fi
+
   echo "Next command:"
   echo "  $(installer_cmd local-dev-quickstart)"
 }
@@ -1779,7 +1829,7 @@ show_storage_status() {
   if [[ "${can_expand:-no}" == "yes" ]]; then
     status_line "Expansion" "WARN" "recommended"
     echo
-    echo "Run: ./install-erpnext-dev.sh expand-root-storage"
+    echo "Run: $(installer_cmd expand-root-storage)"
   elif [[ "${layout:-unknown}" == "unknown" ]]; then
     status_line "Expansion" "WARN" "not automatic"
     [[ -n "${reason:-}" ]] && echo "Reason: ${reason}"
@@ -2371,7 +2421,7 @@ Browser access:
 
 Important:
   ${SITE_NAME} only works after ERPNext is running and your HOST machine maps ${SITE_NAME} to the VM IP.
-  Use ./install-erpnext-dev.sh access to print the required host-side command.
+  Use $(installer_cmd access) to print the required host-side command.
 EOF_CREDS
 
   $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$cred_file"
@@ -2558,22 +2608,22 @@ show_next_step() {
 
     if [[ "${can_expand:-no}" == "yes" ]]; then
       next_label="expand root storage"
-      next_command="./install-erpnext-dev.sh expand-root-storage"
+      next_command="$(installer_cmd expand-root-storage)"
     elif [[ "$installed" != "Installed" ]]; then
       next_label="run public quickstart install"
-      next_command="./install-erpnext-dev.sh public-vm-quickstart"
+      next_command="$(installer_cmd public-vm-quickstart)"
     elif [[ "$runtime" != Running* ]]; then
       next_label="start ERPNext"
-      next_command="./install-erpnext-dev.sh start"
+      next_command="$(installer_cmd start)"
     elif [[ "$prod_ssl_status" != "OK" ]]; then
       next_label="configure production HTTPS"
-      next_command="./install-erpnext-dev.sh production-ssl-wizard"
+      next_command="$(installer_cmd production-ssl-wizard)"
     elif [[ "$backup_complete" != "complete" ]]; then
       next_label="create initial backup"
-      next_command="./install-erpnext-dev.sh backup-files"
+      next_command="$(installer_cmd backup-files)"
     else
       next_label="run release readiness"
-      next_command="./install-erpnext-dev.sh release-readiness"
+      next_command="$(installer_cmd release-readiness)"
     fi
 
     echo "Recommended next step: ${next_label}."
@@ -2600,30 +2650,30 @@ show_next_step() {
 
   if [[ "${can_expand:-no}" == "yes" ]]; then
     next_label="expand root storage"
-    next_command="./install-erpnext-dev.sh expand-root-storage"
+    next_command="$(installer_cmd expand-root-storage)"
   else
     case "$installed" in
       "Not installed")
         next_label="run guided setup"
-        next_command="./install-erpnext-dev.sh guided-setup"
+        next_command="$(installer_cmd guided-setup)"
         ;;
       "Incomplete")
         next_label="repair or reinstall the environment"
-        next_command="./install-erpnext-dev.sh repair"
+        next_command="$(installer_cmd repair)"
         ;;
       *)
         if [[ "$runtime" != Running* ]]; then
           next_label="start ERPNext"
-          next_command="./install-erpnext-dev.sh start"
+          next_command="$(installer_cmd start)"
         elif [[ "$auto" != "Enabled" ]]; then
           next_label="enable autostart so the VM recovers cleanly after reboot"
-          next_command="./install-erpnext-dev.sh enable-autostart"
+          next_command="$(installer_cmd enable-autostart)"
         elif [[ "$ssl_state" != "configured" ]]; then
           next_label="configure local HTTPS"
-          next_command="./install-erpnext-dev.sh local-ssl-wizard"
+          next_command="$(installer_cmd local-ssl-wizard)"
         else
           next_label="install optional apps with a checkpoint"
-          next_command="./install-erpnext-dev.sh app-install-wizard"
+          next_command="$(installer_cmd app-install-wizard)"
         fi
         ;;
     esac
@@ -2633,8 +2683,8 @@ show_next_step() {
   echo "  $(installer_display_item "$next_command")"
   echo
   echo "Useful checks:"
-  echo "  ./install-erpnext-dev.sh verify-access"
-  echo "  ./install-erpnext-dev.sh storage-status"
+  echo "  $(installer_cmd verify-access)"
+  echo "  $(installer_cmd storage-status)"
   echo
   echo "Open when running:"
   echo "  http://${vm_ip}:8000"
@@ -2652,16 +2702,34 @@ run_guided_setup() {
   echo "============================================================"
   echo "Guided ERPNext Setup"
   echo "============================================================"
-  echo "Flow: storage -> site name -> install -> service -> access."
+  echo "Flow: storage expansion -> environment preflight -> site name -> install -> service -> access."
   echo "Keep this terminal open until setup finishes."
   echo "============================================================"
 
   run_install
 
   echo
-  echo "Guided setup finished. Verifying local access state..."
+  ok "ERPNext installation workflow finished successfully."
+  echo "Verifying local access state..."
   verify_access
   show_next_step
+  prompt_open_main_menu_after_install
+}
+
+prompt_open_main_menu_after_install() {
+  local reply
+
+  [[ -t 0 ]] || return 0
+  echo
+  read -r -p "Open the main installer menu now? [Y/n]: " reply
+  reply="${reply:-Y}"
+  if [[ "$reply" =~ ^[Yy]$ ]]; then
+    show_menu
+  else
+    echo
+    echo "Open it later with:"
+    echo "  $(installer_cmd menu)"
+  fi
 }
 
 show_host_hosts_command() {
@@ -2711,7 +2779,7 @@ show_config_summary() {
   status_line "VM IP" "INFO" "$vm_ip"
   status_line "Config file" "INFO" "$CONFIG_FILE"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh setup-wizard" "./install-erpnext-dev.sh production-readiness"
+  ui_next "$(installer_cmd setup-wizard)" "$(installer_cmd production-readiness)"
 }
 
 prompt_and_save_public_domain() {
@@ -2784,7 +2852,7 @@ prompt_and_save_public_domain() {
   status_line "Deployment mode" "INFO" "$DEPLOYMENT_MODE"
   status_line "Saved config" "OK" "$CONFIG_FILE"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh public-vm-quickstart" "./install-erpnext-dev.sh production-domain-plan"
+  ui_next "$(installer_cmd public-vm-quickstart)" "$(installer_cmd production-domain-plan)"
 }
 
 set_local_dev_defaults() {
@@ -2816,7 +2884,7 @@ run_local_dev_quickstart() {
     set_local_dev_defaults
     run_guided_setup
   else
-    ui_next "./install-erpnext-dev.sh local-dev-quickstart" "./install-erpnext-dev.sh setup-wizard"
+    ui_next "$(installer_cmd local-dev-quickstart)" "$(installer_cmd setup-wizard)"
   fi
 }
 
@@ -2880,7 +2948,7 @@ public_quickstart_maybe_initial_backup() {
     create_site_backup true || return 1
     verify_latest_backup_set || true
   else
-    ui_next "./install-erpnext-dev.sh backup-files" "./install-erpnext-dev.sh backup-verify"
+    ui_next "$(installer_cmd backup-files)" "$(installer_cmd backup-verify)"
   fi
 }
 
@@ -2890,7 +2958,7 @@ public_quickstart_final_status() {
   show_firewall_hardening_status
   public_quickstart_maybe_initial_backup || true
   show_release_readiness
-  ui_next "./install-erpnext-dev.sh support-bundle" "Take a cloud snapshot after validation."
+  ui_next "$(installer_cmd support-bundle)" "Take a cloud snapshot after validation."
 }
 
 run_public_vm_quickstart() {
@@ -3216,7 +3284,7 @@ DNS requirements:
   - Avoid .test and .local for production.
 
 Structured planning command:
-  ./install-erpnext-dev.sh production-domain-plan
+  $(installer_cmd production-domain-plan)
 
 This developer installer only plans production settings.
 Production automation should be a separate track.
@@ -3283,9 +3351,9 @@ show_production_domain_plan() {
   echo "  - The ERPNext site/domain mapping is planned before go-live."
   echo
   echo "Useful commands:"
-  echo "  PRODUCTION_DOMAIN=${record_name} ./install-erpnext-dev.sh production-readiness"
-  echo "  PRODUCTION_DOMAIN=${record_name} ./install-erpnext-dev.sh production-domain-plan"
-  echo "  ./install-erpnext-dev.sh production-ssl-guide"
+  echo "  $(installer_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-readiness)"
+  echo "  $(installer_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-domain-plan)"
+  echo "  $(installer_cmd production-ssl-guide)"
   echo "============================================================"
 }
 
@@ -3485,17 +3553,17 @@ show_public_vm_readiness() {
 
   echo
   echo "Recommended next commands:"
-  echo "  ./install-erpnext-dev.sh backup-files"
-  echo "  ./install-erpnext-dev.sh production-ssl-plan"
-  echo "  ./install-erpnext-dev.sh production-ssl-wizard"
-  echo "  ./install-erpnext-dev.sh ssl-mode-status"
-  echo "  ./install-erpnext-dev.sh setup-effort-guide"
-  echo "  ./install-erpnext-dev.sh configure-production-ssl"
-  echo "  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
-  echo "  ./install-erpnext-dev.sh production-ssl-status"
-  echo "  ./install-erpnext-dev.sh production-firewall-plan"
-  echo "  ./install-erpnext-dev.sh firewall-hardening-status"
-  echo "  ./install-erpnext-dev.sh support-bundle"
+  echo "  $(installer_cmd backup-files)"
+  echo "  $(installer_cmd production-ssl-plan)"
+  echo "  $(installer_cmd production-ssl-wizard)"
+  echo "  $(installer_cmd ssl-mode-status)"
+  echo "  $(installer_cmd setup-effort-guide)"
+  echo "  $(installer_cmd configure-production-ssl)"
+  echo "  $(installer_cmd configure-cloudflare-origin-ssl)"
+  echo "  $(installer_cmd production-ssl-status)"
+  echo "  $(installer_cmd production-firewall-plan)"
+  echo "  $(installer_cmd firewall-hardening-status)"
+  echo "  $(installer_cmd support-bundle)"
   echo "============================================================"
 }
 
@@ -3567,13 +3635,13 @@ show_production_ssl_plan() {
   echo "  curl -Ik https://${domain}"
   echo
   echo "Related commands:"
-  echo "  ./install-erpnext-dev.sh production-ssl-wizard"
-  echo "  ./install-erpnext-dev.sh configure-production-ssl"
-  echo "  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
-  echo "  ./install-erpnext-dev.sh production-ssl-status"
-  echo "  ./install-erpnext-dev.sh production-firewall-plan"
-  echo "  ./install-erpnext-dev.sh public-vm-readiness"
-  echo "  ./install-erpnext-dev.sh production-ssl-guide"
+  echo "  $(installer_cmd production-ssl-wizard)"
+  echo "  $(installer_cmd configure-production-ssl)"
+  echo "  $(installer_cmd configure-cloudflare-origin-ssl)"
+  echo "  $(installer_cmd production-ssl-status)"
+  echo "  $(installer_cmd production-firewall-plan)"
+  echo "  $(installer_cmd public-vm-readiness)"
+  echo "  $(installer_cmd production-ssl-guide)"
   echo "============================================================"
 }
 
@@ -3620,8 +3688,8 @@ show_production_firewall_plan() {
   echo
   echo "Safe check commands:"
   echo "  ss -lntp"
-  echo "  ./install-erpnext-dev.sh public-vm-readiness"
-  echo "  ./install-erpnext-dev.sh production-ssl-plan"
+  echo "  $(installer_cmd public-vm-readiness)"
+  echo "  $(installer_cmd production-ssl-plan)"
   echo "============================================================"
 }
 
@@ -3721,8 +3789,8 @@ show_firewall_hardening_status() {
   echo "Expected: HTTPS returns 200/redirect through Cloudflare/Nginx; 8000/9000 time out or are blocked."
   echo
   echo "Internal validation from this VM:"
-  echo "  ./install-erpnext-dev.sh firewall-hardening-status"
-  echo "  ./install-erpnext-dev.sh public-vm-readiness"
+  echo "  $(installer_cmd firewall-hardening-status)"
+  echo "  $(installer_cmd public-vm-readiness)"
   echo "============================================================"
 }
 
@@ -3752,7 +3820,7 @@ vm_firewall_plan() {
   echo
   echo "Why SSH stays open in UFW by default:"
   echo "  - Your admin IP may change. Restrict SSH at the cloud provider firewall first."
-  echo "  - UFW can be made stricter later with: ./install-erpnext-dev.sh ufw-ssh-admin-only"
+  echo "  - UFW can be made stricter later with: $(installer_cmd ufw-ssh-admin-only)"
   echo "  - That advanced SSH restriction can lock you out if the wrong IP is used."
   echo
   echo "Recommended layering:"
@@ -3762,11 +3830,11 @@ vm_firewall_plan() {
   echo "  Layer 4: Cloudflare proxy/WAF/CDN"
   echo
   echo "Commands:"
-  echo "  ./install-erpnext-dev.sh configure-vm-firewall"
-  echo "  ./install-erpnext-dev.sh configure-fail2ban"
-  echo "  ./install-erpnext-dev.sh vm-firewall-status"
-  echo "  ./install-erpnext-dev.sh fail2ban-status"
-  echo "  ./install-erpnext-dev.sh security-hardening-wizard"
+  echo "  $(installer_cmd configure-vm-firewall)"
+  echo "  $(installer_cmd configure-fail2ban)"
+  echo "  $(installer_cmd vm-firewall-status)"
+  echo "  $(installer_cmd fail2ban-status)"
+  echo "  $(installer_cmd security-hardening-wizard)"
   echo "============================================================"
 }
 
@@ -3803,7 +3871,7 @@ show_vm_firewall_status() {
   echo "============================================================"
   if ! command -v ufw >/dev/null 2>&1; then
     status_line "UFW" "WARN" "not installed"
-    echo "Run: ./install-erpnext-dev.sh configure-vm-firewall"
+    echo "Run: $(installer_cmd configure-vm-firewall)"
     echo "============================================================"
     return 0
   fi
@@ -3902,8 +3970,8 @@ configure_vm_firewall() {
   status_line "Backend ports" "OK" "8000/9000/11000/13000 not allowed in UFW"
   ui_box_end
   ui_next \
-    "./install-erpnext-dev.sh vm-firewall-status" \
-    "./install-erpnext-dev.sh firewall-hardening-status"
+    "$(installer_cmd vm-firewall-status)" \
+    "$(installer_cmd firewall-hardening-status)"
 }
 
 configure_ufw_ssh_admin_only() {
@@ -3953,7 +4021,7 @@ configure_ufw_ssh_admin_only() {
   status_line "UFW SSH" "OK" "restricted to ${admin_ip}"
   status_line "Lockout safety" "WARN" "test a second SSH session before closing this one"
   ui_box_end
-  ui_next "ssh root@$(get_vm_ip 2>/dev/null || echo VM_IP)" "./install-erpnext-dev.sh vm-firewall-status"
+  ui_next "ssh root@$(get_vm_ip 2>/dev/null || echo VM_IP)" "$(installer_cmd vm-firewall-status)"
 }
 
 show_fail2ban_status() {
@@ -3965,7 +4033,7 @@ show_fail2ban_status() {
   echo "============================================================"
   if ! command -v fail2ban-client >/dev/null 2>&1; then
     status_line "Fail2Ban" "WARN" "not installed"
-    echo "Run: ./install-erpnext-dev.sh configure-fail2ban"
+    echo "Run: $(installer_cmd configure-fail2ban)"
     echo "============================================================"
     return 0
   fi
@@ -4034,7 +4102,7 @@ EOF
   status_line "findtime" "INFO" "$findtime"
   status_line "maxretry" "INFO" "$maxretry"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh fail2ban-status" "./install-erpnext-dev.sh security-hardening-wizard"
+  ui_next "$(installer_cmd fail2ban-status)" "$(installer_cmd security-hardening-wizard)"
 }
 
 security_hardening_wizard() {
@@ -4565,7 +4633,7 @@ show_production_ssl_status() {
   echo "Useful tests:"
   echo "  curl -I http://${domain}"
   echo "  curl -I https://${domain}"
-  echo "  ./install-erpnext-dev.sh public-vm-readiness"
+  echo "  $(installer_cmd public-vm-readiness)"
   echo "============================================================"
 }
 
@@ -4575,7 +4643,7 @@ configure_production_ssl() {
 
   local domain vm_ip dns_ip install_quick runtime backup_count email_args staging_args force_renewal_args http_head https_head existing_cert_detail
   domain="$(production_ssl_domain 2>/dev/null || true)"
-  [[ -n "$domain" ]] || fail "Set a valid PRODUCTION_DOMAIN or SITE_NAME, for example: PRODUCTION_DOMAIN=erp.flowmaya.com SITE_NAME=erp.flowmaya.com ./install-erpnext-dev.sh configure-production-ssl"
+  [[ -n "$domain" ]] || fail "Set a valid PRODUCTION_DOMAIN or SITE_NAME, for example: $(installer_cmd_env "PRODUCTION_DOMAIN=erp.flowmaya.com SITE_NAME=erp.flowmaya.com" configure-production-ssl)"
 
   vm_ip="$(get_vm_ip)"
   dns_ip="$(resolve_ipv4_first "$domain")"
@@ -4614,10 +4682,10 @@ configure_production_ssl() {
 
   [[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] || fail "DNS for ${domain} must resolve to ${vm_ip} before issuing Let's Encrypt. Use DNS-only first if behind Cloudflare."
   [[ "$install_quick" == Installed* ]] || fail "ERPNext is not fully installed. Run guided setup first."
-  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: ./install-erpnext-dev.sh start"
+  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: $(installer_cmd start)"
 
   if [[ "$backup_count" =~ ^[0-9]+$ && "$backup_count" -eq 0 ]]; then
-    warn "No local backup detected. Recommended: ./install-erpnext-dev.sh backup-files"
+    warn "No local backup detected. Recommended: $(installer_cmd backup-files)"
   fi
 
   if [[ "$ASSUME_YES" -ne 1 ]]; then
@@ -4694,8 +4762,8 @@ configure_production_ssl() {
   echo
   echo "Next steps:"
   echo "  curl -I https://${domain}"
-  echo "  ./install-erpnext-dev.sh production-ssl-status"
-  echo "  ./install-erpnext-dev.sh production-firewall-plan"
+  echo "  $(installer_cmd production-ssl-status)"
+  echo "  $(installer_cmd production-firewall-plan)"
   echo
   echo "After HTTPS works, restrict/close public :8000 and :9000 at the cloud firewall."
   echo "============================================================"
@@ -4724,9 +4792,9 @@ show_cloudflare_origin_guide() {
   echo "  7) Set SSL/TLS encryption mode to Full (strict)."
   echo
   echo "Installer commands:"
-  echo "  ./install-erpnext-dev.sh production-ssl-wizard"
-  echo "  ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
-  echo "  ./install-erpnext-dev.sh cloudflare-origin-ssl-status"
+  echo "  $(installer_cmd production-ssl-wizard)"
+  echo "  $(installer_cmd configure-cloudflare-origin-ssl)"
+  echo "  $(installer_cmd cloudflare-origin-ssl-status)"
   echo
   echo "Important: Cloudflare Origin CA certificates are trusted by Cloudflare, not by browsers directly."
   echo "With DNS-only/grey-cloud, direct curl/browser checks may show a certificate trust warning."
@@ -4781,7 +4849,7 @@ configure_cloudflare_origin_ssl() {
 
   local domain vm_ip dns_ip install_quick runtime backup_count available_path backup_path https_head provider cert_path key_path
   domain="$(production_ssl_domain 2>/dev/null || true)"
-  [[ -n "$domain" ]] || fail "Set PRODUCTION_DOMAIN and SITE_NAME, for example: SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com ./install-erpnext-dev.sh configure-cloudflare-origin-ssl"
+  [[ -n "$domain" ]] || fail "Set PRODUCTION_DOMAIN and SITE_NAME, for example: $(installer_cmd_env "SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com" configure-cloudflare-origin-ssl)"
   vm_ip="$(get_vm_ip)"
   dns_ip="$(resolve_ipv4_first "$domain")"
   install_quick="$(production_quick_install_state)"
@@ -4811,7 +4879,7 @@ configure_cloudflare_origin_ssl() {
   echo
 
   [[ "$install_quick" == Installed* ]] || fail "ERPNext is not fully installed. Run guided setup first."
-  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: ./install-erpnext-dev.sh start"
+  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: $(installer_cmd start)"
 
   if [[ "$ASSUME_YES" -ne 1 ]]; then
     echo "Before continuing, confirm you have a snapshot and the Cloudflare Origin certificate/private key."
@@ -4862,7 +4930,7 @@ configure_cloudflare_origin_ssl() {
   echo "  1) Set ${domain} DNS record to Proxied / orange-cloud."
   echo "  2) Set SSL/TLS mode to Full (strict)."
   echo "  3) Test: curl -I https://${domain}"
-  echo "  4) Run: ./install-erpnext-dev.sh cloudflare-origin-ssl-status"
+  echo "  4) Run: $(installer_cmd cloudflare-origin-ssl-status)"
   echo "============================================================"
 }
 
@@ -4968,7 +5036,7 @@ show_ssl_mode_status() {
   status_line "Recommended mode" "OK" "$mode"
   ui_box_end
   echo "Reason: $detail"
-  ui_next "./install-erpnext-dev.sh ssl-mode-guide" "./install-erpnext-dev.sh production-ssl-wizard"
+  ui_next "$(installer_cmd ssl-mode-guide)" "$(installer_cmd production-ssl-wizard)"
 }
 
 show_ssl_mode_guide() {
@@ -4988,9 +5056,9 @@ show_ssl_mode_guide() {
   echo "  - Do not use Cloudflare Origin CA for direct browser-to-origin access."
   echo
   echo "Commands:"
-  echo "  ./install-erpnext-dev.sh ssl-mode-status"
-  echo "  ./install-erpnext-dev.sh production-ssl-wizard"
-  echo "  ./install-erpnext-dev.sh local-ssl-wizard"
+  echo "  $(installer_cmd ssl-mode-status)"
+  echo "  $(installer_cmd production-ssl-wizard)"
+  echo "  $(installer_cmd local-ssl-wizard)"
 }
 
 show_setup_effort_guide() {
@@ -5308,11 +5376,11 @@ show_production_readiness() {
 
   echo
   echo "Recommended next commands:"
-  echo "  ./install-erpnext-dev.sh production-plan"
-  echo "  ./install-erpnext-dev.sh production-domain-plan"
-  echo "  ./install-erpnext-dev.sh public-vm-readiness"
-  echo "  ./install-erpnext-dev.sh production-ssl-plan"
-  echo "  ./install-erpnext-dev.sh production-firewall-plan"
+  echo "  $(installer_cmd production-plan)"
+  echo "  $(installer_cmd production-domain-plan)"
+  echo "  $(installer_cmd public-vm-readiness)"
+  echo "  $(installer_cmd production-ssl-plan)"
+  echo "  $(installer_cmd production-firewall-plan)"
   echo "============================================================"
 }
 
@@ -5357,13 +5425,13 @@ show_production_plan() {
   echo "   - Admin password and credential handling"
   echo
   echo "Useful commands now:"
-  echo "  ./install-erpnext-dev.sh production-readiness"
-  echo "  ./install-erpnext-dev.sh production-domain-plan"
-  echo "  ./install-erpnext-dev.sh public-vm-readiness"
-  echo "  ./install-erpnext-dev.sh production-ssl-plan"
-  echo "  ./install-erpnext-dev.sh production-firewall-plan"
-  echo "  ./install-erpnext-dev.sh backup-files"
-  echo "  ./install-erpnext-dev.sh support-bundle"
+  echo "  $(installer_cmd production-readiness)"
+  echo "  $(installer_cmd production-domain-plan)"
+  echo "  $(installer_cmd public-vm-readiness)"
+  echo "  $(installer_cmd production-ssl-plan)"
+  echo "  $(installer_cmd production-firewall-plan)"
+  echo "  $(installer_cmd backup-files)"
+  echo "  $(installer_cmd support-bundle)"
   echo "============================================================"
 }
 
@@ -5898,9 +5966,9 @@ Recommended examples:
 
 Install examples inside each VM:
 
-  SITE_NAME=erp1.test ./install-erpnext-dev.sh setup
-  SITE_NAME=school.test ./install-erpnext-dev.sh setup
-  SITE_NAME=client-a.test ./install-erpnext-dev.sh setup
+  $(installer_cmd_env "SITE_NAME=erp1.test" setup)
+  $(installer_cmd_env "SITE_NAME=school.test" setup)
+  $(installer_cmd_env "SITE_NAME=client-a.test" setup)
 
 Host /etc/hosts examples on your Linux host:
 
@@ -6371,17 +6439,17 @@ recommended_action() {
         if [[ "$auto" == "Enabled" ]]; then
           echo "ERPNext is ready. Open the browser URL below."
         else
-          echo "ERPNext is running. Optional: enable autostart with ./install-erpnext-dev.sh enable-autostart"
+          echo "ERPNext is running. Optional: enable autostart with $(installer_cmd enable-autostart)"
         fi
       else
-        echo "Start ERPNext with ./install-erpnext-dev.sh start"
+        echo "Start ERPNext with $(installer_cmd start)"
       fi
       ;;
     "Incomplete")
-      echo "Run ./install-erpnext-dev.sh repair, or run setup for a clean reinstall."
+      echo "Run $(installer_cmd repair), or run setup for a clean reinstall."
       ;;
     *)
-      echo "Run ./install-erpnext-dev.sh setup"
+      echo "Run $(installer_cmd setup)"
       ;;
   esac
 }
@@ -6416,7 +6484,7 @@ run_status() {
   echo "Notes:"
   echo "  - Direct URL works after ERPNext is running."
   echo "  - Friendly URL also needs the HOST /etc/hosts entry: ${vm_ip} ${SITE_NAME}"
-  echo "  - Detailed diagnostics: ./install-erpnext-dev.sh doctor"
+  echo "  - Detailed diagnostics: $(installer_cmd doctor)"
   echo "============================================================"
 }
 
@@ -6477,10 +6545,10 @@ run_runtime_status() {
   echo
   if [[ "$runtime_status" == Starting* ]]; then
     echo "ERPNext was recently started/restarted. If ports are still waiting, run:"
-    echo "  sleep 30 && ./install-erpnext-dev.sh runtime-status"
-    echo "  ./install-erpnext-dev.sh logs"
+    echo "  sleep 30 && $(installer_cmd runtime-status)"
+    echo "  $(installer_cmd logs)"
   else
-    echo "If installed but stopped, run: ./install-erpnext-dev.sh start"
+    echo "If installed but stopped, run: $(installer_cmd start)"
   fi
   echo "============================================================"
 }
@@ -6582,11 +6650,11 @@ run_service_summary() {
   fi
   echo
   echo "Useful commands:"
-  echo "  ./install-erpnext-dev.sh enable-autostart"
-  echo "  ./install-erpnext-dev.sh disable-autostart"
-  echo "  ./install-erpnext-dev.sh service-start"
-  echo "  ./install-erpnext-dev.sh service-stop"
-  echo "  ./install-erpnext-dev.sh logs"
+  echo "  $(installer_cmd enable-autostart)"
+  echo "  $(installer_cmd disable-autostart)"
+  echo "  $(installer_cmd service-start)"
+  echo "  $(installer_cmd service-stop)"
+  echo "  $(installer_cmd logs)"
   echo "============================================================"
 }
 
@@ -8248,10 +8316,10 @@ show_app_install_guide() {
   echo "  - Take a VM snapshot before testing several apps together."
   echo
   echo "Commands:"
-  echo "  ./install-erpnext-dev.sh app-install-wizard"
-  echo "  ./install-erpnext-dev.sh app-compatibility"
-  echo "  ./install-erpnext-dev.sh app-status"
-  echo "  ./install-erpnext-dev.sh app-rollback-guide"
+  echo "  $(installer_cmd app-install-wizard)"
+  echo "  $(installer_cmd app-compatibility)"
+  echo "  $(installer_cmd app-status)"
+  echo "  $(installer_cmd app-rollback-guide)"
   echo "============================================================"
 }
 
@@ -8321,9 +8389,9 @@ run_post_app_validation() {
 
   echo
   echo "Next checks:"
-  echo "  ./install-erpnext-dev.sh app-status"
-  echo "  ./install-erpnext-dev.sh doctor"
-  echo "  ./install-erpnext-dev.sh verify-access"
+  echo "  $(installer_cmd app-status)"
+  echo "  $(installer_cmd doctor)"
+  echo "  $(installer_cmd verify-access)"
   echo "============================================================"
 }
 
@@ -8340,18 +8408,18 @@ patches, database changes, and assets may already be applied.
 
 Recommended rollback flow:
   1) Stop the service if needed:
-     ./install-erpnext-dev.sh stop
+     $(installer_cmd stop)
 
   2) List available backups:
-     ./install-erpnext-dev.sh list-backups
+     $(installer_cmd list-backups)
 
   3) Restore the pre-app database/files backup:
-     ./install-erpnext-dev.sh restore-full
+     $(installer_cmd restore-full)
 
   4) Start and validate:
-     ./install-erpnext-dev.sh start
-     ./install-erpnext-dev.sh app-status
-     ./install-erpnext-dev.sh doctor
+     $(installer_cmd start)
+     $(installer_cmd app-status)
+     $(installer_cmd doctor)
 
 Best practice:
   - Take a VM snapshot before installing optional apps.
@@ -8726,7 +8794,7 @@ show_backup_result_summary() {
   status_line "Public files" "$([[ -f "$public_file" ]] && echo OK || echo WARN)" "$(basename "$public_file")"
   status_line "Private files" "$([[ -f "$private_file" ]] && echo OK || echo WARN)" "$(basename "$private_file")"
   status_line "Site config" "$([[ -f "$config_file" ]] && echo OK || echo WARN)" "$(basename "$config_file")"
-  ui_next "./install-erpnext-dev.sh backup-verify" "./install-erpnext-dev.sh off-vm-backup-guide"
+  ui_next "$(installer_cmd backup-verify)" "$(installer_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9110,7 +9178,7 @@ show_backup_status() {
 
   if ! path_is_dir "$backup_dir"; then
     status_line "Backup folder" "WARN" "not found; create a backup first"
-    ui_next "./install-erpnext-dev.sh backup-files"
+    ui_next "$(installer_cmd backup-files)"
     ui_box_end
     return 0
   fi
@@ -9146,7 +9214,7 @@ show_backup_status() {
 
   echo
   echo "Off-VM copy: still required for production readiness."
-  ui_next "./install-erpnext-dev.sh backup-verify" "./install-erpnext-dev.sh off-vm-backup-guide"
+  ui_next "$(installer_cmd backup-verify)" "$(installer_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9205,7 +9273,7 @@ verify_latest_backup_set() {
   latest_lines="$(backup_latest_set_paths || true)"
   if [[ -z "$latest_lines" ]]; then
     status_line "Latest backup" "FAIL" "no database backup found"
-    ui_next "./install-erpnext-dev.sh backup-files"
+    ui_next "$(installer_cmd backup-files)"
     ui_box_end
     return 1
   fi
@@ -9235,7 +9303,7 @@ verify_latest_backup_set() {
 
   echo
   echo "This is not a restore test. For production, rehearse restore on a disposable VM."
-  ui_next "./install-erpnext-dev.sh restore-rehearsal-guide" "./install-erpnext-dev.sh off-vm-backup-guide"
+  ui_next "$(installer_cmd restore-rehearsal-guide)" "$(installer_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9263,7 +9331,7 @@ show_off_vm_backup_guide() {
   echo "Recommended after copy:"
   echo "  sha256sum ~/erpnext-backups/${SITE_NAME}/* > ~/erpnext-backups/${SITE_NAME}/SHA256SUMS"
   echo
-  ui_next "./install-erpnext-dev.sh backup-verify" "Take/confirm a cloud snapshot after off-VM copy."
+  ui_next "$(installer_cmd backup-verify)" "Take/confirm a cloud snapshot after off-VM copy."
   ui_box_end
 }
 
@@ -9282,12 +9350,12 @@ show_restore_rehearsal_guide() {
   echo "  7) Destroy the disposable VM after validation."
   echo
   echo "Restore commands on the test VM:"
-  echo "  ./install-erpnext-dev.sh list-backups"
-  echo "  ./install-erpnext-dev.sh restore-full"
-  echo "  ./install-erpnext-dev.sh production-readiness"
+  echo "  $(installer_cmd list-backups)"
+  echo "  $(installer_cmd restore-full)"
+  echo "  $(installer_cmd production-readiness)"
   echo
   echo "Never use the first restore rehearsal on the live VM."
-  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh off-vm-backup-guide"
+  ui_next "$(installer_cmd backup-status)" "$(installer_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9327,7 +9395,7 @@ show_backup_schedule_plan() {
   echo "  - It does not copy backups off the VM."
   echo "  - It does not replace cloud snapshots."
   echo "  - It does not prove restore works; use restore rehearsal for that."
-  ui_next "./install-erpnext-dev.sh configure-backup-schedule" "./install-erpnext-dev.sh backup-schedule-status"
+  ui_next "$(installer_cmd configure-backup-schedule)" "$(installer_cmd backup-schedule-status)"
   ui_box_end
 }
 
@@ -9391,7 +9459,7 @@ EOF_TIMER
   status_line "Schedule" "INFO" "OnCalendar=${BACKUP_SCHEDULE_ON_CALENDAR}"
   status_line "Backup type" "INFO" "database + public/private files"
   status_line "Off-VM copy" "WARN" "still required"
-  ui_next "./install-erpnext-dev.sh backup-schedule-status" "./install-erpnext-dev.sh off-vm-backup-guide"
+  ui_next "$(installer_cmd backup-schedule-status)" "$(installer_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9422,7 +9490,7 @@ show_backup_schedule_status() {
   echo "Useful commands:"
   echo "  systemctl list-timers ${BACKUP_SCHEDULE_TIMER} --all"
   echo "  journalctl -u ${BACKUP_SCHEDULE_SERVICE} --no-pager -n 80"
-  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh backup-verify"
+  ui_next "$(installer_cmd backup-status)" "$(installer_cmd backup-verify)"
   ui_box_end
 }
 
@@ -9513,7 +9581,7 @@ show_backup_retention_plan() {
   echo "  - Keeps the newest ${keep} complete set(s)."
   echo "  - Does not replace off-VM backups or cloud snapshots."
   echo "  - Does not delete partial/orphan files in this first implementation."
-  ui_next "./install-erpnext-dev.sh cleanup-old-backups-dry-run" "./install-erpnext-dev.sh cleanup-old-backups"
+  ui_next "$(installer_cmd cleanup-old-backups-dry-run)" "$(installer_cmd cleanup-old-backups)"
   ui_box_end
 }
 
@@ -9539,7 +9607,7 @@ show_backup_retention_status() {
   status_line "Cleanup candidates" "$([[ "$candidate_count" -gt 0 ]] && echo WARN || echo OK)" "${candidate_count} old set(s)"
   status_line "Backup folder size" "INFO" "$backup_total"
   status_line "Disk usage" "$([[ "$disk_percent" -ge "$warn_percent" ]] && echo WARN || echo OK)" "${disk_percent}% used; warn at ${warn_percent}%"
-  ui_next "./install-erpnext-dev.sh backup-retention-plan" "./install-erpnext-dev.sh cleanup-old-backups-dry-run"
+  ui_next "$(installer_cmd backup-retention-plan)" "$(installer_cmd cleanup-old-backups-dry-run)"
   ui_box_end
 }
 
@@ -9561,7 +9629,7 @@ cleanup_old_backups() {
   if [[ "$count" -eq 0 ]]; then
     echo
     echo "No cleanup needed. Current complete backup count is within retention."
-    ui_next "./install-erpnext-dev.sh backup-retention-status"
+    ui_next "$(installer_cmd backup-retention-status)"
     ui_box_end
     return 0
   fi
@@ -9576,7 +9644,7 @@ cleanup_old_backups() {
   if [[ "$mode" == "dry-run" ]]; then
     echo
     echo "Dry run only. No files were deleted."
-    ui_next "./install-erpnext-dev.sh cleanup-old-backups" "./install-erpnext-dev.sh backup-retention-status"
+    ui_next "$(installer_cmd cleanup-old-backups)" "$(installer_cmd backup-retention-status)"
     ui_box_end
     return 0
   fi
@@ -9604,7 +9672,7 @@ cleanup_old_backups() {
   status_line "Deleted sets" "OK" "$count"
   status_line "Backup size before" "INFO" "$disk_before"
   status_line "Backup size after" "INFO" "$disk_after"
-  ui_next "./install-erpnext-dev.sh backup-retention-status" "./install-erpnext-dev.sh backup-verify"
+  ui_next "$(installer_cmd backup-retention-status)" "$(installer_cmd backup-verify)"
   ui_box_end
 }
 
@@ -9623,7 +9691,7 @@ disable_backup_schedule() {
   $SUDO systemctl disable --now "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 || true
   $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
   status_line "Scheduled backups" "OK" "timer disabled"
-  ui_next "./install-erpnext-dev.sh backup-schedule-status"
+  ui_next "$(installer_cmd backup-schedule-status)"
   ui_box_end
 }
 
@@ -9644,7 +9712,7 @@ show_restore_preflight() {
   echo "  - Rehearse restore on a disposable VM first."
   echo "  - Take a cloud snapshot before any live restore."
   echo "  - Use restore-full only when you intentionally want database + files restored."
-  ui_next "./install-erpnext-dev.sh restore-rehearsal-guide" "./install-erpnext-dev.sh restore-full"
+  ui_next "$(installer_cmd restore-rehearsal-guide)" "$(installer_cmd restore-full)"
   ui_box_end
 }
 
@@ -9817,7 +9885,7 @@ run_off_vm_backup_rsync() {
     fi
     status_line "Off-VM backup" "FAIL" "rsync command failed"
   fi
-  ui_next "./install-erpnext-dev.sh off-vm-backup-status" "./install-erpnext-dev.sh production-checklist"
+  ui_next "$(installer_cmd off-vm-backup-status)" "$(installer_cmd production-checklist)"
   ui_box_end
 }
 
@@ -9846,7 +9914,7 @@ show_off_vm_backup_plan() {
   echo "  - No remote deletion by default."
   echo "  - No passwords or private keys are printed in logs."
   echo "  - Off-VM backup does not replace restore rehearsal."
-  ui_next "./install-erpnext-dev.sh configure-rsync-backup-target" "./install-erpnext-dev.sh off-vm-backup-dry-run"
+  ui_next "$(installer_cmd configure-rsync-backup-target)" "$(installer_cmd off-vm-backup-dry-run)"
   ui_box_end
 }
 
@@ -9904,7 +9972,7 @@ EOF_OFF_VM_CONFIG
   status_line "Config file" "OK" "$OFF_VM_BACKUP_CONFIG_FILE"
   status_line "Delete mode" "INFO" "$OFF_VM_BACKUP_RSYNC_DELETE"
   status_line "Next test" "INFO" "run dry-run before real sync"
-  ui_next "./install-erpnext-dev.sh off-vm-backup-dry-run" "./install-erpnext-dev.sh off-vm-backup-status"
+  ui_next "$(installer_cmd off-vm-backup-dry-run)" "$(installer_cmd off-vm-backup-status)"
   ui_box_end
 }
 
@@ -9935,7 +10003,7 @@ show_off_vm_backup_status() {
   status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE}"
   echo
   echo "Off-VM backup protects against VM/disk loss only if the target is outside this VM/account."
-  ui_next "./install-erpnext-dev.sh off-vm-backup-dry-run" "./install-erpnext-dev.sh run-off-vm-backup"
+  ui_next "$(installer_cmd off-vm-backup-dry-run)" "$(installer_cmd run-off-vm-backup)"
   ui_box_end
 }
 
@@ -9957,7 +10025,7 @@ disable_off_vm_backup() {
   OFF_VM_BACKUP_SSH_IDENTITY=""
   OFF_VM_BACKUP_RSYNC_DELETE="false"
   status_line "Off-VM backup" "OK" "configuration removed"
-  ui_next "./install-erpnext-dev.sh off-vm-backup-status"
+  ui_next "$(installer_cmd off-vm-backup-status)"
   ui_box_end
 }
 
@@ -10150,7 +10218,7 @@ run_health_check() {
 
   status_line "Overall" "$overall" "$([[ "$overall" == OK ]] && echo "healthy" || echo "review WARN rows")"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh health-check-status" "./install-erpnext-dev.sh production-checklist"
+  ui_next "$(installer_cmd health-check-status)" "$(installer_cmd production-checklist)"
 }
 
 configure_health_check_timer() {
@@ -10207,7 +10275,7 @@ EOF_HEALTH_TIMER
   status_line "Timer" "INFO" "${HEALTH_CHECK_TIMER}"
   status_line "Schedule" "INFO" "${HEALTH_CHECK_ON_CALENDAR}"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh health-check-status" "systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
+  ui_next "$(installer_cmd health-check-status)" "systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
 }
 
 show_health_check_status() {
@@ -10234,7 +10302,7 @@ show_health_check_status() {
   echo "Useful commands:"
   echo "  systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
   echo "  journalctl -u ${HEALTH_CHECK_SERVICE} --no-pager -n 80"
-  ui_next "./install-erpnext-dev.sh health-check" "./install-erpnext-dev.sh service-recovery-plan"
+  ui_next "$(installer_cmd health-check)" "$(installer_cmd service-recovery-plan)"
   ui_box_end
 }
 
@@ -10250,7 +10318,7 @@ disable_health_check_timer() {
   systemctl daemon-reload || true
   status_line "Health timer" "OK" "disabled"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh health-check-status"
+  ui_next "$(installer_cmd health-check-status)"
 }
 
 show_service_recovery_plan() {
@@ -10400,7 +10468,7 @@ show_production_checklist() {
   echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
   echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
   echo "  - Create named cloud snapshot after final validation."
-  ui_next "./install-erpnext-dev.sh backup-status" "./install-erpnext-dev.sh off-vm-backup-status" "./install-erpnext-dev.sh support-bundle"
+  ui_next "$(installer_cmd backup-status)" "$(installer_cmd off-vm-backup-status)" "$(installer_cmd support-bundle)"
   ui_box_end
 }
 
@@ -10465,7 +10533,7 @@ show_release_readiness() {
   status_line "Release state" "$release_state" "$([[ "$release_state" == OK ]] && echo "ready for production use" || echo "review WARN rows before production use")"
   ui_box_end
 
-  ui_next "./install-erpnext-dev.sh production-checklist" "./install-erpnext-dev.sh support-bundle"
+  ui_next "$(installer_cmd production-checklist)" "$(installer_cmd support-bundle)"
 }
 
 show_command_audit() {
@@ -10487,7 +10555,7 @@ show_command_audit() {
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-preflight, restore-db, restore-full"
   status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh release-readiness" "./install-erpnext-dev.sh help"
+  ui_next "$(installer_cmd release-readiness)" "$(installer_cmd help)"
 }
 
 show_release_notes_guide() {
@@ -10513,7 +10581,7 @@ show_release_notes_guide() {
   echo "  - Keep cloud snapshots named and current"
   echo "  - Confirm cloud firewall rules after IP/admin changes"
   ui_box_end
-  ui_next "./install-erpnext-dev.sh release-readiness" "./install-erpnext-dev.sh production-checklist"
+  ui_next "$(installer_cmd release-readiness)" "$(installer_cmd production-checklist)"
 }
 
 final_qa_wizard() {
@@ -10672,10 +10740,11 @@ run_repair() {
 
 run_install() {
   require_sudo
+  install_self_for_reuse
   check_os
   check_internet
-  check_resources
   maybe_offer_root_storage_expansion
+  check_resources
   prompt_for_site_name_if_needed
 
   if path_is_dir "$BENCH_PARENT"; then
@@ -10725,7 +10794,7 @@ run_install() {
   if [[ "${AUTO_START}" == "true" || "$ASSUME_YES" -eq 1 ]]; then
     if ! start_erpnext_service; then
       warn "Install completed, but ERPNext could not be started automatically."
-      warn "Run this later: ./install-erpnext-dev.sh start"
+      warn "Run this later: $(installer_cmd start)"
     fi
   elif [[ "${AUTO_START}" == "false" ]]; then
     echo
@@ -10738,7 +10807,7 @@ run_install() {
     if [[ "$start_now" =~ ^[Yy]$ ]]; then
       if ! start_erpnext_service; then
         warn "Install completed, but ERPNext could not be started automatically."
-        warn "Run this later: ./install-erpnext-dev.sh start"
+        warn "Run this later: $(installer_cmd start)"
       fi
     else
       echo
@@ -10991,7 +11060,7 @@ show_help() {
 ${APP_NAME} v${SCRIPT_VERSION}
 
 Usage:
-  ./install-erpnext-dev.sh [command]
+  $(installer_cmd "[command]")
 
 Start here:
   first-run           Pick local VM, public VM, or maintenance flow
@@ -11074,13 +11143,13 @@ Menus:
   maintenance Backup/maintenance menu
 
 Examples:
-  ./install-erpnext-dev.sh first-run
-  ./install-erpnext-dev.sh public-vm-quickstart
-  ./install-erpnext-dev.sh local-dev-quickstart
-  ./install-erpnext-dev.sh production-ssl-wizard
-  ./install-erpnext-dev.sh security-hardening-wizard
-  ./install-erpnext-dev.sh final-qa
-  ./install-erpnext-dev.sh production-ops-wizard
+  $(installer_cmd first-run)
+  $(installer_cmd public-vm-quickstart)
+  $(installer_cmd local-dev-quickstart)
+  $(installer_cmd production-ssl-wizard)
+  $(installer_cmd security-hardening-wizard)
+  $(installer_cmd final-qa)
+  $(installer_cmd production-ops-wizard)
 
 Options:
   -y, --yes  Assume yes for supported confirmations
@@ -11109,7 +11178,7 @@ Common environment overrides:
   OFF_VM_BACKUP_SSH_IDENTITY=/root/.ssh/id_ed25519
   OFF_VM_BACKUP_RSYNC_DELETE=false
 
-Use ./install-erpnext-dev.sh advanced for the complete command menu.
+Use $(installer_cmd advanced) for the complete command menu.
 EOF_HELP
 }
 

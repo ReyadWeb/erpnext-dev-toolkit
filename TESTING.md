@@ -1,6 +1,37 @@
-# v1.1.13 validation
+# v1.1.14 validation
 
-Validate the blocking environment preflight and version bump.
+Validate the safer preflight command flow, storage-first install sequence, sudo/path command output, and version bump.
+
+## v1.1.14 command-path validation
+
+Run from a temporary path, matching the one-command install method:
+
+```bash
+cp ./install-erpnext-dev.sh /tmp/install-erpnext-dev.sh
+chmod +x /tmp/install-erpnext-dev.sh
+sudo /tmp/install-erpnext-dev.sh help | grep -E "sudo /tmp/install-erpnext-dev.sh|local-dev-quickstart"
+```
+
+Expected:
+
+- Help and next-step examples include `sudo`.
+- Commands reference the active script path when `/root/install-erpnext-dev.sh` is not installed yet.
+- After a sudo preflight/quickstart run, follow-up commands prefer `/root/install-erpnext-dev.sh` when the self-copy succeeds.
+
+Interactive VM test:
+
+```bash
+sudo /tmp/install-erpnext-dev.sh install-preflight
+```
+
+Expected:
+
+- Preflight passes or blocks with clear red `INSTALL BLOCKED` rows.
+- On pass, the user is offered to start `local-dev-quickstart` directly.
+- The user does not need to copy `./install-erpnext-dev.sh local-dev-quickstart`.
+- The actual install path offers root-storage expansion before the final blocking resource preflight.
+- After successful guided install, the script prints a success message and asks whether to open the main menu.
+
 
 ```bash
 chmod +x install-erpnext-dev.sh
@@ -13,7 +44,7 @@ grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="1.1.13"
+SCRIPT_VERSION="1.1.14"
 install-preflight is accepted by the dispatcher
 environment-preflight is accepted as an alias
 help shows the expert-only ERPNEXT_ALLOW_UNSAFE_INSTALL override

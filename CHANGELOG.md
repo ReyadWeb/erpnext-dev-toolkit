@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.14
+
+- Fixed preflight follow-up commands so they use the real active installer path instead of `./install-erpnext-dev.sh` when the script was downloaded to `/tmp`.
+- Updated printed follow-up commands to include `sudo` where installer actions require elevated permissions.
+- Added automatic self-copy during install/preflight flows so reusable commands prefer `/root/install-erpnext-dev.sh` after first sudo execution.
+- Changed the install sequence so root-storage expansion is offered before the blocking resource preflight, allowing expanded VM disks to be used before disk checks block the install.
+- Improved `install-preflight` so an interactive user can continue directly into `local-dev-quickstart` instead of copying a second command.
+- Added a successful guided-install completion message and an optional prompt to open the main installer menu immediately after setup.
+
 ## v1.1.13
 
 - Added a blocking install environment preflight for safer fresh VM installs.
