@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.21"
+SCRIPT_VERSION="1.1.22"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -139,7 +139,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -7617,11 +7617,11 @@ run_full_status() {
 # ============================================================
 
 app_profile_list() {
-  echo "crm hrms payments webshop builder lms wiki print_designer drive raven insights telephony helpdesk"
+  echo "crm hrms education payments webshop builder lms wiki print_designer drive raven insights telephony helpdesk"
 }
 
 app_profile_branch_overrides() {
-  echo "CRM_BRANCH, HRMS_BRANCH, PAYMENTS_BRANCH, WEBSHOP_BRANCH, BUILDER_BRANCH, LMS_BRANCH, WIKI_BRANCH, PRINT_DESIGNER_BRANCH, DRIVE_BRANCH, RAVEN_BRANCH, INSIGHTS_BRANCH, TELEPHONY_BRANCH, HELPDESK_BRANCH"
+  echo "CRM_BRANCH, HRMS_BRANCH, EDUCATION_BRANCH, PAYMENTS_BRANCH, WEBSHOP_BRANCH, BUILDER_BRANCH, LMS_BRANCH, WIKI_BRANCH, PRINT_DESIGNER_BRANCH, DRIVE_BRANCH, RAVEN_BRANCH, INSIGHTS_BRANCH, TELEPHONY_BRANCH, HELPDESK_BRANCH"
 }
 
 app_profile_defaults() {
@@ -7650,6 +7650,14 @@ app_profile_defaults() {
       LIB_APP_REPO="https://github.com/frappe/hrms"
       LIB_APP_BRANCH="${HRMS_BRANCH:-version-16}"
       LIB_APP_NOTES="HR, payroll, attendance, leave, employee lifecycle, and HR operations app for Frappe/ERPNext."
+      ;;
+    education|school|school-erp)
+      LIB_APP_KEY="education"
+      LIB_APP_DISPLAY="Frappe Education"
+      LIB_APP_NAME="education"
+      LIB_APP_REPO="https://github.com/frappe/education"
+      LIB_APP_BRANCH="${EDUCATION_BRANCH:-version-16}"
+      LIB_APP_NOTES="Education and school-management ERP app for admissions, students, teachers, attendance, fees, course scheduling, exams, and student portal. Defaults to EDUCATION_BRANCH=version-16."
       ;;
     telephony)
       LIB_APP_KEY="telephony"
@@ -7922,7 +7930,7 @@ for token in raw.replace("\r", "\n").replace(",", "\n").split():
 items = [x for x in items if x in valid_set]
 
 ordered = []
-preferred = ("frappe", "erpnext", "crm", "hrms", "payments", "webshop", "builder", "lms", "wiki", "print_designer", "drive", "raven", "insights", "telephony", "helpdesk")
+preferred = ("frappe", "erpnext", "crm", "hrms", "education", "payments", "webshop", "builder", "lms", "wiki", "print_designer", "drive", "raven", "insights", "telephony", "helpdesk")
 
 # Keep core and curated apps in a predictable order for cleaner diagnostics.
 for name in preferred:
@@ -8226,6 +8234,23 @@ assess_app_compatibility() {
       else
         APP_COMPAT_STATUS="INFO"
         APP_COMPAT_DETAIL="${display} target is ${branch_text}; verify it matches your Frappe/ERPNext branch."
+      fi
+      ;;
+    education)
+      if [[ "$branch" == version-16 ]]; then
+        APP_COMPAT_STATUS="OK"
+        APP_COMPAT_DETAIL="Frappe Education compatibility matrix lists version-16 for Frappe Framework version-16."
+        APP_COMPAT_RECOMMENDATION="Safe to test after a backup checkpoint; validate admissions, student portal, fees, and course flows."
+      elif [[ "$branch" == develop || -z "$branch" ]]; then
+        APP_COMPAT_STATUS="WARN"
+        APP_COMPAT_DETAIL="Frappe Education is targeting a moving branch (${branch_text}); compatibility can change as upstream moves."
+        APP_COMPAT_RECOMMENDATION="Prefer EDUCATION_BRANCH=version-16 for this installer unless intentionally testing upstream changes."
+      elif [[ -n "$target_major" ]]; then
+        APP_COMPAT_STATUS="OK"
+        APP_COMPAT_DETAIL="Target branch ${branch_text} is version-pinned and matches the detected core major version."
+      else
+        APP_COMPAT_STATUS="INFO"
+        APP_COMPAT_DETAIL="Frappe Education target is ${branch_text}; verify it matches your Frappe/ERPNext branch."
       fi
       ;;
     crm)
@@ -8692,7 +8717,7 @@ run_app_install_wizard() {
     echo "============================================================"
     echo "Choose one app to install. Status and guide tools are listed first."
     echo
-    print_two_column_menu       "1) App status"       "2) Compatibility"       "3) CRM"       "4) HR / HRMS"       "5) Payments"       "6) Webshop / E-Commerce"       "7) Builder"       "8) Learning / LMS"       "9) Wiki"       "10) Print Designer"       "11) Drive"       "12) Raven Chat"       "13) Insights"       "14) Telephony"       "15) Helpdesk"       "16) Advanced tools"       "17) Rollback guide"
+    print_two_column_menu       "1) App status"       "2) Compatibility"       "3) CRM"       "4) HR / HRMS"       "5) Education"       "6) Payments"       "7) Webshop / E-Commerce"       "8) Builder"       "9) Learning / LMS"       "10) Wiki"       "11) Print Designer"       "12) Drive"       "13) Raven Chat"       "14) Insights"       "15) Telephony"       "16) Helpdesk"       "17) Advanced tools"       "18) Rollback guide"
     echo
     echo "Install one app at a time. The wizard will offer a backup checkpoint first."
     menu_footer
@@ -8703,19 +8728,20 @@ run_app_install_wizard() {
       2) show_app_compatibility_matrix; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
       3) install_app_profile crm; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
       4) install_app_profile hrms; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      5) install_app_profile payments; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      6) install_app_profile webshop; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      7) install_app_profile builder; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      8) install_app_profile lms; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      9) install_app_profile wiki; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      10) install_app_profile print_designer; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      11) install_app_profile drive; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      12) install_app_profile raven; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      13) install_app_profile insights; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      14) install_app_profile telephony; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      15) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      16) show_advanced_app_tools_menu; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      17) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      5) install_app_profile education; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      6) install_app_profile payments; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      7) install_app_profile webshop; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      8) install_app_profile builder; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      9) install_app_profile lms; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      10) install_app_profile wiki; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      11) install_app_profile print_designer; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      12) install_app_profile drive; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      13) install_app_profile raven; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      14) install_app_profile insights; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      15) install_app_profile telephony; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      16) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      17) show_advanced_app_tools_menu; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
+      18) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -8912,7 +8938,7 @@ show_app_library_menu() {
     echo "============================================================"
     echo "Choose an app to install, or use the status/guide tools."
     echo
-    print_two_column_menu       "1) Wizard"       "2) App status"       "3) Compatibility"       "4) Installed apps"       "5) Guide"       "6) Rollback guide"       "7) CRM"       "8) HR / HRMS"       "9) Payments"       "10) Webshop / E-Commerce"       "11) Builder"       "12) Learning / LMS"       "13) Wiki"       "14) Print Designer"       "15) Drive"       "16) Raven Chat"       "17) Helpdesk"       "18) Telephony"       "19) Insights"       "20) Advanced tools"
+    print_two_column_menu       "1) Wizard"       "2) App status"       "3) Compatibility"       "4) Installed apps"       "5) Guide"       "6) Rollback guide"       "7) CRM"       "8) HR / HRMS"       "9) Education"       "10) Payments"       "11) Webshop / E-Commerce"       "12) Builder"       "13) Learning / LMS"       "14) Wiki"       "15) Print Designer"       "16) Drive"       "17) Raven Chat"       "18) Helpdesk"       "19) Telephony"       "20) Insights"       "21) Advanced tools"
     echo
     echo "Notes: one app at a time; keep a backup checkpoint."
     menu_footer
@@ -8927,18 +8953,19 @@ show_app_library_menu() {
       6) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Library..." ;;
       7) install_app_profile crm; pause_after_screen "Press Enter to return to App Library..." ;;
       8) install_app_profile hrms; pause_after_screen "Press Enter to return to App Library..." ;;
-      9) install_app_profile payments; pause_after_screen "Press Enter to return to App Library..." ;;
-      10) install_app_profile webshop; pause_after_screen "Press Enter to return to App Library..." ;;
-      11) install_app_profile builder; pause_after_screen "Press Enter to return to App Library..." ;;
-      12) install_app_profile lms; pause_after_screen "Press Enter to return to App Library..." ;;
-      13) install_app_profile wiki; pause_after_screen "Press Enter to return to App Library..." ;;
-      14) install_app_profile print_designer; pause_after_screen "Press Enter to return to App Library..." ;;
-      15) install_app_profile drive; pause_after_screen "Press Enter to return to App Library..." ;;
-      16) install_app_profile raven; pause_after_screen "Press Enter to return to App Library..." ;;
-      17) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Library..." ;;
-      18) install_app_profile telephony; pause_after_screen "Press Enter to return to App Library..." ;;
-      19) install_app_profile insights; pause_after_screen "Press Enter to return to App Library..." ;;
-      20) show_advanced_app_tools_menu; pause_after_screen "Press Enter to return to App Library..." ;;
+      9) install_app_profile education; pause_after_screen "Press Enter to return to App Library..." ;;
+      10) install_app_profile payments; pause_after_screen "Press Enter to return to App Library..." ;;
+      11) install_app_profile webshop; pause_after_screen "Press Enter to return to App Library..." ;;
+      12) install_app_profile builder; pause_after_screen "Press Enter to return to App Library..." ;;
+      13) install_app_profile lms; pause_after_screen "Press Enter to return to App Library..." ;;
+      14) install_app_profile wiki; pause_after_screen "Press Enter to return to App Library..." ;;
+      15) install_app_profile print_designer; pause_after_screen "Press Enter to return to App Library..." ;;
+      16) install_app_profile drive; pause_after_screen "Press Enter to return to App Library..." ;;
+      17) install_app_profile raven; pause_after_screen "Press Enter to return to App Library..." ;;
+      18) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Library..." ;;
+      19) install_app_profile telephony; pause_after_screen "Press Enter to return to App Library..." ;;
+      20) install_app_profile insights; pause_after_screen "Press Enter to return to App Library..." ;;
+      21) show_advanced_app_tools_menu; pause_after_screen "Press Enter to return to App Library..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -10806,7 +10833,7 @@ show_command_audit() {
   status_line "Off-VM backup" "OK" "off-vm-backup-plan, configure-rsync-backup-target, run-off-vm-backup"
   status_line "Health monitoring" "OK" "health-check, configure-health-check-timer, health-check-status"
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-preflight, restore-db, restore-full"
-  status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility, install-payments, install-webshop, install-builder, install-lms, install-wiki, install-print-designer, install-drive, install-raven, advanced-app-tools"
+  status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility, install-payments, install-webshop, install-builder, install-lms, install-education, install-wiki, install-print-designer, install-drive, install-raven, advanced-app-tools"
   ui_box_end
   ui_next "$(installer_cmd release-readiness)" "$(installer_cmd help)"
 }
@@ -11388,6 +11415,7 @@ Apps:
   install-webshop     Install Frappe Webshop / E-Commerce
   install-builder     Install Frappe Builder
   install-lms         Install Frappe Learning / LMS
+  install-education   Install Frappe Education
   install-wiki        Install Frappe Wiki
   install-print-designer Install Frappe Print Designer
   install-drive       Install Frappe Drive
@@ -11444,6 +11472,8 @@ Common environment overrides:
   OFF_VM_BACKUP_RSYNC_DELETE=false
   PAYMENTS_BRANCH=                # blank = repository default branch
   WEBSHOP_BRANCH=develop
+  EDUCATION_BRANCH=version-16
+  LMS_BRANCH=                     # blank = repository default branch
 
 Use $(installer_cmd advanced) for the complete command menu.
 EOF_HELP
@@ -11510,7 +11540,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|credentials-info|credentials|login-info|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|credentials-info|credentials|login-info|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -11585,6 +11615,7 @@ main() {
     install-webshop|install-ecommerce) install_app_profile webshop ;;
     install-builder) install_app_profile builder ;;
     install-lms) install_app_profile lms ;;
+    install-education) install_app_profile education ;;
     install-wiki) install_app_profile wiki ;;
     install-print-designer) install_app_profile print_designer ;;
     install-drive) install_app_profile drive ;;

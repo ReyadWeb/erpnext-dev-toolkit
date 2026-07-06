@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.22 - Add Education app profile
+
+- Added Frappe Education to the curated optional app library.
+- Added `install-education` command.
+- Added `EDUCATION_BRANCH=version-16` default branch support.
+- Updated app library and app installation wizard menus to include Education separately from Learning / LMS.
+- Updated optional app compatibility handling, status output, app registry order, help output, and command audit references.
+
 ## v1.1.21 - Fit-aware two-column app menus
 
 - Fixed the App Installation Library and App Installation Wizard layout so two-column rendering is based on actual label length instead of a fixed 76-column threshold.

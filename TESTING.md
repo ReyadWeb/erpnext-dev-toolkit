@@ -1,3 +1,58 @@
+# Testing Guide
+
+## v1.1.22 Validation - Education App Profile
+
+Validate script version and syntax:
+
+```bash
+bash -n install-erpnext-dev.sh
+grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
+./install-erpnext-dev.sh version
+```
+
+Expected:
+
+```text
+SCRIPT_VERSION="1.1.22"
+ERPNext Developer Installer v1.1.22
+```
+
+Validate Education command and menu exposure:
+
+```bash
+./install-erpnext-dev.sh help | grep -E "install-education|EDUCATION_BRANCH"
+printf 'q\n' | ./install-erpnext-dev.sh app-library
+printf 'q\n' | MENU_TERMINAL_COLS=60 ./install-erpnext-dev.sh app-library
+```
+
+Expected:
+
+```text
+Education appears in the App Installation Library.
+install-education appears in help output.
+EDUCATION_BRANCH=version-16 appears in branch override examples.
+The app library still uses two-column layout when labels fit.
+```
+
+VM validation after updating `/root/install-erpnext-dev.sh`:
+
+```bash
+sudo /root/install-erpnext-dev.sh app-status
+sudo /root/install-erpnext-dev.sh app-compatibility
+sudo /root/install-erpnext-dev.sh install-education
+sudo /root/install-erpnext-dev.sh app-status
+sudo /root/install-erpnext-dev.sh doctor --plain
+sudo /root/install-erpnext-dev.sh verify-access
+```
+
+Expected:
+
+```text
+Frappe Education appears in status and compatibility output.
+Education installs from the version-16 branch unless EDUCATION_BRANCH is overridden.
+Doctor and access checks remain healthy after installation.
+```
+
 # ERPNext Developer Installer Testing Guide
 
 ## v1.1.21 Validation - Fit-Aware Two-Column App Menus
