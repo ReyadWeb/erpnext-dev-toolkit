@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.14"
+SCRIPT_VERSION="1.1.15"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -139,7 +139,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|repair-app-registry)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-custom-app|repair-app-registry)
       return 0
       ;;
     *)
@@ -6959,7 +6959,7 @@ doctor_collect() {
   fi
 
   local optional_item optional_app optional_label optional_detail
-  for optional_item in "crm:Frappe CRM" "hrms:Frappe HR / HRMS" "telephony:Frappe Telephony" "helpdesk:Frappe Helpdesk" "insights:Frappe Insights"; do
+  for optional_item in "crm:Frappe CRM" "hrms:Frappe HR / HRMS" "telephony:Frappe Telephony" "helpdesk:Frappe Helpdesk" "insights:Frappe Insights" "payments:Frappe Payments" "webshop:Frappe Webshop / E-Commerce"; do
     optional_app="${optional_item%%:*}"
     optional_label="${optional_item#*:}"
     optional_detail="$(doctor_optional_app_detail "$DOCTOR_BENCH_DIR" "$optional_app")"
@@ -7452,6 +7452,8 @@ run_full_status() {
     "telephony:Frappe Telephony"
     "helpdesk:Frappe Helpdesk"
     "insights:Frappe Insights"
+    "payments:Frappe Payments"
+    "webshop:Frappe Webshop / E-Commerce"
   )
 
   for optional_item in "${optional_apps[@]}"; do
@@ -7572,6 +7574,22 @@ app_profile_defaults() {
       LIB_APP_REPO="https://github.com/frappe/insights"
       LIB_APP_BRANCH="${INSIGHTS_BRANCH:-main}"
       LIB_APP_NOTES="Business intelligence, reporting, and dashboard app for Frappe sites."
+      ;;
+    payments|payment)
+      LIB_APP_KEY="payments"
+      LIB_APP_DISPLAY="Frappe Payments"
+      LIB_APP_NAME="payments"
+      LIB_APP_REPO="https://github.com/frappe/payments"
+      LIB_APP_BRANCH="${PAYMENTS_BRANCH:-}"
+      LIB_APP_NOTES="Payment gateway integrations for Frappe apps, including Stripe, PayPal, Razorpay, Braintree, and PayTM. Uses the repository default branch unless PAYMENTS_BRANCH is set."
+      ;;
+    webshop|ecommerce|e-commerce)
+      LIB_APP_KEY="webshop"
+      LIB_APP_DISPLAY="Frappe Webshop / E-Commerce"
+      LIB_APP_NAME="webshop"
+      LIB_APP_REPO="https://github.com/frappe/webshop"
+      LIB_APP_BRANCH="${WEBSHOP_BRANCH:-develop}"
+      LIB_APP_NOTES="Open-source eCommerce storefront app for ERPNext-backed catalogs and orders. For Frappe/ERPNext v16, upstream guidance currently points to the develop branch."
       ;;
     *)
       return 1
@@ -7756,7 +7774,7 @@ for token in raw.replace("\r", "\n").replace(",", "\n").split():
 items = [x for x in items if x in valid_set]
 
 ordered = []
-preferred = ("frappe", "erpnext", "crm", "hrms", "telephony", "helpdesk", "insights")
+preferred = ("frappe", "erpnext", "crm", "hrms", "payments", "webshop", "telephony", "helpdesk", "insights")
 
 # Keep core and curated apps in a predictable order for cleaner diagnostics.
 for name in preferred:
@@ -7862,6 +7880,8 @@ run_app_status() {
     "telephony:Frappe Telephony"
     "helpdesk:Frappe Helpdesk"
     "insights:Frappe Insights"
+    "payments:Frappe Payments"
+    "webshop:Frappe Webshop / E-Commerce"
   )
 
   for item in "${app_items[@]}"; do
@@ -8121,6 +8141,32 @@ assess_app_compatibility() {
         APP_COMPAT_DETAIL="Frappe Telephony target is ${branch_text}; verify upstream compatibility before use."
       fi
       ;;
+    payments)
+      if [[ -z "$branch" ]]; then
+        APP_COMPAT_STATUS="OK"
+        APP_COMPAT_DETAIL="Frappe Payments uses the repository default branch; Frappe Cloud Marketplace lists Payments as supporting Version 16."
+        APP_COMPAT_RECOMMENDATION="Safe to test after a backup checkpoint. Set PAYMENTS_BRANCH only if you intentionally want a specific upstream branch."
+      elif [[ -n "$target_major" ]]; then
+        APP_COMPAT_STATUS="OK"
+        APP_COMPAT_DETAIL="Target branch ${branch_text} is version-pinned and matches the detected core major version."
+      else
+        APP_COMPAT_STATUS="INFO"
+        APP_COMPAT_DETAIL="Frappe Payments target is ${branch_text}; verify upstream compatibility before use."
+      fi
+      ;;
+    webshop)
+      if [[ "$branch" == develop ]]; then
+        APP_COMPAT_STATUS="WARN"
+        APP_COMPAT_DETAIL="Frappe Webshop is targeting develop because upstream guidance for v16 points to develop; this branch can still change over time."
+        APP_COMPAT_RECOMMENDATION="Use a VM snapshot or backup checkpoint first, then test catalog, cart, checkout, and ERPNext order flow."
+      elif [[ -n "$target_major" ]]; then
+        APP_COMPAT_STATUS="OK"
+        APP_COMPAT_DETAIL="Target branch ${branch_text} is version-pinned and matches the detected core major version."
+      else
+        APP_COMPAT_STATUS="INFO"
+        APP_COMPAT_DETAIL="Frappe Webshop target is ${branch_text}; verify upstream compatibility before use."
+      fi
+      ;;
     *)
       APP_COMPAT_STATUS="WARN"
       APP_COMPAT_DETAIL="Custom app compatibility cannot be verified by this installer."
@@ -8205,7 +8251,7 @@ show_app_compatibility_matrix() {
   echo "The install command still verifies remote branch availability before downloading."
   echo
 
-  for profile in crm hrms insights telephony helpdesk; do
+  for profile in crm hrms payments webshop insights telephony helpdesk; do
     app_profile_defaults "$profile" || continue
     assess_app_compatibility "$bench_dir" "$LIB_APP_NAME" "$LIB_APP_DISPLAY" "$LIB_APP_BRANCH" "$LIB_APP_REPO" "false"
     app_state="$(app_install_state_detail "$bench_dir" "$LIB_APP_NAME")"
@@ -8214,7 +8260,7 @@ show_app_compatibility_matrix() {
 
   echo
   echo "Detailed check for one app is shown automatically before install."
-  echo "Branch overrides: CRM_BRANCH, HRMS_BRANCH, INSIGHTS_BRANCH, TELEPHONY_BRANCH, HELPDESK_BRANCH."
+  echo "Branch overrides: CRM_BRANCH, HRMS_BRANCH, PAYMENTS_BRANCH, WEBSHOP_BRANCH, INSIGHTS_BRANCH, TELEPHONY_BRANCH, HELPDESK_BRANCH."
   echo "============================================================"
 }
 
@@ -8224,7 +8270,7 @@ print_app_compatibility_snapshot() {
 
   echo
   echo "Compatibility snapshot:"
-  for profile in crm hrms insights telephony helpdesk; do
+  for profile in crm hrms payments webshop insights telephony helpdesk; do
     app_profile_defaults "$profile" || continue
     assess_app_compatibility "$bench_dir" "$LIB_APP_NAME" "$LIB_APP_DISPLAY" "$LIB_APP_BRANCH" "$LIB_APP_REPO" "false"
     summary="target=${APP_COMPAT_TARGET_BRANCH}; $(app_install_state_detail "$bench_dir" "$LIB_APP_NAME")"
@@ -8305,9 +8351,11 @@ show_app_install_guide() {
   echo "Optional App Install Guide"
   echo "============================================================"
   echo "Recommended order:"
-  echo "  1) CRM, HRMS, or Insights if needed"
-  echo "  2) Telephony before Helpdesk, unless the wizard installs it"
-  echo "  3) Helpdesk after Telephony dependency is ready"
+  echo "  1) Payments before Webshop if you plan to test online checkout"
+  echo "  2) Webshop / E-Commerce after ERPNext items and prices are ready"
+  echo "  3) CRM, HRMS, or Insights if needed"
+  echo "  4) Telephony before Helpdesk, unless the wizard installs it"
+  echo "  5) Helpdesk after Telephony dependency is ready"
   echo
   echo "Safety workflow:"
   echo "  - Install one optional app at a time."
@@ -8484,11 +8532,13 @@ run_app_install_wizard() {
     echo "2) Show optional app compatibility"
     echo "3) Install Frappe CRM"
     echo "4) Install Frappe HR / HRMS"
-    echo "5) Install Frappe Insights"
-    echo "6) Install Frappe Telephony"
-    echo "7) Install Frappe Helpdesk"
-    echo "8) Install custom app from Git URL"
-    echo "9) Rollback guide"
+    echo "5) Install Frappe Payments"
+    echo "6) Install Frappe Webshop / E-Commerce"
+    echo "7) Install Frappe Insights"
+    echo "8) Install Frappe Telephony"
+    echo "9) Install Frappe Helpdesk"
+    echo "10) Install custom app from Git URL"
+    echo "11) Rollback guide"
     echo
     echo "Install one app at a time. The wizard will offer a backup checkpoint first."
     menu_footer
@@ -8499,11 +8549,13 @@ run_app_install_wizard() {
       2) show_app_compatibility_matrix; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
       3) install_app_profile crm; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
       4) install_app_profile hrms; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
-      5) install_app_profile insights; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
-      6) install_app_profile telephony; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
-      7) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
-      8) install_custom_app_interactive; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
-      9) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
+      5) install_app_profile payments; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
+      6) install_app_profile webshop; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
+      7) install_app_profile insights; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
+      8) install_app_profile telephony; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
+      9) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
+      10) install_custom_app_interactive; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
+      11) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Install Wizard..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -8682,10 +8734,12 @@ show_app_library_menu() {
       6) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Library..." ;;
       7) install_app_profile crm; pause_after_screen "Press Enter to return to App Library..." ;;
       8) install_app_profile hrms; pause_after_screen "Press Enter to return to App Library..." ;;
-      9) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Library..." ;;
-      10) install_app_profile telephony; pause_after_screen "Press Enter to return to App Library..." ;;
-      11) install_app_profile insights; pause_after_screen "Press Enter to return to App Library..." ;;
-      12) install_custom_app_interactive; pause_after_screen "Press Enter to return to App Library..." ;;
+      9) install_app_profile payments; pause_after_screen "Press Enter to return to App Library..." ;;
+      10) install_app_profile webshop; pause_after_screen "Press Enter to return to App Library..." ;;
+      11) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Library..." ;;
+      12) install_app_profile telephony; pause_after_screen "Press Enter to return to App Library..." ;;
+      13) install_app_profile insights; pause_after_screen "Press Enter to return to App Library..." ;;
+      14) install_custom_app_interactive; pause_after_screen "Press Enter to return to App Library..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -10553,7 +10607,7 @@ show_command_audit() {
   status_line "Off-VM backup" "OK" "off-vm-backup-plan, configure-rsync-backup-target, run-off-vm-backup"
   status_line "Health monitoring" "OK" "health-check, configure-health-check-timer, health-check-status"
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-preflight, restore-db, restore-full"
-  status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility"
+  status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility, install-payments, install-webshop"
   ui_box_end
   ui_next "$(installer_cmd release-readiness)" "$(installer_cmd help)"
 }
@@ -11129,6 +11183,9 @@ Production checklist:
 Apps:
   app-install-wizard  Optional Frappe app installer
   app-status          Optional app status
+  app-compatibility   Optional app compatibility matrix
+  install-payments    Install Frappe Payments
+  install-webshop     Install Frappe Webshop / E-Commerce
 
 Guides:
   production-domain-plan   DNS/domain plan
@@ -11177,6 +11234,8 @@ Common environment overrides:
   OFF_VM_BACKUP_TARGET=backup@example.com:/srv/erpnext-backups/site/
   OFF_VM_BACKUP_SSH_IDENTITY=/root/.ssh/id_ed25519
   OFF_VM_BACKUP_RSYNC_DELETE=false
+  PAYMENTS_BRANCH=                # blank = repository default branch
+  WEBSHOP_BRANCH=develop
 
 Use $(installer_cmd advanced) for the complete command menu.
 EOF_HELP
@@ -11243,7 +11302,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|credentials-info|credentials|login-info|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|credentials-info|credentials|login-info|next-step|local-ssl-wizard|ssl-wizard|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -11312,6 +11371,8 @@ main() {
     install-helpdesk) install_app_profile helpdesk ;;
     install-telephony) install_app_profile telephony ;;
     install-insights) install_app_profile insights ;;
+    install-payments) install_app_profile payments ;;
+    install-webshop|install-ecommerce) install_app_profile webshop ;;
     install-custom-app) install_custom_app_interactive ;;
     repair-app-registry) repair_app_registry ;;
     backup) create_site_backup false ;;

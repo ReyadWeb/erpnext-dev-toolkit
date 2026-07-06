@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.15
+
+- Added Frappe Payments to the optional app library, install wizard, status checks, compatibility matrix, command parser, and direct `install-payments` command.
+- Added Frappe Webshop / E-Commerce to the optional app library, install wizard, status checks, compatibility matrix, command parser, and direct `install-webshop` / `install-ecommerce` commands.
+- Added `PAYMENTS_BRANCH` and `WEBSHOP_BRANCH` branch override documentation for safer repeatable app testing.
+- Updated optional app compatibility notes so Payments uses the repository default branch by default and Webshop defaults to `develop` for current v16 testing.
+- Cleaned up the App Library menu by removing a duplicate status entry and fixed a duplicate app dependency-preparation call.
+
 ## v1.1.14
 
 - Fixed preflight follow-up commands so they use the real active installer path instead of `./install-erpnext-dev.sh` when the script was downloaded to `/tmp`.

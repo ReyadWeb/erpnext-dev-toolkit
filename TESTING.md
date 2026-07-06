@@ -1085,3 +1085,58 @@ Expected:
 - Docker is listed as a later, separate track.
 - VM management, monitoring, security, backup, restore, and update safety remain the near-term priority.
 - The roadmap does not mix changelog history into future planning.
+
+## v1.1.15 optional app catalog validation
+
+Validate that Payments and Webshop are visible in the command surface before testing installs on a disposable VM:
+
+```bash
+bash -n install-erpnext-dev.sh
+grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
+./install-erpnext-dev.sh help | grep -E "install-payments|install-webshop|PAYMENTS_BRANCH|WEBSHOP_BRANCH"
+./install-erpnext-dev.sh command-audit | grep "Optional apps"
+```
+
+Expected:
+
+```text
+SCRIPT_VERSION="1.1.15"
+install-payments is listed in help
+install-webshop is listed in help
+PAYMENTS_BRANCH and WEBSHOP_BRANCH are documented
+Optional apps command audit still passes
+```
+
+On a fresh local VM after ERPNext is installed, validate the app menu and status view:
+
+```bash
+sudo /root/install-erpnext-dev.sh app-status
+sudo /root/install-erpnext-dev.sh app-compatibility
+sudo /root/install-erpnext-dev.sh app-install-wizard
+```
+
+Expected:
+
+```text
+Frappe Payments appears in app-status and compatibility output
+Frappe Webshop / E-Commerce appears in app-status and compatibility output
+The App Install Wizard offers separate install options for Payments and Webshop
+The App Library menu has no duplicate numbered status item
+```
+
+Recommended install test order on a disposable VM:
+
+```bash
+sudo /root/install-erpnext-dev.sh install-payments
+sudo /root/install-erpnext-dev.sh app-status
+sudo /root/install-erpnext-dev.sh doctor --plain
+sudo /root/install-erpnext-dev.sh verify-access
+
+sudo /root/install-erpnext-dev.sh install-webshop
+sudo /root/install-erpnext-dev.sh app-status
+sudo /root/install-erpnext-dev.sh doctor --plain
+sudo /root/install-erpnext-dev.sh verify-access
+```
+
+Expected: each app creates a backup checkpoint prompt, downloads the app, registers it in `sites/apps.txt`, installs it on the active site, runs migrate/build/clear-cache, and leaves the ERPNext desk accessible.
+
