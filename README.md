@@ -1,4 +1,4 @@
-# ERPNext Developer Installer v1.1.19
+# ERPNext Developer Installer v1.1.20
 
 ![ERPNext Installer Banner](docs/assets/erp_installer_readme_banner.png)
 

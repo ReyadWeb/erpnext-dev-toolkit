@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.20 - Safer advanced app tools
+
+- Moved Custom Git app installation out of the main curated App Installation Library list and into a dedicated Advanced App Tools submenu.
+- Changed the main app menu item from Custom Git app to Advanced tools so normal users are guided toward curated apps first.
+- Added an Advanced App Tools submenu for Custom Git app, app registry repair, rollback guidance, and installed-app review.
+- Added stronger warnings and a typed `I UNDERSTAND` confirmation before custom Git app installation can continue.
+- Added `advanced-app-tools`, `app-advanced-tools`, and `custom-app-tools` command aliases.
+- Kept `install-custom-app` available as an advanced direct command, but made it safer with the same warning and confirmation flow.
+
 ## v1.1.19 - Concise app installation menus
 
 - Renamed the App Library heading to App Installation Library so the menu context carries the install meaning.

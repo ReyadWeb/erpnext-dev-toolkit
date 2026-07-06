@@ -1,3 +1,67 @@
+# v1.1.20 validation
+
+## Purpose
+
+Validate that custom Git app installation is no longer presented as a normal curated app and is protected behind an Advanced App Tools path.
+
+## Static checks
+
+```bash
+bash -n install-erpnext-dev.sh
+grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
+./install-erpnext-dev.sh version
+```
+
+Expected:
+
+```text
+SCRIPT_VERSION="1.1.20"
+ERPNext Developer Installer v1.1.20
+```
+
+## App Library menu check
+
+```bash
+printf 'q\n' | ./install-erpnext-dev.sh app-library
+```
+
+Expected:
+
+- The main app menu shows `20) Advanced tools`.
+- The main app menu does not show `20) Custom Git app`.
+- Curated app labels remain concise: CRM, HR / HRMS, Payments, Webshop / E-Commerce, Builder, Learning / LMS, Wiki, Print Designer, Drive, Raven Chat, Helpdesk, Telephony, Insights.
+
+## Advanced App Tools check
+
+```bash
+printf 'q\n' | ./install-erpnext-dev.sh advanced-app-tools
+```
+
+Expected:
+
+- The submenu title is `Advanced App Tools`.
+- It includes `Custom Git app`, `Repair app registry`, `Rollback guide`, and `Installed apps`.
+- It prints a warning that custom Git apps are not curated and may break the site if incompatible.
+
+## Custom app safety confirmation
+
+Run interactively only on a test VM:
+
+```bash
+sudo /root/install-erpnext-dev.sh advanced-app-tools
+```
+
+Choose `1) Custom Git app`.
+
+Expected:
+
+- The script shows a red/strong advanced warning.
+- The script asks whether to continue.
+- The script requires the user to type exactly `I UNDERSTAND` before asking for app name, repository URL, and branch.
+- If the typed confirmation does not match, the custom app install is cancelled safely.
+
+---
+
 # v1.1.19 validation
 
 Validate concise app installation menu labels and responsive two-column rendering.
@@ -1255,8 +1319,7 @@ All new app install commands appear in help output.
 Menu validation:
 
 ```bash
-printf 'q
-' | ./install-erpnext-dev.sh app-library
+printf 'q\n' | ./install-erpnext-dev.sh app-library
 ```
 
 Expected: App Library prints in two columns and includes:
