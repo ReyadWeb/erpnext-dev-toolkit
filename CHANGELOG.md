@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.23 - README command and workflow refresh
+
+- Refreshed README.md to document the current v1.1.22+ installer workflow.
+- Added full one-command paths for install preflight, local VM quickstart, public VM quickstart, guided menu, existing VM script update, and optional app wizard.
+- Updated post-install examples to use the stable `/root/install-erpnext-dev.sh` path with `sudo`.
+- Added blocking preflight behavior, root storage expansion flow, public SSL commands, local SSL commands, pre-app backup/checkpoint workflow, and current optional app list including Education and Learning / LMS.
+- Clarified that the installer creates ERPNext backups from inside the VM, while true VM snapshots/checkpoints must be created from the host/hypervisor.
+
 ## v1.1.22 - Add Education app profile
 
 - Added Frappe Education to the curated optional app library.

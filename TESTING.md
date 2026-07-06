@@ -1,5 +1,53 @@
 # Testing Guide
 
+## v1.1.23 Validation - README Command and Workflow Refresh
+
+Validate script version and syntax:
+
+```bash
+bash -n install-erpnext-dev.sh
+grep -n "SCRIPT_VERSION" install-erpnext-dev.sh
+./install-erpnext-dev.sh version
+```
+
+Expected:
+
+```text
+SCRIPT_VERSION="1.1.23"
+ERPNext Developer Installer v1.1.23
+```
+
+Validate README command coverage:
+
+```bash
+grep -n "install-preflight\|local-dev-quickstart\|public-vm-quickstart\|production-ops-wizard\|app-install-wizard" README.md
+grep -n "install-education\|install-lms\|advanced-app-tools\|pre-app checkpoint" README.md
+grep -n "sudo /root/install-erpnext-dev.sh" README.md | head -30
+```
+
+Expected:
+
+```text
+README includes full command paths for local and public installation.
+README documents install-preflight and the stable sudo /root/install-erpnext-dev.sh command pattern.
+README includes the current optional app list, including Education and Learning / LMS.
+README explains the pre-app backup/checkpoint workflow and VM snapshot limitation.
+```
+
+Fresh VM documentation smoke test:
+
+```bash
+# Inside a fresh test VM, copy the README local command and confirm it downloads the latest script.
+sudo /tmp/install-erpnext-dev.sh version
+sudo /tmp/install-erpnext-dev.sh install-preflight
+```
+
+Expected:
+
+```text
+The README command downloads the current script, version prints correctly, and preflight either passes or blocks with a clear reason.
+```
+
 ## v1.1.22 Validation - Education App Profile
 
 Validate script version and syntax:
