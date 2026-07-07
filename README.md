@@ -780,6 +780,38 @@ sudo erpnext-dev change-local-domain
 
 The wizard backs up the existing site when possible, runs the Frappe site rename, updates the Bench default site, updates the toolkit config, disables the old local SSL Nginx site, and prints the exact `/etc/hosts` commands to run on the host machine. Rebuild local SSL after a domain change because certificates are domain-specific.
 
+### Local VM host DNS mapping
+
+A local `.test` name such as `erp.test` is not public DNS. Your **host machine** must map the chosen local domain to the VM's current IP. The IP is not hardcoded because every user environment can be different: KVM may use `192.168.122.x`, bridged networking may use your LAN range, and other hypervisors may use `10.x` or another private range.
+
+Use the toolkit to print the correct host-side command for the current VM:
+
+```bash
+sudo erpnext-dev local-domain-status
+sudo erpnext-dev host-dns-guide
+sudo erpnext-dev local-access-doctor
+```
+
+If the host shows this error:
+
+```text
+curl: (6) Could not resolve host: erp.test
+```
+
+that is a host DNS mapping issue. Run the command printed by `host-dns-guide` on the **host machine**, then test again with:
+
+```bash
+getent hosts erp.test
+curl -I http://erp.test:8000
+```
+
+For KVM/libvirt, a fixed DHCP reservation is recommended so the VM IP does not change after reboot:
+
+```bash
+sudo erpnext-dev network-status
+sudo erpnext-dev kvm-guide
+```
+
 Local SSL commands:
 
 ```bash

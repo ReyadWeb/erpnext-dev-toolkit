@@ -1,5 +1,45 @@
 # Testing
 
+## v1.1.35 dynamic local DNS and access checks
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+./erpnext-dev.sh --help | grep -E "local-domain-status|local-access-doctor|host-dns-guide"
+./erpnext-dev.sh local-domain-status
+./erpnext-dev.sh local-access-doctor
+./erpnext-dev.sh hosts-command
+printf 'q\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh access
+printf 'q\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh local-ssl-menu
+```
+
+Expected:
+
+```text
+ERPNext Developer Toolkit v1.1.35
+```
+
+Validation points:
+
+- `get_vm_ip` detects the current VM IP dynamically; it must not print a hardcoded sample IP.
+- `hosts-command` prints a host-side command with a backup of `/etc/hosts`, removal of old entries for the selected domain, and the current VM IP.
+- `local-access-doctor` explains that `curl: (6) Could not resolve host: erp.test` means host DNS mapping is missing.
+- The Access menu includes Local domain / host DNS status and Local access doctor.
+- The Local VM HTTPS / SSL menu includes Local Domain / Host DNS Status, Local Access Doctor, and Print Host `/etc/hosts` Command.
+
+Manual host validation after installing the patch inside a local VM:
+
+```bash
+sudo erpnext-dev host-dns-guide
+```
+
+Run the printed command on the host machine, then verify from the host:
+
+```bash
+getent hosts erp.test
+curl -I http://erp.test:8000
+```
+
 ## v1.1.34 environment-aware security and setup lifecycle checks
 
 ```bash
@@ -14,7 +54,7 @@ printf 'q\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh public-vm-quickstart
 Expected:
 
 ```text
-ERPNext Developer Toolkit v1.1.34
+ERPNext Developer Toolkit v1.1.35
 Security menu shows Local VM firewall profile, Production firewall profile, Repair local VM access, and rollback snapshots.
 Public VM quickstart shows the lifecycle order: requirements, domain, install, backup, HTTPS, security, apps, final status.
 ```
@@ -54,7 +94,7 @@ printf 'q\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh advanced | grep -E "47\) 
 Expected:
 
 ```text
-SCRIPT_VERSION="1.1.34"
+SCRIPT_VERSION="1.1.35"
 ERPNext Developer Toolkit v1.1.34
 ```
 

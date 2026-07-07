@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.35 - Dynamic local host DNS and access doctor
+
+- Added dynamic VM IP detection for local host mapping. The toolkit no longer assumes `192.168.122.x`; it detects the active VM IP from routing/interface data and supports KVM NAT, bridged LAN, VirtualBox/UTM-style NAT, and other private networks.
+- Added `local-domain-status`, `local-access-doctor`, `host-dns-guide`, and `print-hosts-command` aliases for local VM DNS/access troubleshooting.
+- Updated `verify-access`, `access`, `local-ssl-menu`, and local domain output to clearly separate VM service checks from host `/etc/hosts` mapping.
+- Added safer host-side `/etc/hosts` commands that back up the file, remove old entries for the local domain, and append the current detected VM IP.
+- Changed the Access command to open the access/networking submenu so local DNS, access doctor, fixed-IP guidance, and SSL checks are discoverable from one place.
+- Documented that `curl: (6) Could not resolve host: erp.test` is a host DNS mapping issue, not an ERPNext/Frappe error.
+
 ## v1.1.34 - Environment-aware security profiles and setup lifecycle
 
 - Replaced the generic security hardening flow with environment-aware security profiles so local `.test` VMs do not accidentally lose direct Bench access on ports `8000` and `9000`.

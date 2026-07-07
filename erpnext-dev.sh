@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.34"
+SCRIPT_VERSION="1.1.35"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -233,7 +233,7 @@ acquire_toolkit_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|host-dns-guide|print-hosts-command|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
       return 0
       ;;
     *)
@@ -999,12 +999,10 @@ change_local_domain_wizard() {
   ok "Local VM domain changed to ${SITE_NAME}"
   echo
   echo "Run this on your HOST machine, not inside the VM:"
-  echo "  sudo sed -i '/[[:space:]]${old_site//./\\.}\$/d' /etc/hosts"
-  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Then test from the HOST:"
-  echo "  getent hosts ${SITE_NAME}"
-  echo "  curl -I http://${SITE_NAME}:8000"
+  print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
 
   if [[ "$maybe_rebuild_ssl" == yes || -f "$old_cert" || -f "$old_key" ]]; then
     echo
@@ -1100,8 +1098,7 @@ show_site_config() {
   echo "  https://${SITE_NAME}"
   echo
   echo "Host /etc/hosts command:"
-  echo "  sudo sed -i '/[[:space:]]${SITE_NAME//./\\.}\$/d' /etc/hosts"
-  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "To choose a custom site during a fresh setup:"
   echo "  $(toolkit_cmd_env "SITE_NAME=erp107.test" setup)"
@@ -2968,8 +2965,65 @@ EOF_CREDS
   ok "Credentials file secured with root-only permissions"
 }
 
+valid_ipv4_address() {
+  local ip="$1"
+  [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  local IFS=. a b c d
+  read -r a b c d <<< "$ip"
+  for octet in "$a" "$b" "$c" "$d"; do
+    [[ "$octet" =~ ^[0-9]+$ ]] || return 1
+    (( octet >= 0 && octet <= 255 )) || return 1
+  done
+  return 0
+}
+
+is_usable_vm_ip() {
+  local ip="$1"
+  valid_ipv4_address "$ip" || return 1
+  case "$ip" in
+    127.*|169.254.*|0.*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 get_vm_ip() {
-  hostname -I | awk '{print $1}'
+  # Do not hardcode the local VM network. Users may be on KVM default NAT
+  # (192.168.122.x), VirtualBox/UTM-style NAT (10.x), a bridged LAN address,
+  # or a cloud/public interface. Prefer the source IP chosen by the kernel for
+  # outbound routing, then fall back to the primary interface address and then
+  # the first usable address from hostname -I.
+  local candidate="" token="" iface=""
+  local IFS=$' \t\n'
+
+  if [[ -n "${VM_IP:-}" ]] && is_usable_vm_ip "$VM_IP"; then
+    printf '%s\n' "$VM_IP"
+    return 0
+  fi
+
+  candidate="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}' || true)"
+  if is_usable_vm_ip "$candidate"; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+
+  iface="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="dev") {print $(i+1); exit}}' || true)"
+  if [[ -n "$iface" ]]; then
+    candidate="$(ip -o -4 addr show dev "$iface" scope global 2>/dev/null | awk '{sub(/\/.*$/, "", $4); print $4; exit}' || true)"
+    if is_usable_vm_ip "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  fi
+
+  for token in $(hostname -I 2>/dev/null || true); do
+    if is_usable_vm_ip "$token"; then
+      printf '%s\n' "$token"
+      return 0
+    fi
+  done
+
+  # Keep callers from printing an empty value; verification will still fail clearly.
+  printf '%s\n' "unknown"
 }
 
 curl_head_status() {
@@ -2988,6 +3042,134 @@ curl_head_status() {
   fi
 
   curl "${curl_args[@]}" "$url" 2>/dev/null | awk 'NR==1 {print; exit}' || true
+}
+
+escape_hosts_regex() {
+  printf '%s' "$1" | sed 's/[.[\*^$()+?{}|]/\\&/g'
+}
+
+print_host_dns_commands_for_site() {
+  local site="${1:-$SITE_NAME}" vm_ip="${2:-}"
+  local escaped_site
+  vm_ip="${vm_ip:-$(get_vm_ip)}"
+  escaped_site="$(escape_hosts_regex "$site")"
+
+  echo "  VM_IP=\"${vm_ip}\""
+  echo "  LOCAL_DOMAIN=\"${site}\""
+  echo "  sudo cp /etc/hosts \"/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)\""
+  echo "  sudo sed -i \"/[[:space:]]${escaped_site}\\([[:space:]]\\|$\\)/d\" /etc/hosts"
+  echo "  echo \"\${VM_IP} \${LOCAL_DOMAIN}\" | sudo tee -a /etc/hosts"
+}
+
+print_host_dns_tests_for_site() {
+  local site="${1:-$SITE_NAME}" vm_ip="${2:-}"
+  vm_ip="${vm_ip:-$(get_vm_ip)}"
+  echo "  getent hosts ${site}"
+  if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
+    echo "  curl -I http://${vm_ip}:8000"
+  else
+    echo "  curl -I http://\${VM_IP}:8000"
+  fi
+  echo "  curl -I http://${site}:8000"
+  if port_listens 443; then
+    echo "  curl -kI https://${site}"
+  fi
+}
+
+show_local_domain_status() {
+  require_sudo
+  local vm_ip bench_dir detected_network
+  vm_ip="$(get_vm_ip)"
+  bench_dir="$(active_bench_dir 2>/dev/null || printf '%s' "$BENCH_DIR")"
+
+  if [[ "$vm_ip" == 192.168.122.* ]]; then
+    detected_network="KVM/libvirt default NAT"
+  elif [[ "$vm_ip" == 10.* || "$vm_ip" == 172.* || "$vm_ip" == 192.168.* ]]; then
+    detected_network="private NAT/LAN/bridged network"
+  elif [[ "$vm_ip" == unknown ]]; then
+    detected_network="unknown"
+  else
+    detected_network="public or routed interface"
+  fi
+
+  echo
+  echo "============================================================"
+  echo "Local Domain / Host DNS Status"
+  echo "============================================================"
+  status_line "Local domain" "INFO" "$SITE_NAME"
+  status_line "VM IP" "$([[ "$vm_ip" != unknown ]] && echo OK || echo WARN)" "$vm_ip"
+  status_line "Network type" "INFO" "$detected_network"
+  status_line "Bench" "INFO" "$bench_dir"
+  status_line "Direct URL" "INFO" "http://${vm_ip}:8000"
+  status_line "Friendly URL" "INFO" "http://${SITE_NAME}:8000"
+  echo
+  echo "Important: ${SITE_NAME} is a local-only name. It is not public DNS."
+  echo "Your HOST machine must map ${SITE_NAME} to the current VM IP."
+  echo "The IP is detected dynamically; do not copy someone else's 192.168.122.x value."
+  echo
+  echo "Run this on the HOST machine, not inside the VM:"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
+  echo
+  echo "Then test from the HOST machine:"
+  print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
+  echo "============================================================"
+}
+
+show_host_dns_guide() {
+  show_local_domain_status
+}
+
+local_access_doctor() {
+  require_sudo
+  local vm_ip direct_head site_head ip_head gateway
+  vm_ip="$(get_vm_ip)"
+  gateway="$(get_default_gateway 2>/dev/null || true)"
+
+  echo
+  echo "============================================================"
+  echo "Local Access Doctor"
+  echo "============================================================"
+  status_line "Local domain" "INFO" "$SITE_NAME"
+  status_line "Detected VM IP" "$([[ "$vm_ip" != unknown ]] && echo OK || echo WARN)" "$vm_ip"
+  status_line "Default gateway" "INFO" "${gateway:-unknown}"
+
+  if port_listens 8000; then
+    status_line "Bench web port" "OK" "8000 listening"
+  else
+    status_line "Bench web port" "WARN" "8000 is not listening; start ERPNext service or bench"
+  fi
+
+  if port_listens 9000; then
+    status_line "Socket.IO port" "OK" "9000 listening"
+  else
+    status_line "Socket.IO port" "INFO" "9000 not listening"
+  fi
+
+  direct_head="$(curl_head_status "http://127.0.0.1:8000/" "" "" "" || true)"
+  site_head="$(curl_head_status "http://${SITE_NAME}:8000/" "$SITE_NAME" 8000 "127.0.0.1" || true)"
+  ip_head="$(curl_head_status "http://${vm_ip}:8000/" "" "" "" || true)"
+
+  [[ "$direct_head" == HTTP/* ]] && status_line "Inside VM direct HTTP" "OK" "$direct_head" || status_line "Inside VM direct HTTP" "WARN" "no response from 127.0.0.1:8000"
+  [[ "$site_head" == HTTP/* ]] && status_line "Inside VM Host header" "OK" "$site_head" || status_line "Inside VM Host header" "WARN" "no response for ${SITE_NAME} host header"
+  [[ "$ip_head" == HTTP/* ]] && status_line "Inside VM IP HTTP" "OK" "$ip_head" || status_line "Inside VM IP HTTP" "INFO" "no response from ${vm_ip}:8000 inside VM"
+
+  if command -v ufw >/dev/null 2>&1; then
+    status_line "UFW status" "INFO" "$(ufw status 2>/dev/null | head -n 1 | sed 's/^Status: //' || echo unknown)"
+  fi
+
+  echo
+  echo "If the HOST shows 'Could not resolve host: ${SITE_NAME}', that is host DNS mapping."
+  echo "Fix it on the HOST machine with the dynamic command below:"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
+  echo
+  echo "HOST-side tests:"
+  print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
+  echo
+  echo "If direct IP works but ${SITE_NAME} fails, the fix is /etc/hosts on the HOST."
+  echo "If both direct IP and ${SITE_NAME} fail, run:"
+  echo "  $(toolkit_cmd repair-local-access)"
+  echo "  $(toolkit_cmd verify-access)"
+  echo "============================================================"
 }
 
 show_access_instructions() {
@@ -3021,12 +3203,10 @@ show_access_instructions() {
   echo "The friendly URL only works after your HOST machine maps ${SITE_NAME} to this VM IP."
   echo
   echo "Run this on your Linux HOST machine, not inside the VM:"
-  echo
-  echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
-  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Then test on the host:"
-  echo "  getent hosts ${SITE_NAME}"
+  print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "If ${SITE_NAME} still does not open, use the direct IP URL first:"
   echo "  http://${vm_ip}:8000"
@@ -3108,12 +3288,10 @@ verify_access() {
     echo "  http://${SITE_NAME}:8000"
     echo
     echo "HOST /etc/hosts command:"
-    echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
-    echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+    print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
     echo
     echo "HOST tests:"
-    echo "  curl -I http://${vm_ip}:8000"
-    echo "  curl -I http://${SITE_NAME}:8000"
+    print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   fi
 
   echo
@@ -3465,9 +3643,8 @@ prompt_open_main_menu_after_install() {
 
 
 show_host_hosts_command() {
-  local vm_ip escaped_site
+  local vm_ip
   vm_ip="$(get_vm_ip)"
-  escaped_site="${SITE_NAME//./\\.}"
 
   echo
   echo "============================================================"
@@ -3476,21 +3653,16 @@ show_host_hosts_command() {
   echo
   echo "Run these commands on your HOST machine, not inside this VM:"
   echo
-  echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
-  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Then test from the host:"
-  echo "  getent hosts ${SITE_NAME}"
+  print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo
-  echo "Expected:"
+  echo "Expected host mapping:"
   echo "  ${vm_ip} ${SITE_NAME}"
   echo
-  echo "Direct fallback URL while Bench is running:"
-  echo "  http://${vm_ip}:8000"
-  echo
-  echo "Friendly URL after the host entry is added:"
-  echo "  http://${SITE_NAME}:8000"
-  echo
+  echo "This command is environment-aware. The VM IP is detected from this VM,"
+  echo "so it works for KVM, bridged LAN, VirtualBox/UTM-style NAT, or other private networks."
   echo "============================================================"
 }
 
@@ -3620,6 +3792,9 @@ run_local_dev_quickstart() {
   status_line "Default if skipped" "INFO" "erp.test"
   status_line "Production domain" "INFO" "not used"
   ui_box_end
+
+  echo "The host DNS command will be generated with this VM's detected IP. Do not hardcode another user's IP."
+  echo "After install, run: $(toolkit_cmd host-dns-guide)"
 
   if confirm "Save local defaults and start guided setup now?"; then
     set_local_dev_defaults
@@ -3842,8 +4017,7 @@ show_network_status() {
   if [[ -n "${vm_ip}" && -n "${mac}" ]]; then
     echo
     echo "Host /etc/hosts command:"
-    echo "  sudo sed -i '/[[:space:]]${SITE_NAME//./\\.}\$/d' /etc/hosts"
-    echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+    print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
     echo
     echo "KVM host helper to find the matching VM by MAC:"
     echo "  target_mac=\"${mac}\""
@@ -3871,14 +4045,10 @@ show_host_access_test_guide() {
   echo "  getent hosts ${SITE_NAME}"
   echo
   echo "2) If it does not resolve to ${vm_ip}, update /etc/hosts:"
-  echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
-  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
-  echo "3) Test the direct URL:"
-  echo "  curl -I http://${vm_ip}:8000"
-  echo
-  echo "4) Test the friendly URL:"
-  echo "  curl -I http://${SITE_NAME}:8000"
+  echo "3) Test direct and friendly URLs:"
+  print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "5) Browser URLs:"
   echo "  http://${vm_ip}:8000"
@@ -6596,12 +6766,16 @@ Option 2: Trusted local certificate with mkcert
     ${cmd_verify}
 
 Host /etc/hosts still needs to map ${SITE_NAME} to this VM IP:
-  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts
-  echo "${vm_ip} ${SITE_NAME}" | sudo tee -a /etc/hosts
+  VM_IP="${vm_ip}"
+  LOCAL_DOMAIN="${SITE_NAME}"
+  sudo cp /etc/hosts "/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)"
+  sudo sed -i "/[[:space:]]${escaped_site}\([[:space:]]\|$\)/d" /etc/hosts
+  echo "\${VM_IP} \${LOCAL_DOMAIN}" | sudo tee -a /etc/hosts
 
 Host tests:
   getent hosts ${SITE_NAME}
-  curl -I http://${SITE_NAME}
+  curl -I http://${vm_ip}:8000
+  curl -I http://${SITE_NAME}:8000
   curl -kI https://${SITE_NAME}
   curl -I http://${SITE_NAME}:8000
 
@@ -6690,10 +6864,13 @@ Checklist:
 
 7) On the HOST, confirm DNS/hosts and HTTPS:
 
-  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts
-  echo "${vm_ip} ${SITE_NAME}" | sudo tee -a /etc/hosts
+  VM_IP="${vm_ip}"
+  LOCAL_DOMAIN="${SITE_NAME}"
+  sudo cp /etc/hosts "/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)"
+  sudo sed -i "/[[:space:]]${escaped_site}\([[:space:]]\|$\)/d" /etc/hosts
+  echo "\${VM_IP} \${LOCAL_DOMAIN}" | sudo tee -a /etc/hosts
   getent hosts ${SITE_NAME}
-  curl -I http://${SITE_NAME}
+  curl -I http://${vm_ip}:8000
   curl -I https://${SITE_NAME}
 
 Expected:
@@ -7401,8 +7578,7 @@ show_kvm_fixed_ip_guide() {
   echo
   echo "Then update the host /etc/hosts entry:"
   echo
-  echo "  sudo sed -i '/[[:space:]]${escaped_site}\$/d' /etc/hosts"
-  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Notes:"
   echo "  - Use one unique fixed IP per ERPNext VM."
@@ -7458,61 +7634,65 @@ show_access_menu() {
     echo "Access / Hostname / VM Networking Guide"
     echo "============================================================"
     echo "1) Show current VM browser access instructions"
-    echo "2) Show host /etc/hosts command only"
-    echo "3) Show VM network/access status"
-    echo "4) Show host access test guide"
-    echo "5) Verify ERPNext HTTP access"
-    echo "6) Show KVM VM identification + fixed IP helper"
-    echo "7) Show KVM/libvirt fixed IP guide"
-    echo "8) Show multi-environment naming guide"
-    echo "9) Show SSL/HTTPS roadmap"
-    echo "10) Show local SSL status"
-    echo "11) Show local SSL guide"
-    echo "12) Local SSL wizard"
-    echo "13) Show trusted mkcert SSL guide"
-    echo "14) Show browser trust check guide"
-    echo "15) Verify local SSL"
-    echo "16) Install/replace local SSL cert"
-    echo "17) Create self-signed local cert"
-    echo "18) Configure local SSL reverse proxy"
-    echo "19) Disable local SSL reverse proxy"
-    echo "20) Verify SSL rollback"
-    echo "21) Show SSL rollback guide"
-    echo "22) Domain config"
-    echo "23) Production readiness preview"
-    echo "24) Production domain guide"
-    echo "25) Production SSL guide"
-    echo "26) Environment / location check"
+    echo "2) Local domain / host DNS status"
+    echo "3) Local access doctor"
+    echo "4) Show host /etc/hosts command only"
+    echo "5) Show VM network/access status"
+    echo "6) Show host access test guide"
+    echo "7) Verify ERPNext HTTP access"
+    echo "8) Show KVM VM identification + fixed IP helper"
+    echo "9) Show KVM/libvirt fixed IP guide"
+    echo "10) Show multi-environment naming guide"
+    echo "11) Show SSL/HTTPS roadmap"
+    echo "12) Show local SSL status"
+    echo "13) Show local SSL guide"
+    echo "14) Local SSL wizard"
+    echo "15) Show trusted mkcert SSL guide"
+    echo "16) Show browser trust check guide"
+    echo "17) Verify local SSL"
+    echo "18) Install/replace local SSL cert"
+    echo "19) Create self-signed local cert"
+    echo "20) Configure local SSL reverse proxy"
+    echo "21) Disable local SSL reverse proxy"
+    echo "22) Verify SSL rollback"
+    echo "23) Show SSL rollback guide"
+    echo "24) Domain config"
+    echo "25) Production readiness preview"
+    echo "26) Production domain guide"
+    echo "27) Production SSL guide"
+    echo "28) Environment / location check"
     menu_footer
     read -r -p "Choose an option: " access_choice
 
     case "$access_choice" in
       1) show_access_instructions ;;
-      2) show_host_hosts_command ;;
-      3) show_network_status ;;
-      4) show_host_access_test_guide ;;
-      5) verify_access ;;
-      6) show_kvm_vm_identification_guide ;;
-      7) show_kvm_fixed_ip_guide ;;
-      8) show_multi_environment_guide ;;
-      9) show_ssl_roadmap_guide ;;
-      10) show_ssl_status ;;
-      11) show_local_ssl_guide ;;
-      12) run_local_ssl_wizard ;;
-      13) show_mkcert_local_ssl_guide ;;
-      14) show_browser_trust_check_guide ;;
-      15) verify_local_ssl ;;
-      16) install_local_ssl_cert ;;
-      17) create_self_signed_local_cert ;;
-      18) configure_local_ssl ;;
-      19) disable_local_ssl ;;
-      20) verify_ssl_rollback ;;
-      21) show_ssl_rollback_guide ;;
-      22) show_domain_config ;;
-      23) show_production_readiness ;;
-      24) show_production_domain_guide ;;
-      25) show_production_ssl_guide ;;
-      26) show_environment_check ;;
+      2) show_local_domain_status ;;
+      3) local_access_doctor ;;
+      4) show_host_hosts_command ;;
+      5) show_network_status ;;
+      6) show_host_access_test_guide ;;
+      7) verify_access ;;
+      8) show_kvm_vm_identification_guide ;;
+      9) show_kvm_fixed_ip_guide ;;
+      10) show_multi_environment_guide ;;
+      11) show_ssl_roadmap_guide ;;
+      12) show_ssl_status ;;
+      13) show_local_ssl_guide ;;
+      14) run_local_ssl_wizard ;;
+      15) show_mkcert_local_ssl_guide ;;
+      16) show_browser_trust_check_guide ;;
+      17) verify_local_ssl ;;
+      18) install_local_ssl_cert ;;
+      19) create_self_signed_local_cert ;;
+      20) configure_local_ssl ;;
+      21) disable_local_ssl ;;
+      22) verify_ssl_rollback ;;
+      23) show_ssl_rollback_guide ;;
+      24) show_domain_config ;;
+      25) show_production_readiness ;;
+      26) show_production_domain_guide ;;
+      27) show_production_ssl_guide ;;
+      28) show_environment_check ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -7591,7 +7771,7 @@ print_summary() {
   echo "  Friendly URL: http://${SITE_NAME}:8000"
   echo
   echo "Run this on the HOST for the friendly URL:"
-  echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Verify access after setup:"
   echo "  $(toolkit_cmd verify-access)"
@@ -12907,7 +13087,7 @@ show_local_ssl_menu() {
     echo "Use this for local VM domains such as erp.test."
     echo "For public domains, use Production HTTPS instead."
     echo
-    print_two_column_menu       "1) Local SSL Wizard"       "2) Local SSL Status"       "3) Local SSL Guide"       "4) Trusted mkcert Guide"       "5) Browser Trust Check"       "6) Install/Replace Cert"       "7) Verify Local SSL"       "8) Create Self-Signed Cert"       "9) Configure Local SSL"       "10) Disable Local SSL"       "11) Verify SSL Rollback"       "12) Change Local Domain"       "13) SSL/HTTPS Roadmap"
+    print_two_column_menu       "1) Local SSL Wizard"       "2) Local SSL Status"       "3) Local SSL Guide"       "4) Trusted mkcert Guide"       "5) Browser Trust Check"       "6) Install/Replace Cert"       "7) Verify Local SSL"       "8) Create Self-Signed Cert"       "9) Configure Local SSL"       "10) Disable Local SSL"       "11) Verify SSL Rollback"       "12) Change Local Domain"       "13) Local Domain / Host DNS Status"       "14) Local Access Doctor"       "15) Print Host /etc/hosts Command"       "16) SSL/HTTPS Roadmap"
     menu_footer
     read -r -p "Choose an option: " ssl_choice
 
@@ -12924,7 +13104,10 @@ show_local_ssl_menu() {
       10) disable_local_ssl ;;
       11) verify_ssl_rollback ;;
       12) change_local_domain_wizard ;;
-      13) show_ssl_roadmap_guide ;;
+      13) show_local_domain_status ;;
+      14) local_access_doctor ;;
+      15) show_host_hosts_command ;;
+      16) show_ssl_roadmap_guide ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -13040,6 +13223,9 @@ Local VM HTTPS / SSL:
   local-ssl-menu       Local VM HTTPS / SSL submenu
   local-ssl-wizard     Guided local HTTPS setup for erp.test-style domains
   change-local-domain  Rename the local VM domain/site and update toolkit config
+  local-domain-status  Show dynamic VM IP, local domain, and host mapping status
+  local-access-doctor  Diagnose local URL/DNS/firewall/access issues
+  host-dns-guide       Print host-side /etc/hosts commands using the current VM IP
   local-ssl-guide      Local SSL guide
   ssl-status           Local SSL status
   install-local-ssl-cert Install/replace local certificate from /tmp
@@ -13220,7 +13406,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -13275,7 +13461,7 @@ main() {
     stop) run_stop ;;
     uninstall) run_uninstall_menu ;;
     advanced) show_advanced_menu ;;
-    access) show_access_instructions ;;
+    access|access-menu) show_access_menu ;;
     verify-access) verify_access ;;
     access-info|desk-url) show_access_info ;;
     education-access-info|portal-access-info) show_education_access_info ;;
@@ -13288,7 +13474,6 @@ main() {
     next-step) show_next_step ;;
     local-ssl-menu|local-https|local-vm-ssl) show_local_ssl_menu ;;
     local-ssl-wizard|ssl-wizard) run_local_ssl_wizard ;;
-    access-menu) show_access_menu ;;
     backup-menu) run_backup_maintenance_menu ;;
     app-library|apps) show_app_library_menu ;;
     app-install-wizard|app-wizard) run_app_install_wizard ;;
@@ -13369,7 +13554,9 @@ main() {
     kvm-guide) show_kvm_fixed_ip_guide ;;
     kvm-identify) show_kvm_vm_identification_guide ;;
     network-status) show_network_status ;;
-    hosts-command) show_host_hosts_command ;;
+    local-domain-status) show_local_domain_status ;;
+    local-access-doctor) local_access_doctor ;;
+    hosts-command|print-hosts-command|host-dns-guide) show_host_hosts_command ;;
     host-test) show_host_access_test_guide ;;
     ssl-roadmap) show_ssl_roadmap_guide ;;
     ssl-status) show_ssl_status ;;

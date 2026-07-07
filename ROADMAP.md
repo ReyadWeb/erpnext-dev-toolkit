@@ -1,3 +1,10 @@
+## v1.1.35 completed local DNS/access root fix
+
+- Local VM host mapping now uses dynamic VM IP detection instead of assuming a fixed `192.168.122.x` address.
+- Added local domain status, local access doctor, and host DNS guide commands.
+- Access and Local SSL menus now expose local DNS/host mapping diagnostics.
+- The setup flow now treats host `/etc/hosts` mapping as a first-class local VM step, while still reminding users that the script cannot directly edit the separate host machine from inside the guest VM.
+
 ## v1.1.34 completed security profile and setup lifecycle hardening
 
 - Added separate Local VM and Production firewall profiles.
