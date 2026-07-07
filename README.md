@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit v1.1.36
+# ERPNext Developer Toolkit v1.1.37
 
 ![ERPNext Toolkit Banner](docs/assets/erp_installer_readme_banner.png)
 
@@ -21,46 +21,50 @@ Interactive menus use a shared navigation reader: `q`/`Q` quits, `b`/`B` goes ba
 
 ## Start here
 
-Use this section when you want to install quickly without reading the full README first.
+Use this section when you want the fastest path without reading the full README first.
 
-These commands assume a fresh **Debian-family Linux VM** such as Ubuntu or Debian, with `sudo` access.
+Pick the command that matches your VM. These commands assume a fresh **Debian-family Linux VM** such as Ubuntu or Debian, with `sudo` access.
 
-### Command path note — why `/tmp` first and `erpnext-dev` later
+### Option A — fresh local VM install
 
-The first `curl` command downloads the toolkit to a unique temporary bootstrap file under `/tmp`, for example:
+Use this inside a local VM for development, testing, or app evaluation.
 
-```bash
-/tmp/erpnext-dev.A1b2C3.sh
-```
-
-That path is used only as a **temporary bootstrap copy**. The command uses `mktemp` so root-owned and normal-user runs cannot collide with each other during repeated tests.
-
-After the toolkit runs with `sudo`, it saves the stable root-owned copy here:
-
-```bash
-/opt/erpnext-dev/erpnext-dev.sh
-```
-
-It also creates this short command:
-
-```bash
-/usr/local/bin/erpnext-dev
-```
-
-Use the paths this way:
+The wizard asks for the local domain near the beginning. Press **Enter** to use the default:
 
 ```text
-Fresh VM / first copied command:  sudo "$tmp" <command>
-After first run or update:        sudo erpnext-dev <command>
-Stable toolkit file:              /opt/erpnext-dev/erpnext-dev.sh
-Short command:                    /usr/local/bin/erpnext-dev
+erp.test
 ```
 
-If `erpnext-dev` does not exist yet, run one of the quickstart commands below or use **Option E** to install/repair the CLI command.
+```bash
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" local-dev-quickstart
+```
 
-### Option A — check the VM before installing
+After the local install finishes, run this inside the VM to print the host-side DNS mapping command for your current VM IP:
 
-Use this first when testing a fresh VM. It checks OS, internet access, CPU, RAM, root disk, and `/tmp` free space before the heavy install begins:
+```bash
+sudo erpnext-dev local-domain-status
+sudo erpnext-dev local-access-doctor
+```
+
+### Option B — fresh public VPS / cloud VM install
+
+Use this inside a fresh public VM when you have a real domain or subdomain ready, such as `erp.example.com`.
+
+```bash
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" public-vm-quickstart
+```
+
+### Option C — open the guided setup menu
+
+Use this if you want to choose the setup path interactively.
+
+```bash
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" menu
+```
+
+### Option D — check the VM before installing
+
+Use this first when you only want to verify OS, internet access, CPU, RAM, disk, and temporary storage before starting the full install.
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" install-preflight
@@ -68,90 +72,58 @@ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl c
 
 If the VM is clearly unsafe for ERPNext, the installer blocks the install and prints a red `INSTALL BLOCKED` summary explaining what to fix.
 
-### Option B — local VM development install
+### Option E — update or repair the `erpnext-dev` command
 
-Use this inside a fresh local VM for testing or development:
-
-```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" local-dev-quickstart
-```
-
-Recommended local hostname:
-
-```text
-erp.test
-```
-
-### Option C — public VPS / cloud VM install
-
-Use this inside a fresh public VM when you have a real domain or subdomain ready:
+Use this on an existing VM to install, update, or repair the reusable toolkit command.
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" public-vm-quickstart
+tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" install-cli && erpnext-dev version
 ```
 
-Recommended public hostname:
-
-```text
-erp.example.com
-```
-
-### Option D — open the guided installer menu
-
-Use this if you want to choose the setup path interactively:
-
-```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" menu
-```
-
-### Option E — update or repair the toolkit command
-
-Use this on a VM where you want to update the toolkit and create/repair the short `erpnext-dev` command:
-
-```bash
-tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" install-cli && sudo erpnext-dev version
-```
-
-Then open the main menu or production operations wizard:
+Then use the stable command:
 
 ```bash
 sudo erpnext-dev menu
 sudo erpnext-dev production-ops-wizard
 ```
 
-Useful toolkit command checks:
-
-```bash
-erpnext-dev --help
-erpnext-dev version
-erpnext-dev where-installed
-sudo erpnext-dev update-toolkit
-sudo erpnext-dev repair-cli
-```
-
 ### Option F — optional apps wizard
 
-Use this only after the core ERPNext install is healthy:
+Use this only after the core ERPNext install is healthy.
 
 ```bash
 sudo erpnext-dev app-install-wizard
 ```
 
-After any quickstart finishes, use this stable path for follow-up commands:
+### Common follow-up commands
+
+After the first quickstart or `install-cli` run, use `erpnext-dev` for normal operations:
 
 ```bash
-sudo erpnext-dev <command>
-```
-
-Common examples:
-
-```bash
-sudo erpnext-dev version
+erpnext-dev --help
+erpnext-dev version
+erpnext-dev where-installed
+sudo erpnext-dev menu
 sudo erpnext-dev doctor --plain
 sudo erpnext-dev verify-access
 sudo erpnext-dev credentials-info
-sudo erpnext-dev production-ops-wizard
+sudo erpnext-dev update-toolkit
+sudo erpnext-dev repair-cli
 ```
+
+### What the first command does
+
+The long first-run command downloads a temporary bootstrap copy, runs it with `sudo`, then installs the stable toolkit command.
+
+After the first run, the stable files are:
+
+```text
+Toolkit file:  /opt/erpnext-dev/erpnext-dev.sh
+CLI command:   /usr/local/bin/erpnext-dev
+Daily command: sudo erpnext-dev <command>
+```
+
+The temporary file under `/tmp` is only used for the first bootstrap or update. It is not the long-term toolkit location.
 
 ---
 
@@ -310,19 +282,21 @@ sudo erpnext-dev backup-verify
 sudo erpnext-dev credentials-info
 ```
 
-From the host machine, add a hosts entry. Replace `LOCAL_VM_IP` with the local VM IP:
+For local VM domain access, print the correct host-side `/etc/hosts` command from inside the VM:
 
 ```bash
-sudo sed -i '/[[:space:]]erp\.test$/d' /etc/hosts
-echo "LOCAL_VM_IP erp.test" | sudo tee -a /etc/hosts
+sudo erpnext-dev local-domain-status
+sudo erpnext-dev host-dns-guide
 ```
 
-Then test access from the host:
+Run the printed `/etc/hosts` command on the **host machine**, then test access from the host:
 
 ```bash
-curl -I http://LOCAL_VM_IP:8000
+getent hosts erp.test
 curl -I http://erp.test:8000
 ```
+
+The VM IP is detected dynamically. Do not copy a sample IP from another machine.
 
 If local HTTPS is enabled, also test:
 

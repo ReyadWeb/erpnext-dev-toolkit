@@ -1,3 +1,9 @@
+## v1.1.37 completed README first-run UX cleanup
+
+- The README now starts with the real local, production, guided menu, preflight, and update commands before explaining bootstrap internals.
+- The `/tmp` bootstrap note is preserved but moved below the copyable commands.
+- Local host DNS mapping instructions now emphasize dynamic VM IP detection and toolkit-generated host commands rather than static sample IPs.
+
 ## v1.1.36 completed menu navigation hardening
 
 - All interactive menu prompts now use a shared input reader.

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.37 - README start-here cleanup
+
+- Reworked the README **Start here** section so users see the practical install commands first.
+- Moved the temporary bootstrap path explanation below the main quickstart commands so `/tmp` details do not distract first-time users.
+- Clarified local VM domain behavior: the local wizard asks for a domain and defaults to `erp.test` when the user presses Enter.
+- Updated local host DNS instructions to use dynamic toolkit commands (`local-domain-status`, `host-dns-guide`, and `local-access-doctor`) instead of sample IP addresses.
+- Kept the stable toolkit path and CLI explanation, but moved it into a short follow-up note after the primary commands.
+
 ## v1.1.36 - Central menu navigation hardening
 
 - Added a central `menu_read_choice` handler for all interactive menu prompts so `q`, `Q`, `b`, and `B` are handled consistently across menus and submenus.

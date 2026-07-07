@@ -1,5 +1,29 @@
 # Testing
 
+## v1.1.37 README start-here cleanup
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+grep -n "## Start here" README.md
+grep -n "Option A — fresh local VM install" README.md
+grep -n "What the first command does" README.md
+grep -n "local-domain-status" README.md
+```
+
+Expected:
+
+```text
+ERPNext Developer Toolkit v1.1.37
+```
+
+Validation points:
+
+- The Start here section leads with copyable local, production, menu, preflight, update/repair, and optional-app commands.
+- The `/tmp` bootstrap explanation appears after the main start commands, not before them.
+- Local host DNS mapping uses toolkit-generated dynamic IP commands instead of a copied sample IP.
+- Follow-up command examples use the stable `erpnext-dev` CLI.
+
 ## v1.1.36 menu navigation hardening
 
 ```bash
@@ -16,7 +40,7 @@ printf 'B\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh advanced
 Expected:
 
 ```text
-ERPNext Developer Toolkit v1.1.36
+ERPNext Developer Toolkit v1.1.37
 Menu navigation              OK
 ```
 
@@ -43,7 +67,7 @@ printf 'q\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh local-ssl-menu
 Expected:
 
 ```text
-ERPNext Developer Toolkit v1.1.35
+ERPNext Developer Toolkit v1.1.37
 ```
 
 Validation points:
@@ -81,7 +105,7 @@ printf 'q\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh public-vm-quickstart
 Expected:
 
 ```text
-ERPNext Developer Toolkit v1.1.35
+ERPNext Developer Toolkit v1.1.37
 Security menu shows Local VM firewall profile, Production firewall profile, Repair local VM access, and rollback snapshots.
 Public VM quickstart shows the lifecycle order: requirements, domain, install, backup, HTTPS, security, apps, final status.
 ```
@@ -122,7 +146,7 @@ Expected:
 
 ```text
 SCRIPT_VERSION="1.1.35"
-ERPNext Developer Toolkit v1.1.34
+ERPNext Developer Toolkit v1.1.37
 ```
 
 Manual VM validation after installing the patch:
@@ -158,7 +182,7 @@ Expected:
 
 ```text
 SCRIPT_VERSION="1.1.32"
-ERPNext Developer Toolkit v1.1.32
+ERPNext Developer Toolkit v1.1.37
 ```
 
 
