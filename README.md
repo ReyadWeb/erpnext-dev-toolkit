@@ -1,6 +1,6 @@
-# ERPNext Developer Installer v1.1.26
+# ERPNext Developer Toolkit v1.1.28
 
-![ERPNext Installer Banner](docs/assets/erp_installer_readme_banner.png)
+![ERPNext Toolkit Banner](docs/assets/erp_installer_readme_banner.png)
 
 A guided installer and operations toolkit for ERPNext/Frappe on Ubuntu and Debian-family VMs.
 
@@ -21,12 +21,45 @@ Use this section when you want to install quickly without reading the full READM
 
 These commands assume a fresh **Debian-family Linux VM** such as Ubuntu or Debian, with `sudo` access.
 
+### Command path note — why `/tmp` first and `erp-dev` later
+
+The first `curl` command downloads the toolkit to:
+
+```bash
+/tmp/erpnext-dev.sh
+```
+
+That path is used only as a **temporary bootstrap copy**. It keeps the first download simple, avoids writing into system-owned locations before `sudo` is used, and is safe to overwrite on every test run with `cache_bust=$(date +%s)`.
+
+After the toolkit runs with `sudo`, it saves the stable root-owned copy here:
+
+```bash
+/opt/erpnext-dev/erpnext-dev.sh
+```
+
+It also creates this short command:
+
+```bash
+/usr/local/bin/erp-dev
+```
+
+Use the paths this way:
+
+```text
+Fresh VM / first copied command:  sudo /tmp/erpnext-dev.sh <command>
+After first run or update:        sudo erp-dev <command>
+Stable toolkit file:              /opt/erpnext-dev/erpnext-dev.sh
+Short command:                    /usr/local/bin/erp-dev
+```
+
+If `erp-dev` does not exist yet, run one of the quickstart commands below or use **Option E** to install/repair the CLI command.
+
 ### Option A — check the VM before installing
 
 Use this first when testing a fresh VM. It checks OS, internet access, CPU, RAM, root disk, and `/tmp` free space before the heavy install begins:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh install-preflight
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh install-preflight
 ```
 
 If the VM is clearly unsafe for ERPNext, the installer blocks the install and prints a red `INSTALL BLOCKED` summary explaining what to fix.
@@ -36,7 +69,7 @@ If the VM is clearly unsafe for ERPNext, the installer blocks the install and pr
 Use this inside a fresh local VM for testing or development:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh local-dev-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart
 ```
 
 Recommended local hostname:
@@ -50,7 +83,7 @@ erp.test
 Use this inside a fresh public VM when you have a real domain or subdomain ready:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh public-vm-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart
 ```
 
 Recommended public hostname:
@@ -64,22 +97,32 @@ erp.example.com
 Use this if you want to choose the setup path interactively:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh menu
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh menu
 ```
 
-### Option E — update an existing VM to the latest script
+### Option E — update or repair the toolkit command
 
-Use this on a VM where the installer was already used:
+Use this on a VM where you want to update the toolkit and create/repair the short `erp-dev` command:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo cp /tmp/install-erpnext-dev.sh /root/install-erpnext-dev.sh && sudo chmod +x /root/install-erpnext-dev.sh && sudo /root/install-erpnext-dev.sh version
+curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh install-cli && sudo erp-dev version
 ```
 
 Then open the main menu or production operations wizard:
 
 ```bash
-sudo /root/install-erpnext-dev.sh menu
-sudo /root/install-erpnext-dev.sh production-ops-wizard
+sudo erp-dev menu
+sudo erp-dev production-ops-wizard
+```
+
+Useful toolkit command checks:
+
+```bash
+erp-dev --help
+erp-dev version
+erp-dev where-installed
+sudo erp-dev update-toolkit
+sudo erp-dev repair-cli
 ```
 
 ### Option F — optional apps wizard
@@ -87,23 +130,23 @@ sudo /root/install-erpnext-dev.sh production-ops-wizard
 Use this only after the core ERPNext install is healthy:
 
 ```bash
-sudo /root/install-erpnext-dev.sh app-install-wizard
+sudo erp-dev app-install-wizard
 ```
 
 After any quickstart finishes, use this stable path for follow-up commands:
 
 ```bash
-sudo /root/install-erpnext-dev.sh <command>
+sudo erp-dev <command>
 ```
 
 Common examples:
 
 ```bash
-sudo /root/install-erpnext-dev.sh version
-sudo /root/install-erpnext-dev.sh doctor --plain
-sudo /root/install-erpnext-dev.sh verify-access
-sudo /root/install-erpnext-dev.sh credentials-info
-sudo /root/install-erpnext-dev.sh production-ops-wizard
+sudo erp-dev version
+sudo erp-dev doctor --plain
+sudo erp-dev verify-access
+sudo erp-dev credentials-info
+sudo erp-dev production-ops-wizard
 ```
 
 ---
@@ -117,7 +160,7 @@ sudo /root/install-erpnext-dev.sh production-ops-wizard
 - [Interactive menu navigation](#interactive-menu-navigation)
 - [One-command local VM test](#one-command-local-vm-test)
 - [One-command public VPS / cloud VM setup](#one-command-public-vps--cloud-vm-setup)
-- [Reusable script path](#reusable-script-path)
+- [Reusable toolkit command](#reusable-toolkit-command)
 - [Accessing ERPNext credentials](#accessing-erpnext-credentials)
 - [Production operations](#production-operations)
 - [Backups and restore safety](#backups-and-restore-safety)
@@ -165,13 +208,13 @@ The installer includes a blocking install preflight so unsafe environments do no
 Run it directly:
 
 ```bash
-sudo /tmp/install-erpnext-dev.sh install-preflight
+sudo /tmp/erpnext-dev.sh install-preflight
 ```
 
 or after the script has been copied to the reusable path:
 
 ```bash
-sudo /root/install-erpnext-dev.sh install-preflight
+sudo erp-dev install-preflight
 ```
 
 Current safety behavior:
@@ -194,7 +237,7 @@ The install flow offers root storage expansion before the final blocking resourc
 There is an expert-only unsafe override for disposable test VMs:
 
 ```bash
-ERPNEXT_ALLOW_UNSAFE_INSTALL=true sudo /tmp/install-erpnext-dev.sh local-dev-quickstart
+ERPNEXT_ALLOW_UNSAFE_INSTALL=true sudo /tmp/erpnext-dev.sh local-dev-quickstart
 ```
 
 Normal users should not use the unsafe override.
@@ -232,16 +275,17 @@ Some longer app menus use two columns when the terminal is wide enough, and fall
 Run this inside a fresh local Ubuntu/Debian-family VM:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh local-dev-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart
 ```
 
-The quickstart copies the installer to a reusable path inside the VM:
+The quickstart installs the toolkit into the VM and creates the short command:
 
 ```bash
-/root/install-erpnext-dev.sh
+/opt/erpnext-dev/erpnext-dev.sh
+/usr/local/bin/erp-dev
 ```
 
-Use that path with `sudo` for follow-up commands, including SSL setup and optional app installation. Do not use `./install-erpnext-dev.sh` unless you are in the directory that contains the script.
+Use `sudo erp-dev` for follow-up commands, including SSL setup and optional app installation. Do not use `./erpnext-dev.sh` unless you are in the directory that contains the script.
 
 Recommended local site name:
 
@@ -252,14 +296,14 @@ erp.test
 After the installer finishes, validate inside the VM:
 
 ```bash
-sudo /root/install-erpnext-dev.sh version
-sudo /root/install-erpnext-dev.sh doctor --plain
-sudo /root/install-erpnext-dev.sh verify-access
-sudo /root/install-erpnext-dev.sh access-info
-sudo /root/install-erpnext-dev.sh backup-files
-sudo /root/install-erpnext-dev.sh backup-status
-sudo /root/install-erpnext-dev.sh backup-verify
-sudo /root/install-erpnext-dev.sh credentials-info
+sudo erp-dev version
+sudo erp-dev doctor --plain
+sudo erp-dev verify-access
+sudo erp-dev access-info
+sudo erp-dev backup-files
+sudo erp-dev backup-status
+sudo erp-dev backup-verify
+sudo erp-dev credentials-info
 ```
 
 From the host machine, add a hosts entry. Replace `LOCAL_VM_IP` with the local VM IP:
@@ -285,13 +329,13 @@ curl -Ik https://erp.test
 For trusted local HTTPS with mkcert, run the guide inside the VM:
 
 ```bash
-sudo /root/install-erpnext-dev.sh mkcert-guide
+sudo erp-dev mkcert-guide
 ```
 
 The guide separates HOST commands from VM commands. In short: generate and trust the certificate on the Linux HOST, copy the cert/key into the VM with `scp`, then run the local SSL wizard inside the VM:
 
 ```bash
-sudo /root/install-erpnext-dev.sh local-ssl-wizard
+sudo erp-dev local-ssl-wizard
 ```
 
 Expected local result:
@@ -326,7 +370,7 @@ Recommended local VM test order:
 Run this inside a fresh public Ubuntu/Debian-family VM:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh public-vm-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart
 ```
 
 Use a real subdomain, for example:
@@ -360,9 +404,9 @@ Origin certificate: installed on the VM
 Helpful Cloudflare commands:
 
 ```bash
-sudo /root/install-erpnext-dev.sh cloudflare-origin-guide
-sudo /root/install-erpnext-dev.sh configure-cloudflare-origin-ssl
-sudo /root/install-erpnext-dev.sh cloudflare-origin-ssl-status
+sudo erp-dev cloudflare-origin-guide
+sudo erp-dev configure-cloudflare-origin-ssl
+sudo erp-dev cloudflare-origin-ssl-status
 ```
 
 For Let's Encrypt mode:
@@ -375,18 +419,18 @@ Port 80: reachable during certificate issuance
 Helpful public SSL commands:
 
 ```bash
-sudo /root/install-erpnext-dev.sh production-ssl-plan
-sudo /root/install-erpnext-dev.sh production-ssl-wizard
-sudo /root/install-erpnext-dev.sh production-ssl-status
+sudo erp-dev production-ssl-plan
+sudo erp-dev production-ssl-wizard
+sudo erp-dev production-ssl-status
 ```
 
 After installation, validate:
 
 ```bash
-sudo /root/install-erpnext-dev.sh release-readiness
-sudo /root/install-erpnext-dev.sh production-checklist
-sudo /root/install-erpnext-dev.sh backup-verify
-sudo /root/install-erpnext-dev.sh support-bundle
+sudo erp-dev release-readiness
+sudo erp-dev production-checklist
+sudo erp-dev backup-verify
+sudo erp-dev support-bundle
 ```
 
 From your workstation, replace `PUBLIC_VM_IP` with the public server IP:
@@ -407,28 +451,50 @@ PUBLIC_VM_IP:9000 -> timeout or blocked
 
 ---
 
-## Reusable script path
+## Reusable toolkit command
 
-During quickstart and preflight flows, the installer copies itself to:
+The toolkit intentionally uses a temporary bootstrap file first, then a stable installed command:
 
-```bash
-/root/install-erpnext-dev.sh
+```text
+/tmp/erpnext-dev.sh                 temporary bootstrap copy downloaded by curl
+/opt/erpnext-dev/erpnext-dev.sh     stable root-owned toolkit file
+/usr/local/bin/erp-dev              short command for daily use
 ```
 
-Use this stable path with `sudo` for follow-up commands:
+Why `/tmp` first? The README one-liners download to `/tmp` because it is writable by a normal sudo user, easy to overwrite during testing, and avoids modifying system-owned paths until the toolkit is actually executed with `sudo`. The `/tmp` copy should not be treated as permanent because `/tmp` may be cleaned by the OS.
+
+Why `/opt` later? During quickstart, preflight, and CLI repair flows, the toolkit copies itself to:
 
 ```bash
-sudo /root/install-erpnext-dev.sh version
-sudo /root/install-erpnext-dev.sh status
-sudo /root/install-erpnext-dev.sh doctor --plain
-sudo /root/install-erpnext-dev.sh verify-access
-sudo /root/install-erpnext-dev.sh production-ops-wizard
+/opt/erpnext-dev/erpnext-dev.sh
 ```
 
-To update the stable script path from GitHub:
+Then it creates the short command:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo cp /tmp/install-erpnext-dev.sh /root/install-erpnext-dev.sh && sudo chmod +x /root/install-erpnext-dev.sh && sudo /root/install-erpnext-dev.sh version
+/usr/local/bin/erp-dev
+```
+
+Use `sudo erp-dev` for follow-up maintenance, backups, SSL, app installs, diagnostics, and production operations:
+
+```bash
+sudo erp-dev version
+sudo erp-dev status
+sudo erp-dev doctor --plain
+sudo erp-dev verify-access
+sudo erp-dev production-ops-wizard
+```
+
+To update or repair the toolkit command from GitHub:
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh install-cli && sudo erp-dev version
+```
+
+To check where the toolkit is installed:
+
+```bash
+erp-dev where-installed
 ```
 
 ---
@@ -440,13 +506,13 @@ After installation, the installer saves the generated ERPNext Administrator pass
 Use the safe overview command first. It shows where the credentials are stored, but it does **not** print passwords:
 
 ```bash
-sudo /root/install-erpnext-dev.sh credentials-info
+sudo erp-dev credentials-info
 ```
 
 To display the generated password on a private VM console, use the guarded command below. It warns first and requires confirmation before printing secrets:
 
 ```bash
-sudo /root/install-erpnext-dev.sh credentials-show
+sudo erp-dev credentials-show
 ```
 
 The ERPNext web login normally uses:
@@ -459,25 +525,25 @@ Password: value shown by credentials-show
 Check the credentials file owner and permissions:
 
 ```bash
-sudo /root/install-erpnext-dev.sh credentials-file-status
+sudo erp-dev credentials-file-status
 ```
 
 Secure the credentials file with root-only permissions:
 
 ```bash
-sudo /root/install-erpnext-dev.sh credentials-secure
+sudo erp-dev credentials-secure
 ```
 
 After saving the credentials in a password manager or completing production handoff, remove the local plaintext credentials file:
 
 ```bash
-sudo /root/install-erpnext-dev.sh credentials-delete
+sudo erp-dev credentials-delete
 ```
 
 Reset the ERPNext Administrator password safely without manually changing directories or relying on the current user's `bench` PATH:
 
 ```bash
-sudo /root/install-erpnext-dev.sh reset-admin-password
+sudo erp-dev reset-admin-password
 ```
 
 The credentials file is intentionally excluded from diagnostics, support bundles, shared logs, and generated support archives. Do not paste credentials into public tickets, GitHub issues, screenshots, or support chats.
@@ -489,18 +555,18 @@ The credentials file is intentionally excluded from diagnostics, support bundles
 Open the production operations wizard:
 
 ```bash
-sudo /root/install-erpnext-dev.sh production-ops-wizard
+sudo erp-dev production-ops-wizard
 ```
 
 Common operations commands:
 
 ```bash
-sudo /root/install-erpnext-dev.sh release-readiness
-sudo /root/install-erpnext-dev.sh production-checklist
-sudo /root/install-erpnext-dev.sh health-check
-sudo /root/install-erpnext-dev.sh configure-health-check-timer
-sudo /root/install-erpnext-dev.sh health-check-status
-sudo /root/install-erpnext-dev.sh service-recovery-plan
+sudo erp-dev release-readiness
+sudo erp-dev production-checklist
+sudo erp-dev health-check
+sudo erp-dev configure-health-check-timer
+sudo erp-dev health-check-status
+sudo erp-dev service-recovery-plan
 ```
 
 Health checks cover ERPNext runtime, Nginx, MariaDB, Redis, HTTPS, disk usage, latest backup state, UFW, Fail2Ban, scheduled backup timer, and off-VM backup state.
@@ -512,43 +578,43 @@ Health checks cover ERPNext runtime, Nginx, MariaDB, Redis, HTTPS, disk usage, l
 Create and verify a local database + files backup:
 
 ```bash
-sudo /root/install-erpnext-dev.sh backup-files
-sudo /root/install-erpnext-dev.sh backup-status
-sudo /root/install-erpnext-dev.sh backup-verify
+sudo erp-dev backup-files
+sudo erp-dev backup-status
+sudo erp-dev backup-verify
 ```
 
 Scheduled local backups:
 
 ```bash
-sudo /root/install-erpnext-dev.sh backup-schedule-plan
-sudo /root/install-erpnext-dev.sh configure-backup-schedule
-sudo /root/install-erpnext-dev.sh backup-schedule-status
+sudo erp-dev backup-schedule-plan
+sudo erp-dev configure-backup-schedule
+sudo erp-dev backup-schedule-status
 ```
 
 Backup retention:
 
 ```bash
-sudo /root/install-erpnext-dev.sh backup-retention-plan
-sudo /root/install-erpnext-dev.sh backup-retention-status
-sudo /root/install-erpnext-dev.sh cleanup-old-backups-dry-run
-sudo /root/install-erpnext-dev.sh cleanup-old-backups
+sudo erp-dev backup-retention-plan
+sudo erp-dev backup-retention-status
+sudo erp-dev cleanup-old-backups-dry-run
+sudo erp-dev cleanup-old-backups
 ```
 
 Off-VM backup planning and rsync target setup:
 
 ```bash
-sudo /root/install-erpnext-dev.sh off-vm-backup-plan
-sudo /root/install-erpnext-dev.sh configure-rsync-backup-target
-sudo /root/install-erpnext-dev.sh off-vm-backup-dry-run
-sudo /root/install-erpnext-dev.sh run-off-vm-backup
-sudo /root/install-erpnext-dev.sh off-vm-backup-status
+sudo erp-dev off-vm-backup-plan
+sudo erp-dev configure-rsync-backup-target
+sudo erp-dev off-vm-backup-dry-run
+sudo erp-dev run-off-vm-backup
+sudo erp-dev off-vm-backup-status
 ```
 
 Restore safety checks:
 
 ```bash
-sudo /root/install-erpnext-dev.sh restore-preflight
-sudo /root/install-erpnext-dev.sh restore-rehearsal-guide
+sudo erp-dev restore-preflight
+sudo erp-dev restore-rehearsal-guide
 ```
 
 Important backup model:
@@ -569,9 +635,9 @@ Before installing an optional app, create an ERPNext backup and take a VM snapsh
 Inside the ERPNext VM:
 
 ```bash
-sudo /root/install-erpnext-dev.sh backup-files
-sudo /root/install-erpnext-dev.sh backup-verify
-sudo /root/install-erpnext-dev.sh backup-status
+sudo erp-dev backup-files
+sudo erp-dev backup-verify
+sudo erp-dev backup-status
 ```
 
 Then create the VM snapshot from the host platform, for example KVM/virt-manager, Proxmox, VMware, VirtualBox, or your cloud provider.
@@ -596,30 +662,30 @@ Recommended optional app workflow:
 Install optional apps only after the core ERPNext install is healthy:
 
 ```bash
-sudo /root/install-erpnext-dev.sh app-library
-sudo /root/install-erpnext-dev.sh app-compatibility
-sudo /root/install-erpnext-dev.sh app-install-wizard
-sudo /root/install-erpnext-dev.sh app-status
+sudo erp-dev app-library
+sudo erp-dev app-compatibility
+sudo erp-dev app-install-wizard
+sudo erp-dev app-status
 ```
 
 Curated app library:
 
 | App | Direct command |
 |---|---|
-| CRM | `sudo /root/install-erpnext-dev.sh install-crm` |
-| HR / HRMS | `sudo /root/install-erpnext-dev.sh install-hrms` |
-| Education | `sudo /root/install-erpnext-dev.sh install-education` |
-| Payments | `sudo /root/install-erpnext-dev.sh install-payments` |
-| Webshop / E-Commerce | `sudo /root/install-erpnext-dev.sh install-webshop` |
-| Builder | `sudo /root/install-erpnext-dev.sh install-builder` |
-| Learning / LMS | `sudo /root/install-erpnext-dev.sh install-lms` |
-| Wiki | `sudo /root/install-erpnext-dev.sh install-wiki` |
-| Print Designer | `sudo /root/install-erpnext-dev.sh install-print-designer` |
-| Drive | `sudo /root/install-erpnext-dev.sh install-drive` |
-| Raven Chat | `sudo /root/install-erpnext-dev.sh install-raven` |
-| Helpdesk | `sudo /root/install-erpnext-dev.sh install-helpdesk` |
-| Telephony | `sudo /root/install-erpnext-dev.sh install-telephony` |
-| Insights | `sudo /root/install-erpnext-dev.sh install-insights` |
+| CRM | `sudo erp-dev install-crm` |
+| HR / HRMS | `sudo erp-dev install-hrms` |
+| Education | `sudo erp-dev install-education` |
+| Payments | `sudo erp-dev install-payments` |
+| Webshop / E-Commerce | `sudo erp-dev install-webshop` |
+| Builder | `sudo erp-dev install-builder` |
+| Learning / LMS | `sudo erp-dev install-lms` |
+| Wiki | `sudo erp-dev install-wiki` |
+| Print Designer | `sudo erp-dev install-print-designer` |
+| Drive | `sudo erp-dev install-drive` |
+| Raven Chat | `sudo erp-dev install-raven` |
+| Helpdesk | `sudo erp-dev install-helpdesk` |
+| Telephony | `sudo erp-dev install-telephony` |
+| Insights | `sudo erp-dev install-insights` |
 
 
 ### Education app access note
@@ -637,9 +703,9 @@ Education portal:      /edu-portal/students
 Helpful commands:
 
 ```bash
-sudo /root/install-erpnext-dev.sh access-info
-sudo /root/install-erpnext-dev.sh education-access-info
-sudo /root/install-erpnext-dev.sh verify-access
+sudo erp-dev access-info
+sudo erp-dev education-access-info
+sudo erp-dev verify-access
 ```
 
 For a local VM, examples are:
@@ -653,7 +719,7 @@ http://LOCAL_VM_IP:8000/edu-portal/students
 Advanced app tools are separated from the curated app list:
 
 ```bash
-sudo /root/install-erpnext-dev.sh advanced-app-tools
+sudo erp-dev advanced-app-tools
 ```
 
 The advanced tools menu includes custom Git app installation and app registry repair. Custom Git app installation is intentionally protected with stronger warnings because third-party apps can be incompatible, untrusted, or unsafe for the current Frappe/ERPNext version.
@@ -684,10 +750,10 @@ Install one optional app at a time and keep a backup/snapshot checkpoint before 
 ## SSL mode guide
 
 ```bash
-sudo /root/install-erpnext-dev.sh ssl-mode-status
-sudo /root/install-erpnext-dev.sh ssl-mode-guide
-sudo /root/install-erpnext-dev.sh ssl-compatibility
-sudo /root/install-erpnext-dev.sh production-ssl-wizard
+sudo erp-dev ssl-mode-status
+sudo erp-dev ssl-mode-guide
+sudo erp-dev ssl-compatibility
+sudo erp-dev production-ssl-wizard
 ```
 
 | Mode | Best for | Notes |
@@ -699,18 +765,18 @@ sudo /root/install-erpnext-dev.sh production-ssl-wizard
 Local SSL commands:
 
 ```bash
-sudo /root/install-erpnext-dev.sh local-ssl-wizard
-sudo /root/install-erpnext-dev.sh verify-local-ssl
-sudo /root/install-erpnext-dev.sh disable-local-ssl
+sudo erp-dev local-ssl-wizard
+sudo erp-dev verify-local-ssl
+sudo erp-dev disable-local-ssl
 ```
 
 Production SSL commands:
 
 ```bash
-sudo /root/install-erpnext-dev.sh production-ssl-wizard
-sudo /root/install-erpnext-dev.sh configure-cloudflare-origin-ssl
-sudo /root/install-erpnext-dev.sh production-ssl-status
-sudo /root/install-erpnext-dev.sh disable-production-ssl
+sudo erp-dev production-ssl-wizard
+sudo erp-dev configure-cloudflare-origin-ssl
+sudo erp-dev production-ssl-status
+sudo erp-dev disable-production-ssl
 ```
 
 ---
@@ -718,12 +784,12 @@ sudo /root/install-erpnext-dev.sh disable-production-ssl
 ## Security hardening
 
 ```bash
-sudo /root/install-erpnext-dev.sh security-hardening-wizard
-sudo /root/install-erpnext-dev.sh configure-vm-firewall
-sudo /root/install-erpnext-dev.sh vm-firewall-status
-sudo /root/install-erpnext-dev.sh configure-fail2ban
-sudo /root/install-erpnext-dev.sh fail2ban-status
-sudo /root/install-erpnext-dev.sh firewall-hardening-status
+sudo erp-dev security-hardening-wizard
+sudo erp-dev configure-vm-firewall
+sudo erp-dev vm-firewall-status
+sudo erp-dev configure-fail2ban
+sudo erp-dev fail2ban-status
+sudo erp-dev firewall-hardening-status
 ```
 
 Recommended public exposure:
@@ -745,15 +811,15 @@ UFW keeps SSH open by default to reduce lockout risk. Restrict SSH at the cloud 
 ## Diagnostics and support
 
 ```bash
-sudo /root/install-erpnext-dev.sh doctor
-sudo /root/install-erpnext-dev.sh doctor --plain
-sudo /root/install-erpnext-dev.sh doctor --json
-sudo /root/install-erpnext-dev.sh verify-access
-sudo /root/install-erpnext-dev.sh support-bundle
-sudo /root/install-erpnext-dev.sh command-audit
-sudo /root/install-erpnext-dev.sh credentials-info
-sudo /root/install-erpnext-dev.sh credentials-file-status
-sudo /root/install-erpnext-dev.sh next-step
+sudo erp-dev doctor
+sudo erp-dev doctor --plain
+sudo erp-dev doctor --json
+sudo erp-dev verify-access
+sudo erp-dev support-bundle
+sudo erp-dev command-audit
+sudo erp-dev credentials-info
+sudo erp-dev credentials-file-status
+sudo erp-dev next-step
 ```
 
 Support bundles are redacted. They intentionally exclude credential files, private keys, raw secrets, tokens, and passwords.

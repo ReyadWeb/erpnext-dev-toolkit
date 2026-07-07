@@ -4,14 +4,14 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 # ============================================================
-# ERPNext / Frappe Developer Installer Manager
+# ERPNext / Frappe Developer Toolkit Manager
 # Target: Ubuntu 24.04 / 26.04 LTS developer VM
 # Default: Frappe v16 + ERPNext v16 + site erp.test
 # Mode: local development using bench start
 # ============================================================
 
-APP_NAME="ERPNext Developer Installer"
-SCRIPT_VERSION="1.1.26"
+APP_NAME="ERPNext Developer Toolkit"
+SCRIPT_VERSION="1.1.28"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -33,7 +33,7 @@ APP_BACKUP_BEFORE_INSTALL="${APP_BACKUP_BEFORE_INSTALL:-prompt}"
 ERPNEXT_SERVICE_NAME="${ERPNEXT_SERVICE_NAME:-erpnext-dev.service}"
 READY_TIMEOUT="${READY_TIMEOUT:-90}"
 READY_INTERVAL="${READY_INTERVAL:-5}"
-CONFIG_FILE="${CONFIG_FILE:-/etc/erpnext-dev-installer/config.env}"
+CONFIG_FILE="${CONFIG_FILE:-/etc/erpnext-dev/config.env}"
 LEGACY_CONFIG_FILE="${LEGACY_CONFIG_FILE:-${FRAPPE_HOME}/erpnext-dev-config.env}"
 
 SSL_CERT_DIR="${SSL_CERT_DIR:-/etc/erpnext-dev-ssl}"
@@ -60,17 +60,19 @@ ASSUME_YES=0
 ACTION=""
 DOCTOR_FORMAT="human"
 LOG_DIR="${LOG_DIR:-/tmp}"
-LOG_FILE="${LOG_FILE:-${LOG_DIR}/erpnext-dev-installer-$(date +%Y%m%d-%H%M%S).log}"
-LOCK_FILE="${LOCK_FILE:-/tmp/erpnext-dev-installer.lock}"
-INSTALLER_CANONICAL_PATH="${INSTALLER_CANONICAL_PATH:-/root/install-erpnext-dev.sh}"
+LOG_FILE="${LOG_FILE:-${LOG_DIR}/erpnext-dev-$(date +%Y%m%d-%H%M%S).log}"
+LOCK_FILE="${LOCK_FILE:-/tmp/erpnext-dev.lock}"
+TOOLKIT_INSTALL_DIR="${TOOLKIT_INSTALL_DIR:-/opt/erpnext-dev}"
+INSTALLER_CANONICAL_PATH="${INSTALLER_CANONICAL_PATH:-${TOOLKIT_INSTALL_DIR}/erpnext-dev.sh}"
+TOOLKIT_CLI_PATH="${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}"
 BACKUP_SCHEDULE_SERVICE="${BACKUP_SCHEDULE_SERVICE:-erpnext-dev-backup.service}"
 BACKUP_SCHEDULE_TIMER="${BACKUP_SCHEDULE_TIMER:-erpnext-dev-backup.timer}"
 BACKUP_SCHEDULE_ON_CALENDAR="${BACKUP_SCHEDULE_ON_CALENDAR:-daily}"
 BACKUP_SCHEDULE_RANDOM_DELAY="${BACKUP_SCHEDULE_RANDOM_DELAY:-30m}"
 BACKUP_RETENTION_KEEP_COMPLETE="${BACKUP_RETENTION_KEEP_COMPLETE:-14}"
 BACKUP_RETENTION_WARN_DISK_PERCENT="${BACKUP_RETENTION_WARN_DISK_PERCENT:-80}"
-OFF_VM_BACKUP_CONFIG_FILE="${OFF_VM_BACKUP_CONFIG_FILE:-/etc/erpnext-dev-installer/off-vm-backup.env}"
-OFF_VM_BACKUP_STATE_FILE="${OFF_VM_BACKUP_STATE_FILE:-/etc/erpnext-dev-installer/off-vm-backup.state}"
+OFF_VM_BACKUP_CONFIG_FILE="${OFF_VM_BACKUP_CONFIG_FILE:-/etc/erpnext-dev/off-vm-backup.env}"
+OFF_VM_BACKUP_STATE_FILE="${OFF_VM_BACKUP_STATE_FILE:-/etc/erpnext-dev/off-vm-backup.state}"
 OFF_VM_BACKUP_TARGET="${OFF_VM_BACKUP_TARGET:-}"
 OFF_VM_BACKUP_SSH_IDENTITY="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
 OFF_VM_BACKUP_RSYNC_DELETE="${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
@@ -124,14 +126,14 @@ warn() { echo -e "${YELLOW}WARN:${RESET} $*"; }
 err() { echo -e "${RED}ERROR:${RESET} $*" >&2; }
 fail() { err "$*"; echo "Log file: $LOG_FILE" >&2; exit 1; }
 
-acquire_installer_lock() {
+acquire_toolkit_lock() {
   # Prevent two setup/repair/service commands from changing the same VM at once.
   exec 200>"$LOCK_FILE"
   chmod 600 "$LOCK_FILE" 2>/dev/null || true
   if ! flock -n 200; then
-    err "Another installer task is already running."
+    err "Another toolkit task is already running."
     echo "Lock file: $LOCK_FILE" >&2
-    echo "Wait for it to finish, or remove the lock only if you are sure no installer is running." >&2
+    echo "Wait for it to finish, or remove the lock only if you are sure no toolkit is running." >&2
     exit 1
   fi
 }
@@ -139,7 +141,7 @@ acquire_installer_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|configure-fail2ban|ufw-ssh-admin-only|local-ssl-wizard|ssl-wizard|repair-site-config|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
       return 0
       ;;
     *)
@@ -179,13 +181,13 @@ ui_next() {
   echo
   echo "Next:"
   for item in "$@"; do
-    printf '  %s\n' "$(installer_display_item "$item")"
+    printf '  %s\n' "$(toolkit_display_item "$item")"
   done
 }
 
 menu_footer() {
   # Keep navigation controls consistent across all interactive menus.
-  # Numbers run actions. b/B returns to the previous menu. q/Q exits the installer.
+  # Numbers run actions. b/B returns to the previous menu. q/Q exits the toolkit.
   local mode="${1:-back}"
   echo
   echo "-----------------------------"
@@ -278,18 +280,128 @@ ui_note() {
   printf '  %s\n' "$@"
 }
 
+install_toolkit_cli_entry() {
+  local dest cli_dir
+  dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
+  cli_dir="$(dirname "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}")"
+  mkdir -p "$cli_dir" 2>/dev/null || return 1
+  ln -sf "$dest" "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}" 2>/dev/null || return 1
+  chmod 755 "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}" 2>/dev/null || true
+  return 0
+}
+
 install_self_for_reuse() {
-  # One-command quickstart often runs from /tmp. Copy the active script to a
-  # stable root path so later printed commands remain usable after the wizard exits.
+  # One-command quickstart runs from /tmp/erpnext-dev.sh. Copy the active
+  # toolkit into /opt and expose the short erp-dev command for future use.
   local src dest
-  dest="${INSTALLER_CANONICAL_PATH:-/root/install-erpnext-dev.sh}"
+  dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
   src="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
   [[ -n "$src" && -f "$src" ]] || return 0
-  [[ "$src" == "$dest" ]] && return 0
+
   mkdir -p "$(dirname "$dest")" 2>/dev/null || true
-  if cp "$src" "$dest" 2>/dev/null; then
-    chmod +x "$dest" 2>/dev/null || true
+
+  if [[ "$src" != "$dest" ]]; then
+    if cp "$src" "$dest" 2>/dev/null; then
+      chmod 755 "$dest" 2>/dev/null || true
+      chown root:root "$dest" 2>/dev/null || true
+    fi
+  else
+    chmod 755 "$dest" 2>/dev/null || true
+    chown root:root "$dest" 2>/dev/null || true
   fi
+
+  install_toolkit_cli_entry 2>/dev/null || true
+}
+
+
+show_where_installed() {
+  local src stable_state cli_state cli_target config_state
+  src="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo unknown)"
+  if [[ -x "${INSTALLER_CANONICAL_PATH}" ]]; then
+    stable_state="OK"
+  else
+    stable_state="WARN"
+  fi
+  if [[ -x "${TOOLKIT_CLI_PATH}" ]]; then
+    cli_state="OK"
+    cli_target="$(readlink -f "${TOOLKIT_CLI_PATH}" 2>/dev/null || echo "${TOOLKIT_CLI_PATH}")"
+  else
+    cli_state="WARN"
+    cli_target="not installed"
+  fi
+  if [[ -f "${CONFIG_FILE}" ]]; then
+    config_state="OK"
+  else
+    config_state="INFO"
+  fi
+
+  ui_box_start "ERPNext Toolkit Installation"
+  status_line "Version" "INFO" "${SCRIPT_VERSION}"
+  status_line "Active script" "INFO" "${src}"
+  status_line "Stable toolkit" "${stable_state}" "${INSTALLER_CANONICAL_PATH}"
+  status_line "CLI command" "${cli_state}" "${TOOLKIT_CLI_PATH}${cli_target:+ -> ${cli_target}}"
+  status_line "Config file" "${config_state}" "${CONFIG_FILE}"
+  status_line "Short command" "INFO" "erp-dev"
+  ui_box_end
+}
+
+install_toolkit_cli() {
+  require_sudo
+  install_self_for_reuse
+  ui_box_start "Install ERPNext Toolkit CLI"
+  if [[ -x "${INSTALLER_CANONICAL_PATH}" ]]; then
+    status_line "Stable toolkit" "OK" "${INSTALLER_CANONICAL_PATH}"
+  else
+    status_line "Stable toolkit" "FAIL" "${INSTALLER_CANONICAL_PATH} missing"
+    ui_box_end
+    return 1
+  fi
+
+  if install_toolkit_cli_entry; then
+    status_line "CLI command" "OK" "${TOOLKIT_CLI_PATH}"
+    echo
+    echo "You can now run:"
+    echo "  erp-dev --help"
+    echo "  sudo erp-dev menu"
+  else
+    status_line "CLI command" "FAIL" "could not create ${TOOLKIT_CLI_PATH}"
+    ui_box_end
+    return 1
+  fi
+  ui_box_end
+}
+
+repair_toolkit_cli() {
+  install_toolkit_cli
+}
+
+update_toolkit() {
+  require_sudo
+  local url tmp
+  url="https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)"
+  tmp="/tmp/erpnext-dev.sh"
+
+  ui_box_start "Update ERPNext Toolkit"
+  status_line "Download URL" "INFO" "$url"
+  status_line "Temporary file" "INFO" "$tmp"
+  status_line "Stable toolkit" "INFO" "$INSTALLER_CANONICAL_PATH"
+
+  command -v curl >/dev/null 2>&1 || fail "curl is required. Install it with: sudo apt-get install -y curl ca-certificates"
+
+  log "Downloading latest toolkit"
+  curl -fsSL "$url" -o "$tmp" || fail "Failed to download latest toolkit."
+  chmod +x "$tmp"
+  bash -n "$tmp" || fail "Downloaded toolkit failed bash syntax validation."
+
+  mkdir -p "$(dirname "$INSTALLER_CANONICAL_PATH")"
+  cp "$tmp" "$INSTALLER_CANONICAL_PATH"
+  chmod 755 "$INSTALLER_CANONICAL_PATH"
+  chown root:root "$INSTALLER_CANONICAL_PATH" 2>/dev/null || true
+  install_toolkit_cli_entry || fail "Updated toolkit, but failed to recreate ${TOOLKIT_CLI_PATH}."
+
+  ok "Toolkit updated."
+  "$INSTALLER_CANONICAL_PATH" version
+  ui_box_end
 }
 
 is_public_vm_workflow() {
@@ -298,10 +410,15 @@ is_public_vm_workflow() {
   return 1
 }
 
-active_installer_path() {
-  # Commands printed to users must work whether the one-command installer was
-  # downloaded into /tmp, copied into /root, or run from a project checkout.
+active_toolkit_path() {
+  # Prefer the short CLI once it exists. Fall back to the stable /opt path,
+  # then to the current script path when running from /tmp or a checkout.
   local src
+
+  if [[ -x "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}" ]]; then
+    printf '%s' "erp-dev"
+    return 0
+  fi
 
   if [[ -x "${INSTALLER_CANONICAL_PATH:-}" ]]; then
     printf '%s' "$INSTALLER_CANONICAL_PATH"
@@ -314,42 +431,42 @@ active_installer_path() {
     return 0
   fi
 
-  printf '%s' "./install-erpnext-dev.sh"
+  printf '%s' "./erpnext-dev.sh"
 }
 
-installer_display_item() {
+toolkit_display_item() {
   local item="$1"
   local suffix
 
-  if [[ "$item" == .\/install-erpnext-dev.sh* ]]; then
-    suffix="${item#.\/install-erpnext-dev.sh}"
+  if [[ "$item" == .\/erpnext-dev.sh* ]]; then
+    suffix="${item#.\/erpnext-dev.sh}"
     suffix="${suffix# }"
-    installer_cmd "$suffix"
+    toolkit_cmd "$suffix"
     return 0
   fi
 
   if [[ -n "${INSTALLER_CANONICAL_PATH:-}" && "$item" == "${INSTALLER_CANONICAL_PATH}"* ]]; then
     suffix="${item#${INSTALLER_CANONICAL_PATH}}"
     suffix="${suffix# }"
-    installer_cmd "$suffix"
+    toolkit_cmd "$suffix"
     return 0
   fi
 
   printf '%s' "$item"
 }
 
-installer_cmd() {
+toolkit_cmd() {
   local subcmd="${1:-}"
   local script_path
-  script_path="$(active_installer_path)"
+  script_path="$(active_toolkit_path)"
   printf '%s' "sudo ${script_path}${subcmd:+ $subcmd}"
 }
 
-installer_cmd_env() {
+toolkit_cmd_env() {
   local env_args="${1:-}"
   local subcmd="${2:-}"
   local script_path
-  script_path="$(active_installer_path)"
+  script_path="$(active_toolkit_path)"
   printf '%s' "sudo ${env_args:+$env_args }${script_path}${subcmd:+ $subcmd}"
 }
 
@@ -363,7 +480,7 @@ suggested_vm_ssh_user() {
 
 menu_invalid_choice() {
   local choice="${1:-}" exit_hint="${2:-type the menu number}"
-  if [[ "$choice" == *install-erpnext-dev.sh* || "$choice" == ./* || "$choice" == sudo\ * || "$choice" == curl\ * ]]; then
+  if [[ "$choice" == *erpnext-dev.sh* || "$choice" == *erp-dev* || "$choice" == ./* || "$choice" == sudo\ * || "$choice" == curl\ * ]]; then
     warn "A shell command was pasted into an interactive menu."
     echo "This menu expects a number, b/B, or q/Q. ${exit_hint}, then run commands at the shell prompt."
     return 2
@@ -610,7 +727,7 @@ write_dev_config_file() {
 
   $SUDO mkdir -p "$config_dir"
   $SUDO tee "$CONFIG_FILE" >/dev/null <<EOF_DEV_CONFIG
-# ERPNext Developer Installer local configuration
+# ERPNext Developer Toolkit local configuration
 # Non-secret settings only. Credentials are stored separately.
 SITE_NAME=${SITE_NAME}
 DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
@@ -628,7 +745,7 @@ EOF_DEV_CONFIG
   if [[ "$LEGACY_CONFIG_FILE" != "$CONFIG_FILE" ]]; then
     $SUDO mkdir -p "$legacy_dir" || true
     $SUDO tee "$LEGACY_CONFIG_FILE" >/dev/null <<EOF_LEGACY_DEV_CONFIG
-# ERPNext Developer Installer local configuration
+# ERPNext Developer Toolkit local configuration
 # Compatibility mirror. Primary config: ${CONFIG_FILE}
 SITE_NAME=${SITE_NAME}
 DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
@@ -686,7 +803,7 @@ show_site_config() {
   echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
   echo
   echo "To choose a custom site during a fresh setup:"
-  echo "  $(installer_cmd_env "SITE_NAME=erp107.test" setup)"
+  echo "  $(toolkit_cmd_env "SITE_NAME=erp107.test" setup)"
   echo
   echo "Or run setup interactively and answer the site-name prompt."
   echo "============================================================"
@@ -732,7 +849,7 @@ show_site_name_guide() {
   echo "  client-a.test"
   echo
   echo "Fresh install with a custom name:"
-  echo "  $(installer_cmd_env "SITE_NAME=erp107.test" setup)"
+  echo "  $(toolkit_cmd_env "SITE_NAME=erp107.test" setup)"
   echo
   echo "During interactive setup, you can also type the site name when prompted."
   echo
@@ -778,7 +895,7 @@ start_erpnext_foreground() {
   echo "  http://${SITE_NAME}:8000"
   echo
   echo "If ${SITE_NAME} does not open, use the direct IP URL first, then run:"
-  echo "  $(installer_cmd access)"
+  echo "  $(toolkit_cmd access)"
   echo
 
   $SUDO -iu "$FRAPPE_USER" bash -lc "
@@ -859,8 +976,8 @@ wait_for_erpnext_ready() {
   warn "ERPNext did not become fully ready within ${timeout}s."
   echo
   echo "Useful checks:"
-  echo "  $(installer_cmd runtime-status)"
-  echo "  $(installer_cmd logs)"
+  echo "  $(toolkit_cmd runtime-status)"
+  echo "  $(toolkit_cmd logs)"
   echo "  sudo systemctl status ${ERPNEXT_SERVICE_NAME} --no-pager -l"
   return 1
 }
@@ -871,7 +988,7 @@ ensure_bench_services_for_site_commands() {
   bench_dir="$(active_bench_dir)"
 
   if ! service_exists; then
-    err "ERPNext service is not configured, so Bench services are not managed by this installer yet."
+    err "ERPNext service is not configured, so Bench services are not managed by this toolkit yet."
     echo
     echo "Start Bench manually as the ${FRAPPE_USER} user if you are using development mode:"
     echo "  sudo -iu ${FRAPPE_USER} bash -lc 'export PATH="\$HOME/.local/bin:\$PATH"; cd ${bench_dir} && bench start'"
@@ -891,7 +1008,7 @@ ensure_bench_services_for_site_commands() {
 
   if ! $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}"; then
     err "Could not restart ${ERPNEXT_SERVICE_NAME} before ${context}."
-    echo "Check logs with: $(installer_cmd logs)"
+    echo "Check logs with: $(toolkit_cmd logs)"
     return 1
   fi
 
@@ -904,7 +1021,7 @@ show_access_when_ready() {
   else
     warn "Browser access was not shown because web port 8000 is not listening yet."
     echo "Run this after a few seconds:"
-    echo "  $(installer_cmd runtime-status)"
+    echo "  $(toolkit_cmd runtime-status)"
   fi
 }
 
@@ -923,7 +1040,7 @@ show_ready_summary() {
   echo "  Friendly URL: http://${SITE_NAME}:8000"
   echo
   echo "Friendly URL note: your HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."
-  echo "For full access instructions, run: $(installer_cmd access)"
+  echo "For full access instructions, run: $(toolkit_cmd access)"
   echo "============================================================"
 }
 
@@ -979,7 +1096,7 @@ require_bench_dir() {
 
   err "Bench folder not found. Expected one of:"
   bench_dir_candidates | awk '{print "  - " $0}' >&2
-  err "Run Recommended Setup first, or run: $(installer_cmd install-status)"
+  err "Run Recommended Setup first, or run: $(toolkit_cmd install-status)"
   return 1
 }
 
@@ -1035,9 +1152,9 @@ show_environment_check() {
     status_line "ERPNext VM context" "OK" "this looks like the ERPNext VM"
     echo
     echo "VM-only actions are allowed here, including:"
-    echo "  $(installer_cmd ssl-status)"
-    echo "  $(installer_cmd configure-local-ssl)"
-    echo "  $(installer_cmd install-local-ssl-cert)"
+    echo "  $(toolkit_cmd ssl-status)"
+    echo "  $(toolkit_cmd configure-local-ssl)"
+    echo "  $(toolkit_cmd install-local-ssl-cert)"
   else
     status_line "ERPNext VM context" "WARN" "not detected"
     echo
@@ -1082,7 +1199,7 @@ show_vm_only_guard_message() {
   else
     echo "  ssh test@VM_IP"
   fi
-  echo "  $(installer_cmd "${action}")"
+  echo "  $(toolkit_cmd "${action}")"
   echo
   echo "Commands that belong on the HOST:"
   echo "  mkcert -install"
@@ -1093,7 +1210,7 @@ show_vm_only_guard_message() {
   echo "  curl -kI https://${SITE_NAME}"
   echo
   echo "To check where you are, run:"
-  echo "  $(installer_cmd environment-check)"
+  echo "  $(toolkit_cmd environment-check)"
   echo "============================================================"
 }
 
@@ -1185,7 +1302,7 @@ start_erpnext_service() {
       return 1
     fi
   else
-    err "Could not start ${ERPNEXT_SERVICE_NAME}. Check logs with: $(installer_cmd logs)"
+    err "Could not start ${ERPNEXT_SERVICE_NAME}. Check logs with: $(toolkit_cmd logs)"
     return 1
   fi
 }
@@ -1223,7 +1340,7 @@ restart_erpnext_service() {
       return 1
     fi
   else
-    err "Could not restart ${ERPNEXT_SERVICE_NAME}. Check logs with: $(installer_cmd logs)"
+    err "Could not restart ${ERPNEXT_SERVICE_NAME}. Check logs with: $(toolkit_cmd logs)"
     return 1
   fi
 }
@@ -1293,14 +1410,21 @@ pause_after_screen() {
 }
 
 require_sudo() {
-  if [[ "${EUID}" -eq 0 ]]; then
-    SUDO=""
-  else
-    sudo -v || fail "This command requires sudo access."
-    SUDO="sudo"
+  if [[ "${EUID}" -ne 0 ]]; then
+    err "This command changes or inspects protected ERPNext VM resources and must be run with sudo."
+    echo
+    echo "Run:"
+    echo "  sudo $(active_toolkit_path) ${ACTION:-menu}"
+    echo
+    echo "Help and version can be run without sudo:"
+    echo "  erp-dev --help"
+    echo "  erp-dev version"
+    exit 1
   fi
 
-  # After sudo is available, resolve the real site from the readable config,
+  SUDO=""
+
+  # After root access is available, resolve the real site from the readable config,
   # the legacy config, currentsite.txt, common_site_config.json, or the single
   # installed site folder. This prevents commands from falling back to erp.test
   # when a custom site such as erp208.test already exists.
@@ -1318,7 +1442,7 @@ EOF_PREFIX
 
 frappe_login_bash() {
   # Read a Bash script from stdin and execute it as the frappe user.
-  # This must work both when the installer is run as root and when it is run
+  # This must work both when the toolkit is run as root and when it is run
   # by a sudo-capable non-root user. Do not prefix sudo options with an empty
   # $SUDO value; root would otherwise try to execute "-H" as a command.
   if [[ "${EUID}" -eq 0 ]]; then
@@ -1484,7 +1608,7 @@ check_resources() {
     echo "  Root disk: ${RECOMMENDED_INSTALL_DISK_GB}+ GB free"
     echo
     echo "If the only blocker is root disk size and the VM disk was expanded, run:"
-    echo "  $(installer_cmd expand-root-storage)"
+    echo "  $(toolkit_cmd expand-root-storage)"
 
     if install_override_enabled; then
       warn "Unsafe install override is enabled with ERPNEXT_ALLOW_UNSAFE_INSTALL=${ERPNEXT_ALLOW_UNSAFE_INSTALL}. Continuing anyway."
@@ -1516,7 +1640,7 @@ run_install_preflight() {
   fi
 
   echo "Next command:"
-  echo "  $(installer_cmd local-dev-quickstart)"
+  echo "  $(toolkit_cmd local-dev-quickstart)"
 }
 
 # ============================================================
@@ -1935,7 +2059,7 @@ show_storage_status() {
   if [[ "${can_expand:-no}" == "yes" ]]; then
     status_line "Expansion" "WARN" "recommended"
     echo
-    echo "Run: $(installer_cmd expand-root-storage)"
+    echo "Run: $(toolkit_cmd expand-root-storage)"
   elif [[ "${layout:-unknown}" == "unknown" ]]; then
     status_line "Expansion" "WARN" "not automatic"
     [[ -n "${reason:-}" ]] && echo "Reason: ${reason}"
@@ -2527,7 +2651,7 @@ Browser access:
 
 Important:
   ${SITE_NAME} only works after ERPNext is running and your HOST machine maps ${SITE_NAME} to the VM IP.
-  Use $(installer_cmd access) to print the required host-side command.
+  Use $(toolkit_cmd access) to print the required host-side command.
 EOF_CREDS
 
   $SUDO chown root:root "$cred_file"
@@ -2573,7 +2697,7 @@ show_access_instructions() {
   echo "ERPNext must be running before any browser URL will work."
   echo
   echo "Start ERPNext inside the VM with:"
-  echo "  $(installer_cmd start)"
+  echo "  $(toolkit_cmd start)"
   echo
   echo "Or manually:"
   echo "  sudo -iu ${FRAPPE_USER}"
@@ -2770,8 +2894,8 @@ show_access_info() {
 
   echo
   echo "Useful checks:"
-  echo "  $(installer_cmd verify-access)"
-  echo "  $(installer_cmd doctor)"
+  echo "  $(toolkit_cmd verify-access)"
+  echo "  $(toolkit_cmd doctor)"
   echo "============================================================"
 }
 
@@ -2785,9 +2909,9 @@ show_education_access_info() {
   print_education_access_note
   echo
   echo "If /app fails, run:"
-  echo "  $(installer_cmd service-restart)"
-  echo "  $(installer_cmd wait-ready)"
-  echo "  $(installer_cmd doctor)"
+  echo "  $(toolkit_cmd service-restart)"
+  echo "  $(toolkit_cmd wait-ready)"
+  echo "  $(toolkit_cmd doctor)"
   echo "============================================================"
 }
 
@@ -2837,26 +2961,26 @@ show_next_step() {
 
     if [[ "${can_expand:-no}" == "yes" ]]; then
       next_label="expand root storage"
-      next_command="$(installer_cmd expand-root-storage)"
+      next_command="$(toolkit_cmd expand-root-storage)"
     elif [[ "$installed" != "Installed" ]]; then
       next_label="run public quickstart install"
-      next_command="$(installer_cmd public-vm-quickstart)"
+      next_command="$(toolkit_cmd public-vm-quickstart)"
     elif [[ "$runtime" != Running* ]]; then
       next_label="start ERPNext"
-      next_command="$(installer_cmd start)"
+      next_command="$(toolkit_cmd start)"
     elif [[ "$prod_ssl_status" != "OK" ]]; then
       next_label="configure production HTTPS"
-      next_command="$(installer_cmd production-ssl-wizard)"
+      next_command="$(toolkit_cmd production-ssl-wizard)"
     elif [[ "$backup_complete" != "complete" ]]; then
       next_label="create initial backup"
-      next_command="$(installer_cmd backup-files)"
+      next_command="$(toolkit_cmd backup-files)"
     else
       next_label="run release readiness"
-      next_command="$(installer_cmd release-readiness)"
+      next_command="$(toolkit_cmd release-readiness)"
     fi
 
     echo "Recommended next step: ${next_label}."
-    echo "  $(installer_display_item "$next_command")"
+    echo "  $(toolkit_display_item "$next_command")"
     echo
     echo "Production URL:"
     echo "  https://${PRODUCTION_DOMAIN:-$SITE_NAME}"
@@ -2879,41 +3003,41 @@ show_next_step() {
 
   if [[ "${can_expand:-no}" == "yes" ]]; then
     next_label="expand root storage"
-    next_command="$(installer_cmd expand-root-storage)"
+    next_command="$(toolkit_cmd expand-root-storage)"
   else
     case "$installed" in
       "Not installed")
         next_label="run guided setup"
-        next_command="$(installer_cmd guided-setup)"
+        next_command="$(toolkit_cmd guided-setup)"
         ;;
       "Incomplete")
         next_label="repair or reinstall the environment"
-        next_command="$(installer_cmd repair)"
+        next_command="$(toolkit_cmd repair)"
         ;;
       *)
         if [[ "$runtime" != Running* ]]; then
           next_label="start ERPNext"
-          next_command="$(installer_cmd start)"
+          next_command="$(toolkit_cmd start)"
         elif [[ "$auto" != "Enabled" ]]; then
           next_label="enable autostart so the VM recovers cleanly after reboot"
-          next_command="$(installer_cmd enable-autostart)"
+          next_command="$(toolkit_cmd enable-autostart)"
         elif [[ "$ssl_state" != "configured" ]]; then
           next_label="configure local HTTPS"
-          next_command="$(installer_cmd local-ssl-wizard)"
+          next_command="$(toolkit_cmd local-ssl-wizard)"
         else
           next_label="install optional apps with a checkpoint"
-          next_command="$(installer_cmd app-install-wizard)"
+          next_command="$(toolkit_cmd app-install-wizard)"
         fi
         ;;
     esac
   fi
 
   echo "Recommended next step: ${next_label}."
-  echo "  $(installer_display_item "$next_command")"
+  echo "  $(toolkit_display_item "$next_command")"
   echo
   echo "Useful checks:"
-  echo "  $(installer_cmd verify-access)"
-  echo "  $(installer_cmd storage-status)"
+  echo "  $(toolkit_cmd verify-access)"
+  echo "  $(toolkit_cmd storage-status)"
   echo
   echo "Open when running:"
   echo "  http://${vm_ip}:8000"
@@ -2950,14 +3074,14 @@ prompt_open_main_menu_after_install() {
 
   [[ -t 0 ]] || return 0
   echo
-  read -r -p "Open the main installer menu now? [Y/n]: " reply
+  read -r -p "Open the main toolkit menu now? [Y/n]: " reply
   reply="${reply:-Y}"
   if [[ "$reply" =~ ^[Yy]$ ]]; then
     show_menu
   else
     echo
     echo "Open it later with:"
-    echo "  $(installer_cmd menu)"
+    echo "  $(toolkit_cmd menu)"
   fi
 }
 
@@ -3000,7 +3124,7 @@ show_config_summary() {
   mode_display="${DEPLOYMENT_MODE:-development}"
   ssl_display="${PRODUCTION_SSL_MODE:-planned}"
 
-  ui_box_start "Installer Config Summary"
+  ui_box_start "Toolkit Config Summary"
   status_line "Site" "INFO" "${SITE_NAME} (${SITE_NAME_SOURCE})"
   status_line "Production domain" "$([[ -n "${PRODUCTION_DOMAIN:-}" ]] && echo OK || echo INFO)" "$prod_display"
   status_line "Deployment mode" "INFO" "$mode_display"
@@ -3008,7 +3132,7 @@ show_config_summary() {
   status_line "VM IP" "INFO" "$vm_ip"
   status_line "Config file" "INFO" "$CONFIG_FILE"
   ui_box_end
-  ui_next "$(installer_cmd setup-wizard)" "$(installer_cmd production-readiness)"
+  ui_next "$(toolkit_cmd setup-wizard)" "$(toolkit_cmd production-readiness)"
 }
 
 prompt_and_save_public_domain() {
@@ -3081,7 +3205,7 @@ prompt_and_save_public_domain() {
   status_line "Deployment mode" "INFO" "$DEPLOYMENT_MODE"
   status_line "Saved config" "OK" "$CONFIG_FILE"
   ui_box_end
-  ui_next "$(installer_cmd public-vm-quickstart)" "$(installer_cmd production-domain-plan)"
+  ui_next "$(toolkit_cmd public-vm-quickstart)" "$(toolkit_cmd production-domain-plan)"
 }
 
 set_local_dev_defaults() {
@@ -3113,7 +3237,7 @@ run_local_dev_quickstart() {
     set_local_dev_defaults
     run_guided_setup
   else
-    ui_next "$(installer_cmd local-dev-quickstart)" "$(installer_cmd setup-wizard)"
+    ui_next "$(toolkit_cmd local-dev-quickstart)" "$(toolkit_cmd setup-wizard)"
   fi
 }
 
@@ -3177,7 +3301,7 @@ public_quickstart_maybe_initial_backup() {
     create_site_backup true || return 1
     verify_latest_backup_set || true
   else
-    ui_next "$(installer_cmd backup-files)" "$(installer_cmd backup-verify)"
+    ui_next "$(toolkit_cmd backup-files)" "$(toolkit_cmd backup-verify)"
   fi
 }
 
@@ -3187,7 +3311,7 @@ public_quickstart_final_status() {
   show_firewall_hardening_status
   public_quickstart_maybe_initial_backup || true
   show_release_readiness
-  ui_next "$(installer_cmd support-bundle)" "Take a cloud snapshot after validation."
+  ui_next "$(toolkit_cmd support-bundle)" "Take a cloud snapshot after validation."
 }
 
 run_public_vm_quickstart() {
@@ -3428,14 +3552,14 @@ Planned local architecture:
       -> Socket.io on 127.0.0.1:9000
 
 Planned local SSL commands:
-  Use /root/install-erpnext-dev.sh after the one-command quickstart copies the installer there.
-  /root/install-erpnext-dev.sh ssl-status
-  /root/install-erpnext-dev.sh local-ssl-guide
-  /root/install-erpnext-dev.sh local-ssl-wizard
-  /root/install-erpnext-dev.sh mkcert-guide
-  /root/install-erpnext-dev.sh verify-local-ssl
-  /root/install-erpnext-dev.sh configure-local-ssl
-  /root/install-erpnext-dev.sh disable-local-ssl
+  Use /opt/erpnext-dev/erpnext-dev.sh after the one-command quickstart copies the toolkit there.
+  /opt/erpnext-dev/erpnext-dev.sh ssl-status
+  /opt/erpnext-dev/erpnext-dev.sh local-ssl-guide
+  /opt/erpnext-dev/erpnext-dev.sh local-ssl-wizard
+  /opt/erpnext-dev/erpnext-dev.sh mkcert-guide
+  /opt/erpnext-dev/erpnext-dev.sh verify-local-ssl
+  /opt/erpnext-dev/erpnext-dev.sh configure-local-ssl
+  /opt/erpnext-dev/erpnext-dev.sh disable-local-ssl
 
 Recommended local certificate direction:
   - Use mkcert or a local CA workflow.
@@ -3463,8 +3587,8 @@ Recommended roadmap:
   v0.7.x  VM/networking and hostname foundation
   v0.8.x  Local HTTPS reverse proxy planning/implementation
   v0.9.x  Production planning branch
-  v1.x    Stable developer installer
-  prod    Separate production installer track
+  v1.x    Stable developer toolkit
+  prod    Separate production toolkit track
 
 ============================================================
 EOF_SSL
@@ -3513,9 +3637,9 @@ DNS requirements:
   - Avoid .test and .local for production.
 
 Structured planning command:
-  $(installer_cmd production-domain-plan)
+  $(toolkit_cmd production-domain-plan)
 
-This developer installer only plans production settings.
+This developer toolkit only plans production settings.
 Production automation should be a separate track.
 ============================================================
 EOF_PROD_DOMAIN
@@ -3580,9 +3704,9 @@ show_production_domain_plan() {
   echo "  - The ERPNext site/domain mapping is planned before go-live."
   echo
   echo "Useful commands:"
-  echo "  $(installer_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-readiness)"
-  echo "  $(installer_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-domain-plan)"
-  echo "  $(installer_cmd production-ssl-guide)"
+  echo "  $(toolkit_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-readiness)"
+  echo "  $(toolkit_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-domain-plan)"
+  echo "  $(toolkit_cmd production-ssl-guide)"
   echo "============================================================"
 }
 
@@ -3607,7 +3731,7 @@ Production needs:
   - backup/restore testing
 
 Current local SSL remains separate:
-  /root/install-erpnext-dev.sh configure-local-ssl
+  /opt/erpnext-dev/erpnext-dev.sh configure-local-ssl
 ============================================================
 EOF_PROD_SSL
 }
@@ -3782,17 +3906,17 @@ show_public_vm_readiness() {
 
   echo
   echo "Recommended next commands:"
-  echo "  $(installer_cmd backup-files)"
-  echo "  $(installer_cmd production-ssl-plan)"
-  echo "  $(installer_cmd production-ssl-wizard)"
-  echo "  $(installer_cmd ssl-mode-status)"
-  echo "  $(installer_cmd setup-effort-guide)"
-  echo "  $(installer_cmd configure-production-ssl)"
-  echo "  $(installer_cmd configure-cloudflare-origin-ssl)"
-  echo "  $(installer_cmd production-ssl-status)"
-  echo "  $(installer_cmd production-firewall-plan)"
-  echo "  $(installer_cmd firewall-hardening-status)"
-  echo "  $(installer_cmd support-bundle)"
+  echo "  $(toolkit_cmd backup-files)"
+  echo "  $(toolkit_cmd production-ssl-plan)"
+  echo "  $(toolkit_cmd production-ssl-wizard)"
+  echo "  $(toolkit_cmd ssl-mode-status)"
+  echo "  $(toolkit_cmd setup-effort-guide)"
+  echo "  $(toolkit_cmd configure-production-ssl)"
+  echo "  $(toolkit_cmd configure-cloudflare-origin-ssl)"
+  echo "  $(toolkit_cmd production-ssl-status)"
+  echo "  $(toolkit_cmd production-firewall-plan)"
+  echo "  $(toolkit_cmd firewall-hardening-status)"
+  echo "  $(toolkit_cmd support-bundle)"
   echo "============================================================"
 }
 
@@ -3864,13 +3988,13 @@ show_production_ssl_plan() {
   echo "  curl -Ik https://${domain}"
   echo
   echo "Related commands:"
-  echo "  $(installer_cmd production-ssl-wizard)"
-  echo "  $(installer_cmd configure-production-ssl)"
-  echo "  $(installer_cmd configure-cloudflare-origin-ssl)"
-  echo "  $(installer_cmd production-ssl-status)"
-  echo "  $(installer_cmd production-firewall-plan)"
-  echo "  $(installer_cmd public-vm-readiness)"
-  echo "  $(installer_cmd production-ssl-guide)"
+  echo "  $(toolkit_cmd production-ssl-wizard)"
+  echo "  $(toolkit_cmd configure-production-ssl)"
+  echo "  $(toolkit_cmd configure-cloudflare-origin-ssl)"
+  echo "  $(toolkit_cmd production-ssl-status)"
+  echo "  $(toolkit_cmd production-firewall-plan)"
+  echo "  $(toolkit_cmd public-vm-readiness)"
+  echo "  $(toolkit_cmd production-ssl-guide)"
   echo "============================================================"
 }
 
@@ -3917,8 +4041,8 @@ show_production_firewall_plan() {
   echo
   echo "Safe check commands:"
   echo "  ss -lntp"
-  echo "  $(installer_cmd public-vm-readiness)"
-  echo "  $(installer_cmd production-ssl-plan)"
+  echo "  $(toolkit_cmd public-vm-readiness)"
+  echo "  $(toolkit_cmd production-ssl-plan)"
   echo "============================================================"
 }
 
@@ -4018,8 +4142,8 @@ show_firewall_hardening_status() {
   echo "Expected: HTTPS returns 200/redirect through Cloudflare/Nginx; 8000/9000 time out or are blocked."
   echo
   echo "Internal validation from this VM:"
-  echo "  $(installer_cmd firewall-hardening-status)"
-  echo "  $(installer_cmd public-vm-readiness)"
+  echo "  $(toolkit_cmd firewall-hardening-status)"
+  echo "  $(toolkit_cmd public-vm-readiness)"
   echo "============================================================"
 }
 
@@ -4049,7 +4173,7 @@ vm_firewall_plan() {
   echo
   echo "Why SSH stays open in UFW by default:"
   echo "  - Your admin IP may change. Restrict SSH at the cloud provider firewall first."
-  echo "  - UFW can be made stricter later with: $(installer_cmd ufw-ssh-admin-only)"
+  echo "  - UFW can be made stricter later with: $(toolkit_cmd ufw-ssh-admin-only)"
   echo "  - That advanced SSH restriction can lock you out if the wrong IP is used."
   echo
   echo "Recommended layering:"
@@ -4059,11 +4183,11 @@ vm_firewall_plan() {
   echo "  Layer 4: Cloudflare proxy/WAF/CDN"
   echo
   echo "Commands:"
-  echo "  $(installer_cmd configure-vm-firewall)"
-  echo "  $(installer_cmd configure-fail2ban)"
-  echo "  $(installer_cmd vm-firewall-status)"
-  echo "  $(installer_cmd fail2ban-status)"
-  echo "  $(installer_cmd security-hardening-wizard)"
+  echo "  $(toolkit_cmd configure-vm-firewall)"
+  echo "  $(toolkit_cmd configure-fail2ban)"
+  echo "  $(toolkit_cmd vm-firewall-status)"
+  echo "  $(toolkit_cmd fail2ban-status)"
+  echo "  $(toolkit_cmd security-hardening-wizard)"
   echo "============================================================"
 }
 
@@ -4100,7 +4224,7 @@ show_vm_firewall_status() {
   echo "============================================================"
   if ! command -v ufw >/dev/null 2>&1; then
     status_line "UFW" "WARN" "not installed"
-    echo "Run: $(installer_cmd configure-vm-firewall)"
+    echo "Run: $(toolkit_cmd configure-vm-firewall)"
     echo "============================================================"
     return 0
   fi
@@ -4199,8 +4323,8 @@ configure_vm_firewall() {
   status_line "Backend ports" "OK" "8000/9000/11000/13000 not allowed in UFW"
   ui_box_end
   ui_next \
-    "$(installer_cmd vm-firewall-status)" \
-    "$(installer_cmd firewall-hardening-status)"
+    "$(toolkit_cmd vm-firewall-status)" \
+    "$(toolkit_cmd firewall-hardening-status)"
 }
 
 configure_ufw_ssh_admin_only() {
@@ -4250,7 +4374,7 @@ configure_ufw_ssh_admin_only() {
   status_line "UFW SSH" "OK" "restricted to ${admin_ip}"
   status_line "Lockout safety" "WARN" "test a second SSH session before closing this one"
   ui_box_end
-  ui_next "ssh root@$(get_vm_ip 2>/dev/null || echo VM_IP)" "$(installer_cmd vm-firewall-status)"
+  ui_next "ssh root@$(get_vm_ip 2>/dev/null || echo VM_IP)" "$(toolkit_cmd vm-firewall-status)"
 }
 
 show_fail2ban_status() {
@@ -4262,7 +4386,7 @@ show_fail2ban_status() {
   echo "============================================================"
   if ! command -v fail2ban-client >/dev/null 2>&1; then
     status_line "Fail2Ban" "WARN" "not installed"
-    echo "Run: $(installer_cmd configure-fail2ban)"
+    echo "Run: $(toolkit_cmd configure-fail2ban)"
     echo "============================================================"
     return 0
   fi
@@ -4331,7 +4455,7 @@ EOF
   status_line "findtime" "INFO" "$findtime"
   status_line "maxretry" "INFO" "$maxretry"
   ui_box_end
-  ui_next "$(installer_cmd fail2ban-status)" "$(installer_cmd security-hardening-wizard)"
+  ui_next "$(toolkit_cmd fail2ban-status)" "$(toolkit_cmd security-hardening-wizard)"
 }
 
 security_hardening_wizard() {
@@ -4514,7 +4638,7 @@ read_multiline_secret_to_file() {
   local label="$1" end_marker="$2" output_file="$3" line had_tty=0
   echo
   echo "Paste the ${label}. End with a line containing only: ${end_marker}"
-  echo "Input is hidden while you paste. Nothing is printed to the installer log."
+  echo "Input is hidden while you paste. Nothing is printed to the toolkit log."
   : > "$output_file"
   chmod 600 "$output_file" 2>/dev/null || true
   if [[ -t 0 ]]; then
@@ -4538,8 +4662,8 @@ read_pem_block_to_file() {
 
   echo
   echo "Paste the ${label} PEM block now."
-  echo "The installer will stop reading automatically when it sees the real PEM ending line."
-  echo "Input is hidden while you paste. Nothing is printed to the installer log."
+  echo "The toolkit will stop reading automatically when it sees the real PEM ending line."
+  echo "Input is hidden while you paste. Nothing is printed to the toolkit log."
   echo
   echo "Expected first line: ${begin_hint}"
   echo "Expected ending:     ${end_hint}"
@@ -4760,7 +4884,7 @@ server {
   fi
 
   $SUDO tee "$available_path" >/dev/null <<EOF_PROD_NGINX
-# Managed by ERPNext Developer Installer.
+# Managed by ERPNext Developer Toolkit.
 # Production HTTPS reverse proxy for ${domain}.
 # Certificate provider: ${cert_provider}.
 # ERPNext Bench remains on localhost :8000/:9000 behind Nginx.
@@ -4862,7 +4986,7 @@ show_production_ssl_status() {
   echo "Useful tests:"
   echo "  curl -I http://${domain}"
   echo "  curl -I https://${domain}"
-  echo "  $(installer_cmd public-vm-readiness)"
+  echo "  $(toolkit_cmd public-vm-readiness)"
   echo "============================================================"
 }
 
@@ -4872,7 +4996,7 @@ configure_production_ssl() {
 
   local domain vm_ip dns_ip install_quick runtime backup_count email_args staging_args force_renewal_args http_head https_head existing_cert_detail
   domain="$(production_ssl_domain 2>/dev/null || true)"
-  [[ -n "$domain" ]] || fail "Set a valid PRODUCTION_DOMAIN or SITE_NAME, for example: $(installer_cmd_env "PRODUCTION_DOMAIN=erp.flowmaya.com SITE_NAME=erp.flowmaya.com" configure-production-ssl)"
+  [[ -n "$domain" ]] || fail "Set a valid PRODUCTION_DOMAIN or SITE_NAME, for example: $(toolkit_cmd_env "PRODUCTION_DOMAIN=erp.flowmaya.com SITE_NAME=erp.flowmaya.com" configure-production-ssl)"
 
   vm_ip="$(get_vm_ip)"
   dns_ip="$(resolve_ipv4_first "$domain")"
@@ -4911,10 +5035,10 @@ configure_production_ssl() {
 
   [[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] || fail "DNS for ${domain} must resolve to ${vm_ip} before issuing Let's Encrypt. Use DNS-only first if behind Cloudflare."
   [[ "$install_quick" == Installed* ]] || fail "ERPNext is not fully installed. Run guided setup first."
-  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: $(installer_cmd start)"
+  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: $(toolkit_cmd start)"
 
   if [[ "$backup_count" =~ ^[0-9]+$ && "$backup_count" -eq 0 ]]; then
-    warn "No local backup detected. Recommended: $(installer_cmd backup-files)"
+    warn "No local backup detected. Recommended: $(toolkit_cmd backup-files)"
   fi
 
   if [[ "$ASSUME_YES" -ne 1 ]]; then
@@ -4991,8 +5115,8 @@ configure_production_ssl() {
   echo
   echo "Next steps:"
   echo "  curl -I https://${domain}"
-  echo "  $(installer_cmd production-ssl-status)"
-  echo "  $(installer_cmd production-firewall-plan)"
+  echo "  $(toolkit_cmd production-ssl-status)"
+  echo "  $(toolkit_cmd production-firewall-plan)"
   echo
   echo "After HTTPS works, restrict/close public :8000 and :9000 at the cloud firewall."
   echo "============================================================"
@@ -5020,10 +5144,10 @@ show_cloudflare_origin_guide() {
   echo "  6) After installing the origin cert here, turn proxy ON/orange-cloud."
   echo "  7) Set SSL/TLS encryption mode to Full (strict)."
   echo
-  echo "Installer commands:"
-  echo "  $(installer_cmd production-ssl-wizard)"
-  echo "  $(installer_cmd configure-cloudflare-origin-ssl)"
-  echo "  $(installer_cmd cloudflare-origin-ssl-status)"
+  echo "Toolkit commands:"
+  echo "  $(toolkit_cmd production-ssl-wizard)"
+  echo "  $(toolkit_cmd configure-cloudflare-origin-ssl)"
+  echo "  $(toolkit_cmd cloudflare-origin-ssl-status)"
   echo
   echo "Important: Cloudflare Origin CA certificates are trusted by Cloudflare, not by browsers directly."
   echo "With DNS-only/grey-cloud, direct curl/browser checks may show a certificate trust warning."
@@ -5078,7 +5202,7 @@ configure_cloudflare_origin_ssl() {
 
   local domain vm_ip dns_ip install_quick runtime backup_count available_path backup_path https_head provider cert_path key_path
   domain="$(production_ssl_domain 2>/dev/null || true)"
-  [[ -n "$domain" ]] || fail "Set PRODUCTION_DOMAIN and SITE_NAME, for example: $(installer_cmd_env "SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com" configure-cloudflare-origin-ssl)"
+  [[ -n "$domain" ]] || fail "Set PRODUCTION_DOMAIN and SITE_NAME, for example: $(toolkit_cmd_env "SITE_NAME=erp.flowmaya.com PRODUCTION_DOMAIN=erp.flowmaya.com" configure-cloudflare-origin-ssl)"
   vm_ip="$(get_vm_ip)"
   dns_ip="$(resolve_ipv4_first "$domain")"
   install_quick="$(production_quick_install_state)"
@@ -5108,7 +5232,7 @@ configure_cloudflare_origin_ssl() {
   echo
 
   [[ "$install_quick" == Installed* ]] || fail "ERPNext is not fully installed. Run guided setup first."
-  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: $(installer_cmd start)"
+  [[ "$runtime" == Running* ]] || fail "ERPNext is not running. Start it first: $(toolkit_cmd start)"
 
   if [[ "$ASSUME_YES" -ne 1 ]]; then
     echo "Before continuing, confirm you have a snapshot and the Cloudflare Origin certificate/private key."
@@ -5159,7 +5283,7 @@ configure_cloudflare_origin_ssl() {
   echo "  1) Set ${domain} DNS record to Proxied / orange-cloud."
   echo "  2) Set SSL/TLS mode to Full (strict)."
   echo "  3) Test: curl -I https://${domain}"
-  echo "  4) Run: $(installer_cmd cloudflare-origin-ssl-status)"
+  echo "  4) Run: $(toolkit_cmd cloudflare-origin-ssl-status)"
   echo "============================================================"
 }
 
@@ -5265,7 +5389,7 @@ show_ssl_mode_status() {
   status_line "Recommended mode" "OK" "$mode"
   ui_box_end
   echo "Reason: $detail"
-  ui_next "$(installer_cmd ssl-mode-guide)" "$(installer_cmd production-ssl-wizard)"
+  ui_next "$(toolkit_cmd ssl-mode-guide)" "$(toolkit_cmd production-ssl-wizard)"
 }
 
 show_ssl_mode_guide() {
@@ -5285,9 +5409,9 @@ show_ssl_mode_guide() {
   echo "  - Do not use Cloudflare Origin CA for direct browser-to-origin access."
   echo
   echo "Commands:"
-  echo "  $(installer_cmd ssl-mode-status)"
-  echo "  $(installer_cmd production-ssl-wizard)"
-  echo "  $(installer_cmd local-ssl-wizard)"
+  echo "  $(toolkit_cmd ssl-mode-status)"
+  echo "  $(toolkit_cmd production-ssl-wizard)"
+  echo "  $(toolkit_cmd local-ssl-wizard)"
 }
 
 show_setup_effort_guide() {
@@ -5303,10 +5427,10 @@ show_setup_effort_guide() {
   printf '  %-28s %-12s %-18s %s\n' "Existing install" "1" "1-3" "Use public-vm-quickstart/status"
   ui_box_end
   echo "One-command public VM entry point:"
-  echo "  curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=\$(date +%s)\" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh public-vm-quickstart"
+  echo "  curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart"
   echo
   echo "One-command local VM entry point:"
-  echo "  curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=\$(date +%s)\" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh local-dev-quickstart"
+  echo "  curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart"
   echo
   echo "Interpretation: commands are shell commands typed by the user. Inputs are menu choices, confirmations, domain/email, and certificate paste steps."
 }
@@ -5605,11 +5729,11 @@ show_production_readiness() {
 
   echo
   echo "Recommended next commands:"
-  echo "  $(installer_cmd production-plan)"
-  echo "  $(installer_cmd production-domain-plan)"
-  echo "  $(installer_cmd public-vm-readiness)"
-  echo "  $(installer_cmd production-ssl-plan)"
-  echo "  $(installer_cmd production-firewall-plan)"
+  echo "  $(toolkit_cmd production-plan)"
+  echo "  $(toolkit_cmd production-domain-plan)"
+  echo "  $(toolkit_cmd public-vm-readiness)"
+  echo "  $(toolkit_cmd production-ssl-plan)"
+  echo "  $(toolkit_cmd production-firewall-plan)"
   echo "============================================================"
 }
 
@@ -5654,13 +5778,13 @@ show_production_plan() {
   echo "   - Admin password and credential handling"
   echo
   echo "Useful commands now:"
-  echo "  $(installer_cmd production-readiness)"
-  echo "  $(installer_cmd production-domain-plan)"
-  echo "  $(installer_cmd public-vm-readiness)"
-  echo "  $(installer_cmd production-ssl-plan)"
-  echo "  $(installer_cmd production-firewall-plan)"
-  echo "  $(installer_cmd backup-files)"
-  echo "  $(installer_cmd support-bundle)"
+  echo "  $(toolkit_cmd production-readiness)"
+  echo "  $(toolkit_cmd production-domain-plan)"
+  echo "  $(toolkit_cmd public-vm-readiness)"
+  echo "  $(toolkit_cmd production-ssl-plan)"
+  echo "  $(toolkit_cmd production-firewall-plan)"
+  echo "  $(toolkit_cmd backup-files)"
+  echo "  $(toolkit_cmd support-bundle)"
   echo "============================================================"
 }
 
@@ -5723,7 +5847,7 @@ Direct Bench access remains available:
   http://${SITE_NAME}:8000
   http://${vm_ip}:8000
 
-Reusable installer path inside the VM:
+Reusable toolkit path inside the VM:
   ${INSTALLER_CANONICAL_PATH}
 
 Expected certificate paths inside the VM:
@@ -5818,8 +5942,8 @@ Goal:
 
 Important:
   - Run mkcert on the HOST where the browser runs.
-  - Run installer SSL commands inside the ERPNext VM.
-  - The reusable installer path inside the VM is: ${INSTALLER_CANONICAL_PATH}
+  - Run toolkit SSL commands inside the ERPNext VM.
+  - The reusable toolkit path inside the VM is: ${INSTALLER_CANONICAL_PATH}
   - If unsure which machine you are on, run: ${cmd_env}
 
 Checklist:
@@ -5934,8 +6058,8 @@ create_self_signed_local_cert() {
   ok "Self-signed local certificate created"
   echo
   echo "Next steps:"
-  echo "  $(installer_cmd configure-local-ssl)"
-  echo "  $(installer_cmd ssl-status)"
+  echo "  $(toolkit_cmd configure-local-ssl)"
+  echo "  $(toolkit_cmd ssl-status)"
   echo
   echo "Host test:"
   echo "  curl -kI https://${SITE_NAME}"
@@ -5957,7 +6081,7 @@ write_local_ssl_nginx_config() {
   $SUDO mkdir -p "${SSL_NGINX_CONF_DIR}/sites-available" "${SSL_NGINX_CONF_DIR}/sites-enabled"
 
   $SUDO tee "$available_path" >/dev/null <<EOF_NGINX
-# Managed by ERPNext Developer Installer.
+# Managed by ERPNext Developer Toolkit.
 # Local development reverse proxy for ${SITE_NAME}.
 # Direct Bench access remains available on :8000.
 
@@ -6037,7 +6161,7 @@ configure_local_ssl() {
     warn "Certificate or key is missing."
     echo
     echo "Create/copy the certificate files first, then rerun this command."
-    echo "For instructions, run: $(installer_cmd local-ssl-guide)"
+    echo "For instructions, run: $(toolkit_cmd local-ssl-guide)"
     echo
     echo "Quick target paths:"
     echo "  ${cert_path}"
@@ -6195,9 +6319,9 @@ Recommended examples:
 
 Install examples inside each VM:
 
-  $(installer_cmd_env "SITE_NAME=erp1.test" setup)
-  $(installer_cmd_env "SITE_NAME=school.test" setup)
-  $(installer_cmd_env "SITE_NAME=client-a.test" setup)
+  $(toolkit_cmd_env "SITE_NAME=erp1.test" setup)
+  $(toolkit_cmd_env "SITE_NAME=school.test" setup)
+  $(toolkit_cmd_env "SITE_NAME=client-a.test" setup)
 
 Host /etc/hosts examples on your Linux host:
 
@@ -6338,11 +6462,11 @@ print_summary() {
   echo "Login:"
   echo "  Username: Administrator"
   echo "  Password: saved in the credentials file"
-  echo "  Credentials help: $(installer_cmd credentials-info)"
-  echo "  Show password: $(installer_cmd credentials-show)"
+  echo "  Credentials help: $(toolkit_cmd credentials-info)"
+  echo "  Show password: $(toolkit_cmd credentials-show)"
   echo
   echo "Start ERPNext:"
-  echo "  $(installer_cmd start)"
+  echo "  $(toolkit_cmd start)"
   echo
   echo "Manual start command:"
   echo "  sudo -iu ${FRAPPE_USER}"
@@ -6358,7 +6482,7 @@ print_summary() {
   echo "  echo \"${vm_ip} ${SITE_NAME}\" | sudo tee -a /etc/hosts"
   echo
   echo "Verify access after setup:"
-  echo "  $(installer_cmd verify-access)"
+  echo "  $(toolkit_cmd verify-access)"
   echo
   echo "Credentials file:"
   echo "  ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
@@ -6393,12 +6517,12 @@ show_credentials_info() {
   status_line "Bench" "INFO" "$bench_dir"
   echo
   echo "Recommended commands:"
-  echo "  View safe credential info:       $(installer_cmd credentials-info)"
-  echo "  Show generated password:         $(installer_cmd credentials-show)"
-  echo "  Check credential file security:  $(installer_cmd credentials-file-status)"
-  echo "  Fix credential file permissions: $(installer_cmd credentials-secure)"
-  echo "  Delete local plaintext file:     $(installer_cmd credentials-delete)"
-  echo "  Reset Administrator password:    $(installer_cmd reset-admin-password)"
+  echo "  View safe credential info:       $(toolkit_cmd credentials-info)"
+  echo "  Show generated password:         $(toolkit_cmd credentials-show)"
+  echo "  Check credential file security:  $(toolkit_cmd credentials-file-status)"
+  echo "  Fix credential file permissions: $(toolkit_cmd credentials-secure)"
+  echo "  Delete local plaintext file:     $(toolkit_cmd credentials-delete)"
+  echo "  Reset Administrator password:    $(toolkit_cmd reset-admin-password)"
   echo
   echo "ERPNext web login:"
   echo "  Username: Administrator"
@@ -6406,7 +6530,7 @@ show_credentials_info() {
   echo
   echo "Security note:"
   echo "  credentials-info does not print passwords."
-  echo "  The installer does not print passwords in diagnostics, support bundles, or shared logs."
+  echo "  The toolkit does not print passwords in diagnostics, support bundles, or shared logs."
   echo "  After saving credentials in a password manager, remove the local plaintext file on production systems."
   echo
   echo "Manual fallback for experienced admins: sudo cat ${cred_file}"
@@ -6432,7 +6556,7 @@ show_credentials_file_status() {
     echo
     echo "If you already saved the credentials in a password manager, this is acceptable."
     echo "If you still need access, reset the Administrator password with:"
-    echo "  $(installer_cmd reset-admin-password)"
+    echo "  $(toolkit_cmd reset-admin-password)"
     echo "============================================================"
     return 0
   fi
@@ -6448,7 +6572,7 @@ show_credentials_file_status() {
     status="root-only permissions"
   else
     perm_status="WARN"
-    status="recommended owner=root and mode=600; run $(installer_cmd credentials-secure)"
+    status="recommended owner=root and mode=600; run $(toolkit_cmd credentials-secure)"
   fi
 
   status_line "Credentials file" "OK" "$cred_file"
@@ -6461,7 +6585,7 @@ show_credentials_file_status() {
   echo
   echo "Production recommendation:"
   echo "  1. Save the credentials in a password manager."
-  echo "  2. Run: $(installer_cmd credentials-delete)"
+  echo "  2. Run: $(toolkit_cmd credentials-delete)"
   echo "============================================================"
 }
 
@@ -6473,7 +6597,7 @@ credentials_secure() {
 
   if ! path_is_file "$cred_file"; then
     warn "Credentials file is missing: $cred_file"
-    echo "Use $(installer_cmd reset-admin-password) if you need to set a new Administrator password."
+    echo "Use $(toolkit_cmd reset-admin-password) if you need to set a new Administrator password."
     return 0
   fi
 
@@ -6498,7 +6622,7 @@ credentials_show() {
     status_line "Credentials file" "WARN" "missing at $cred_file"
     echo
     echo "If the file was deleted after handoff, reset the Administrator password with:"
-    echo "  $(installer_cmd reset-admin-password)"
+    echo "  $(toolkit_cmd reset-admin-password)"
     echo "============================================================"
     return 1
   fi
@@ -6525,7 +6649,7 @@ credentials_show() {
   echo "----- END CREDENTIALS -----"
   echo
   echo "After saving these credentials in a password manager, production systems should run:"
-  echo "  $(installer_cmd credentials-delete)"
+  echo "  $(toolkit_cmd credentials-delete)"
   echo "============================================================"
 }
 
@@ -6565,7 +6689,7 @@ credentials_delete() {
 
   $SUDO rm -f "$cred_file"
   ok "Deleted local credentials file: $cred_file"
-  echo "If access is needed later, run: $(installer_cmd reset-admin-password)"
+  echo "If access is needed later, run: $(toolkit_cmd reset-admin-password)"
   echo "============================================================"
 }
 
@@ -6613,7 +6737,7 @@ reset_admin_password() {
   echo
   echo "Save the new password in a password manager."
   echo "If the generated credentials file contains the old password, remove it with:"
-  echo "  $(installer_cmd credentials-delete)"
+  echo "  $(toolkit_cmd credentials-delete)"
   echo "============================================================"
 }
 
@@ -6876,17 +7000,17 @@ recommended_action() {
         if [[ "$auto" == "Enabled" ]]; then
           echo "ERPNext is ready. Open the browser URL below."
         else
-          echo "ERPNext is running. Optional: enable autostart with $(installer_cmd enable-autostart)"
+          echo "ERPNext is running. Optional: enable autostart with $(toolkit_cmd enable-autostart)"
         fi
       else
-        echo "Start ERPNext with $(installer_cmd start)"
+        echo "Start ERPNext with $(toolkit_cmd start)"
       fi
       ;;
     "Incomplete")
-      echo "Run $(installer_cmd repair), or run setup for a clean reinstall."
+      echo "Run $(toolkit_cmd repair), or run setup for a clean reinstall."
       ;;
     *)
-      echo "Run $(installer_cmd setup)"
+      echo "Run $(toolkit_cmd setup)"
       ;;
   esac
 }
@@ -6921,7 +7045,7 @@ run_status() {
   echo "Notes:"
   echo "  - Direct URL works after ERPNext is running."
   echo "  - Friendly URL also needs the HOST /etc/hosts entry: ${vm_ip} ${SITE_NAME}"
-  echo "  - Detailed diagnostics: $(installer_cmd doctor)"
+  echo "  - Detailed diagnostics: $(toolkit_cmd doctor)"
   echo "============================================================"
 }
 
@@ -6982,10 +7106,10 @@ run_runtime_status() {
   echo
   if [[ "$runtime_status" == Starting* ]]; then
     echo "ERPNext was recently started/restarted. If ports are still waiting, run:"
-    echo "  sleep 30 && $(installer_cmd runtime-status)"
-    echo "  $(installer_cmd logs)"
+    echo "  sleep 30 && $(toolkit_cmd runtime-status)"
+    echo "  $(toolkit_cmd logs)"
   else
-    echo "If installed but stopped, run: $(installer_cmd start)"
+    echo "If installed but stopped, run: $(toolkit_cmd start)"
   fi
   echo "============================================================"
 }
@@ -7087,11 +7211,11 @@ run_service_summary() {
   fi
   echo
   echo "Useful commands:"
-  echo "  $(installer_cmd enable-autostart)"
-  echo "  $(installer_cmd disable-autostart)"
-  echo "  $(installer_cmd service-start)"
-  echo "  $(installer_cmd service-stop)"
-  echo "  $(installer_cmd logs)"
+  echo "  $(toolkit_cmd enable-autostart)"
+  echo "  $(toolkit_cmd disable-autostart)"
+  echo "  $(toolkit_cmd service-start)"
+  echo "  $(toolkit_cmd service-stop)"
+  echo "  $(toolkit_cmd logs)"
   echo "============================================================"
 }
 
@@ -7540,7 +7664,7 @@ support_bundle_write_file() {
 
 support_bundle_manifest() {
   cat <<EOF_SUPPORT_MANIFEST
-ERPNext Developer Installer Support Bundle
+ERPNext Developer Toolkit Support Bundle
 =========================================
 
 Generated: $(date -Iseconds 2>/dev/null || date)
@@ -8019,7 +8143,7 @@ app_profile_defaults() {
       LIB_APP_NAME="helpdesk"
       LIB_APP_REPO="https://github.com/frappe/helpdesk"
       LIB_APP_BRANCH="${HELPDESK_BRANCH:-main}"
-      LIB_APP_NOTES="Ticketing and customer support app. Requires the Frappe Telephony app; the installer handles that dependency automatically."
+      LIB_APP_NOTES="Ticketing and customer support app. Requires the Frappe Telephony app; the toolkit handles that dependency automatically."
       ;;
     insights)
       LIB_APP_KEY="insights"
@@ -8576,7 +8700,7 @@ assess_app_compatibility() {
       elif [[ "$branch" == main || "$branch" == develop ]]; then
         APP_COMPAT_STATUS="WARN"
         APP_COMPAT_DETAIL="${display} is targeting a moving branch (${branch_text}) instead of a pinned version branch."
-        APP_COMPAT_RECOMMENDATION="Prefer HRMS_BRANCH=version-16 for this installer unless you are intentionally testing upstream changes."
+        APP_COMPAT_RECOMMENDATION="Prefer HRMS_BRANCH=version-16 for this toolkit unless you are intentionally testing upstream changes."
       else
         APP_COMPAT_STATUS="INFO"
         APP_COMPAT_DETAIL="${display} target is ${branch_text}; verify it matches your Frappe/ERPNext branch."
@@ -8590,7 +8714,7 @@ assess_app_compatibility() {
       elif [[ "$branch" == develop || -z "$branch" ]]; then
         APP_COMPAT_STATUS="WARN"
         APP_COMPAT_DETAIL="Frappe Education is targeting a moving branch (${branch_text}); compatibility can change as upstream moves."
-        APP_COMPAT_RECOMMENDATION="Prefer EDUCATION_BRANCH=version-16 for this installer unless intentionally testing upstream changes."
+        APP_COMPAT_RECOMMENDATION="Prefer EDUCATION_BRANCH=version-16 for this toolkit unless intentionally testing upstream changes."
       elif [[ -n "$target_major" ]]; then
         APP_COMPAT_STATUS="OK"
         APP_COMPAT_DETAIL="Target branch ${branch_text} is version-pinned and matches the detected core major version."
@@ -8701,7 +8825,7 @@ assess_app_compatibility() {
       ;;
     *)
       APP_COMPAT_STATUS="WARN"
-      APP_COMPAT_DETAIL="Custom app compatibility cannot be verified by this installer."
+      APP_COMPAT_DETAIL="Custom app compatibility cannot be verified by this toolkit."
       APP_COMPAT_RECOMMENDATION="Only install trusted apps after confirming the app supports your detected Frappe branch."
       ;;
   esac
@@ -8897,10 +9021,10 @@ show_app_install_guide() {
   echo "  - Take a VM snapshot before testing several apps together."
   echo
   echo "Commands:"
-  echo "  $(installer_cmd app-install-wizard)"
-  echo "  $(installer_cmd app-compatibility)"
-  echo "  $(installer_cmd app-status)"
-  echo "  $(installer_cmd app-rollback-guide)"
+  echo "  $(toolkit_cmd app-install-wizard)"
+  echo "  $(toolkit_cmd app-compatibility)"
+  echo "  $(toolkit_cmd app-status)"
+  echo "  $(toolkit_cmd app-rollback-guide)"
   echo "============================================================"
 }
 
@@ -8970,9 +9094,9 @@ run_post_app_validation() {
 
   echo
   echo "Next checks:"
-  echo "  $(installer_cmd app-status)"
-  echo "  $(installer_cmd doctor)"
-  echo "  $(installer_cmd verify-access)"
+  echo "  $(toolkit_cmd app-status)"
+  echo "  $(toolkit_cmd doctor)"
+  echo "  $(toolkit_cmd verify-access)"
 
   if [[ "$app_name" == "education" ]]; then
     print_education_access_note
@@ -8994,18 +9118,18 @@ patches, database changes, and assets may already be applied.
 
 Recommended rollback flow:
   1) Stop the service if needed:
-     $(installer_cmd stop)
+     $(toolkit_cmd stop)
 
   2) List available backups:
-     $(installer_cmd list-backups)
+     $(toolkit_cmd list-backups)
 
   3) Restore the pre-app database/files backup:
-     $(installer_cmd restore-full)
+     $(toolkit_cmd restore-full)
 
   4) Start and validate:
-     $(installer_cmd start)
-     $(installer_cmd app-status)
-     $(installer_cmd doctor)
+     $(toolkit_cmd start)
+     $(toolkit_cmd app-status)
+     $(toolkit_cmd doctor)
 
 Best practice:
   - Take a VM snapshot before installing optional apps.
@@ -9267,7 +9391,7 @@ show_advanced_app_tools_menu() {
     echo
     print_two_column_menu       "1) Custom Git app"       "2) Repair app registry"       "3) Rollback guide"       "4) Installed apps"
     echo
-    warn "Custom Git apps are not curated by this installer and may break the site if incompatible."
+    warn "Custom Git apps are not curated by this toolkit and may break the site if incompatible."
     menu_footer
     read -r -p "Choose an option: " advanced_app_choice
 
@@ -9427,7 +9551,7 @@ show_backup_result_summary() {
   status_line "Public files" "$([[ -f "$public_file" ]] && echo OK || echo WARN)" "$(basename "$public_file")"
   status_line "Private files" "$([[ -f "$private_file" ]] && echo OK || echo WARN)" "$(basename "$private_file")"
   status_line "Site config" "$([[ -f "$config_file" ]] && echo OK || echo WARN)" "$(basename "$config_file")"
-  ui_next "$(installer_cmd backup-verify)" "$(installer_cmd off-vm-backup-guide)"
+  ui_next "$(toolkit_cmd backup-verify)" "$(toolkit_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9813,7 +9937,7 @@ show_backup_status() {
 
   if ! path_is_dir "$backup_dir"; then
     status_line "Backup folder" "WARN" "not found; create a backup first"
-    ui_next "$(installer_cmd backup-files)"
+    ui_next "$(toolkit_cmd backup-files)"
     ui_box_end
     return 0
   fi
@@ -9849,7 +9973,7 @@ show_backup_status() {
 
   echo
   echo "Off-VM copy: still required for production readiness."
-  ui_next "$(installer_cmd backup-verify)" "$(installer_cmd off-vm-backup-guide)"
+  ui_next "$(toolkit_cmd backup-verify)" "$(toolkit_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9908,7 +10032,7 @@ verify_latest_backup_set() {
   latest_lines="$(backup_latest_set_paths || true)"
   if [[ -z "$latest_lines" ]]; then
     status_line "Latest backup" "FAIL" "no database backup found"
-    ui_next "$(installer_cmd backup-files)"
+    ui_next "$(toolkit_cmd backup-files)"
     ui_box_end
     return 1
   fi
@@ -9938,7 +10062,7 @@ verify_latest_backup_set() {
 
   echo
   echo "This is not a restore test. For production, rehearse restore on a disposable VM."
-  ui_next "$(installer_cmd restore-rehearsal-guide)" "$(installer_cmd off-vm-backup-guide)"
+  ui_next "$(toolkit_cmd restore-rehearsal-guide)" "$(toolkit_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -9966,7 +10090,7 @@ show_off_vm_backup_guide() {
   echo "Recommended after copy:"
   echo "  sha256sum ~/erpnext-backups/${SITE_NAME}/* > ~/erpnext-backups/${SITE_NAME}/SHA256SUMS"
   echo
-  ui_next "$(installer_cmd backup-verify)" "Take/confirm a cloud snapshot after off-VM copy."
+  ui_next "$(toolkit_cmd backup-verify)" "Take/confirm a cloud snapshot after off-VM copy."
   ui_box_end
 }
 
@@ -9985,12 +10109,12 @@ show_restore_rehearsal_guide() {
   echo "  7) Destroy the disposable VM after validation."
   echo
   echo "Restore commands on the test VM:"
-  echo "  $(installer_cmd list-backups)"
-  echo "  $(installer_cmd restore-full)"
-  echo "  $(installer_cmd production-readiness)"
+  echo "  $(toolkit_cmd list-backups)"
+  echo "  $(toolkit_cmd restore-full)"
+  echo "  $(toolkit_cmd production-readiness)"
   echo
   echo "Never use the first restore rehearsal on the live VM."
-  ui_next "$(installer_cmd backup-status)" "$(installer_cmd off-vm-backup-guide)"
+  ui_next "$(toolkit_cmd backup-status)" "$(toolkit_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -10023,14 +10147,14 @@ show_backup_schedule_plan() {
   echo
   echo "What this does:"
   echo "  - Creates a systemd timer inside the VM."
-  echo "  - Runs database + files backup using the same installer script."
+  echo "  - Runs database + files backup using the same toolkit script."
   echo "  - Keeps backups in the site's private/backups folder."
   echo
   echo "What this does not do:"
   echo "  - It does not copy backups off the VM."
   echo "  - It does not replace cloud snapshots."
   echo "  - It does not prove restore works; use restore rehearsal for that."
-  ui_next "$(installer_cmd configure-backup-schedule)" "$(installer_cmd backup-schedule-status)"
+  ui_next "$(toolkit_cmd configure-backup-schedule)" "$(toolkit_cmd backup-schedule-status)"
   ui_box_end
 }
 
@@ -10094,7 +10218,7 @@ EOF_TIMER
   status_line "Schedule" "INFO" "OnCalendar=${BACKUP_SCHEDULE_ON_CALENDAR}"
   status_line "Backup type" "INFO" "database + public/private files"
   status_line "Off-VM copy" "WARN" "still required"
-  ui_next "$(installer_cmd backup-schedule-status)" "$(installer_cmd off-vm-backup-guide)"
+  ui_next "$(toolkit_cmd backup-schedule-status)" "$(toolkit_cmd off-vm-backup-guide)"
   ui_box_end
 }
 
@@ -10125,7 +10249,7 @@ show_backup_schedule_status() {
   echo "Useful commands:"
   echo "  systemctl list-timers ${BACKUP_SCHEDULE_TIMER} --all"
   echo "  journalctl -u ${BACKUP_SCHEDULE_SERVICE} --no-pager -n 80"
-  ui_next "$(installer_cmd backup-status)" "$(installer_cmd backup-verify)"
+  ui_next "$(toolkit_cmd backup-status)" "$(toolkit_cmd backup-verify)"
   ui_box_end
 }
 
@@ -10216,7 +10340,7 @@ show_backup_retention_plan() {
   echo "  - Keeps the newest ${keep} complete set(s)."
   echo "  - Does not replace off-VM backups or cloud snapshots."
   echo "  - Does not delete partial/orphan files in this first implementation."
-  ui_next "$(installer_cmd cleanup-old-backups-dry-run)" "$(installer_cmd cleanup-old-backups)"
+  ui_next "$(toolkit_cmd cleanup-old-backups-dry-run)" "$(toolkit_cmd cleanup-old-backups)"
   ui_box_end
 }
 
@@ -10242,7 +10366,7 @@ show_backup_retention_status() {
   status_line "Cleanup candidates" "$([[ "$candidate_count" -gt 0 ]] && echo WARN || echo OK)" "${candidate_count} old set(s)"
   status_line "Backup folder size" "INFO" "$backup_total"
   status_line "Disk usage" "$([[ "$disk_percent" -ge "$warn_percent" ]] && echo WARN || echo OK)" "${disk_percent}% used; warn at ${warn_percent}%"
-  ui_next "$(installer_cmd backup-retention-plan)" "$(installer_cmd cleanup-old-backups-dry-run)"
+  ui_next "$(toolkit_cmd backup-retention-plan)" "$(toolkit_cmd cleanup-old-backups-dry-run)"
   ui_box_end
 }
 
@@ -10264,7 +10388,7 @@ cleanup_old_backups() {
   if [[ "$count" -eq 0 ]]; then
     echo
     echo "No cleanup needed. Current complete backup count is within retention."
-    ui_next "$(installer_cmd backup-retention-status)"
+    ui_next "$(toolkit_cmd backup-retention-status)"
     ui_box_end
     return 0
   fi
@@ -10279,7 +10403,7 @@ cleanup_old_backups() {
   if [[ "$mode" == "dry-run" ]]; then
     echo
     echo "Dry run only. No files were deleted."
-    ui_next "$(installer_cmd cleanup-old-backups)" "$(installer_cmd backup-retention-status)"
+    ui_next "$(toolkit_cmd cleanup-old-backups)" "$(toolkit_cmd backup-retention-status)"
     ui_box_end
     return 0
   fi
@@ -10307,7 +10431,7 @@ cleanup_old_backups() {
   status_line "Deleted sets" "OK" "$count"
   status_line "Backup size before" "INFO" "$disk_before"
   status_line "Backup size after" "INFO" "$disk_after"
-  ui_next "$(installer_cmd backup-retention-status)" "$(installer_cmd backup-verify)"
+  ui_next "$(toolkit_cmd backup-retention-status)" "$(toolkit_cmd backup-verify)"
   ui_box_end
 }
 
@@ -10326,7 +10450,7 @@ disable_backup_schedule() {
   $SUDO systemctl disable --now "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 || true
   $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
   status_line "Scheduled backups" "OK" "timer disabled"
-  ui_next "$(installer_cmd backup-schedule-status)"
+  ui_next "$(toolkit_cmd backup-schedule-status)"
   ui_box_end
 }
 
@@ -10347,7 +10471,7 @@ show_restore_preflight() {
   echo "  - Rehearse restore on a disposable VM first."
   echo "  - Take a cloud snapshot before any live restore."
   echo "  - Use restore-full only when you intentionally want database + files restored."
-  ui_next "$(installer_cmd restore-rehearsal-guide)" "$(installer_cmd restore-full)"
+  ui_next "$(toolkit_cmd restore-rehearsal-guide)" "$(toolkit_cmd restore-full)"
   ui_box_end
 }
 
@@ -10520,7 +10644,7 @@ run_off_vm_backup_rsync() {
     fi
     status_line "Off-VM backup" "FAIL" "rsync command failed"
   fi
-  ui_next "$(installer_cmd off-vm-backup-status)" "$(installer_cmd production-checklist)"
+  ui_next "$(toolkit_cmd off-vm-backup-status)" "$(toolkit_cmd production-checklist)"
   ui_box_end
 }
 
@@ -10549,7 +10673,7 @@ show_off_vm_backup_plan() {
   echo "  - No remote deletion by default."
   echo "  - No passwords or private keys are printed in logs."
   echo "  - Off-VM backup does not replace restore rehearsal."
-  ui_next "$(installer_cmd configure-rsync-backup-target)" "$(installer_cmd off-vm-backup-dry-run)"
+  ui_next "$(toolkit_cmd configure-rsync-backup-target)" "$(toolkit_cmd off-vm-backup-dry-run)"
   ui_box_end
 }
 
@@ -10588,7 +10712,7 @@ configure_rsync_backup_target() {
   config_dir="$(dirname "$OFF_VM_BACKUP_CONFIG_FILE")"
   $SUDO mkdir -p "$config_dir"
   $SUDO tee "$OFF_VM_BACKUP_CONFIG_FILE" >/dev/null <<EOF_OFF_VM_CONFIG
-# ERPNext Developer Installer off-VM backup configuration
+# ERPNext Developer Toolkit off-VM backup configuration
 # Non-secret settings only. Use SSH keys/agent for authentication.
 OFF_VM_BACKUP_TARGET=${target}
 OFF_VM_BACKUP_SSH_IDENTITY=${identity}
@@ -10607,7 +10731,7 @@ EOF_OFF_VM_CONFIG
   status_line "Config file" "OK" "$OFF_VM_BACKUP_CONFIG_FILE"
   status_line "Delete mode" "INFO" "$OFF_VM_BACKUP_RSYNC_DELETE"
   status_line "Next test" "INFO" "run dry-run before real sync"
-  ui_next "$(installer_cmd off-vm-backup-dry-run)" "$(installer_cmd off-vm-backup-status)"
+  ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd off-vm-backup-status)"
   ui_box_end
 }
 
@@ -10638,7 +10762,7 @@ show_off_vm_backup_status() {
   status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE}"
   echo
   echo "Off-VM backup protects against VM/disk loss only if the target is outside this VM/account."
-  ui_next "$(installer_cmd off-vm-backup-dry-run)" "$(installer_cmd run-off-vm-backup)"
+  ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd run-off-vm-backup)"
   ui_box_end
 }
 
@@ -10660,7 +10784,7 @@ disable_off_vm_backup() {
   OFF_VM_BACKUP_SSH_IDENTITY=""
   OFF_VM_BACKUP_RSYNC_DELETE="false"
   status_line "Off-VM backup" "OK" "configuration removed"
-  ui_next "$(installer_cmd off-vm-backup-status)"
+  ui_next "$(toolkit_cmd off-vm-backup-status)"
   ui_box_end
 }
 
@@ -10853,7 +10977,7 @@ run_health_check() {
 
   status_line "Overall" "$overall" "$([[ "$overall" == OK ]] && echo "healthy" || echo "review WARN rows")"
   ui_box_end
-  ui_next "$(installer_cmd health-check-status)" "$(installer_cmd production-checklist)"
+  ui_next "$(toolkit_cmd health-check-status)" "$(toolkit_cmd production-checklist)"
 }
 
 configure_health_check_timer() {
@@ -10879,7 +11003,7 @@ configure_health_check_timer() {
   log "Writing health check systemd units"
   cat > "$service_file" <<EOF_HEALTH_SERVICE
 [Unit]
-Description=ERPNext Developer Installer health check
+Description=ERPNext Developer Toolkit health check
 After=network-online.target
 
 [Service]
@@ -10890,7 +11014,7 @@ EOF_HEALTH_SERVICE
 
   cat > "$timer_file" <<EOF_HEALTH_TIMER
 [Unit]
-Description=Run ERPNext Developer Installer health check periodically
+Description=Run ERPNext Developer Toolkit health check periodically
 
 [Timer]
 OnCalendar=${HEALTH_CHECK_ON_CALENDAR}
@@ -10910,7 +11034,7 @@ EOF_HEALTH_TIMER
   status_line "Timer" "INFO" "${HEALTH_CHECK_TIMER}"
   status_line "Schedule" "INFO" "${HEALTH_CHECK_ON_CALENDAR}"
   ui_box_end
-  ui_next "$(installer_cmd health-check-status)" "systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
+  ui_next "$(toolkit_cmd health-check-status)" "systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
 }
 
 show_health_check_status() {
@@ -10937,7 +11061,7 @@ show_health_check_status() {
   echo "Useful commands:"
   echo "  systemctl list-timers ${HEALTH_CHECK_TIMER} --all"
   echo "  journalctl -u ${HEALTH_CHECK_SERVICE} --no-pager -n 80"
-  ui_next "$(installer_cmd health-check)" "$(installer_cmd service-recovery-plan)"
+  ui_next "$(toolkit_cmd health-check)" "$(toolkit_cmd service-recovery-plan)"
   ui_box_end
 }
 
@@ -10953,7 +11077,7 @@ disable_health_check_timer() {
   systemctl daemon-reload || true
   status_line "Health timer" "OK" "disabled"
   ui_box_end
-  ui_next "$(installer_cmd health-check-status)"
+  ui_next "$(toolkit_cmd health-check-status)"
 }
 
 show_service_recovery_plan() {
@@ -10970,12 +11094,12 @@ show_service_recovery_plan() {
   echo "  5) Create support bundle if the issue repeats."
   echo
   echo "Useful commands:"
-  echo "  /root/install-erpnext-dev.sh health-check"
+  echo "  /opt/erpnext-dev/erpnext-dev.sh health-check"
   echo "  systemctl status ${ERPNEXT_SERVICE_NAME} --no-pager"
   echo "  journalctl -u ${ERPNEXT_SERVICE_NAME} --no-pager -n 120"
   echo "  systemctl restart ${ERPNEXT_SERVICE_NAME}"
   echo "  systemctl status nginx mariadb redis-server --no-pager"
-  echo "  /root/install-erpnext-dev.sh support-bundle"
+  echo "  /opt/erpnext-dev/erpnext-dev.sh support-bundle"
   ui_box_end
 }
 
@@ -11103,7 +11227,7 @@ show_production_checklist() {
   echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
   echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
   echo "  - Create named cloud snapshot after final validation."
-  ui_next "$(installer_cmd backup-status)" "$(installer_cmd off-vm-backup-status)" "$(installer_cmd support-bundle)"
+  ui_next "$(toolkit_cmd backup-status)" "$(toolkit_cmd off-vm-backup-status)" "$(toolkit_cmd support-bundle)"
   ui_box_end
 }
 
@@ -11168,13 +11292,14 @@ show_release_readiness() {
   status_line "Release state" "$release_state" "$([[ "$release_state" == OK ]] && echo "ready for production use" || echo "review WARN rows before production use")"
   ui_box_end
 
-  ui_next "$(installer_cmd production-checklist)" "$(installer_cmd support-bundle)"
+  ui_next "$(toolkit_cmd production-checklist)" "$(toolkit_cmd support-bundle)"
 }
 
 show_command_audit() {
   ui_box_start "Command Audit / Key Workflows"
   status_line "Start here" "OK" "first-run, public-vm-quickstart, local-dev-quickstart"
   status_line "Preflight" "OK" "install-preflight, environment-preflight"
+  status_line "Toolkit CLI" "OK" "where-installed, install-cli, repair-cli, update-toolkit"
   status_line "Config" "OK" "set-domain, show-config, setup-effort-guide"
   status_line "Install/status" "OK" "guided-setup, status, doctor, support-bundle"
   status_line "Credentials" "OK" "credentials-info, credentials-show, credentials-file-status, credentials-secure, credentials-delete, reset-admin-password"
@@ -11190,7 +11315,7 @@ show_command_audit() {
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-preflight, restore-db, restore-full"
   status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility, install-payments, install-webshop, install-builder, install-lms, install-education, install-wiki, install-print-designer, install-drive, install-raven, advanced-app-tools"
   ui_box_end
-  ui_next "$(installer_cmd release-readiness)" "$(installer_cmd help)"
+  ui_next "$(toolkit_cmd release-readiness)" "$(toolkit_cmd help)"
 }
 
 show_release_notes_guide() {
@@ -11216,7 +11341,7 @@ show_release_notes_guide() {
   echo "  - Keep cloud snapshots named and current"
   echo "  - Confirm cloud firewall rules after IP/admin changes"
   ui_box_end
-  ui_next "$(installer_cmd release-readiness)" "$(installer_cmd production-checklist)"
+  ui_next "$(toolkit_cmd release-readiness)" "$(toolkit_cmd production-checklist)"
 }
 
 final_qa_wizard() {
@@ -11429,12 +11554,12 @@ run_install() {
   if [[ "${AUTO_START}" == "true" || "$ASSUME_YES" -eq 1 ]]; then
     if ! start_erpnext_service; then
       warn "Install completed, but ERPNext could not be started automatically."
-      warn "Run this later: $(installer_cmd start)"
+      warn "Run this later: $(toolkit_cmd start)"
     fi
   elif [[ "${AUTO_START}" == "false" ]]; then
     echo
     echo "You can start ERPNext later with:"
-    echo "  $(installer_cmd start)"
+    echo "  $(toolkit_cmd start)"
   elif [[ -t 0 ]]; then
     echo
     read -r -p "Start ERPNext now in the background service? [Y/n]: " start_now
@@ -11442,12 +11567,12 @@ run_install() {
     if [[ "$start_now" =~ ^[Yy]$ ]]; then
       if ! start_erpnext_service; then
         warn "Install completed, but ERPNext could not be started automatically."
-        warn "Run this later: $(installer_cmd start)"
+        warn "Run this later: $(toolkit_cmd start)"
       fi
     else
       echo
       echo "You can start ERPNext later with:"
-      echo "  $(installer_cmd start)"
+      echo "  $(toolkit_cmd start)"
     fi
   fi
   post_install_validation_summary
@@ -11695,7 +11820,7 @@ show_help() {
 ${APP_NAME} v${SCRIPT_VERSION}
 
 Usage:
-  $(installer_cmd "[command]")
+  $(toolkit_cmd "[command]")
 
 Start here:
   first-run           Pick local VM, public VM, or maintenance flow
@@ -11703,11 +11828,15 @@ Start here:
   local-dev-quickstart Minimal-input local VM setup using erp.test
   install-preflight   Check OS, internet, CPU, RAM, disk, and /tmp before installing
   set-domain          Save public domain and site config
-  show-config         Show saved installer config
+  show-config         Show saved toolkit config
   setup-effort-guide  Show commands/input count by setup type
 
 Core:
-  version             Print installer version
+  version             Print toolkit version
+  where-installed     Show active script, stable /opt path, CLI path, and config path
+  install-cli         Install or repair the erp-dev command
+  repair-cli          Alias for install-cli
+  update-toolkit      Download latest erpnext-dev.sh from GitHub and update /opt copy
   guided-setup        Guided install / repair workflow
   status              Compact ERPNext status
   verify-access       HTTP access checks
@@ -11798,22 +11927,22 @@ Menus:
   maintenance Backup/maintenance menu
 
 Examples:
-  $(installer_cmd first-run)
-  $(installer_cmd public-vm-quickstart)
-  $(installer_cmd local-dev-quickstart)
-  $(installer_cmd production-ssl-wizard)
-  $(installer_cmd security-hardening-wizard)
-  $(installer_cmd final-qa)
-  $(installer_cmd production-ops-wizard)
+  $(toolkit_cmd first-run)
+  $(toolkit_cmd public-vm-quickstart)
+  $(toolkit_cmd local-dev-quickstart)
+  $(toolkit_cmd production-ssl-wizard)
+  $(toolkit_cmd security-hardening-wizard)
+  $(toolkit_cmd final-qa)
+  $(toolkit_cmd production-ops-wizard)
 
 Options:
   -y, --yes  Assume yes for supported confirmations
 
 One-command GitHub entry points:
   Public VM:
-    curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=\$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh public-vm-quickstart
+    curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart
   Local VM:
-    curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/install-erpnext-dev.sh?cache_bust=\$(date +%s)" -o /tmp/install-erpnext-dev.sh && chmod +x /tmp/install-erpnext-dev.sh && sudo /tmp/install-erpnext-dev.sh local-dev-quickstart
+    curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart
 
 Common environment overrides:
   SITE_NAME=erp.test
@@ -11837,7 +11966,8 @@ Common environment overrides:
   EDUCATION_BRANCH=version-16
   LMS_BRANCH=                     # blank = repository default branch
 
-Use $(installer_cmd advanced) for the complete command menu.
+Use $(toolkit_cmd advanced) for the complete command menu.
+After first run, use the short command: sudo erp-dev menu
 EOF_HELP
 }
 
@@ -11902,7 +12032,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-wizard|ssl-wizard|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-wizard|ssl-wizard|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|hosts-command|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -11921,12 +12051,16 @@ main() {
   parse_args "$@"
 
   if action_requires_lock "${ACTION:-menu}"; then
-    acquire_installer_lock
+    acquire_toolkit_lock
   fi
 
   case "${ACTION:-menu}" in
     ""|menu) show_menu ;;
     version|--version) echo "${APP_NAME} v${SCRIPT_VERSION}" ;;
+    where-installed) show_where_installed ;;
+    install-cli) install_toolkit_cli ;;
+    repair-cli) repair_toolkit_cli ;;
+    update-toolkit) update_toolkit ;;
     first-run|start-here|quickstart|setup-wizard) run_first_run_wizard ;;
     public-vm-quickstart|public-setup) run_public_vm_quickstart ;;
     local-dev-quickstart|local-setup) run_local_dev_quickstart ;;

@@ -1,8 +1,14 @@
 # Roadmap
 
-This roadmap is focused on making the ERPNext Developer Installer mature enough to install, manage, monitor, secure, back up, and maintain ERPNext/Frappe VMs reliably.
+This roadmap is focused on making the ERPNext Developer Toolkit mature enough to install, manage, monitor, secure, back up, and maintain ERPNext/Frappe VMs reliably.
 
 The current priority remains the **VM-based installer and production operations toolkit**. A Docker-based ERPNext/Frappe installation method is planned as a separate future track, but it should not distract from hardening the VM workflow first.
+
+---
+
+## v1.1.28 toolkit rename baseline
+
+The command naming baseline is now `erpnext-dev.sh` for the bootstrap file and `erp-dev` for day-to-day operations. Future roadmap items should refer to the project as the ERPNext Developer Toolkit, not only an installer.
 
 ---
 
@@ -25,7 +31,7 @@ Completed or available:
 
 - Local VM quickstart using `.test` domains such as `erp.test`.
 - Public VPS/cloud VM quickstart using a real domain or subdomain.
-- Reusable installer path at `/root/install-erpnext-dev.sh`.
+- Reusable toolkit command `erp-dev` backed by `/opt/erpnext-dev/erpnext-dev.sh`.
 - ERPNext/Frappe install, runtime checks, and access verification.
 - Local SSL guide and mkcert workflow.
 - Production SSL paths, including Cloudflare Origin CA and public HTTPS checks.
@@ -79,11 +85,11 @@ Planned work:
 Candidate commands:
 
 ```bash
-/root/install-erpnext-dev.sh log-review
-/root/install-erpnext-dev.sh vm-state-report
-/root/install-erpnext-dev.sh maintenance-dashboard
-/root/install-erpnext-dev.sh backup-size-estimate
-/root/install-erpnext-dev.sh backup-capacity-plan
+sudo erp-dev log-review
+sudo erp-dev vm-state-report
+sudo erp-dev maintenance-dashboard
+sudo erp-dev backup-size-estimate
+sudo erp-dev backup-capacity-plan
 ```
 
 ---
@@ -113,11 +119,11 @@ Planned work:
 Candidate commands:
 
 ```bash
-/root/install-erpnext-dev.sh configure-rsync-backup-target
-/root/install-erpnext-dev.sh off-vm-capacity-check
-/root/install-erpnext-dev.sh configure-object-backup-target
-/root/install-erpnext-dev.sh restore-rehearsal-wizard
-/root/install-erpnext-dev.sh backup-report
+sudo erp-dev configure-rsync-backup-target
+sudo erp-dev off-vm-capacity-check
+sudo erp-dev configure-object-backup-target
+sudo erp-dev restore-rehearsal-wizard
+sudo erp-dev backup-report
 ```
 
 ---
@@ -149,11 +155,11 @@ Planned work:
 Candidate commands:
 
 ```bash
-/root/install-erpnext-dev.sh monitoring-status
-/root/install-erpnext-dev.sh configure-alerts
-/root/install-erpnext-dev.sh security-audit
-/root/install-erpnext-dev.sh patch-status
-/root/install-erpnext-dev.sh reboot-plan
+sudo erp-dev monitoring-status
+sudo erp-dev configure-alerts
+sudo erp-dev security-audit
+sudo erp-dev patch-status
+sudo erp-dev reboot-plan
 ```
 
 ---
@@ -179,10 +185,10 @@ Planned work:
 Candidate commands:
 
 ```bash
-/root/install-erpnext-dev.sh update-preflight
-/root/install-erpnext-dev.sh safe-update-wizard
-/root/install-erpnext-dev.sh app-inventory
-/root/install-erpnext-dev.sh production-report
+sudo erp-dev update-preflight
+sudo erp-dev safe-update-wizard
+sudo erp-dev app-inventory
+sudo erp-dev production-report
 ```
 
 ---
@@ -202,10 +208,10 @@ Planned work:
 Candidate commands:
 
 ```bash
-/root/install-erpnext-dev.sh config-export
-/root/install-erpnext-dev.sh config-import
-/root/install-erpnext-dev.sh staging-plan
-/root/install-erpnext-dev.sh migration-plan
+sudo erp-dev config-export
+sudo erp-dev config-import
+sudo erp-dev staging-plan
+sudo erp-dev migration-plan
 ```
 
 ---
@@ -235,10 +241,10 @@ Planned Docker research and implementation items:
 Possible future commands:
 
 ```bash
-/root/install-erpnext-dev.sh docker-plan
-/root/install-erpnext-dev.sh docker-local-quickstart
-/root/install-erpnext-dev.sh docker-production-quickstart
-/root/install-erpnext-dev.sh docker-backup-plan
+sudo erp-dev docker-plan
+sudo erp-dev docker-local-quickstart
+sudo erp-dev docker-production-quickstart
+sudo erp-dev docker-backup-plan
 ```
 
 Target status: **later agenda item**.

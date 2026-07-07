@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.1.28 - Rename toolkit and add erp-dev CLI
+
+- Renamed the canonical script from `erpnext-dev.sh` package usage to a full toolkit identity.
+- Added the stable root-owned toolkit path `/opt/erpnext-dev/erpnext-dev.sh`.
+- Added the short user-facing command `/usr/local/bin/erp-dev`.
+- Added `where-installed`, `install-cli`, `repair-cli`, and `update-toolkit`.
+- Updated README, TESTING, and ROADMAP command examples to use `sudo erp-dev` after first run.
+- Updated the default config directory to `/etc/erpnext-dev`.
+- Updated the app name to `ERPNext Developer Toolkit` because the project now covers install, operations, backups, credentials, SSL, security, diagnostics, and optional apps.
+
+## v1.1.27 - README command path clarification
+
+- Clarified why first-run README commands download the installer to `/tmp/erpnext-dev.sh`.
+- Clarified that `/tmp/erpnext-dev.sh` is only a temporary bootstrap copy and should not be used as the long-term command path.
+- Clarified that `/opt/erpnext-dev/erpnext-dev.sh` is the stable root-owned script path after the first sudo run or after the existing-VM update command.
+- Added guidance for users who copy follow-up commands before `/opt/erpnext-dev/erpnext-dev.sh` exists.
+- Updated TESTING with README command-path validation checks.
+
 ## v1.1.26 - Credentials workflow hardening
 
 - Added `credentials-show` with explicit confirmation before displaying generated passwords.
@@ -30,7 +48,7 @@
 
 - Refreshed README.md to document the current v1.1.22+ installer workflow.
 - Added full one-command paths for install preflight, local VM quickstart, public VM quickstart, guided menu, existing VM script update, and optional app wizard.
-- Updated post-install examples to use the stable `/root/install-erpnext-dev.sh` path with `sudo`.
+- Updated post-install examples to use the stable `/opt/erpnext-dev/erpnext-dev.sh` path with `sudo`.
 - Added blocking preflight behavior, root storage expansion flow, public SSL commands, local SSL commands, pre-app backup/checkpoint workflow, and current optional app list including Education and Learning / LMS.
 - Clarified that the installer creates ERPNext backups from inside the VM, while true VM snapshots/checkpoints must be created from the host/hypervisor.
 
@@ -99,9 +117,9 @@
 
 ## v1.1.14
 
-- Fixed preflight follow-up commands so they use the real active installer path instead of `./install-erpnext-dev.sh` when the script was downloaded to `/tmp`.
+- Fixed preflight follow-up commands so they use the real active installer path instead of `./erpnext-dev.sh` when the script was downloaded to `/tmp`.
 - Updated printed follow-up commands to include `sudo` where installer actions require elevated permissions.
-- Added automatic self-copy during install/preflight flows so reusable commands prefer `/root/install-erpnext-dev.sh` after first sudo execution.
+- Added automatic self-copy during install/preflight flows so reusable commands prefer `/opt/erpnext-dev/erpnext-dev.sh` after first sudo execution.
 - Changed the install sequence so root-storage expansion is offered before the blocking resource preflight, allowing expanded VM disks to be used before disk checks block the install.
 - Improved `install-preflight` so an interactive user can continue directly into `local-dev-quickstart` instead of copying a second command.
 - Added a successful guided-install completion message and an optional prompt to open the main installer menu immediately after setup.
@@ -130,7 +148,7 @@
 - Added one-command start paths for the guided menu, local VM quickstart, public VPS/cloud VM quickstart, existing-install operations, and optional apps.
 - Added Debian-family system update/bootstrap commands using `apt-get update`, `apt-get upgrade`, `curl`, and `ca-certificates`.
 - Added a README menu/table of contents so users can jump directly to the needed section.
-- Updated quickstart documentation to make the stable `/root/install-erpnext-dev.sh` follow-up path clearer.
+- Updated quickstart documentation to make the stable `/opt/erpnext-dev/erpnext-dev.sh` follow-up path clearer.
 
 ## v1.1.9
 
@@ -152,13 +170,13 @@
 - Added clear credential-access documentation to `README.md`.
 - Added `credentials-info`, `credentials`, and `login-info` commands.
 - `credentials-info` shows the ERPNext username, credentials-file path, and safe password-reset commands without printing the password.
-- Post-install summary now points users to `credentials-info` and the stable `/root/install-erpnext-dev.sh` follow-up path.
+- Post-install summary now points users to `credentials-info` and the stable `/opt/erpnext-dev/erpnext-dev.sh` follow-up path.
 - Updated help output, command audit, and testing documentation for credential lookup.
 
 ## v1.1.7
 
 - Improved local SSL and mkcert guide wording.
-- Follow-up commands now use `/root/install-erpnext-dev.sh` in local SSL instructions so users are not blocked by scripts downloaded to `/tmp`.
+- Follow-up commands now use `/opt/erpnext-dev/erpnext-dev.sh` in local SSL instructions so users are not blocked by scripts downloaded to `/tmp`.
 - Replaced distro-specific HOST wording with generic Linux HOST wording.
 - Improved mkcert Option 2 checklist with clearer HOST vs VM steps.
 - Replaced placeholder `USER@VM_IP` examples with a suggested VM SSH user when available.
@@ -219,7 +237,7 @@
 - Promoted v1.0.0-rc5 to v1.0.0 after clean public VM quickstart validation.
 - Validated public VM flow: domain setup, ERPNext install, Cloudflare Origin CA HTTPS, UFW, Fail2Ban, optional apps, backup creation, backup verification, and release readiness.
 - Validated that backend ports 8000 and 9000 remain blocked externally while HTTPS works through Cloudflare/Nginx.
-- Keeps the stable reusable installer path at `/root/install-erpnext-dev.sh` after one-command quickstart runs.
+- Keeps the stable reusable installer path at `/opt/erpnext-dev/erpnext-dev.sh` after one-command quickstart runs.
 - Keeps provider-neutral cloud firewall wording.
 
 ### Production note
@@ -230,7 +248,7 @@
 
 ### Improved
 
-- Public/local quickstart now copies the active script to `/root/install-erpnext-dev.sh` so follow-up commands work after one-command installs from `/tmp`.
+- Public/local quickstart now copies the active script to `/opt/erpnext-dev/erpnext-dev.sh` so follow-up commands work after one-command installs from `/tmp`.
 - `Next:` command rendering now prefers the stable installer path when available.
 - Public VM final status can offer an initial database + files backup and immediately run backup verification/release readiness.
 - `verify-access` now presents production-mode access guidance with `https://domain` and backend-port blocking tests instead of only local `:8000` host instructions.
@@ -343,7 +361,7 @@
 
 ### Improved
 
-- Reduced the need to prefix every command with `SITE_NAME=... PRODUCTION_DOMAIN=...` by saving the domain/site choice in `/etc/erpnext-dev-installer/config.env`.
+- Reduced the need to prefix every command with `SITE_NAME=... PRODUCTION_DOMAIN=...` by saving the domain/site choice in `/etc/erpnext-dev/config.env`.
 - Main menu now starts with setup/onboarding options before advanced operations.
 - Public VM quickstart prevents users from starting install/HTTPS without first setting a real production domain.
 
