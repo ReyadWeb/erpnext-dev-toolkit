@@ -1,12 +1,12 @@
 # Changelog
 
-## v1.1.28 - Rename toolkit and add erp-dev CLI
+## v1.1.29 - Rename toolkit and add erpnext-dev CLI
 
-- Renamed the canonical script from `erpnext-dev.sh` package usage to a full toolkit identity.
+- Standardized the canonical script as `erpnext-dev.sh` and promoted the package to a full toolkit identity.
 - Added the stable root-owned toolkit path `/opt/erpnext-dev/erpnext-dev.sh`.
-- Added the short user-facing command `/usr/local/bin/erp-dev`.
+- Added the short user-facing command `/usr/local/bin/erpnext-dev`.
 - Added `where-installed`, `install-cli`, `repair-cli`, and `update-toolkit`.
-- Updated README, TESTING, and ROADMAP command examples to use `sudo erp-dev` after first run.
+- Updated README, TESTING, and ROADMAP command examples to use `sudo erpnext-dev` after first run.
 - Updated the default config directory to `/etc/erpnext-dev`.
 - Updated the app name to `ERPNext Developer Toolkit` because the project now covers install, operations, backups, credentials, SSL, security, diagnostics, and optional apps.
 

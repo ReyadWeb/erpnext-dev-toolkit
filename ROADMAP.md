@@ -6,9 +6,9 @@ The current priority remains the **VM-based installer and production operations 
 
 ---
 
-## v1.1.28 toolkit rename baseline
+## v1.1.29 toolkit rename baseline
 
-The command naming baseline is now `erpnext-dev.sh` for the bootstrap file and `erp-dev` for day-to-day operations. Future roadmap items should refer to the project as the ERPNext Developer Toolkit, not only an installer.
+The command naming baseline is now `erpnext-dev.sh` for the bootstrap file and `erpnext-dev` for day-to-day operations. Future roadmap items should refer to the project as the ERPNext Developer Toolkit, not only an installer.
 
 ---
 
@@ -31,7 +31,7 @@ Completed or available:
 
 - Local VM quickstart using `.test` domains such as `erp.test`.
 - Public VPS/cloud VM quickstart using a real domain or subdomain.
-- Reusable toolkit command `erp-dev` backed by `/opt/erpnext-dev/erpnext-dev.sh`.
+- Reusable toolkit command `erpnext-dev` backed by `/opt/erpnext-dev/erpnext-dev.sh`.
 - ERPNext/Frappe install, runtime checks, and access verification.
 - Local SSL guide and mkcert workflow.
 - Production SSL paths, including Cloudflare Origin CA and public HTTPS checks.
@@ -85,11 +85,11 @@ Planned work:
 Candidate commands:
 
 ```bash
-sudo erp-dev log-review
-sudo erp-dev vm-state-report
-sudo erp-dev maintenance-dashboard
-sudo erp-dev backup-size-estimate
-sudo erp-dev backup-capacity-plan
+sudo erpnext-dev log-review
+sudo erpnext-dev vm-state-report
+sudo erpnext-dev maintenance-dashboard
+sudo erpnext-dev backup-size-estimate
+sudo erpnext-dev backup-capacity-plan
 ```
 
 ---
@@ -119,11 +119,11 @@ Planned work:
 Candidate commands:
 
 ```bash
-sudo erp-dev configure-rsync-backup-target
-sudo erp-dev off-vm-capacity-check
-sudo erp-dev configure-object-backup-target
-sudo erp-dev restore-rehearsal-wizard
-sudo erp-dev backup-report
+sudo erpnext-dev configure-rsync-backup-target
+sudo erpnext-dev off-vm-capacity-check
+sudo erpnext-dev configure-object-backup-target
+sudo erpnext-dev restore-rehearsal-wizard
+sudo erpnext-dev backup-report
 ```
 
 ---
@@ -155,11 +155,11 @@ Planned work:
 Candidate commands:
 
 ```bash
-sudo erp-dev monitoring-status
-sudo erp-dev configure-alerts
-sudo erp-dev security-audit
-sudo erp-dev patch-status
-sudo erp-dev reboot-plan
+sudo erpnext-dev monitoring-status
+sudo erpnext-dev configure-alerts
+sudo erpnext-dev security-audit
+sudo erpnext-dev patch-status
+sudo erpnext-dev reboot-plan
 ```
 
 ---
@@ -185,10 +185,10 @@ Planned work:
 Candidate commands:
 
 ```bash
-sudo erp-dev update-preflight
-sudo erp-dev safe-update-wizard
-sudo erp-dev app-inventory
-sudo erp-dev production-report
+sudo erpnext-dev update-preflight
+sudo erpnext-dev safe-update-wizard
+sudo erpnext-dev app-inventory
+sudo erpnext-dev production-report
 ```
 
 ---
@@ -208,10 +208,10 @@ Planned work:
 Candidate commands:
 
 ```bash
-sudo erp-dev config-export
-sudo erp-dev config-import
-sudo erp-dev staging-plan
-sudo erp-dev migration-plan
+sudo erpnext-dev config-export
+sudo erpnext-dev config-import
+sudo erpnext-dev staging-plan
+sudo erpnext-dev migration-plan
 ```
 
 ---
@@ -241,10 +241,10 @@ Planned Docker research and implementation items:
 Possible future commands:
 
 ```bash
-sudo erp-dev docker-plan
-sudo erp-dev docker-local-quickstart
-sudo erp-dev docker-production-quickstart
-sudo erp-dev docker-backup-plan
+sudo erpnext-dev docker-plan
+sudo erpnext-dev docker-local-quickstart
+sudo erpnext-dev docker-production-quickstart
+sudo erpnext-dev docker-backup-plan
 ```
 
 Target status: **later agenda item**.

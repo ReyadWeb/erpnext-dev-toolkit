@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.28"
+SCRIPT_VERSION="1.1.29"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -64,7 +64,7 @@ LOG_FILE="${LOG_FILE:-${LOG_DIR}/erpnext-dev-$(date +%Y%m%d-%H%M%S).log}"
 LOCK_FILE="${LOCK_FILE:-/tmp/erpnext-dev.lock}"
 TOOLKIT_INSTALL_DIR="${TOOLKIT_INSTALL_DIR:-/opt/erpnext-dev}"
 INSTALLER_CANONICAL_PATH="${INSTALLER_CANONICAL_PATH:-${TOOLKIT_INSTALL_DIR}/erpnext-dev.sh}"
-TOOLKIT_CLI_PATH="${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}"
+TOOLKIT_CLI_PATH="${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}"
 BACKUP_SCHEDULE_SERVICE="${BACKUP_SCHEDULE_SERVICE:-erpnext-dev-backup.service}"
 BACKUP_SCHEDULE_TIMER="${BACKUP_SCHEDULE_TIMER:-erpnext-dev-backup.timer}"
 BACKUP_SCHEDULE_ON_CALENDAR="${BACKUP_SCHEDULE_ON_CALENDAR:-daily}"
@@ -283,16 +283,16 @@ ui_note() {
 install_toolkit_cli_entry() {
   local dest cli_dir
   dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
-  cli_dir="$(dirname "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}")"
+  cli_dir="$(dirname "${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}")"
   mkdir -p "$cli_dir" 2>/dev/null || return 1
-  ln -sf "$dest" "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}" 2>/dev/null || return 1
-  chmod 755 "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}" 2>/dev/null || true
+  ln -sf "$dest" "${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}" 2>/dev/null || return 1
+  chmod 755 "${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}" 2>/dev/null || true
   return 0
 }
 
 install_self_for_reuse() {
   # One-command quickstart runs from /tmp/erpnext-dev.sh. Copy the active
-  # toolkit into /opt and expose the short erp-dev command for future use.
+  # toolkit into /opt and expose the short erpnext-dev command for future use.
   local src dest
   dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
   src="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
@@ -341,7 +341,7 @@ show_where_installed() {
   status_line "Stable toolkit" "${stable_state}" "${INSTALLER_CANONICAL_PATH}"
   status_line "CLI command" "${cli_state}" "${TOOLKIT_CLI_PATH}${cli_target:+ -> ${cli_target}}"
   status_line "Config file" "${config_state}" "${CONFIG_FILE}"
-  status_line "Short command" "INFO" "erp-dev"
+  status_line "Short command" "INFO" "erpnext-dev"
   ui_box_end
 }
 
@@ -361,8 +361,8 @@ install_toolkit_cli() {
     status_line "CLI command" "OK" "${TOOLKIT_CLI_PATH}"
     echo
     echo "You can now run:"
-    echo "  erp-dev --help"
-    echo "  sudo erp-dev menu"
+    echo "  erpnext-dev --help"
+    echo "  sudo erpnext-dev menu"
   else
     status_line "CLI command" "FAIL" "could not create ${TOOLKIT_CLI_PATH}"
     ui_box_end
@@ -415,8 +415,8 @@ active_toolkit_path() {
   # then to the current script path when running from /tmp or a checkout.
   local src
 
-  if [[ -x "${TOOLKIT_CLI_PATH:-/usr/local/bin/erp-dev}" ]]; then
-    printf '%s' "erp-dev"
+  if [[ -x "${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}" ]]; then
+    printf '%s' "erpnext-dev"
     return 0
   fi
 
@@ -480,7 +480,7 @@ suggested_vm_ssh_user() {
 
 menu_invalid_choice() {
   local choice="${1:-}" exit_hint="${2:-type the menu number}"
-  if [[ "$choice" == *erpnext-dev.sh* || "$choice" == *erp-dev* || "$choice" == ./* || "$choice" == sudo\ * || "$choice" == curl\ * ]]; then
+  if [[ "$choice" == *erpnext-dev.sh* || "$choice" == *erpnext-dev* || "$choice" == ./* || "$choice" == sudo\ * || "$choice" == curl\ * ]]; then
     warn "A shell command was pasted into an interactive menu."
     echo "This menu expects a number, b/B, or q/Q. ${exit_hint}, then run commands at the shell prompt."
     return 2
@@ -1417,8 +1417,8 @@ require_sudo() {
     echo "  sudo $(active_toolkit_path) ${ACTION:-menu}"
     echo
     echo "Help and version can be run without sudo:"
-    echo "  erp-dev --help"
-    echo "  erp-dev version"
+    echo "  erpnext-dev --help"
+    echo "  erpnext-dev version"
     exit 1
   fi
 
@@ -11834,7 +11834,7 @@ Start here:
 Core:
   version             Print toolkit version
   where-installed     Show active script, stable /opt path, CLI path, and config path
-  install-cli         Install or repair the erp-dev command
+  install-cli         Install or repair the erpnext-dev command
   repair-cli          Alias for install-cli
   update-toolkit      Download latest erpnext-dev.sh from GitHub and update /opt copy
   guided-setup        Guided install / repair workflow
@@ -11967,7 +11967,7 @@ Common environment overrides:
   LMS_BRANCH=                     # blank = repository default branch
 
 Use $(toolkit_cmd advanced) for the complete command menu.
-After first run, use the short command: sudo erp-dev menu
+After first run, use the short command: sudo erpnext-dev menu
 EOF_HELP
 }
 

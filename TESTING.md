@@ -2,7 +2,7 @@
 
 This file validates the current toolkit release. Version history belongs in `CHANGELOG.md`.
 
-## v1.1.28 toolkit rename and CLI validation
+## v1.1.29 toolkit rename and CLI validation
 
 Local syntax/version validation:
 
@@ -18,8 +18,8 @@ grep -n "SCRIPT_VERSION" erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="1.1.28"
-ERPNext Developer Toolkit v1.1.28
+SCRIPT_VERSION="1.1.29"
+ERPNext Developer Toolkit v1.1.29
 ```
 
 ## Package file check
@@ -27,7 +27,7 @@ ERPNext Developer Toolkit v1.1.28
 The release package should contain the canonical toolkit file `erpnext-dev.sh`.
 
 ```bash
-unzip -l erpnext-dev-installer-v1.1.28.zip | grep "erpnext-dev.sh"
+unzip -l erpnext-dev-installer-v1.1.29.zip | grep "erpnext-dev.sh"
 ```
 
 Expected:
@@ -44,24 +44,24 @@ Run on a VM or disposable test machine:
 curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh
 chmod +x /tmp/erpnext-dev.sh
 sudo /tmp/erpnext-dev.sh install-cli
-erp-dev version
-erp-dev --help
-erp-dev where-installed
+erpnext-dev version
+erpnext-dev --help
+erpnext-dev where-installed
 ```
 
 Expected installed paths:
 
 ```text
 /opt/erpnext-dev/erpnext-dev.sh
-/usr/local/bin/erp-dev
+/usr/local/bin/erpnext-dev
 ```
 
 Repair/update checks:
 
 ```bash
-sudo erp-dev repair-cli
-sudo erp-dev update-toolkit
-erp-dev where-installed
+sudo erpnext-dev repair-cli
+sudo erpnext-dev update-toolkit
+erpnext-dev where-installed
 ```
 
 ## Fresh VM preflight validation
@@ -76,7 +76,7 @@ Expected:
 
 ```text
 The VM passes preflight, or prints INSTALL BLOCKED with clear CPU/RAM/disk/tmp reasons.
-The toolkit installs /opt/erpnext-dev/erpnext-dev.sh and /usr/local/bin/erp-dev after sudo execution.
+The toolkit installs /opt/erpnext-dev/erpnext-dev.sh and /usr/local/bin/erpnext-dev after sudo execution.
 ```
 
 ## Fresh local VM install validation
@@ -90,12 +90,12 @@ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl c
 After install, validate with the short command:
 
 ```bash
-erp-dev version
-erp-dev where-installed
-sudo erp-dev doctor --plain
-sudo erp-dev verify-access
-sudo erp-dev access-info
-sudo erp-dev credentials-info
+erpnext-dev version
+erpnext-dev where-installed
+sudo erpnext-dev doctor --plain
+sudo erpnext-dev verify-access
+sudo erpnext-dev access-info
+sudo erpnext-dev credentials-info
 ```
 
 Expected:
@@ -109,11 +109,11 @@ Credentials are not printed by diagnostics or credentials-info.
 ## Credentials workflow validation
 
 ```bash
-sudo erp-dev credentials-info
-sudo erp-dev credentials-file-status
-printf 'NO\n' | sudo erp-dev credentials-show || true
-printf 'NO\n' | sudo erp-dev credentials-delete || true
-sudo erp-dev --help | grep -E "credentials-show|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password"
+sudo erpnext-dev credentials-info
+sudo erpnext-dev credentials-file-status
+printf 'NO\n' | sudo erpnext-dev credentials-show || true
+printf 'NO\n' | sudo erpnext-dev credentials-delete || true
+sudo erpnext-dev --help | grep -E "credentials-show|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password"
 ```
 
 Expected:
@@ -130,10 +130,10 @@ credentials-file-status reports owner/mode and recommends root:root 600.
 After installing Education:
 
 ```bash
-sudo erp-dev install-education
-sudo erp-dev education-access-info
-sudo erp-dev access-info
-sudo erp-dev verify-access
+sudo erpnext-dev install-education
+sudo erpnext-dev education-access-info
+sudo erpnext-dev access-info
+sudo erpnext-dev verify-access
 ```
 
 Expected:
@@ -151,16 +151,16 @@ The website root may route to the Education portal. This is expected; users shou
 Install optional apps one at a time and validate service readiness after each app:
 
 ```bash
-sudo erp-dev app-status
-sudo erp-dev install-payments
-sudo erp-dev service-restart
-sudo erp-dev wait-ready
-sudo erp-dev migrate
-sudo erp-dev build
-sudo erp-dev clear-cache
-sudo erp-dev app-status
-sudo erp-dev doctor --plain
-sudo erp-dev verify-access
+sudo erpnext-dev app-status
+sudo erpnext-dev install-payments
+sudo erpnext-dev service-restart
+sudo erpnext-dev wait-ready
+sudo erpnext-dev migrate
+sudo erpnext-dev build
+sudo erpnext-dev clear-cache
+sudo erpnext-dev app-status
+sudo erpnext-dev doctor --plain
+sudo erpnext-dev verify-access
 ```
 
 Expected:
@@ -193,7 +193,7 @@ Forced one-column mode works.
 
 ```bash
 grep -n "/tmp/erpnext-dev.sh" README.md | head -20
-grep -n "sudo erp-dev" README.md | head -30
+grep -n "sudo erpnext-dev" README.md | head -30
 grep -n "/opt/erpnext-dev/erpnext-dev.sh" README.md | head -20
 ```
 
@@ -201,5 +201,5 @@ Expected:
 
 ```text
 Fresh VM commands use /tmp/erpnext-dev.sh.
-Follow-up commands use sudo erp-dev.
+Follow-up commands use sudo erpnext-dev.
 ```
