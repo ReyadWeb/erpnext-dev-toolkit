@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.30 - Logging and lock permission hardening
+
+- Fixed root/non-root log collisions by replacing timestamp-only `/tmp` log names with unique `mktemp` log files.
+- Changed default root logs to `/var/log/erpnext-dev` and default normal-user logs to the user's state directory, with a safe `/tmp/erpnext-dev-<uid>-logs` fallback.
+- Kept explicit `LOG_DIR` and `LOG_FILE` overrides supported while preventing accidental same-second collisions when `LOG_FILE` is not provided.
+- Reworked toolkit locking to use a shared lock directory at `/tmp/erpnext-dev-locks` instead of the old root-owned `/tmp/erpnext-dev.lock` path.
+- Changed generated README/help bootstrap commands to use `mktemp /tmp/erpnext-dev.XXXXXX.sh` instead of a fixed `/tmp/erpnext-dev.sh` path.
+- Changed `update-toolkit` and scheduled-backup unit generation to use unique temporary files instead of fixed `/tmp` filenames.
+- Added validation coverage for running `sudo erpnext-dev install-cli` followed immediately by non-root `erpnext-dev version` and `erpnext-dev where-installed`.
+
 ## v1.1.29 - Rename toolkit and add erpnext-dev CLI
 
 - Standardized the canonical script as `erpnext-dev.sh` and promoted the package to a full toolkit identity.

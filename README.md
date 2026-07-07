@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit v1.1.29
+# ERPNext Developer Toolkit v1.1.30
 
 ![ERPNext Toolkit Banner](docs/assets/erp_installer_readme_banner.png)
 
@@ -23,13 +23,13 @@ These commands assume a fresh **Debian-family Linux VM** such as Ubuntu or Debia
 
 ### Command path note — why `/tmp` first and `erpnext-dev` later
 
-The first `curl` command downloads the toolkit to:
+The first `curl` command downloads the toolkit to a unique temporary bootstrap file under `/tmp`, for example:
 
 ```bash
-/tmp/erpnext-dev.sh
+/tmp/erpnext-dev.A1b2C3.sh
 ```
 
-That path is used only as a **temporary bootstrap copy**. It keeps the first download simple, avoids writing into system-owned locations before `sudo` is used, and is safe to overwrite on every test run with `cache_bust=$(date +%s)`.
+That path is used only as a **temporary bootstrap copy**. The command uses `mktemp` so root-owned and normal-user runs cannot collide with each other during repeated tests.
 
 After the toolkit runs with `sudo`, it saves the stable root-owned copy here:
 
@@ -46,7 +46,7 @@ It also creates this short command:
 Use the paths this way:
 
 ```text
-Fresh VM / first copied command:  sudo /tmp/erpnext-dev.sh <command>
+Fresh VM / first copied command:  sudo "$tmp" <command>
 After first run or update:        sudo erpnext-dev <command>
 Stable toolkit file:              /opt/erpnext-dev/erpnext-dev.sh
 Short command:                    /usr/local/bin/erpnext-dev
@@ -59,7 +59,7 @@ If `erpnext-dev` does not exist yet, run one of the quickstart commands below or
 Use this first when testing a fresh VM. It checks OS, internet access, CPU, RAM, root disk, and `/tmp` free space before the heavy install begins:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh install-preflight
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" install-preflight
 ```
 
 If the VM is clearly unsafe for ERPNext, the installer blocks the install and prints a red `INSTALL BLOCKED` summary explaining what to fix.
@@ -69,7 +69,7 @@ If the VM is clearly unsafe for ERPNext, the installer blocks the install and pr
 Use this inside a fresh local VM for testing or development:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" local-dev-quickstart
 ```
 
 Recommended local hostname:
@@ -83,7 +83,7 @@ erp.test
 Use this inside a fresh public VM when you have a real domain or subdomain ready:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" public-vm-quickstart
 ```
 
 Recommended public hostname:
@@ -97,7 +97,7 @@ erp.example.com
 Use this if you want to choose the setup path interactively:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh menu
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" menu
 ```
 
 ### Option E — update or repair the toolkit command
@@ -105,7 +105,7 @@ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl c
 Use this on a VM where you want to update the toolkit and create/repair the short `erpnext-dev` command:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh install-cli && sudo erpnext-dev version
+tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" install-cli && sudo erpnext-dev version
 ```
 
 Then open the main menu or production operations wizard:
@@ -208,7 +208,7 @@ The installer includes a blocking install preflight so unsafe environments do no
 Run it directly:
 
 ```bash
-sudo /tmp/erpnext-dev.sh install-preflight
+sudo "$tmp" install-preflight
 ```
 
 or after the script has been copied to the reusable path:
@@ -237,7 +237,7 @@ The install flow offers root storage expansion before the final blocking resourc
 There is an expert-only unsafe override for disposable test VMs:
 
 ```bash
-ERPNEXT_ALLOW_UNSAFE_INSTALL=true sudo /tmp/erpnext-dev.sh local-dev-quickstart
+ERPNEXT_ALLOW_UNSAFE_INSTALL=true sudo "$tmp" local-dev-quickstart
 ```
 
 Normal users should not use the unsafe override.
@@ -275,7 +275,7 @@ Some longer app menus use two columns when the terminal is wide enough, and fall
 Run this inside a fresh local Ubuntu/Debian-family VM:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" local-dev-quickstart
 ```
 
 The quickstart installs the toolkit into the VM and creates the short command:
@@ -370,7 +370,7 @@ Recommended local VM test order:
 Run this inside a fresh public Ubuntu/Debian-family VM:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" public-vm-quickstart
 ```
 
 Use a real subdomain, for example:
@@ -456,12 +456,12 @@ PUBLIC_VM_IP:9000 -> timeout or blocked
 The toolkit intentionally uses a temporary bootstrap file first, then a stable installed command:
 
 ```text
-/tmp/erpnext-dev.sh                 temporary bootstrap copy downloaded by curl
+/tmp/erpnext-dev.XXXXXX.sh           temporary bootstrap copy created by mktemp
 /opt/erpnext-dev/erpnext-dev.sh     stable root-owned toolkit file
 /usr/local/bin/erpnext-dev              short command for daily use
 ```
 
-Why `/tmp` first? The README one-liners download to `/tmp` because it is writable by a normal sudo user, easy to overwrite during testing, and avoids modifying system-owned paths until the toolkit is actually executed with `sudo`. The `/tmp` copy should not be treated as permanent because `/tmp` may be cleaned by the OS.
+Why `/tmp` first? The README one-liners download to a unique `mktemp` file under `/tmp` because it is writable by a normal sudo user and avoids modifying system-owned paths until the toolkit is actually executed with `sudo`. The `/tmp` copy should not be treated as permanent because `/tmp` may be cleaned by the OS.
 
 Why `/opt` later? During quickstart, preflight, and CLI repair flows, the toolkit copies itself to:
 
@@ -488,7 +488,7 @@ sudo erpnext-dev production-ops-wizard
 To update or repair the toolkit command from GitHub:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh install-cli && sudo erpnext-dev version
+tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" install-cli && sudo erpnext-dev version
 ```
 
 To check where the toolkit is installed:

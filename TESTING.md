@@ -2,7 +2,7 @@
 
 This file validates the current toolkit release. Version history belongs in `CHANGELOG.md`.
 
-## v1.1.29 toolkit rename and CLI validation
+## v1.1.30 toolkit rename and CLI validation
 
 Local syntax/version validation:
 
@@ -18,8 +18,28 @@ grep -n "SCRIPT_VERSION" erpnext-dev.sh
 Expected:
 
 ```text
-SCRIPT_VERSION="1.1.29"
-ERPNext Developer Toolkit v1.1.29
+SCRIPT_VERSION="1.1.30"
+ERPNext Developer Toolkit v1.1.30
+```
+
+
+## Root/non-root logging validation
+
+Run this immediately after `install-cli` to verify that sudo/root commands and normal-user commands do not reuse the same log file:
+
+```bash
+sudo erpnext-dev install-cli
+erpnext-dev version
+erpnext-dev where-installed
+```
+
+Expected:
+
+```text
+No /tmp log permission error.
+Root runs create unique logs under /var/log/erpnext-dev when writable.
+Normal-user runs create unique logs under ~/.local/state/erpnext-dev/logs, or /tmp/erpnext-dev-<uid>-logs as a fallback.
+The shared lock file uses /tmp/erpnext-dev-locks/toolkit.lock.
 ```
 
 ## Package file check
@@ -27,7 +47,7 @@ ERPNext Developer Toolkit v1.1.29
 The release package should contain the canonical toolkit file `erpnext-dev.sh`.
 
 ```bash
-unzip -l erpnext-dev-installer-v1.1.29.zip | grep "erpnext-dev.sh"
+unzip -l erpnext-dev-installer-v1.1.30.zip | grep "erpnext-dev.sh"
 ```
 
 Expected:
@@ -41,9 +61,10 @@ erpnext-dev.sh
 Run on a VM or disposable test machine:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh
-chmod +x /tmp/erpnext-dev.sh
-sudo /tmp/erpnext-dev.sh install-cli
+tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)"
+curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp"
+chmod +x "$tmp"
+sudo "$tmp" install-cli
 erpnext-dev version
 erpnext-dev --help
 erpnext-dev where-installed
@@ -69,7 +90,7 @@ erpnext-dev where-installed
 Run inside a fresh Ubuntu/Debian-family VM:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh install-preflight
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" install-preflight
 ```
 
 Expected:
@@ -84,7 +105,7 @@ The toolkit installs /opt/erpnext-dev/erpnext-dev.sh and /usr/local/bin/erpnext-
 Run inside a fresh local VM:
 
 ```bash
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart
+sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" local-dev-quickstart
 ```
 
 After install, validate with the short command:
@@ -192,7 +213,7 @@ Forced one-column mode works.
 ## README command validation
 
 ```bash
-grep -n "/tmp/erpnext-dev.sh" README.md | head -20
+grep -n "mktemp /tmp/erpnext-dev" README.md | head -20
 grep -n "sudo erpnext-dev" README.md | head -30
 grep -n "/opt/erpnext-dev/erpnext-dev.sh" README.md | head -20
 ```
@@ -200,6 +221,6 @@ grep -n "/opt/erpnext-dev/erpnext-dev.sh" README.md | head -20
 Expected:
 
 ```text
-Fresh VM commands use /tmp/erpnext-dev.sh.
+Fresh VM commands use a unique /tmp/erpnext-dev.XXXXXX.sh bootstrap path.
 Follow-up commands use sudo erpnext-dev.
 ```

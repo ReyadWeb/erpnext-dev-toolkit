@@ -6,7 +6,7 @@ The current priority remains the **VM-based installer and production operations 
 
 ---
 
-## v1.1.29 toolkit rename baseline
+## v1.1.30 toolkit rename baseline
 
 The command naming baseline is now `erpnext-dev.sh` for the bootstrap file and `erpnext-dev` for day-to-day operations. Future roadmap items should refer to the project as the ERPNext Developer Toolkit, not only an installer.
 

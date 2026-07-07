@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.29"
+SCRIPT_VERSION="1.1.30"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -59,9 +59,35 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 ASSUME_YES=0
 ACTION=""
 DOCTOR_FORMAT="human"
-LOG_DIR="${LOG_DIR:-/tmp}"
-LOG_FILE="${LOG_FILE:-${LOG_DIR}/erpnext-dev-$(date +%Y%m%d-%H%M%S).log}"
-LOCK_FILE="${LOCK_FILE:-/tmp/erpnext-dev.lock}"
+
+# Logging and locking are initialized centrally so every command path behaves
+# the same way whether the toolkit is run as root, through sudo, or as a
+# normal user. Keep defaults user-safe; callers may still override LOG_DIR,
+# LOG_FILE, LOCK_DIR, or LOCK_FILE explicitly when needed.
+LOG_DIR_WAS_SET=0
+LOG_FILE_WAS_SET=0
+LOCK_DIR_WAS_SET=0
+LOCK_FILE_WAS_SET=0
+[[ -n "${LOG_DIR+x}" ]] && LOG_DIR_WAS_SET=1
+[[ -n "${LOG_FILE+x}" ]] && LOG_FILE_WAS_SET=1
+[[ -n "${LOCK_DIR+x}" ]] && LOCK_DIR_WAS_SET=1
+[[ -n "${LOCK_FILE+x}" ]] && LOCK_FILE_WAS_SET=1
+
+if [[ "$LOG_DIR_WAS_SET" -eq 0 ]]; then
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    LOG_DIR="/var/log/erpnext-dev"
+  else
+    LOG_DIR="${XDG_STATE_HOME:-${HOME:-/tmp}/.local/state}/erpnext-dev/logs"
+  fi
+fi
+
+if [[ "$LOCK_DIR_WAS_SET" -eq 0 ]]; then
+  LOCK_DIR="/tmp/erpnext-dev-locks"
+fi
+if [[ "$LOCK_FILE_WAS_SET" -eq 0 ]]; then
+  LOCK_FILE="${LOCK_DIR}/toolkit.lock"
+fi
+
 TOOLKIT_INSTALL_DIR="${TOOLKIT_INSTALL_DIR:-/opt/erpnext-dev}"
 INSTALLER_CANONICAL_PATH="${INSTALLER_CANONICAL_PATH:-${TOOLKIT_INSTALL_DIR}/erpnext-dev.sh}"
 TOOLKIT_CLI_PATH="${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}"
@@ -113,11 +139,45 @@ else
   RESET=""
 fi
 
-# Keep logs private because install output may include sensitive operational details.
-mkdir -p "$LOG_DIR" 2>/dev/null || true
-: > "$LOG_FILE" || { echo "ERROR: Cannot write log file: $LOG_FILE" >&2; exit 1; }
-chmod 600 "$LOG_FILE" 2>/dev/null || true
+prepare_log_file() {
+  local uid fallback_dir template parent
+  uid="${EUID:-$(id -u)}"
 
+  if [[ "$LOG_FILE_WAS_SET" -eq 1 ]]; then
+    parent="$(dirname "$LOG_FILE")"
+    mkdir -p "$parent" 2>/dev/null || {
+      echo "ERROR: Cannot create log directory: $parent" >&2
+      exit 1
+    }
+    : > "$LOG_FILE" || {
+      echo "ERROR: Cannot write log file: $LOG_FILE" >&2
+      exit 1
+    }
+    chmod 600 "$LOG_FILE" 2>/dev/null || true
+    return 0
+  fi
+
+  if ! mkdir -p "$LOG_DIR" 2>/dev/null || [[ ! -w "$LOG_DIR" ]]; then
+    fallback_dir="/tmp/erpnext-dev-${uid}-logs"
+    mkdir -p "$fallback_dir" 2>/dev/null || {
+      echo "ERROR: Cannot create fallback log directory: $fallback_dir" >&2
+      exit 1
+    }
+    chmod 700 "$fallback_dir" 2>/dev/null || true
+    LOG_DIR="$fallback_dir"
+  fi
+
+  # Use mktemp instead of timestamp-only names so sudo/root and normal-user
+  # invocations started in the same second never collide in /tmp or elsewhere.
+  template="${LOG_DIR}/erpnext-dev-$(date +%Y%m%d-%H%M%S)-uid${uid}-pid$$.XXXXXX.log"
+  LOG_FILE="$(mktemp "$template")" || {
+    echo "ERROR: Cannot create log file in: $LOG_DIR" >&2
+    exit 1
+  }
+  chmod 600 "$LOG_FILE" 2>/dev/null || true
+}
+
+prepare_log_file
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 log() { echo -e "\n${BLUE}==>${RESET} ${BOLD}$*${RESET}"; }
@@ -126,10 +186,40 @@ warn() { echo -e "${YELLOW}WARN:${RESET} $*"; }
 err() { echo -e "${RED}ERROR:${RESET} $*" >&2; }
 fail() { err "$*"; echo "Log file: $LOG_FILE" >&2; exit 1; }
 
+prepare_lock_file() {
+  local uid fallback_dir
+  uid="${EUID:-$(id -u)}"
+
+  if [[ "$LOCK_FILE_WAS_SET" -eq 0 ]]; then
+    mkdir -p "$LOCK_DIR" 2>/dev/null || true
+    chmod 1777 "$LOCK_DIR" 2>/dev/null || true
+  else
+    mkdir -p "$(dirname "$LOCK_FILE")" 2>/dev/null || true
+  fi
+
+  if ! ( : > "$LOCK_FILE" ) 2>/dev/null; then
+    fallback_dir="/tmp/erpnext-dev-${uid}-locks"
+    mkdir -p "$fallback_dir" 2>/dev/null || {
+      echo "ERROR: Cannot create fallback lock directory: $fallback_dir" >&2
+      exit 1
+    }
+    chmod 700 "$fallback_dir" 2>/dev/null || true
+    LOCK_FILE="${fallback_dir}/toolkit.lock"
+    : > "$LOCK_FILE" 2>/dev/null || {
+      echo "ERROR: Cannot write lock file: $LOCK_FILE" >&2
+      exit 1
+    }
+  fi
+
+  # The lock file must be writable by both sudo-created/root runs and normal
+  # user read-only runs. The lock protects execution ordering, not secrets.
+  chmod 666 "$LOCK_FILE" 2>/dev/null || true
+}
+
 acquire_toolkit_lock() {
   # Prevent two setup/repair/service commands from changing the same VM at once.
+  prepare_lock_file
   exec 200>"$LOCK_FILE"
-  chmod 600 "$LOCK_FILE" 2>/dev/null || true
   if ! flock -n 200; then
     err "Another toolkit task is already running."
     echo "Lock file: $LOCK_FILE" >&2
@@ -291,7 +381,7 @@ install_toolkit_cli_entry() {
 }
 
 install_self_for_reuse() {
-  # One-command quickstart runs from /tmp/erpnext-dev.sh. Copy the active
+  # One-command quickstart runs from a temporary /tmp bootstrap file. Copy the active
   # toolkit into /opt and expose the short erpnext-dev command for future use.
   local src dest
   dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
@@ -379,7 +469,7 @@ update_toolkit() {
   require_sudo
   local url tmp
   url="https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)"
-  tmp="/tmp/erpnext-dev.sh"
+  tmp="$(mktemp /tmp/erpnext-dev-update.XXXXXX.sh)" || fail "Could not create temporary update file."
 
   ui_box_start "Update ERPNext Toolkit"
   status_line "Download URL" "INFO" "$url"
@@ -5427,10 +5517,10 @@ show_setup_effort_guide() {
   printf '  %-28s %-12s %-18s %s\n' "Existing install" "1" "1-3" "Use public-vm-quickstart/status"
   ui_box_end
   echo "One-command public VM entry point:"
-  echo "  curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart"
+  echo "  tmp=\"\$(mktemp /tmp/erpnext-dev.XXXXXX.sh)\" && curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o \"\$tmp\" && chmod +x \"\$tmp\" && sudo \"\$tmp\" public-vm-quickstart"
   echo
   echo "One-command local VM entry point:"
-  echo "  curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart"
+  echo "  tmp=\"\$(mktemp /tmp/erpnext-dev.XXXXXX.sh)\" && curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o \"\$tmp\" && chmod +x \"\$tmp\" && sudo \"\$tmp\" local-dev-quickstart"
   echo
   echo "Interpretation: commands are shell commands typed by the user. Inputs are menu choices, confirmations, domain/email, and certificate paste steps."
 }
@@ -10178,7 +10268,11 @@ configure_backup_schedule() {
   fi
 
   log "Writing scheduled backup systemd units"
-  cat > /tmp/erpnext-dev-backup.service <<EOF_SERVICE
+  local service_tmp timer_tmp
+  service_tmp="$(mktemp /tmp/erpnext-dev-backup.XXXXXX.service)" || fail "Could not create temporary service unit file."
+  timer_tmp="$(mktemp /tmp/erpnext-dev-backup.XXXXXX.timer)" || fail "Could not create temporary timer unit file."
+
+  cat > "$service_tmp" <<EOF_SERVICE
 [Unit]
 Description=ERPNext scheduled backup for ${SITE_NAME}
 Wants=network-online.target
@@ -10192,7 +10286,7 @@ Environment=DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-development}
 ExecStart=${INSTALLER_CANONICAL_PATH} backup-files
 EOF_SERVICE
 
-  cat > /tmp/erpnext-dev-backup.timer <<EOF_TIMER
+  cat > "$timer_tmp" <<EOF_TIMER
 [Unit]
 Description=Run ERPNext scheduled backup for ${SITE_NAME}
 
@@ -10206,8 +10300,8 @@ Unit=${BACKUP_SCHEDULE_SERVICE}
 WantedBy=timers.target
 EOF_TIMER
 
-  $SUDO mv /tmp/erpnext-dev-backup.service "/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}"
-  $SUDO mv /tmp/erpnext-dev-backup.timer "/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
+  $SUDO mv "$service_tmp" "/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}"
+  $SUDO mv "$timer_tmp" "/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
   $SUDO chmod 0644 "/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}" "/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
   $SUDO systemctl daemon-reload
   $SUDO systemctl enable --now "$BACKUP_SCHEDULE_TIMER"
@@ -11940,9 +12034,9 @@ Options:
 
 One-command GitHub entry points:
   Public VM:
-    curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh public-vm-quickstart
+    tmp="\$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)" -o "\$tmp" && chmod +x "\$tmp" && sudo "\$tmp" public-vm-quickstart
   Local VM:
-    curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)" -o /tmp/erpnext-dev.sh && chmod +x /tmp/erpnext-dev.sh && sudo /tmp/erpnext-dev.sh local-dev-quickstart
+    tmp="\$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)" -o "\$tmp" && chmod +x "\$tmp" && sudo "\$tmp" local-dev-quickstart
 
 Common environment overrides:
   SITE_NAME=erp.test
