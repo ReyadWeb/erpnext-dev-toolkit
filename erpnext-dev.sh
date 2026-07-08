@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.47"
+SCRIPT_VERSION="1.1.48"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1367,9 +1367,20 @@ show_ready_summary() {
   echo "============================================================"
   echo "ERPNext is running and the required development ports are listening."
   echo
-  echo "Open one of these URLs:"
-  echo "  Direct IP:    http://${vm_ip}:8000"
-  echo "  Friendly URL: http://${SITE_NAME}:8000"
+  if ssl_is_configured 2>/dev/null && port_listens 443; then
+    echo "Open these HTTPS URLs from the HOST after /etc/hosts is set:"
+    echo "  Desk:         https://${SITE_NAME}/app"
+    echo "  Login:        https://${SITE_NAME}/login"
+    echo "  Website/root: https://${SITE_NAME}"
+    echo
+    echo "Direct Bench fallback, useful for troubleshooting:"
+    echo "  Direct IP:    http://${vm_ip}:8000"
+    echo "  Friendly URL: http://${SITE_NAME}:8000"
+  else
+    echo "Open one of these URLs:"
+    echo "  Direct IP:    http://${vm_ip}:8000"
+    echo "  Friendly URL: http://${SITE_NAME}:8000"
+  fi
   echo
   echo "Friendly URL note: your HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."
   echo "For full access instructions, run: $(toolkit_cmd access)"
@@ -1818,6 +1829,34 @@ run_as_frappe() {
     sudo rm -f "$tmp_script" 2>/dev/null || rm -f "$tmp_script"
   fi
 
+  return "$rc"
+}
+
+run_as_frappe_quiet() {
+  local label="$1"
+  local cmd="$2"
+  local safe_label output_file fallback_dir rc
+
+  safe_label="$(printf '%s' "$label" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9_.-')"
+  [[ -n "$safe_label" ]] || safe_label="command"
+
+  output_file="$(mktemp "${LOG_DIR}/erpnext-dev-${safe_label}.XXXXXX.log" 2>/dev/null || true)"
+  if [[ -z "$output_file" ]]; then
+    fallback_dir="/tmp/erpnext-dev-${EUID:-$(id -u)}-logs"
+    mkdir -p "$fallback_dir" 2>/dev/null || true
+    chmod 700 "$fallback_dir" 2>/dev/null || true
+    output_file="$(mktemp "${fallback_dir}/erpnext-dev-${safe_label}.XXXXXX.log")" || return 1
+  fi
+  chmod 600 "$output_file" 2>/dev/null || true
+
+  echo "  Output log: ${output_file}"
+  if run_as_frappe "$cmd" >"$output_file" 2>&1; then
+    return 0
+  fi
+
+  rc=$?
+  warn "${label} failed. Last 80 lines from ${output_file}:"
+  tail -n 80 "$output_file" 2>/dev/null | sed 's/^/  /' || true
   return "$rc"
 }
 
@@ -5060,6 +5099,9 @@ verify_local_firewall_profile() {
   echo "Host-side tests to run from your host machine:"
   echo "  curl -I http://$(get_vm_ip 2>/dev/null || echo VM_IP):8000"
   echo "  curl -I http://${SITE_NAME}:8000"
+  if ssl_is_configured 2>/dev/null; then
+    echo "  curl -kI https://${SITE_NAME}"
+  fi
   echo "============================================================"
 }
 
@@ -7157,6 +7199,19 @@ EOF_NGINX
 }
 
 
+local_vm_firewall_profile_is_active() {
+  command -v ufw >/dev/null 2>&1 || return 1
+  ufw_is_active || return 1
+
+  ufw_port_has_allow 22 || return 1
+  ufw_port_has_allow 80 || return 1
+  ufw_port_has_allow 443 || return 1
+  ufw_port_has_allow 8000 || return 1
+  ufw_port_has_allow 9000 || return 1
+
+  return 0
+}
+
 print_local_https_success_next_steps() {
   echo
   echo "Recommended next steps after local HTTPS is working:"
@@ -7164,9 +7219,14 @@ print_local_https_success_next_steps() {
   echo "     $(toolkit_cmd verify-access)"
   echo "     $(toolkit_cmd local-access-doctor)"
   echo
-  echo "  2) Apply the Local VM security profile:"
-  echo "     $(toolkit_cmd security-hardening-wizard)"
-  echo "     Choose: 2) Local VM firewall profile"
+  if local_vm_firewall_profile_is_active 2>/dev/null; then
+    echo "  2) Local VM security profile: already active"
+    echo "     Optional status check: $(toolkit_cmd vm-firewall-status)"
+  else
+    echo "  2) Apply the Local VM security profile:"
+    echo "     $(toolkit_cmd security-hardening-wizard)"
+    echo "     Choose: 2) Local VM firewall profile"
+  fi
   echo
   echo "  3) Then install optional apps only after the site remains healthy:"
   echo "     $(toolkit_cmd app-install-wizard)"
@@ -11320,16 +11380,18 @@ run_post_restore_maintenance() {
   fi
 
   log "Running post-restore migrate"
-  run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' migrate" || maintenance_failed=1
+  echo "The detailed migrate output is saved to a log file to keep the restore screen readable."
+  run_as_frappe_quiet "post-restore migrate" "cd '${bench_dir}' && bench --site '${SITE_NAME}' migrate" || maintenance_failed=1
 
   log "Running post-restore asset build"
-  run_as_frappe "cd '${bench_dir}' && bench build" || maintenance_failed=1
+  echo "The detailed build output is saved to a log file to keep the restore screen readable."
+  run_as_frappe_quiet "post-restore asset build" "cd '${bench_dir}' && bench build" || maintenance_failed=1
 
   if ! ensure_bench_services_for_site_commands "post-restore cache cleanup"; then
     maintenance_failed=1
   else
     log "Clearing post-restore cache"
-    run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || maintenance_failed=1
+    run_as_frappe_quiet "post-restore clear-cache" "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || maintenance_failed=1
   fi
 
   if [[ "$maintenance_failed" -ne 0 ]]; then

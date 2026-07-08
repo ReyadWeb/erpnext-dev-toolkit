@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.1.48
+
+### Improved
+
+- Reduced post-restore maintenance console noise by capturing detailed `bench migrate`, `bench build`, and `bench clear-cache` output into per-step log files while keeping concise restore progress on screen.
+- Updated the ERPNext Ready screen to prefer HTTPS Desk/Login/Website URLs when local HTTPS is configured and port 443 is listening, while keeping direct Bench HTTP URLs as troubleshooting fallbacks.
+- Updated local HTTPS verification next steps so the Local VM security profile is shown as already active when UFW rules are present, instead of always recommending that users apply it again.
+- Added the HTTPS host-side curl check to the Local Firewall Access Check when local HTTPS is configured.
+
+### Validated
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` reports v1.1.48.
+- Restore maintenance commands now use quiet log capture helpers and print the output log path.
+
 ## v1.1.47
 
 ### Fixed

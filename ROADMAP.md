@@ -1,5 +1,13 @@
 # Roadmap
 
+## v1.1.48 completed restore and local HTTPS polish
+
+- Post-restore maintenance now keeps the terminal readable by saving verbose migrate/build/cache output to step-specific log files.
+- The ERPNext Ready screen now prioritizes HTTPS Desk/Login/Website URLs when local HTTPS is configured.
+- Local HTTPS verification now detects an already-active Local VM firewall profile and avoids telling the user to apply it again.
+- Local Firewall Access Check now includes an HTTPS host-side test when local SSL is configured.
+- Remaining backup work: scheduled backup activation, retention cleanup validation, off-VM backup rehearsal, and disposable-VM restore testing.
+
 ## v1.1.47 completed restore UX and post-restore sequencing
 
 - Restore prompts now use database-admin wording instead of MySQL/root wording.

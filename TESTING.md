@@ -1,5 +1,38 @@
 # Testing
 
+## v1.1.48 Restore and local HTTPS polish regression test
+
+After updating the VM to v1.1.48, run:
+
+```bash
+erpnext-dev version
+sudo erpnext-dev restore-full
+```
+
+Expected restore UX:
+
+- Version prints `ERPNext Developer Toolkit v1.1.48`.
+- Restore still prints the database admin credential reminder.
+- Restore still asks for `Enter database admin user [frappe_db_admin]:` and `Database admin password:`.
+- Post-restore maintenance no longer floods the terminal with the full migrate/build output.
+- Each quiet maintenance step prints an `Output log:` path.
+- Restore finishes with `OK: Post-restore maintenance completed` and `OK: Full restore completed`.
+
+Then run:
+
+```bash
+sudo erpnext-dev verify-access
+sudo erpnext-dev verify-local-ssl
+sudo erpnext-dev local-firewall-profile
+```
+
+Expected local HTTPS/security UX:
+
+- `verify-local-ssl` passes.
+- If the Local VM firewall profile is already active, `verify-local-ssl` says `Local VM security profile: already active`.
+- `local-firewall-profile` host-side tests include `curl -kI https://<site>` when local HTTPS is configured.
+- After any service restart/wait-ready flow, the ERPNext Ready screen shows HTTPS Desk/Login/Website URLs first when HTTPS is configured.
+
 ## v1.1.47 Restore credential and post-restore maintenance regression test
 
 Before running a destructive restore, make sure the database admin credential is available:
