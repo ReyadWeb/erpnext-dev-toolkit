@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.40"
+SCRIPT_VERSION="1.1.41"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -233,7 +233,7 @@ acquire_toolkit_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|host-dns-guide|print-hosts-command|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|host-dns-guide|print-hosts-command|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
       return 0
       ;;
     *)
@@ -6966,6 +6966,71 @@ Rollback:
 EOF_MKCERT
 }
 
+
+run_trusted_mkcert_setup() {
+  require_erpnext_vm_context "trusted-mkcert-setup" || return 1
+
+  local vm_ip src_cert src_key cert_path key_path
+  vm_ip="$(get_vm_ip)"
+  src_cert="${LOCAL_SSL_CERT_SOURCE:-/tmp/${SITE_NAME}.crt}"
+  src_key="${LOCAL_SSL_KEY_SOURCE:-/tmp/${SITE_NAME}.key}"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
+
+  echo
+  echo "============================================================"
+  echo "Trusted mkcert Local HTTPS Setup"
+  echo "============================================================"
+  echo "This path uses mkcert on the HOST machine so the HOST browser trusts https://${SITE_NAME}."
+  echo
+  echo "Important machine split:"
+  echo "  HOST machine: generate/trust/copy the mkcert certificate"
+  echo "  ERPNext VM:   install the copied cert and enable local HTTPS"
+  echo
+  echo "Current values:"
+  status_line "Local domain" "INFO" "${SITE_NAME}"
+  status_line "Detected VM IP" "OK" "${vm_ip}"
+  status_line "Expected cert source" "INFO" "${src_cert}"
+  status_line "Expected key source" "INFO" "${src_key}"
+  echo
+  echo "Run these on the HOST machine if the cert/key are not copied yet:"
+  echo "  mkcert -install"
+  echo "  mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1"
+  echo "  scp ${SITE_NAME}.crt ${SITE_NAME}.key $(suggested_vm_ssh_user)@${vm_ip}:/tmp/"
+  echo
+  echo "Then rerun this wizard option, or run:"
+  echo "  $(toolkit_cmd install-local-ssl-cert)"
+  echo "  $(toolkit_cmd configure-local-ssl)"
+  echo "  $(toolkit_cmd verify-local-ssl)"
+  echo
+
+  if [[ -f "$src_cert" && -f "$src_key" ]]; then
+    status_line "Copied certificate" "OK" "$src_cert"
+    status_line "Copied private key" "OK" "$src_key"
+    echo
+    if confirm "Install the copied mkcert certificate and enable local HTTPS now?"; then
+      install_local_ssl_cert
+      configure_local_ssl
+      verify_local_ssl || true
+    else
+      warn "mkcert files found, but install was skipped."
+      echo "Run later:"
+      echo "  $(toolkit_cmd install-local-ssl-cert)"
+      echo "  $(toolkit_cmd configure-local-ssl)"
+      echo "  $(toolkit_cmd verify-local-ssl)"
+    fi
+  else
+    status_line "Copied certificate" "WARN" "not found yet"
+    status_line "Copied private key" "WARN" "not found yet"
+    echo
+    echo "Next required action: run the HOST commands above, then copy the files into /tmp/ on the VM."
+    echo "For the detailed guide, run:"
+    echo "  $(toolkit_cmd mkcert-guide)"
+  fi
+
+  echo "============================================================"
+}
+
 create_self_signed_local_cert() {
   require_erpnext_vm_context "create-self-signed-local-cert" || return 1
   require_sudo
@@ -7583,31 +7648,39 @@ run_local_ssl_wizard() {
         create_self_signed_local_cert
         configure_local_ssl
         verify_local_ssl || true
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       2)
-        show_mkcert_local_ssl_guide
+        run_trusted_mkcert_setup
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       3)
         install_local_ssl_cert
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       4)
         configure_local_ssl
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       5)
         verify_local_ssl
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       6)
         show_ssl_status
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       7)
         show_browser_trust_check_guide
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       8)
         disable_local_ssl
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
-      *) warn "Invalid option" ;;
+      *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
     esac
   done
 }
@@ -13422,6 +13495,7 @@ Core:
 Local VM HTTPS / SSL:
   local-ssl-menu       Local VM HTTPS / SSL submenu
   local-ssl-wizard     Guided local HTTPS setup for erp.test-style domains
+  trusted-mkcert-setup Guided mkcert setup; installs copied cert/key when available
   change-local-domain  Rename the local VM domain/site and update toolkit config
   local-domain-status  Show dynamic VM IP, local domain, and host mapping status
   local-access-doctor  Diagnose local URL/DNS/firewall/access issues
@@ -13608,7 +13682,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|menu-self-test|menu-navigation-self-test|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|menu-self-test|menu-navigation-self-test|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -13766,6 +13840,7 @@ main() {
     ssl-status) show_ssl_status ;;
     local-ssl-guide) show_local_ssl_guide ;;
     mkcert-guide|trusted-local-ssl-guide) show_mkcert_local_ssl_guide ;;
+    trusted-mkcert-setup|mkcert-setup) run_trusted_mkcert_setup ;;
     browser-trust-guide|trust-check-guide) show_browser_trust_check_guide ;;
     ssl-rollback-guide) show_ssl_rollback_guide ;;
     verify-ssl-rollback) verify_ssl_rollback ;;

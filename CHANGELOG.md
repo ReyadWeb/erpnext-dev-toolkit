@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.41
+
+### Fixed
+
+- Fixed the Local SSL Wizard option `2) Trusted mkcert setup` feeling like it did nothing.
+- Option 2 now opens a real guided mkcert setup screen instead of only dumping the guide and immediately redrawing the menu.
+- The guided mkcert setup explains HOST vs VM responsibilities, prints the exact host commands, checks for `/tmp/<site>.crt` and `/tmp/<site>.key`, and can install/configure/verify HTTPS when the files are already copied into the VM.
+- Added a pause after Local SSL Wizard actions so users can read the result before the menu redraws.
+- Added direct command aliases: `trusted-mkcert-setup` and `mkcert-setup`.
+
 ## v1.1.40
 
 ### Improved

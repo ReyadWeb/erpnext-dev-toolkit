@@ -331,7 +331,13 @@ If local HTTPS is enabled, also test:
 curl -Ik https://erp.test
 ```
 
-For trusted local HTTPS with mkcert, run the guide inside the VM:
+For trusted local HTTPS with mkcert, use the guided setup inside the VM:
+
+```bash
+sudo erpnext-dev trusted-mkcert-setup
+```
+
+The wizard prints the HOST-side `mkcert` commands, checks whether the certificate/key were copied into `/tmp/` on the VM, and can install/configure/verify HTTPS when they are present. The full reference guide is still available:
 
 ```bash
 sudo erpnext-dev mkcert-guide

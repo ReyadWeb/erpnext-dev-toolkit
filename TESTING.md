@@ -486,3 +486,28 @@ grep -n "sudo "\$tmp" public-vm-quickstart" README.md
 ```
 
 The site-name guidance should appear after the corresponding command blocks, not before the first copy/paste command.
+## v1.1.41 Local SSL Wizard mkcert regression test
+
+Run inside a local ERPNext VM after the local HTTP install passes:
+
+```bash
+sudo erpnext-dev local-ssl-wizard
+```
+
+Checklist:
+
+- Select `2) Trusted mkcert setup`.
+- Confirm a guided mkcert setup screen appears.
+- Confirm it prints HOST vs VM responsibilities.
+- Confirm it prints the HOST-side `mkcert -install`, `mkcert -cert-file ...`, and `scp ...:/tmp/` commands.
+- Confirm the wizard pauses long enough to read the output before returning to the menu.
+- If `/tmp/<site>.crt` and `/tmp/<site>.key` are missing, it should say they are not found yet and explain the next host action.
+- If the files are present, it should offer to install the copied certificate and enable local HTTPS.
+
+Direct command smoke test:
+
+```bash
+sudo erpnext-dev trusted-mkcert-setup
+sudo erpnext-dev mkcert-setup
+```
+
