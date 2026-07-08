@@ -1,5 +1,28 @@
 # Testing
 
+## v1.1.39 local post-install follow-up polish
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+./erpnext-dev.sh --help | grep -E "local-ssl-wizard|local-fixed-ip-guide|kvm-fixed-ip-guide"
+./erpnext-dev.sh local-fixed-ip-guide | grep -E "KVM / libvirt Fixed IP Guide|Current VM IP|HOST machine"
+printf 'n\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh local-dev-quickstart | grep -E "local-ssl-wizard|local-fixed-ip-guide|host-dns-guide"
+```
+
+Expected:
+
+```text
+ERPNext Developer Toolkit v1.1.39
+```
+
+Validation points:
+
+- The local quickstart guidance shows the direct local HTTPS command `sudo erpnext-dev local-ssl-wizard`.
+- The post-install follow-up summary shows both direct SSL wizard and broader SSL menu.
+- `local-fixed-ip-guide`, `fixed-ip-guide`, `kvm-fixed-ip-guide`, and `kvm-guide` all route to the same fixed-IP guidance.
+- README local install instructions list the recommended order: host DNS mapping, HTTP validation, local SSL wizard, then optional fixed-IP reservation.
+
 ## v1.1.37 README start-here cleanup
 
 ```bash

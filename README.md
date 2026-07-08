@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit v1.1.38
+# ERPNext Developer Toolkit v1.1.39
 
 ![ERPNext Toolkit Banner](docs/assets/erp_installer_readme_banner.png)
 
@@ -60,14 +60,16 @@ Use this inside a local VM for development, testing, or app evaluation. The wiza
 erp.test
 ```
 
-After the local install finishes, run this inside the VM to print the host-side DNS mapping command for the current VM IP:
+After the local install finishes, the toolkit prints the direct IP URL, the friendly local URL, and the next local HTTPS command. The most common follow-up commands are:
 
 ```bash
+sudo erpnext-dev local-ssl-wizard
 sudo erpnext-dev local-domain-status
 sudo erpnext-dev local-access-doctor
+sudo erpnext-dev local-fixed-ip-guide
 ```
 
-Then run the printed `/etc/hosts` command on the **host machine**, not inside the VM.
+Run the printed `/etc/hosts` command on the **host machine**, not inside the VM. Then run the local SSL wizard when HTTP access is confirmed.
 
 ### Production VPS / cloud VM install
 
@@ -802,11 +804,19 @@ getent hosts erp.test
 curl -I http://erp.test:8000
 ```
 
-For KVM/libvirt, a fixed DHCP reservation is recommended so the VM IP does not change after reboot:
+For KVM/libvirt, a fixed DHCP reservation is recommended so the VM IP does not change after reboot. The toolkit cannot safely edit the host's libvirt network from inside the guest VM, but it can print the host-side reservation steps:
 
 ```bash
 sudo erpnext-dev network-status
+sudo erpnext-dev local-fixed-ip-guide
+```
+
+Aliases for the same guide:
+
+```bash
 sudo erpnext-dev kvm-guide
+sudo erpnext-dev kvm-fixed-ip-guide
+sudo erpnext-dev fixed-ip-guide
 ```
 
 Local SSL commands:

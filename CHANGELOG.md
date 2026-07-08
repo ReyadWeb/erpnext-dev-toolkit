@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.39
+
+### Improved
+
+- Updated the local install finish flow to print the direct next HTTPS command: `sudo erpnext-dev local-ssl-wizard`.
+- Kept the broader local SSL menu visible as a secondary option: `sudo erpnext-dev local-ssl-menu`.
+- Added a clearer local fixed-IP follow-up command: `sudo erpnext-dev local-fixed-ip-guide`.
+- Added aliases for the same stable-IP guidance: `fixed-ip-guide` and `kvm-fixed-ip-guide`.
+- Updated README local install guidance so users see the post-install command order: verify HTTP, map host DNS, run local SSL, and optionally reserve a stable VM IP.
+
 ## v1.1.38
 
 ### Improved
