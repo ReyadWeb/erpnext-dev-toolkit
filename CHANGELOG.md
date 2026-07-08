@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.1.43
+
+### Fixed
+
+- Fixed `app-status` so it shows installed site apps directly instead of requiring Advanced Tools -> Installed apps.
+- Fixed curated app profile iteration under the toolkit newline/tab `IFS` setting. This affects app status, compatibility snapshots, and optional-app diagnostics.
+- Updated the App Installation Wizard option label to `Installed apps / status`.
+
+### Improved
+
+- `app-status` now shows installed site apps, downloaded app folders, downloaded-but-not-installed apps, and downloaded-but-not-registered apps in one place.
+- `app-status` now prints the recommended verification commands to run after each app install.
+- Kept Advanced Tools -> Installed apps as a troubleshooting shortcut.
+
 ## v1.1.42
 
 ### Improved

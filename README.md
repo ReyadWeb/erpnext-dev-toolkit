@@ -973,3 +973,23 @@ DNS/proxy/SSL ownership
 Update process
 Monitoring and alerting expectations
 ```
+
+
+### Checking installed optional apps
+
+After installing each optional app, run:
+
+```bash
+sudo erpnext-dev app-status
+```
+
+The App Installation Wizard also has `Installed apps / status` as the first option. It lists the apps installed on the site, downloaded app folders, and any downloaded app that is not installed or not registered.
+
+Recommended verification after each optional app install:
+
+```bash
+sudo erpnext-dev verify-access
+sudo erpnext-dev verify-local-ssl
+sudo erpnext-dev local-access-doctor
+sudo erpnext-dev app-status
+```

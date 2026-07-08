@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.42"
+SCRIPT_VERSION="1.1.43"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -9577,7 +9577,23 @@ run_full_status() {
 # ============================================================
 
 app_profile_list() {
-  echo "crm hrms education payments webshop builder lms wiki print_designer drive raven insights telephony helpdesk"
+  # Print one profile per line. The toolkit intentionally sets IFS to newline/tab
+  # for safer parsing, so a space-separated echo would be treated as one item.
+  printf '%s\n' \
+    crm \
+    hrms \
+    education \
+    payments \
+    webshop \
+    builder \
+    lms \
+    wiki \
+    print_designer \
+    drive \
+    raven \
+    insights \
+    telephony \
+    helpdesk
 }
 
 app_profile_branch_overrides() {
@@ -9977,19 +9993,69 @@ app_in_apps_txt() {
 run_app_status() {
   require_sudo
 
-  local bench_dir app label
+  local bench_dir bench_q site_q app label
   bench_dir="$(require_site_environment)" || return 1
+  bench_q="$(printf '%q' "$bench_dir")"
+  site_q="$(printf '%q' "$SITE_NAME")"
 
   normalize_apps_txt "$bench_dir" "" "true" || warn "Could not normalize sites/apps.txt before app status."
 
   echo
   echo "============================================================"
-  echo "Optional Frappe App Status"
+  echo "App Status"
   echo "============================================================"
   echo "Site: ${SITE_NAME}"
   echo "Bench: ${bench_dir}"
   echo
 
+  echo "Installed on site:"
+  run_as_frappe "cd ${bench_q} && bench --site ${site_q} list-apps" || warn "Could not list installed apps."
+  echo
+
+  echo "Downloaded app folders:"
+  run_as_frappe "cd ${bench_q} && find apps -maxdepth 1 -mindepth 1 -type d -printf '  %f\n' | sort" || warn "Could not list downloaded app folders."
+  echo
+
+  echo "Downloaded but not installed on ${SITE_NAME}:"
+  run_as_frappe "
+set -e
+cd ${bench_q}
+installed=\$(bench --site ${site_q} list-apps 2>/dev/null | awk '{print \$1}')
+missing=0
+for d in apps/*; do
+  [ -d "\$d" ] || continue
+  app="\${d##*/}"
+  if ! printf '%s\n' "\$installed" | grep -qx "\$app"; then
+    echo "  \$app"
+    missing=1
+  fi
+done
+if [ "\${missing:-0}" = "0" ]; then
+  echo '  none'
+fi
+" || warn "Could not compare downloaded apps with installed site apps."
+  echo
+
+  echo "Downloaded but not registered in sites/apps.txt:"
+  run_as_frappe "
+set -e
+cd ${bench_q}
+missing=0
+for d in apps/*; do
+  [ -d "\$d" ] || continue
+  app="\${d##*/}"
+  if ! grep -qxF "\$app" sites/apps.txt 2>/dev/null; then
+    echo "  \$app"
+    missing=1
+  fi
+done
+if [ "\${missing:-0}" = "0" ]; then
+  echo '  none'
+fi
+" || warn "Could not compare downloaded apps with sites/apps.txt."
+  echo
+
+  echo "Curated optional app status:"
   for profile in $(app_profile_list); do
     app_profile_defaults "$profile" || continue
     app="$LIB_APP_NAME"
@@ -10006,6 +10072,12 @@ run_app_status() {
     fi
   done
 
+  echo
+  echo "Next after each app install:"
+  echo "  $(toolkit_cmd verify-access)"
+  echo "  $(toolkit_cmd verify-local-ssl)"
+  echo "  $(toolkit_cmd local-access-doctor)"
+  echo "  $(toolkit_cmd app-status)"
   echo "============================================================"
 }
 
@@ -10712,7 +10784,7 @@ run_app_install_wizard() {
     echo "============================================================"
     echo "Choose one app to install. Status and guide tools are listed first."
     echo
-    print_two_column_menu       "1) App status"       "2) Compatibility"       "3) CRM"       "4) HR / HRMS"       "5) Education"       "6) Payments"       "7) Webshop / E-Commerce"       "8) Builder"       "9) Learning / LMS"       "10) Wiki"       "11) Print Designer"       "12) Drive"       "13) Raven Chat"       "14) Insights"       "15) Telephony"       "16) Helpdesk"       "17) Advanced tools"       "18) Rollback guide"
+    print_two_column_menu       "1) Installed apps / status"       "2) Compatibility"       "3) CRM"       "4) HR / HRMS"       "5) Education"       "6) Payments"       "7) Webshop / E-Commerce"       "8) Builder"       "9) Learning / LMS"       "10) Wiki"       "11) Print Designer"       "12) Drive"       "13) Raven Chat"       "14) Insights"       "15) Telephony"       "16) Helpdesk"       "17) Advanced tools"       "18) Rollback guide"
     echo
     echo "Install one app at a time. The wizard will offer a backup checkpoint first."
     menu_footer
@@ -10936,7 +11008,7 @@ show_app_library_menu() {
     echo "============================================================"
     echo "Choose an app to install, or use the status/guide tools."
     echo
-    print_two_column_menu       "1) Wizard"       "2) App status"       "3) Compatibility"       "4) Installed apps"       "5) Guide"       "6) Rollback guide"       "7) CRM"       "8) HR / HRMS"       "9) Education"       "10) Payments"       "11) Webshop / E-Commerce"       "12) Builder"       "13) Learning / LMS"       "14) Wiki"       "15) Print Designer"       "16) Drive"       "17) Raven Chat"       "18) Helpdesk"       "19) Telephony"       "20) Insights"       "21) Advanced tools"
+    print_two_column_menu       "1) Wizard"       "2) Installed apps / status"       "3) Compatibility"       "4) Installed apps"       "5) Guide"       "6) Rollback guide"       "7) CRM"       "8) HR / HRMS"       "9) Education"       "10) Payments"       "11) Webshop / E-Commerce"       "12) Builder"       "13) Learning / LMS"       "14) Wiki"       "15) Print Designer"       "16) Drive"       "17) Raven Chat"       "18) Helpdesk"       "19) Telephony"       "20) Insights"       "21) Advanced tools"
     echo
     echo "Notes: one app at a time; keep a backup checkpoint."
     menu_footer

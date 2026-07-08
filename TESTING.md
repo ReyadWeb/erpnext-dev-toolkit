@@ -559,3 +559,26 @@ The Local VM HTTPS / SSL menu should include:
 ```text
 17) Local Security Profile
 ```
+
+
+## v1.1.43 App status regression test
+
+After installing CRM or another optional app, run:
+
+```bash
+sudo erpnext-dev app-status
+```
+
+Expected:
+
+- The output shows an `Installed on site` section containing frappe, erpnext, and the installed optional app.
+- The output shows downloaded app folders.
+- The curated optional app status section marks the installed app as `OK`.
+- The App Installation Wizard option 1 is labeled `Installed apps / status`.
+
+Also verify from the menu:
+
+```bash
+sudo erpnext-dev app-install-wizard
+# choose 1
+```
