@@ -619,6 +619,8 @@ Scheduled local backups:
 sudo erpnext-dev backup-schedule-plan
 sudo erpnext-dev configure-backup-schedule
 sudo erpnext-dev backup-schedule-status
+# alias also supported:
+sudo erpnext-dev scheduled-backup-status
 ```
 
 Backup retention:

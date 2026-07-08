@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.1.49
+
+### Fixed
+
+- Fixed the Final QA release notes draft so it uses the current script version dynamically instead of the stale `v1.1.5` label.
+- Revised the release notes draft to separate what was actually validated in the local VM stage from production paths that still require dedicated testing.
+- Added `scheduled-backup-status` as a convenience alias for `backup-schedule-status`.
+- Improved scheduled-backup disable output so an unconfigured/missing timer is reported as informational instead of looking like a successful disable.
+- Improved local HTTPS next-step guidance when UFW is active but the exact Local VM firewall profile rules are not fully confirmed.
+
+### Validated
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` reports v1.1.49.
+- `erpnext-dev release-notes-guide` now prints `v1.1.49 Release Notes Draft` and accurate local-stage validation scope.
+
 ## v1.1.48
 
 ### Improved

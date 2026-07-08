@@ -1,5 +1,38 @@
 # Testing
 
+## v1.1.49 Final QA and local-stage polish regression test
+
+After updating the VM to v1.1.49, run:
+
+```bash
+erpnext-dev version
+sudo erpnext-dev release-notes-guide
+sudo erpnext-dev scheduled-backup-status
+sudo erpnext-dev backup-schedule-status
+sudo erpnext-dev verify-local-ssl
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.49`.
+- Release notes draft heading prints `v1.1.49 Release Notes Draft`.
+- Release notes distinguish local VM validated paths from production paths that still require testing.
+- `scheduled-backup-status` and `backup-schedule-status` both show the scheduled backup status.
+- `verify-local-ssl` does not blindly tell users to apply the Local VM firewall profile when UFW is already active; it either confirms the exact local profile or asks the user to review/reapply only if needed.
+
+To test disable UX without deleting backups:
+
+```bash
+sudo erpnext-dev disable-backup-schedule
+sudo erpnext-dev backup-schedule-status
+```
+
+Expected results:
+
+- Existing backup files are not deleted.
+- If no timer/service is configured, the disable screen reports that there is nothing to disable.
+- If a timer exists, it is stopped/disabled and status points back to schedule status/configuration.
+
 ## v1.1.48 Restore and local HTTPS polish regression test
 
 After updating the VM to v1.1.48, run:

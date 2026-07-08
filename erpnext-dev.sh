@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.48"
+SCRIPT_VERSION="1.1.49"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -233,7 +233,7 @@ acquire_toolkit_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|host-dns-guide|print-hosts-command|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|host-dns-guide|print-hosts-command|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
       return 0
       ;;
     *)
@@ -7222,6 +7222,13 @@ print_local_https_success_next_steps() {
   if local_vm_firewall_profile_is_active 2>/dev/null; then
     echo "  2) Local VM security profile: already active"
     echo "     Optional status check: $(toolkit_cmd vm-firewall-status)"
+  elif ufw_is_active 2>/dev/null; then
+    echo "  2) Local firewall: UFW is active"
+    echo "     The exact Local VM profile rules were not fully confirmed."
+    echo "     Review status: $(toolkit_cmd vm-firewall-status)"
+    echo "     Reapply only if local access ports are not behaving as expected:"
+    echo "       $(toolkit_cmd security-hardening-wizard)"
+    echo "       Choose: 2) Local VM firewall profile"
   else
     echo "  2) Apply the Local VM security profile:"
     echo "     $(toolkit_cmd security-hardening-wizard)"
@@ -12204,20 +12211,46 @@ cleanup_old_backups() {
 
 disable_backup_schedule() {
   require_sudo
+  local timer_known=0 service_known=0 timer_enabled_before="unknown" timer_active_before="unknown"
+
+  systemctl cat "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 && timer_known=1
+  systemctl cat "$BACKUP_SCHEDULE_SERVICE" >/dev/null 2>&1 && service_known=1
+  systemctl is-enabled "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 && timer_enabled_before="enabled" || timer_enabled_before="disabled/not-installed"
+  systemctl is-active "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 && timer_active_before="active" || timer_active_before="inactive/not-installed"
+
   ui_box_start "Disable Scheduled Backups"
   status_line "Timer" "INFO" "$BACKUP_SCHEDULE_TIMER"
+  status_line "Timer unit" "$([[ "$timer_known" -eq 1 ]] && echo OK || echo INFO)" "$([[ "$timer_known" -eq 1 ]] && echo present || echo not installed/configured)"
+  status_line "Service unit" "$([[ "$service_known" -eq 1 ]] && echo OK || echo INFO)" "$([[ "$service_known" -eq 1 ]] && echo present || echo not installed/configured)"
+  status_line "Timer enabled" "INFO" "$timer_enabled_before"
+  status_line "Timer active" "INFO" "$timer_active_before"
   echo
   echo "This stops and disables the local VM backup timer."
   echo "Existing backup files are not deleted."
+
+  if [[ "$timer_known" -ne 1 && "$service_known" -ne 1 ]]; then
+    echo
+    status_line "Scheduled backups" "INFO" "nothing to disable; schedule is not configured"
+    ui_next "$(toolkit_cmd configure-backup-schedule)" "$(toolkit_cmd backup-schedule-status)"
+    ui_box_end
+    return 0
+  fi
+
   if ! confirm "Disable scheduled local backups now?"; then
     warn "Scheduled backup disable skipped."
     ui_box_end
     return 0
   fi
+
   $SUDO systemctl disable --now "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 || true
   $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
-  status_line "Scheduled backups" "OK" "timer disabled"
-  ui_next "$(toolkit_cmd backup-schedule-status)"
+
+  if systemctl is-enabled "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1 || systemctl is-active "$BACKUP_SCHEDULE_TIMER" >/dev/null 2>&1; then
+    status_line "Scheduled backups" "WARN" "disable command ran, but timer may still be enabled/active"
+  else
+    status_line "Scheduled backups" "OK" "timer disabled"
+  fi
+  ui_next "$(toolkit_cmd backup-schedule-status)" "$(toolkit_cmd configure-backup-schedule)"
   ui_box_end
 }
 
@@ -13075,7 +13108,7 @@ show_command_audit() {
   status_line "Security" "OK" "security-hardening-wizard, vm-firewall-status, fail2ban-status"
   status_line "Firewall" "OK" "firewall-hardening-status, production-firewall-plan"
   status_line "Backups" "OK" "backup-files, backup-status, backup-verify, backup-hardening-wizard"
-  status_line "Scheduled backups" "OK" "backup-schedule-plan, configure-backup-schedule, backup-schedule-status"
+  status_line "Scheduled backups" "OK" "backup-schedule-plan, configure-backup-schedule, backup-schedule-status, scheduled-backup-status"
   status_line "Backup retention" "OK" "backup-retention-plan, backup-retention-status, cleanup-old-backups"
   status_line "Off-VM backup" "OK" "off-vm-backup-plan, configure-rsync-backup-target, run-off-vm-backup"
   status_line "Health monitoring" "OK" "health-check, configure-health-check-timer, health-check-status"
@@ -13086,21 +13119,33 @@ show_command_audit() {
 }
 
 show_release_notes_guide() {
-  ui_box_start "v1.1.5 Release Notes Draft"
-  echo "Release focus: production operations, health monitoring, service recovery planning, scheduled backups, and backup retention."
+  ui_box_start "v${SCRIPT_VERSION} Release Notes Draft"
+  echo "Release focus: local VM reliability, backup/restore validation, scheduled backups, retention checks, maintenance workflows, and Final QA polish."
   echo
-  echo "Validated paths:"
+  echo "Validated in this local VM stage:"
   echo "  - Local VM quickstart path"
-  echo "  - Public VM quickstart path"
-  echo "  - Let's Encrypt production HTTPS path"
-  echo "  - Cloudflare Origin CA / Full strict path"
-  echo "  - Cloud firewall + UFW + Fail2Ban hardening"
-  echo "  - Backup inventory and readable-file verification"
+  echo "  - Host mapping guidance for local domain access"
+  echo "  - Local HTTPS / mkcert workflow"
+  echo "  - Local VM security profile and access recovery checks"
+  echo "  - Optional app installation and app-status reporting"
+  echo "  - Manual database + files backups"
+  echo "  - Backup readable-file verification"
+  echo "  - Database restore"
+  echo "  - Full database + public/private files restore"
   echo "  - Scheduled local backups with systemd timer"
-  echo "  - Backup retention plan and cleanup dry run"
-  echo "  - Off-VM rsync backup dry run and manual sync"
-  echo "  - Health check and optional health-check timer"
-  echo "  - Restore preflight and production operations wizard"
+  echo "  - Backup retention status and cleanup dry run"
+  echo "  - Maintenance menu: service logs, clear cache, restart, safe repair"
+  echo "  - Final QA: readiness summary, command audit, backup verify, production checklist, support bundle"
+  echo
+  echo "Not yet fully validated in this local VM stage:"
+  echo "  - Public production VM quickstart"
+  echo "  - Let's Encrypt production HTTPS"
+  echo "  - Cloudflare Origin CA / Full strict production path"
+  echo "  - Production cloud firewall hardening"
+  echo "  - Fail2Ban sshd jail confirmation"
+  echo "  - Off-VM backup sync"
+  echo "  - Health-check timer"
+  echo "  - Production operations wizard"
   echo
   echo "Known production responsibility:"
   echo "  - Copy backups off the VM"
@@ -13821,6 +13866,7 @@ Backup / Restore:
   backup-schedule-plan Show scheduled-backup design
   configure-backup-schedule Enable local scheduled backups with systemd
   backup-schedule-status Show scheduled backup timer status
+  scheduled-backup-status Alias for backup-schedule-status
   backup-retention-plan Show local backup retention policy
   cleanup-old-backups-dry-run Preview old backup cleanup
   off-vm-backup-plan  Show rsync off-VM backup plan
@@ -13967,7 +14013,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|menu-self-test|menu-navigation-self-test|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|menu-self-test|menu-navigation-self-test|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -14075,7 +14121,7 @@ main() {
     backup-hardening-wizard|backup-wizard) backup_hardening_wizard ;;
     backup-schedule-plan|scheduled-backups) show_backup_schedule_plan ;;
     configure-backup-schedule) configure_backup_schedule ;;
-    backup-schedule-status) show_backup_schedule_status ;;
+    backup-schedule-status|scheduled-backup-status) show_backup_schedule_status ;;
     disable-backup-schedule) disable_backup_schedule ;;
     backup-retention-plan) show_backup_retention_plan ;;
     backup-retention-status) show_backup_retention_status ;;
