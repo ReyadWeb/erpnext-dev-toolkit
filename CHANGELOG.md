@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.1.53 - VPS rebuild SSH troubleshooting documentation
+
+### Changed
+
+- Updated the toolkit version to v1.1.53.
+- Added an easy-to-find README troubleshooting section for `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!` after intentional fresh VPS rebuilds.
+- Added the same SSH known-hosts recovery guidance to `PRODUCTION-VALIDATION.md` and `TESTING.md` so repeated disposable VPS testing is easier to recover from safely.
+- Kept the guidance security-focused: remove the old local `known_hosts` entry only after confirming the VPS was intentionally rebuilt or replaced.
+
+### Validated
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` reports v1.1.53.
+- Documentation search now finds the SSH host key troubleshooting section from README, TESTING, and PRODUCTION-VALIDATION.
+
 ## v1.1.52 - Production guided setup workflow
 
 ### Changed

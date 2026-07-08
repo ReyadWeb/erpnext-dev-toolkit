@@ -131,6 +131,28 @@ sudo erpnext-dev final-qa
 sudo erpnext-dev support-bundle
 ```
 
+
+## Troubleshooting: SSH host key changed after a fresh VPS rebuild
+
+If you rebuild the VPS or restore a clean provider image while keeping the same public IP or domain, SSH from your workstation may stop with:
+
+```text
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+Host key verification failed.
+```
+
+Classify this as an expected warning only when the VPS was intentionally rebuilt or replaced. If the server was not intentionally changed, stop and verify the server identity from the provider console before connecting.
+
+Fix it from the **local/admin machine**:
+
+```bash
+ssh-keygen -f ~/.ssh/known_hosts -R "VPS_PUBLIC_IP"
+ssh-keygen -f ~/.ssh/known_hosts -R "erp.example.com"
+ssh root@VPS_PUBLIC_IP
+```
+
+For the FlowMaya validation example, replace the placeholders with the current VPS IP and `erp.flowmaya.com`.
+
 ## Acceptance criteria
 
 The production VPS validation stage should not be marked passed until all of these are true:

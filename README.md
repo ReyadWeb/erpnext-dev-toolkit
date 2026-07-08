@@ -125,6 +125,28 @@ Initial cloud firewall baseline before running the production quickstart:
 
 If using Cloudflare, start with **DNS only** for the first Let's Encrypt validation. After the plain public HTTPS path works, test Cloudflare proxy / Full strict as a separate validation path.
 
+
+### Troubleshooting: SSH host key changed after rebuilding a VPS
+
+If you rebuild, reinstall, restore, or replace a VPS while keeping the same public IP or domain, your local computer may refuse SSH with this warning:
+
+```text
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+Host key verification failed.
+```
+
+This is expected after an intentional fresh VPS rebuild because the new server has a new SSH host key. Only continue if you intentionally rebuilt the VPS or verified the server identity in your cloud provider console.
+
+Run these commands on your **local/admin machine**, not inside the VPS:
+
+```bash
+ssh-keygen -f ~/.ssh/known_hosts -R "VPS_PUBLIC_IP"
+ssh-keygen -f ~/.ssh/known_hosts -R "erp.example.com"
+ssh root@VPS_PUBLIC_IP
+```
+
+Replace `VPS_PUBLIC_IP` and `erp.example.com` with your actual server IP and production domain. When SSH asks to trust the new fingerprint, type `yes` only after confirming this is your rebuilt VPS.
+
 See [`PRODUCTION-VALIDATION.md`](PRODUCTION-VALIDATION.md) for the full VPS validation checklist and readiness ratings.
 
 ### Check the VM before installing

@@ -41,6 +41,18 @@ Final QA/support bundle: PASS
 
 Production validation must use a fresh disposable VPS and a real test subdomain. A local `.test` VM cannot validate public DNS, Let's Encrypt HTTP challenges, cloud firewall behavior, Cloudflare proxy modes, or external exposure checks.
 
+
+### SSH host key reset during repeated VPS tests
+
+When a disposable VPS is rebuilt but reuses the same IP or domain, SSH may show `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!`. This is expected only after an intentional rebuild. Remove the old local known-host entry from the admin workstation before reconnecting:
+
+```bash
+ssh-keygen -f ~/.ssh/known_hosts -R "VPS_PUBLIC_IP"
+ssh-keygen -f ~/.ssh/known_hosts -R "erp.example.com"
+```
+
+Then reconnect and accept the new fingerprint only after confirming the server is the rebuilt test VPS.
+
 Required production-validation environment:
 
 ```text
