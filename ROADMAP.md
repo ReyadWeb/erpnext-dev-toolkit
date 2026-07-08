@@ -1,3 +1,11 @@
+# Roadmap
+
+## v1.1.44 completed optional-app status polish
+
+- Fixed optional-app status comparison output after large app batches.
+- `app-status` should no longer show temporary shell syntax errors in the downloaded-but-not-installed or downloaded-but-not-registered sections.
+- App wizard preflight now separates installed state from branch repeatability notes so working apps installed from `main`, `develop`, or default branches do not look failed.
+
 ## v1.1.37 completed README first-run UX cleanup
 
 - The README now starts with the real local, production, guided menu, preflight, and update commands before explaining bootstrap internals.

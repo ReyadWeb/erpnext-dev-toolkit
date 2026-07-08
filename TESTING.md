@@ -1,5 +1,34 @@
 # Testing
 
+## v1.1.44 App status compare regression test
+
+After installing several optional apps, run:
+
+```bash
+sudo erpnext-dev app-status
+```
+
+Expected:
+
+- `Installed on site` shows frappe, erpnext, and installed optional apps.
+- `Downloaded app folders` shows the app folders.
+- `Downloaded but not installed on <site>` prints either a list or `none`; it must not show a temp-script syntax error.
+- `Downloaded but not registered in sites/apps.txt` prints either a list or `none`; it must not show a temp-script syntax error.
+- The curated optional app status marks installed apps as `OK`.
+
+Then open the app wizard:
+
+```bash
+sudo erpnext-dev app-install-wizard
+```
+
+Expected:
+
+- The preflight heading says `Install / branch snapshot`.
+- Installed apps show `OK` even if their branch is `main`, `develop`, or default.
+- The detail text may still include a branch note, but it is clearly presented as a repeatability warning, not an app failure.
+
+
 ## v1.1.40 local host mapping checkpoint
 
 ```bash

@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.43"
+SCRIPT_VERSION="1.1.44"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1801,7 +1801,7 @@ run_as_frappe() {
     echo '#!/usr/bin/env bash'
     echo 'set -o pipefail'
     echo "$prefix"
-    echo "$cmd"
+    printf '%s\n' "$cmd"
   } > "$tmp_script"
 
   chmod 700 "$tmp_script"
@@ -10484,16 +10484,45 @@ show_app_compatibility_matrix() {
 
 print_app_compatibility_snapshot() {
   local bench_dir="$1"
-  local profile summary
+  local profile state branch_safety status detail
 
   echo
-  echo "Compatibility snapshot:"
+  echo "Install / branch snapshot:"
   for profile in $(app_profile_list); do
     app_profile_defaults "$profile" || continue
     assess_app_compatibility "$bench_dir" "$LIB_APP_NAME" "$LIB_APP_DISPLAY" "$LIB_APP_BRANCH" "$LIB_APP_REPO" "false"
-    summary="target=${APP_COMPAT_TARGET_BRANCH}; $(app_install_state_detail "$bench_dir" "$LIB_APP_NAME")"
-    status_line "$LIB_APP_DISPLAY" "$APP_COMPAT_STATUS" "$summary"
+    state="$(app_install_state_detail "$bench_dir" "$LIB_APP_NAME")"
+
+    case "$APP_COMPAT_STATUS" in
+      OK) branch_safety="pinned/known target" ;;
+      WARN) branch_safety="branch note: ${APP_COMPAT_TARGET_BRANCH} may move or be less stable" ;;
+      FAIL) branch_safety="branch check failed" ;;
+      *) branch_safety="review target branch" ;;
+    esac
+
+    if [[ "$state" == installed* ]]; then
+      # In this preflight snapshot, the primary signal should be install state.
+      # Moving-branch compatibility concerns are still shown in the detail text,
+      # but they should not make an already-working installed app look failed.
+      status="OK"
+      detail="installed; target=${APP_COMPAT_TARGET_BRANCH}; ${branch_safety}"
+    elif [[ "$state" == not\ installed ]]; then
+      status="INFO"
+      detail="not installed; target=${APP_COMPAT_TARGET_BRANCH}; ${branch_safety}"
+    elif [[ "$APP_COMPAT_STATUS" == "FAIL" ]]; then
+      status="FAIL"
+      detail="${state}; target=${APP_COMPAT_TARGET_BRANCH}; ${branch_safety}"
+    else
+      status="WARN"
+      detail="${state}; target=${APP_COMPAT_TARGET_BRANCH}; ${branch_safety}"
+    fi
+
+    status_line "$LIB_APP_DISPLAY" "$status" "$detail"
   done
+
+  echo
+  echo "Note: installed apps can still show a branch note when they use main/develop/default branches."
+  echo "That is a repeatability warning, not an installation failure."
 }
 
 

@@ -115,9 +115,12 @@ sudo erpnext-dev production-ops-wizard
 
 ```bash
 sudo erpnext-dev app-install-wizard
+sudo erpnext-dev app-status
 ```
 
-Use this only after the core ERPNext install is healthy.
+Use this only after the core ERPNext install is healthy. The app status command shows installed site apps, downloaded app folders, uninstalled downloads, unregistered downloads, and curated optional-app status in one place.
+
+The app wizard preflight separates installation state from branch safety. Installed apps can still show a branch note when they use `main`, `develop`, or the repository default branch. That is a repeatability warning, not an installation failure.
 
 ### Common follow-up commands
 

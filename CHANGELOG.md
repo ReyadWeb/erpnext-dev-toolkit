@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.1.44
+
+### Fixed
+
+- Fixed a `run_as_frappe` temp-script generation bug that could corrupt commands containing backslash escapes such as `printf '%s\n'`. This caused `app-status` compare sections to fail with `syntax error: unexpected end of file from if command`.
+- `app-status` should now correctly print `none` for downloaded-but-not-installed and downloaded-but-not-registered app comparisons when everything is clean.
+
+### Improved
+
+- Changed the app wizard preflight summary from `Compatibility snapshot` to `Install / branch snapshot`.
+- Installed apps now show `OK` in the snapshot even when their branch is `main`, `develop`, or repository default. The branch warning is kept as a repeatability note instead of making working installed apps look broken.
+- Added explanatory text that moving-branch notes are repeatability warnings, not installation failures.
+
 ## v1.1.43
 
 ### Fixed
