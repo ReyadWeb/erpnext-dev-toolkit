@@ -349,6 +349,16 @@ The guide separates HOST commands from VM commands. In short: generate and trust
 sudo erpnext-dev local-ssl-wizard
 ```
 
+When the Local SSL Wizard is launched directly, `b`/`B` returns to the main menu. When it is launched from the Local VM HTTPS / SSL menu, `b`/`B` returns to that SSL menu.
+
+After HTTPS is verified, continue with the safe local profile:
+
+```bash
+sudo erpnext-dev security-hardening-wizard
+```
+
+Choose `2) Local VM firewall profile`. Do not choose the production firewall profile for a local `erp.test` VM.
+
 Expected local result:
 
 ```text
@@ -838,6 +848,13 @@ sudo erpnext-dev local-ssl-wizard
 sudo erpnext-dev change-local-domain
 sudo erpnext-dev verify-local-ssl
 sudo erpnext-dev disable-local-ssl
+```
+
+Local security command after HTTPS works:
+
+```bash
+sudo erpnext-dev security-hardening-wizard
+# choose: 2) Local VM firewall profile
 ```
 
 The main menu has separate **Local VM HTTPS / SSL** and **Production HTTPS / SSL** options. Use local HTTPS for VM domains such as `erp.test`; use production HTTPS only for public domains.

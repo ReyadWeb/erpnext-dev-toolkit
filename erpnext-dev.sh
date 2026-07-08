@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.41"
+SCRIPT_VERSION="1.1.42"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -7156,6 +7156,24 @@ server {
 EOF_NGINX
 }
 
+
+print_local_https_success_next_steps() {
+  echo
+  echo "Recommended next steps after local HTTPS is working:"
+  echo "  1) Confirm access:"
+  echo "     $(toolkit_cmd verify-access)"
+  echo "     $(toolkit_cmd local-access-doctor)"
+  echo
+  echo "  2) Apply the Local VM security profile:"
+  echo "     $(toolkit_cmd security-hardening-wizard)"
+  echo "     Choose: 2) Local VM firewall profile"
+  echo
+  echo "  3) Then install optional apps only after the site remains healthy:"
+  echo "     $(toolkit_cmd app-install-wizard)"
+  echo
+  echo "Important: for local/dev VMs, use the Local VM firewall profile, not the Production profile."
+}
+
 configure_local_ssl() {
   require_erpnext_vm_context "configure-local-ssl" || return 1
   require_sudo
@@ -7503,6 +7521,9 @@ verify_local_ssl() {
   echo
   echo "Expected host mapping:"
   echo "  ${vm_ip} ${SITE_NAME}"
+  if (( failed == 0 )); then
+    print_local_https_success_next_steps
+  fi
   echo "============================================================"
   return "$failed"
 }
@@ -7623,6 +7644,7 @@ verify_ssl_rollback() {
 }
 
 run_local_ssl_wizard() {
+  local back_target="${1:-return}"
   while true; do
     echo
     echo "============================================================"
@@ -7639,7 +7661,8 @@ run_local_ssl_wizard() {
       "5) Verify local HTTPS" \
       "6) Local SSL status" \
       "7) Browser trust guide" \
-      "8) Disable local HTTPS"
+      "8) Disable local HTTPS" \
+      "9) Local security profile"
     menu_footer
     menu_read_choice wizard_choice
 
@@ -7678,7 +7701,17 @@ run_local_ssl_wizard() {
         disable_local_ssl
         pause_after_screen "Press Enter to return to Local SSL Wizard..."
         ;;
-      b|B|"") return 0 ;;
+      9)
+        configure_local_vm_firewall
+        pause_after_screen "Press Enter to return to Local SSL Wizard..."
+        ;;
+      b|B|"")
+        if [[ "$back_target" == "main" ]]; then
+          show_menu
+          return 0
+        fi
+        return 0
+        ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
     esac
@@ -13244,6 +13277,7 @@ show_production_ssl_menu() {
 }
 
 show_local_ssl_menu() {
+  local back_target="${1:-return}"
   while true; do
     echo
     echo "============================================================"
@@ -13252,7 +13286,7 @@ show_local_ssl_menu() {
     echo "Use this for local VM domains such as erp.test."
     echo "For public domains, use Production HTTPS instead."
     echo
-    print_two_column_menu       "1) Local SSL Wizard"       "2) Local SSL Status"       "3) Local SSL Guide"       "4) Trusted mkcert Guide"       "5) Browser Trust Check"       "6) Install/Replace Cert"       "7) Verify Local SSL"       "8) Create Self-Signed Cert"       "9) Configure Local SSL"       "10) Disable Local SSL"       "11) Verify SSL Rollback"       "12) Change Local Domain"       "13) Local Domain / Host DNS Status"       "14) Local Access Doctor"       "15) Print Host /etc/hosts Command"       "16) SSL/HTTPS Roadmap"
+    print_two_column_menu       "1) Local SSL Wizard"       "2) Local SSL Status"       "3) Local SSL Guide"       "4) Trusted mkcert Guide"       "5) Browser Trust Check"       "6) Install/Replace Cert"       "7) Verify Local SSL"       "8) Create Self-Signed Cert"       "9) Configure Local SSL"       "10) Disable Local SSL"       "11) Verify SSL Rollback"       "12) Change Local Domain"       "13) Local Domain / Host DNS Status"       "14) Local Access Doctor"       "15) Print Host /etc/hosts Command"       "16) SSL/HTTPS Roadmap"       "17) Local Security Profile"
     menu_footer
     menu_read_choice ssl_choice
 
@@ -13273,7 +13307,14 @@ show_local_ssl_menu() {
       14) local_access_doctor ;;
       15) show_host_hosts_command ;;
       16) show_ssl_roadmap_guide ;;
-      b|B|"") return 0 ;;
+      17) configure_local_vm_firewall ;;
+      b|B|"")
+        if [[ "$back_target" == "main" ]]; then
+          show_menu
+          return 0
+        fi
+        return 0
+        ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
@@ -13363,6 +13404,7 @@ menu_navigation_self_test() {
     access
     status-menu
     local-ssl-menu
+    local-ssl-wizard
     production-ssl-menu
     app-library
     advanced-app-tools
@@ -13394,6 +13436,7 @@ menu_navigation_self_test() {
     access
     status-menu
     local-ssl-menu
+    local-ssl-wizard
     production-ssl-menu
     app-library
     advanced-app-tools
@@ -13409,7 +13452,7 @@ menu_navigation_self_test() {
   for action in "${back_actions[@]}"; do
     for input in b B; do
       tested=$((tested + 1))
-      out="$(printf '%s\n' "$input" | timeout 5 bash "$script" "$action" 2>&1)"
+      out="$(printf '%s\nq\n' "$input" | timeout 5 bash "$script" "$action" 2>&1)"
       rc=$?
       if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
         failures=$((failures + 1))
@@ -13494,7 +13537,7 @@ Core:
 
 Local VM HTTPS / SSL:
   local-ssl-menu       Local VM HTTPS / SSL submenu
-  local-ssl-wizard     Guided local HTTPS setup for erp.test-style domains
+  local-ssl-wizard     Guided local HTTPS setup; Back opens main menu when run directly
   trusted-mkcert-setup Guided mkcert setup; installs copied cert/key when available
   change-local-domain  Rename the local VM domain/site and update toolkit config
   local-domain-status  Show dynamic VM IP, local domain, and host mapping status
@@ -13749,8 +13792,8 @@ main() {
     credentials-delete) credentials_delete ;;
     reset-admin-password|admin-password-reset) reset_admin_password ;;
     next-step) show_next_step ;;
-    local-ssl-menu|local-https|local-vm-ssl) show_local_ssl_menu ;;
-    local-ssl-wizard|ssl-wizard) run_local_ssl_wizard ;;
+    local-ssl-menu|local-https|local-vm-ssl) show_local_ssl_menu main ;;
+    local-ssl-wizard|ssl-wizard) run_local_ssl_wizard main ;;
     backup-menu) run_backup_maintenance_menu ;;
     app-library|apps) show_app_library_menu ;;
     app-install-wizard|app-wizard) run_app_install_wizard ;;

@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.42
+
+### Improved
+
+- Updated standalone `local-ssl-wizard` and `local-ssl-menu` navigation so `b`/`B` opens the main menu instead of silently exiting when launched directly from the CLI.
+- Preserved normal nested behavior: when the Local SSL Wizard is opened from the Local VM HTTPS / SSL menu, `b`/`B` still returns to that SSL menu.
+- Added `9) Local security profile` to the Local SSL Wizard so users can continue to safe local hardening after HTTPS succeeds.
+- Added `17) Local Security Profile` to the Local VM HTTPS / SSL menu.
+- After successful local HTTPS verification, the toolkit now prints the recommended next steps: verify access, apply the Local VM firewall profile, then install optional apps.
+- Clarified that local/dev VMs should use the Local VM security profile, not the Production firewall profile.
+
 ## v1.1.41
 
 ### Fixed

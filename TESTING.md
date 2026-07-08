@@ -511,3 +511,51 @@ sudo erpnext-dev trusted-mkcert-setup
 sudo erpnext-dev mkcert-setup
 ```
 
+
+## v1.1.42 Local SSL navigation and next-step test
+
+Run inside a local ERPNext VM after HTTP access is confirmed.
+
+Standalone wizard navigation:
+
+```bash
+printf 'b\nq\n' | sudo erpnext-dev local-ssl-wizard
+```
+
+Expected: `b` opens the main menu, then `q` exits cleanly. It should not drop silently back to the shell before the user sees the main menu.
+
+Nested SSL menu navigation:
+
+```bash
+printf '1\nb\nb\nq\n' | sudo erpnext-dev menu
+```
+
+Expected: main menu -> Local VM HTTPS / SSL -> Local SSL Wizard -> `b` returns to SSL menu -> `b` returns to main menu -> `q` exits.
+
+After a successful trusted mkcert or self-signed HTTPS verification:
+
+```bash
+sudo erpnext-dev verify-local-ssl
+```
+
+Expected: if HTTPS is healthy, the output recommends:
+
+```text
+sudo erpnext-dev verify-access
+sudo erpnext-dev local-access-doctor
+sudo erpnext-dev security-hardening-wizard
+Choose: 2) Local VM firewall profile
+sudo erpnext-dev app-install-wizard
+```
+
+The Local SSL Wizard should also include:
+
+```text
+9) Local security profile
+```
+
+The Local VM HTTPS / SSL menu should include:
+
+```text
+17) Local Security Profile
+```
