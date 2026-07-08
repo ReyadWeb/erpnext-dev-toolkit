@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.49"
+SCRIPT_VERSION="1.1.50"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -61,6 +61,10 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 ASSUME_YES=0
 ACTION=""
 DOCTOR_FORMAT="human"
+# Default SUDO to an empty command prefix. Some read-only/status functions
+# call helper routines before require_sudo() has initialized SUDO; with
+# set -u enabled, leaving it unset can make those checks falsely fail.
+SUDO="${SUDO:-}"
 
 # Logging and locking are initialized centrally so every command path behaves
 # the same way whether the toolkit is run as root, through sudo, or as a
@@ -7224,18 +7228,17 @@ print_local_https_success_next_steps() {
     echo "     Optional status check: $(toolkit_cmd vm-firewall-status)"
   elif ufw_is_active 2>/dev/null; then
     echo "  2) Local firewall: UFW is active"
-    echo "     The exact Local VM profile rules were not fully confirmed."
-    echo "     Review status: $(toolkit_cmd vm-firewall-status)"
-    echo "     Reapply only if local access ports are not behaving as expected:"
-    echo "       $(toolkit_cmd security-hardening-wizard)"
-    echo "       Choose: 2) Local VM firewall profile"
+    echo "     No firewall change is required just because local HTTPS is working."
+    echo "     Optional status check: $(toolkit_cmd vm-firewall-status)"
+    echo "     Reapply the Local VM profile only if local access ports are not behaving as expected:"
+    echo "       $(toolkit_cmd local-firewall-profile)"
   else
     echo "  2) Apply the Local VM security profile:"
     echo "     $(toolkit_cmd security-hardening-wizard)"
     echo "     Choose: 2) Local VM firewall profile"
   fi
   echo
-  echo "  3) Then install optional apps only after the site remains healthy:"
+  echo "  3) Install optional apps only after the site remains healthy:"
   echo "     $(toolkit_cmd app-install-wizard)"
   echo
   echo "Important: for local/dev VMs, use the Local VM firewall profile, not the Production profile."
@@ -7530,6 +7533,7 @@ install_local_ssl_cert() {
 }
 
 verify_local_ssl() {
+  require_sudo
   local vm_ip cert_path key_path enabled_path http_head https_head direct_head failed=0
   vm_ip="$(get_vm_ip)"
   cert_path="$(ssl_cert_path)"

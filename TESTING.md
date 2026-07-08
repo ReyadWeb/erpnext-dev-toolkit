@@ -1,24 +1,38 @@
 # Testing
 
+## v1.1.50 Local SSL firewall-guidance regression test
+
+After updating the VM to v1.1.50, run:
+
+```bash
+erpnext-dev version
+sudo erpnext-dev verify-local-ssl
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.50`.
+- `verify-local-ssl` passes when local HTTPS is configured.
+- If the exact Local VM firewall profile is active, the next-step guidance says `Local VM security profile: already active`.
+- If UFW is active but the exact profile cannot be confirmed, the next-step guidance says `Local firewall: UFW is active` and does not tell the user to apply the profile as a required next step.
+- The command must not fall through to the old unconditional recommendation to apply the Local VM security profile when UFW is active.
+
 ## v1.1.49 Final QA and local-stage polish regression test
 
-After updating the VM to v1.1.49, run:
+After updating the VM to v1.1.49 or later, run:
 
 ```bash
 erpnext-dev version
 sudo erpnext-dev release-notes-guide
 sudo erpnext-dev scheduled-backup-status
 sudo erpnext-dev backup-schedule-status
-sudo erpnext-dev verify-local-ssl
 ```
 
 Expected results:
 
-- Version prints `ERPNext Developer Toolkit v1.1.49`.
-- Release notes draft heading prints `v1.1.49 Release Notes Draft`.
+- Release notes draft heading uses the current toolkit version.
 - Release notes distinguish local VM validated paths from production paths that still require testing.
 - `scheduled-backup-status` and `backup-schedule-status` both show the scheduled backup status.
-- `verify-local-ssl` does not blindly tell users to apply the Local VM firewall profile when UFW is already active; it either confirms the exact local profile or asks the user to review/reapply only if needed.
 
 To test disable UX without deleting backups:
 

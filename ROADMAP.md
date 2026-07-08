@@ -1,11 +1,16 @@
 # Roadmap
 
+## v1.1.50 completed Local SSL firewall-guidance polish
+
+- Fixed `verify-local-ssl` follow-up guidance so it no longer recommends applying the Local VM security profile when UFW is already active.
+- Added a safe default for the internal `SUDO` command prefix so UFW/helper status checks do not falsely fail before `require_sudo` initializes it.
+- `verify-local-ssl` now requires sudo explicitly, matching the protected nginx/UFW checks it performs.
+
 ## v1.1.49 completed Final QA/local-stage polish
 
 - Final QA release notes now use the current toolkit version dynamically and no longer overstate untested production paths.
 - Added `scheduled-backup-status` as a friendly alias for `backup-schedule-status`.
 - Scheduled-backup disable now reports missing/unconfigured timers clearly and points users to configure/status commands.
-- Local HTTPS next-step guidance now distinguishes between an exact Local VM firewall profile match and a generic active UFW state.
 - Local VM development workflow is now considered passed for install, local HTTPS, optional apps, backup/restore, scheduled backups, retention dry run, maintenance basics, and Final QA.
 - Next major stage: production VM validation, including production domain, Let's Encrypt/Cloudflare SSL, cloud firewall, Fail2Ban, off-VM backup, health timer, and production operations.
 

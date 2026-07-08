@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.50 - Local SSL firewall guidance polish
+
+- Fixed `verify-local-ssl` follow-up guidance so it no longer recommends applying the Local VM security profile when UFW is already active.
+- Added a safe default for the internal `SUDO` command prefix so status helpers used outside `require_sudo` do not falsely fail under `set -u`.
+- `verify-local-ssl` now requires sudo explicitly, matching the protected nginx/UFW checks it performs.
+
 ## v1.1.49
 
 ### Fixed
