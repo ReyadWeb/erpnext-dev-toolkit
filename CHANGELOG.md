@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.40
+
+### Improved
+
+- Added `local-host-checkpoint` as a required local-dev workflow checkpoint before local HTTPS.
+- Added aliases `host-dns-checkpoint` and `host-mapping-checkpoint` for the same flow.
+- The checkpoint prints the current detected VM IP, the selected local domain, safe host-side `/etc/hosts` commands, and host-side test commands.
+- The local guided setup now prints the host mapping checkpoint automatically after install verification and backup checkpoint, before opening the main menu.
+- Updated the local setup order so host DNS mapping and host HTTP validation happen before local HTTPS, local security hardening, or optional app installs.
+- Updated local quickstart and final install summaries to make the host mapping step visible and safe to repeat after VM recreation or DHCP IP changes.
+
 ## v1.1.39
 
 ### Improved

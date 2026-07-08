@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit v1.1.39
+# ERPNext Developer Toolkit v1.1.40
 
 ![ERPNext Toolkit Banner](docs/assets/erp_installer_readme_banner.png)
 
@@ -60,16 +60,17 @@ Use this inside a local VM for development, testing, or app evaluation. The wiza
 erp.test
 ```
 
-After the local install finishes, the toolkit prints the direct IP URL, the friendly local URL, and the next local HTTPS command. The most common follow-up commands are:
+After the local install finishes, the toolkit prints the direct IP URL, the friendly local URL, and a required host mapping checkpoint before local HTTPS. The most common follow-up commands are:
 
 ```bash
+sudo erpnext-dev local-host-checkpoint
 sudo erpnext-dev local-ssl-wizard
 sudo erpnext-dev local-domain-status
 sudo erpnext-dev local-access-doctor
 sudo erpnext-dev local-fixed-ip-guide
 ```
 
-Run the printed `/etc/hosts` command on the **host machine**, not inside the VM. Then run the local SSL wizard when HTTP access is confirmed.
+Run the printed `/etc/hosts` command on the **host machine**, not inside the VM. It is safe to repeat because the command backs up `/etc/hosts`, removes only the old entry for the selected local domain, and adds the current VM IP. Then run the local SSL wizard when HTTP access is confirmed.
 
 ### Production VPS / cloud VM install
 
@@ -305,14 +306,15 @@ sudo erpnext-dev backup-verify
 sudo erpnext-dev credentials-info
 ```
 
-For local VM domain access, print the correct host-side `/etc/hosts` command from inside the VM:
+For local VM domain access, print the required host-side mapping checkpoint from inside the VM:
 
 ```bash
+sudo erpnext-dev local-host-checkpoint
 sudo erpnext-dev local-domain-status
 sudo erpnext-dev host-dns-guide
 ```
 
-Run the printed `/etc/hosts` command on the **host machine**, then test access from the host:
+Run the printed `/etc/hosts` command on the **host machine**. This is safe to repeat after VM recreation or DHCP IP changes. Then test access from the host:
 
 ```bash
 getent hosts erp.test
@@ -320,6 +322,8 @@ curl -I http://erp.test:8000
 ```
 
 The VM IP is detected dynamically. Do not copy a sample IP from another machine.
+
+If the VM is deleted and recreated, rerun `sudo erpnext-dev local-host-checkpoint` from inside the VM and apply the printed command on the host. This prevents `erp.test` from pointing to an old VM.
 
 If local HTTPS is enabled, also test:
 
@@ -783,9 +787,10 @@ The wizard backs up the existing site when possible, runs the Frappe site rename
 
 A local `.test` name such as `erp.test` is not public DNS. Your **host machine** must map the chosen local domain to the VM's current IP. The IP is not hardcoded because every user environment can be different: KVM may use `192.168.122.x`, bridged networking may use your LAN range, and other hypervisors may use `10.x` or another private range.
 
-Use the toolkit to print the correct host-side command for the current VM:
+Use the toolkit to print the correct host-side command for the current VM. Run this checkpoint after every fresh local VM install, after deleting/recreating a VM, and before local HTTPS:
 
 ```bash
+sudo erpnext-dev local-host-checkpoint
 sudo erpnext-dev local-domain-status
 sudo erpnext-dev host-dns-guide
 sudo erpnext-dev local-access-doctor

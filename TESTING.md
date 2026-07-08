@@ -1,5 +1,43 @@
 # Testing
 
+## v1.1.40 local host mapping checkpoint
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+./erpnext-dev.sh --help | grep -E "local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint"
+./erpnext-dev.sh local-host-checkpoint | grep -E "Required Local Host Mapping Checkpoint|HOST machine|safe to repeat|local-ssl-wizard"
+printf 'n\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh local-dev-quickstart | grep -E "local-host-checkpoint|host-dns-guide|local-ssl-wizard"
+```
+
+Expected:
+
+```text
+ERPNext Developer Toolkit v1.1.40
+```
+
+Validation points:
+
+- `local-host-checkpoint`, `host-dns-checkpoint`, and `host-mapping-checkpoint` all print the same required host DNS mapping checkpoint.
+- The checkpoint uses the dynamically detected VM IP and never hardcodes a sample `192.168.122.x` value.
+- The printed host command backs up `/etc/hosts`, removes only the selected local domain entry, and appends the current mapping.
+- The checkpoint explicitly says to run the command on the host machine, not inside the VM.
+- The local install summary shows the host mapping checkpoint before the local SSL wizard.
+- The workflow tells users to rerun the checkpoint after deleting/recreating a VM or when DHCP assigns a new IP.
+
+Manual host validation after local install:
+
+```bash
+sudo erpnext-dev local-host-checkpoint
+```
+
+Run the printed command on the host machine, then verify from the host:
+
+```bash
+getent hosts erp.test
+curl -I http://erp.test:8000
+```
+
 ## v1.1.39 local post-install follow-up polish
 
 ```bash

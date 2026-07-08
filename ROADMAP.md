@@ -331,3 +331,9 @@ The VM track can be considered mature when the installer can clearly answer thes
 - Can a redacted support bundle/report be generated?
 
 Once these are reliably covered, the VM-based installer will be ready for broader production use and the Docker track can be started with a stable operations model already established.
+
+
+## Local dev host mapping checkpoint
+
+- Local development setup now treats host `/etc/hosts` mapping as a required checkpoint before local HTTPS.
+- Future host-side companion tooling may automate KVM/libvirt DHCP reservations and host `/etc/hosts` updates directly from the host.
