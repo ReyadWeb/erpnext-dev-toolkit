@@ -1,3 +1,7 @@
+## v1.1.73 support-bundle audit
+
+v1.1.73 adds `support-bundle-audit`, a best-effort command that audits the latest support bundle, or the archive named in `SUPPORT_BUNDLE_AUDIT_ARCHIVE`, for forbidden filenames and obvious unredacted secret patterns. This reduces accidental sharing risk for diagnostic bundles. It does not prove that every custom secret format has been removed, so manual review remains required before external sharing.
+
 # Security Policy and Threat Model
 
 ## Scope

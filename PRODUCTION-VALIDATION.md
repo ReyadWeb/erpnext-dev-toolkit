@@ -1,3 +1,31 @@
+# v1.1.73 production validation notes
+
+v1.1.73 is a release-engineering and support-safety patch. It adds `support-bundle-audit` and expands `scripts/validate-release.sh` with a clean support-bundle audit fixture.
+
+Production validation should confirm:
+
+```bash
+VERSION="v1.1.73"
+# verified tag-pinned update using SHA256SUMS
+sudo erpnext-dev version
+sudo erpnext-dev verify-toolkit
+sudo erpnext-dev final-qa
+sudo erpnext-dev support-bundle
+sudo erpnext-dev support-bundle-audit
+```
+
+Expected:
+
+- Version prints `ERPNext Developer Toolkit v1.1.73`.
+- `verify-toolkit` reports Active/Stable/CLI match OK.
+- Final QA option 1 reports release state OK.
+- Support bundle is created.
+- `support-bundle-audit` reports `Audit result OK` for the newest bundle.
+
+Runtime/install/backup/restore/SSL/firewall/health/go-live behavior is unchanged.
+
+---
+
 ## v1.1.72 validation note - minimal CI and release validation
 
 v1.1.72 is a release-engineering patch. It adds `.github/workflows/ci.yml` and `scripts/validate-release.sh`, and updates the `verify-toolkit` update example to use the stable installed path.

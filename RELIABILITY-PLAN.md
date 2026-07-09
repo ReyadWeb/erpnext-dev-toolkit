@@ -1,3 +1,9 @@
+## v1.1.73 reliability update
+
+v1.1.73 expands release validation with support-bundle audit fixture coverage. `scripts/validate-release.sh` now verifies that a clean support-bundle archive passes the toolkit audit command, which improves regression coverage for support/evidence bundle safety.
+
+Next reliability milestone: release package manifest and broader package checksum validation before beginning modularization.
+
 # Reliability Plan
 
 ## Purpose

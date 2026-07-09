@@ -1,3 +1,29 @@
+# v1.1.73 roadmap update - support-bundle audit and package validation expansion
+
+Status: **implemented as the fourth release-trust hardening patch after v1.1.70, v1.1.71, and v1.1.72**.
+
+v1.1.73 adds support-bundle audit coverage and expands `scripts/validate-release.sh` with a clean support-bundle fixture.
+
+Completed in v1.1.73:
+
+- Added `support-bundle-audit`, `audit-support-bundle`, and `support-bundle-audit-test`.
+- Added a Support and Diagnostics dashboard option for support-bundle auditing.
+- Added forbidden filename checks for credential files, private keys, database backups, and private-file backup archives.
+- Added obvious secret-pattern scanning for private key blocks, bearer tokens, and password/token-style assignments.
+- Added support-bundle audit fixture validation to `scripts/validate-release.sh`.
+
+Next active milestones:
+
+1. **v1.1.74 — release package manifest and checksum expansion**.
+2. **v1.1.75+ — begin careful modularization planning with CI as a safety net**.
+3. Later: optional GPG-signed release artifacts.
+
+Important limitation:
+
+- The audit is best-effort. It reduces accidental sharing risk but does not replace manual review of support bundles before sending outside the organization.
+
+---
+
 # v1.1.72 roadmap update - minimal CI and validate-release script
 
 Status: **implemented as the third release-trust hardening patch after v1.1.70 and v1.1.71**.

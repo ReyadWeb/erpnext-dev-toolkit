@@ -1,3 +1,35 @@
+## v1.1.73 support-bundle audit and package validation expansion
+
+Purpose: add a best-effort support-bundle audit command and expand the repeatable release validation script.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+sha256sum -c SHA256SUMS
+scripts/validate-release.sh
+./erpnext-dev.sh --help | grep -n "support-bundle-audit"
+
+printf '10\n11\n\nb\nq\n' | sudo ./erpnext-dev.sh production-ops-wizard
+
+unzip -l erpnext-dev-installer-v1.1.73.zip | grep "GITHUB-UPDATE" && echo "BAD" || echo "OK"
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.73`.
+- `sha256sum -c SHA256SUMS` reports `erpnext-dev.sh: OK`.
+- `scripts/validate-release.sh` reports `support-bundle-audit clean fixture passed` and `release validation complete`.
+- Help exposes `support-bundle-audit`.
+- Production Operations > Support and Diagnostics includes `11) Audit latest support bundle`.
+- Package contains no `GITHUB-UPDATE-v*.md` files.
+
+Production validation scope:
+
+- This patch does not change ERPNext install, backup, restore, SSL, firewall, health-monitoring, go-live, or dashboard summary behavior.
+- Production validation should include verified tag-pinned update, `verify-toolkit`, Final QA option 1, creation of a support bundle, and `support-bundle-audit`.
+
 ## v1.1.72 minimal CI and release validation script
 
 Purpose: add a repeatable release validation entrypoint and a minimal GitHub Actions workflow before larger structural changes.

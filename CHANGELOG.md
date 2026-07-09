@@ -1,3 +1,32 @@
+## v1.1.73 - Support bundle audit and release validation expansion
+
+### Added
+
+- Added `support-bundle-audit` with aliases `audit-support-bundle` and `support-bundle-audit-test`.
+- Added a Support and Diagnostics dashboard entry: `11) Audit latest support bundle`.
+- Added support-bundle audit fixture coverage to `scripts/validate-release.sh`.
+
+### Changed
+
+- Updated the toolkit version to v1.1.73.
+- Expanded release validation to verify that a clean support-bundle archive passes the audit command.
+- Updated README, SECURITY.md, RELIABILITY-PLAN.md, TESTING.md, ROADMAP.md, and PRODUCTION-VALIDATION.md for the new audit workflow.
+- Updated `SHA256SUMS` for the v1.1.73 `erpnext-dev.sh` artifact.
+
+### Security and reliability impact
+
+- Operators now have a repeatable safety check for support bundles before external sharing.
+- Release validation now covers support-bundle audit behavior in addition to syntax, checksum, help, toolkit verification, package hygiene, and basic secret-pattern checks.
+
+### Validation scope
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` prints v1.1.73.
+- `sha256sum -c SHA256SUMS` passes.
+- `scripts/validate-release.sh` passes locally, including the support-bundle audit fixture.
+- `support-bundle-audit` reports `Audit result OK` for a clean archive.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
 ## v1.1.72 - Minimal GitHub Actions CI and release validation script
 
 ### Added

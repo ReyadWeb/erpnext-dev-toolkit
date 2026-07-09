@@ -1,3 +1,14 @@
+## Support bundle audit and package validation
+
+v1.1.73 adds a `support-bundle-audit` command and exposes it in **Production Operations > Support and Diagnostics**. The audit checks the latest support bundle, or an archive supplied through `SUPPORT_BUNDLE_AUDIT_ARCHIVE`, for forbidden backup/credential filenames and obvious unredacted secret patterns before the bundle is shared. It is a best-effort safety check and does not replace manual review.
+
+```bash
+sudo erpnext-dev support-bundle
+sudo erpnext-dev support-bundle-audit
+```
+
+`scripts/validate-release.sh` now includes a clean support-bundle fixture audit so the release package catches regressions in the audit command before a tag is published.
+
 ## Release validation and CI
 
 v1.1.72 adds a minimal release validation layer:
@@ -49,7 +60,7 @@ Most users should start with the **general guided setup** because it lets them c
 
 ### Verified release bootstrap
 
-v1.1.70 introduced a release checksum artifact: `SHA256SUMS`. v1.1.71 added `verify-toolkit` for installed-file hash reporting. v1.1.72 adds minimal GitHub Actions CI and `scripts/validate-release.sh` for repeatable release checks. The preferred production pattern is to pin the download to a release tag, download `SHA256SUMS`, run `sha256sum -c SHA256SUMS`, and only then execute the script with `sudo`.
+v1.1.70 introduced a release checksum artifact: `SHA256SUMS`. v1.1.71 added `verify-toolkit` for installed-file hash reporting. v1.1.72 adds minimal GitHub Actions CI and `scripts/validate-release.sh` for repeatable release checks. v1.1.73 adds `support-bundle-audit` and expands release validation with a clean support-bundle audit fixture. The preferred production pattern is to pin the download to a release tag, download `SHA256SUMS`, run `sha256sum -c SHA256SUMS`, and only then execute the script with `sudo`.
 
 The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that release tag. Future releases may add a broader package checksum workflow and GPG-signed releases for stronger maintainer identity verification.
 
@@ -57,7 +68,7 @@ The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that releas
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -86,7 +97,7 @@ For local VMs, the installer prints the correct host `/etc/hosts` command using 
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -116,7 +127,7 @@ Run the printed `/etc/hosts` command on the **host machine**, not inside the VM.
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -150,7 +161,7 @@ sudo erpnext-dev generate-off-vm-backup-key
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -277,7 +288,7 @@ See [`PRODUCTION-VALIDATION.md`](PRODUCTION-VALIDATION.md) for the full VPS vali
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -292,7 +303,7 @@ If the VM is clearly unsafe for ERPNext, the installer blocks the install and pr
 ### Update or repair the `erpnext-dev` command
 
 ```bash
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -503,7 +514,7 @@ Run this inside a fresh local Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -625,7 +636,7 @@ Run this inside a fresh public Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -757,7 +768,7 @@ sudo erpnext-dev production-ops-wizard
 To update or repair the toolkit command from a verified release tag:
 
 ```bash
-VERSION="v1.1.72"
+VERSION="v1.1.73"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
