@@ -849,7 +849,7 @@ sudo erpnext-dev support-bundle
 
 ## Validated production state
 
-The current validated production path is documented from the real `erp.flowmaya.com` VPS and its separate off-VM backup server. This is the reference state for v1.1.64 documentation, monitoring, and go-live validation workflow.
+The current validated production path is documented from the real `erp.flowmaya.com` VPS and its separate off-VM backup server. v1.1.65 records the final field evidence from the v1.1.64 go-live validation workflow and is the reference state for the next production-operations milestone.
 
 Validated environment:
 
@@ -877,7 +877,13 @@ Restore rehearsal tracking: passed
 Final QA: Release state OK, ready for production use
 Support bundle creation: passed
 Health monitoring: passed
-Go-live validation record: supported in v1.1.64
+Go-live validation record: passed on production in v1.1.64 and recorded in v1.1.65 documentation
+Named snapshot: erp-flowmaya-v1.1.64-final-validated-20260709
+Cloud firewall: confirmed
+Cloudflare proxied DNS: confirmed
+Cloudflare Full (strict): confirmed
+Cloudflare Origin CA on Nginx: confirmed
+Enhanced support bundle: passed with production evidence files
 ```
 
 Recommended final validation commands on production:
@@ -895,9 +901,21 @@ Expected high-level result:
 
 ```text
 Restore rehearsal            OK      completed ... backup set 20260709_055928-erp_flowmaya_com ... login validated
+Health monitoring            OK      timer active; last check OK
+Go-live validation           OK      snapshot/firewall/Cloudflare confirmations recorded
 Release state                OK      ready for production use
 Verification                 OK      backup files are readable; restore rehearsal is recorded
 ```
+
+Final v1.1.64 field evidence recorded by the v1.1.65 documentation patch:
+
+```text
+Snapshot: erp-flowmaya-v1.1.64-final-validated-20260709
+Go-live record time: 2026-07-09T06:27:12+00:00
+Final evidence bundle: /tmp/erpnext-dev-support-bundle-20260709-062951.tar.gz
+```
+
+The validated support bundle includes redacted operational evidence such as `production-checklist.txt`, `backup-status.txt`, `backup-verify.txt`, `off-vm-backup-status.txt`, `restore-rehearsal-status.txt`, `health-check-status.txt`, and `go-live-status.txt`.
 
 Remaining go-live decisions are outside the ERPNext guest VM:
 

@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.1.65 - Final v1.1.64 production validation record
+
+### Changed
+
+- Updated the toolkit version to v1.1.65.
+- Recorded the completed v1.1.64 production go-live validation from the real `erp.flowmaya.com` environment.
+- Recorded the named cloud snapshot, provider firewall confirmation, Cloudflare proxied DNS, Full (strict), and Origin CA confirmation.
+- Recorded successful production checklist integration and Final QA option `9) Go-live validation status`.
+- Recorded successful enhanced support-bundle collection with production evidence files for backups, restore rehearsal, health monitoring, go-live validation, and production checklist state.
+- Updated README, TESTING, ROADMAP, and PRODUCTION-VALIDATION to reflect the final validated v1.1.64 state and the next planned milestone: a unified production operations dashboard/menu.
+- Kept this as a documentation/validation patch only; no install, backup, restore, firewall, SSL, monitoring, or go-live behavior was changed.
+
+### Validated production evidence
+
+- Production site: `erp.flowmaya.com`.
+- Production VPS: `65.109.221.4`.
+- Backup server: `65.109.220.250`.
+- Snapshot: `erp-flowmaya-v1.1.64-final-validated-20260709`.
+- Go-live record time: `2026-07-09T06:27:12+00:00`.
+- Cloud firewall: confirmed.
+- Cloudflare proxy/orange-cloud: confirmed.
+- Cloudflare SSL/TLS Full (strict): confirmed.
+- Cloudflare Origin CA on Nginx: confirmed.
+- Restore rehearsal: recorded and login validated.
+- Health monitoring: timer active and latest check OK during validation.
+- Final evidence bundle: `/tmp/erpnext-dev-support-bundle-20260709-062951.tar.gz`.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
 ## v1.1.64 - Go-live validation record and evidence bundle polish
 
 ### Changed

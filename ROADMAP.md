@@ -1,3 +1,32 @@
+# v1.1.65 roadmap update - final production validation record
+
+Status: **documentation/validation patch completed after the v1.1.64 production go-live workflow passed**.
+
+The production path is now validated end to end across install, HTTPS, security baseline, local backups, off-VM backup, restore rehearsal, health monitoring, go-live confirmations, and redacted evidence bundle generation.
+
+Completed and recorded in v1.1.65:
+
+- v1.1.64 go-live validation record passed on `erp.flowmaya.com`.
+- Named snapshot recorded: `erp-flowmaya-v1.1.64-final-validated-20260709`.
+- Cloud firewall confirmation recorded.
+- Cloudflare proxied DNS, Full (strict), and Origin CA confirmation recorded.
+- Production checklist reports go-live validation as `OK`.
+- Final QA option `9) Go-live validation status` passed.
+- Enhanced support bundle includes production evidence files for backups, restore rehearsal, monitoring, go-live status, and checklist state.
+
+Next active milestone: **v1.1.66 production operations dashboard / unified operations experience**.
+
+Planned v1.1.66 goals:
+
+1. Provide a clean top-level production operations dashboard with concise current-state summaries.
+2. Group health, services, backups, off-VM backup, restore readiness, monitoring, security, HTTPS, go-live validation, and support actions into a coherent operator flow.
+3. Prefer status-first screens and suggested next actions so operators do not need to remember command names.
+4. Keep existing CLI commands as stable direct entry points.
+5. Avoid duplicating logic; the dashboard should orchestrate existing tested commands.
+6. Keep Docker installation as a separate later track after VM operations remain stable.
+
+---
+
 # v1.1.64 roadmap update - go-live validation record and evidence bundle
 
 Status: **implemented as the next production-readiness polish patch**.

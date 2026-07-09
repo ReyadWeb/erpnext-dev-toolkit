@@ -1,3 +1,108 @@
+# v1.1.65 Final v1.1.64 production validation record
+
+This section records the final field evidence collected after v1.1.64 was installed on the production ERPNext VPS and its go-live validation workflow was completed. v1.1.65 is documentation-only apart from the version bump; it does not change production behavior.
+
+## Validated environment
+
+```text
+Toolkit version under field validation: 1.1.64
+Documentation/package version recording evidence: 1.1.65
+Production site: erp.flowmaya.com
+Production VPS: 65.109.221.4
+Backup server: 65.109.220.250
+Off-VM target: erpbackup@65.109.220.250:/mnt/HC_Volume_106276869/erpnext-backups/erp.flowmaya.com/
+Restored backup set: 20260709_055928-erp_flowmaya_com
+Restore target: local-vm/local-kvm-restore-vm
+Restore target IP/address: evidence only and may change with network changes
+Snapshot: erp-flowmaya-v1.1.64-final-validated-20260709
+Go-live record time: 2026-07-09T06:27:12+00:00
+Final evidence bundle: /tmp/erpnext-dev-support-bundle-20260709-062951.tar.gz
+```
+
+## Go-live validation evidence
+
+The production VPS reported:
+
+```text
+Go-live validation           OK      recorded 2026-07-09T06:27:12+00:00; snapshot erp-flowmaya-v1.1.64-final-validated-20260709; cloud firewall confirmed; Cloudflare proxied; Full strict confirmed; origin cert confirmed
+```
+
+Recorded metadata included:
+
+```text
+GO_LIVE_STATUS=OK
+GO_LIVE_RECORDED_AT=2026-07-09T06:27:12+00:00
+GO_LIVE_SITE=erp.flowmaya.com
+GO_LIVE_SNAPSHOT_CONFIRMED=true
+GO_LIVE_SNAPSHOT_NAME=erp-flowmaya-v1.1.64-final-validated-20260709
+GO_LIVE_CLOUD_FIREWALL_CONFIRMED=true
+GO_LIVE_CLOUDFLARE_PROXY_CONFIRMED=true
+GO_LIVE_CLOUDFLARE_FULL_STRICT_CONFIRMED=true
+GO_LIVE_CLOUDFLARE_ORIGIN_CERT_CONFIRMED=true
+GO_LIVE_NOTES=snapshot-firewall-cloudflare-confirmed
+GO_LIVE_RECORDED_BY_TOOLKIT_VERSION=1.1.64
+```
+
+## Production checklist evidence
+
+The production checklist recognized the complete go-live record and reported all of the following as healthy during validation:
+
+```text
+Install                      OK      Installed
+Runtime                      OK      Running via service
+HTTPS                        OK      Cloudflare Origin CA/Nginx HTTPS responding: HTTP/2 200
+UFW                          OK      active
+Fail2Ban                     OK      sshd jail enabled
+Local backups                OK      off-VM copy verified
+Scheduled backups            OK      local timer active
+Off-VM backup                OK      configured; last run OK
+Restore rehearsal            OK      completed; login validated
+Health timer                 OK      active
+Health check                 OK      last check OK
+Go-live validation           OK      snapshot/firewall/Cloudflare confirmations recorded
+```
+
+## Final QA and support-bundle evidence
+
+Final QA option `9) Go-live validation status` passed and displayed the saved go-live record. The enhanced support bundle was then generated successfully:
+
+```text
+/tmp/erpnext-dev-support-bundle-20260709-062951.tar.gz
+```
+
+Its archive listing included the new redacted production evidence files:
+
+```text
+go-live-status.txt
+health-check-status.txt
+restore-rehearsal-status.txt
+off-vm-backup-status.txt
+backup-verify.txt
+backup-status.txt
+production-checklist.txt
+recent-errors.txt
+bench-status.txt
+ssl-status.txt
+storage-status.txt
+port-status.txt
+service-status.txt
+system-summary.txt
+doctor-json-validation.txt
+doctor.json
+doctor-plain.txt
+manifest.txt
+```
+
+The bundle intentionally excludes credential files, private keys, raw `site_config.json` secrets, tokens, passwords, database backups, and private file backups.
+
+## Validation conclusion
+
+The production path is validated end to end for the tested environment. Remaining work is no longer a blocker for this validated path; future work should focus on operator experience, recurring policy decisions, notification integrations, broader environment coverage, and periodic revalidation after major changes.
+
+Recommended next milestone: v1.1.66 unified production operations dashboard/menu built on the existing tested commands rather than new duplicated logic.
+
+---
+
 # v1.1.64 Go-live validation record and evidence bundle plan
 
 v1.1.64 records the external provider-side checks that cannot be fully proven from inside the ERPNext VM. It complements the already validated install, backup, off-VM backup, restore rehearsal, and health timer.

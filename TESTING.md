@@ -1,3 +1,59 @@
+## v1.1.65 final v1.1.64 production validation documentation
+
+Purpose: record the completed v1.1.64 production go-live evidence and prepare the roadmap for the next operator-experience milestone. This patch is documentation/validation only apart from the version bump.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+grep -n "v1.1.65" CHANGELOG.md TESTING.md ROADMAP.md PRODUCTION-VALIDATION.md
+grep -n "Validated production state" README.md
+grep -n "erp-flowmaya-v1.1.64-final-validated-20260709" README.md PRODUCTION-VALIDATION.md CHANGELOG.md
+unzip -l erpnext-dev-installer-v1.1.65.zip | grep "GITHUB-UPDATE" && echo "BAD" || echo "OK"
+```
+
+Expected:
+
+- Version prints `ERPNext Developer Toolkit v1.1.65`.
+- `bash -n erpnext-dev.sh` passes.
+- Documentation records the final v1.1.64 production validation evidence.
+- README reflects the validated snapshot, health monitoring, go-live record, and enhanced support bundle state.
+- Roadmap names v1.1.66 unified production operations dashboard/menu as the next active milestone.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
+Recorded field evidence:
+
+```text
+Production site: erp.flowmaya.com
+Production VPS: 65.109.221.4
+Backup server: 65.109.220.250
+Snapshot: erp-flowmaya-v1.1.64-final-validated-20260709
+Go-live record: OK at 2026-07-09T06:27:12+00:00
+Cloud firewall: confirmed
+Cloudflare proxy/orange-cloud: confirmed
+Cloudflare Full (strict): confirmed
+Cloudflare Origin CA: confirmed
+Restore rehearsal: recorded and login validated
+Health timer: active
+Health check: last recorded check OK during validation
+Final evidence bundle: /tmp/erpnext-dev-support-bundle-20260709-062951.tar.gz
+```
+
+Support bundle evidence files expected from the validated v1.1.64 workflow:
+
+```text
+go-live-status.txt
+health-check-status.txt
+restore-rehearsal-status.txt
+off-vm-backup-status.txt
+backup-verify.txt
+backup-status.txt
+production-checklist.txt
+```
+
+---
+
 ## v1.1.64 go-live validation and evidence bundle validation
 
 Purpose: record external go-live confirmations that the VM cannot fully verify by itself, and improve support bundles so they include redacted production evidence.
