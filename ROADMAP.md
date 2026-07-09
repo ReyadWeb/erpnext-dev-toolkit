@@ -1,3 +1,15 @@
+# v1.1.90 roadmap update - lib/ops.sh completes Phase B modularization
+
+Status: **implemented — Phase B modularization complete**.
+
+v1.1.90 extracts the production operations dashboard into `lib/ops.sh`. `erpnext-dev.sh` is now ~1,180 lines (dispatcher/menus only).
+
+Next active milestone:
+
+1. **v1.2.0 — Phase C security hardening** (credential handoff, `security-audit`, checksum-gated `update-toolkit`, production update policy).
+
+---
+
 # v1.1.89 roadmap update - lib/status.sh extraction
 
 Status: **implemented as the fourteenth careful modularization patch**.

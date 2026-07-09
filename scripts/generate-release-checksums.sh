@@ -20,6 +20,7 @@ checksum_files=(
   lib/service.sh
   lib/status.sh
   lib/install.sh
+  lib/ops.sh
   scripts/validate-release.sh
   scripts/run-shellcheck.sh
   RELEASE-MANIFEST.txt

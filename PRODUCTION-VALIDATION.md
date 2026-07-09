@@ -1,9 +1,9 @@
-# v1.1.89 production validation notes
+# v1.1.90 production validation notes
 
-v1.1.89 extracts install/runtime status helpers into `lib/status.sh`.
+v1.1.90 completes Phase B modularization with `lib/ops.sh`.
 
 ```bash
-VERSION="v1.1.89"
+VERSION="v1.1.90"
 sudo erpnext-dev version
 scripts/validate-release.sh
 sudo erpnext-dev first-run

@@ -1,3 +1,7 @@
+## v1.1.90 reliability update
+
+v1.1.90 completes Phase B modularization with `lib/ops.sh`. Main script is ~1,180 lines. Next: Phase C security hardening (v1.2.0).
+
 ## v1.1.89 reliability update
 
 v1.1.89 extracts install/runtime status helpers into `lib/status.sh`. Main script is now ~1,460 lines.

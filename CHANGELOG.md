@@ -1,3 +1,24 @@
+## v1.1.90 - Extract lib/ops.sh for production operations menus
+
+### Added
+
+- Added `lib/ops.sh` with the production operations dashboard summary, submenus, and wizard.
+
+### Changed
+
+- Updated the toolkit version to v1.1.90.
+- `erpnext-dev.sh` now sources `lib/ops.sh` after `lib/install.sh`.
+- `erpnext-dev.sh` is reduced to toolkit bootstrap, menus, help, and dispatcher logic (~1,180 lines).
+- `update-toolkit` now downloads `ops.sh` into `/opt/erpnext-dev/lib/`.
+- Expanded `SHA256SUMS`, `RELEASE-MANIFEST.txt`, and shellcheck targets for `lib/ops.sh`.
+- Phase B modularization is complete; next milestone is Phase C security hardening (v1.2.0).
+
+### Validation scope
+
+- `bash -n` passes for `erpnext-dev.sh` and `lib/ops.sh`.
+- `erpnext-dev version` prints v1.1.90.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.1.89 - Extract lib/status.sh for install/runtime status helpers
 
 ### Added

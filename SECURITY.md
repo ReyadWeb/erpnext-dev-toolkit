@@ -1,3 +1,7 @@
+## v1.1.90 ops module extraction — Phase B complete
+
+v1.1.90 extracts the production operations dashboard into `lib/ops.sh`. Next: Phase C security hardening (v1.2.0).
+
 ## v1.1.89 status module extraction
 
 v1.1.89 extracts install/runtime status helpers into `lib/status.sh`.

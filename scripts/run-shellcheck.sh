@@ -24,6 +24,7 @@ targets=(
   lib/service.sh
   lib/status.sh
   lib/install.sh
+  lib/ops.sh
   scripts/validate-release.sh
   scripts/generate-release-checksums.sh
   scripts/run-shellcheck.sh

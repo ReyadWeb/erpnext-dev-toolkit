@@ -1,3 +1,11 @@
+## v1.1.90 lib/ops.sh extraction — Phase B complete
+
+```bash
+bash -n lib/ops.sh
+scripts/validate-release.sh
+sudo erpnext-dev production-ops-wizard
+```
+
 ## v1.1.89 lib/status.sh extraction
 
 ```bash
