@@ -1,3 +1,16 @@
+# v1.2.4 roadmap update - Phase D: reachability hard gate
+
+Status: **implemented**.
+
+v1.2.4 tightens the Phase D integration workflow before its first live run:
+
+- **Site reachability is now a hard gate.** The job requires the installed site to answer `/api/method/ping` on `:8000`, probed with a `Host: <site>` header (so Frappe routes to the correct site) and polled up to 6 minutes after `wait-ready` to absorb first-boot warm-up.
+- **Self-diagnosing failures.** On timeout the step dumps `systemctl status`, the service journal, and listening sockets before failing, so the first red run is debuggable directly from the log.
+
+Both `install_state=Installed` and reachability are now required. The next data point is the first live run's warm-up timing, which will confirm or adjust the 6-minute window.
+
+---
+
 # v1.2.3 roadmap update - Phase D groundwork (disposable-VM integration testing)
 
 Status: **first increment implemented**.

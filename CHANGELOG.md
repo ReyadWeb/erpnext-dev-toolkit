@@ -1,3 +1,22 @@
+## v1.2.4 - Phase D: promote integration site reachability to a hard gate
+
+### Changed
+
+- The integration workflow (`integration.yml`) now treats site reachability as a hard gate rather than a warning. After install it requires the site to answer `/api/method/ping` on `:8000`.
+  - The probe sends a `Host: <site>` header so Frappe routes to the installed site rather than a bare `localhost` (which can resolve to the wrong or a non-existent site).
+  - It polls for up to 6 minutes (36 x 10s) after `wait-ready` to tolerate first-boot asset builds and migrations.
+  - On failure the step emits a GitHub `::error::` and dumps `systemctl status`, the last 200 journal lines, and listening sockets on `:8000`/`:9000` for immediate diagnosis.
+
+### Notes
+
+- v1.2.3 shipped this smoke as a non-fatal warning; v1.2.4 makes both `install_state=Installed` and reachability required. Adjust the 6-minute window from real hosted-runner timing once the first live runs complete.
+
+### Validation scope
+
+- `integration.yml` parses as valid YAML.
+- `erpnext-dev version` prints v1.2.4.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.2.3 - Phase D groundwork: disposable-VM integration testing
 
 ### Added
