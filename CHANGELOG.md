@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.1.58 - Guided off-VM backup server setup
+
+### Changed
+
+- Updated the toolkit version to v1.1.58.
+- Added `backup-server-setup` / `prepare-backup-server` to prepare a separate Linux backup server from the same toolkit script.
+- Added `generate-off-vm-backup-key` to create a dedicated rsync SSH key on the ERPNext VM and print only the public key for the backup server.
+- Added `off-vm-backup-guided-setup` to guide the ERPNext VM side of off-VM backup configuration after the backup server is prepared.
+- Updated the Off-VM Backup menu so users can run plan, guided setup, key generation, backup-server preparation, dry run, real run, status, and disable actions from one place.
+- Documented the two-server backup flow in README, TESTING, ROADMAP, and PRODUCTION-VALIDATION.
+
+### Validated
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` reports v1.1.58.
+- `erpnext-dev --help` lists `backup-server-setup`, `generate-off-vm-backup-key`, and `off-vm-backup-guided-setup`.
+- `off-vm-backup-wizard` menu opens and shows the new off-VM backup actions without removing existing rsync commands.
+
 ## v1.1.57 - Cloudflare Origin CA validation record
 
 ### Changed

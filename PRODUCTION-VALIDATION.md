@@ -1,3 +1,26 @@
+## v1.1.58 off-VM backup server setup validation plan
+
+The next production validation target is off-VM backup. The toolkit now supports a two-server flow:
+
+- ERPNext VPS: `generate-off-vm-backup-key` and `off-vm-backup-guided-setup`.
+- Backup server: `backup-server-setup` / `prepare-backup-server`.
+
+Backup server bootstrap command:
+
+```bash
+sudo apt-get update && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" backup-server-setup
+```
+
+Validation checklist:
+
+- Backup server user/folder created outside the ERPNext VM.
+- ERPNext VM public key installed on backup server.
+- `off-vm-backup-dry-run` succeeds.
+- `run-off-vm-backup` succeeds.
+- `off-vm-backup-status` shows last run OK.
+- Backup server contains database, public files, private files, and site config backup files.
+- Restore rehearsal is still required on a disposable VM after off-VM backup succeeds.
+
 ## v1.1.57 Cloudflare Origin CA validation record
 
 Cloudflare Origin CA / Full (strict) has now been validated on the real Hetzner VPS production path.

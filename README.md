@@ -94,6 +94,35 @@ During the production HTTPS step, the guided setup recommends **Let's Encrypt** 
 
 **v1.1.57 validation note:** Cloudflare Origin CA / Full (strict) was validated on the real Hetzner VPS path. Expected passing status is Cloudflare-proxied DNS returning Cloudflare edge IPs, Cloudflare Origin CA active on the VM, `cloudflare-origin-ssl-status` showing `HTTP/2 200`, and direct backend ports `8000` and `9000` blocked externally.
 
+### Guided off-VM backup server setup
+
+**v1.1.58 backup note:** the toolkit now supports a two-server off-VM backup setup. Run the ERPNext-side key/setup command on the ERPNext VPS, then run the backup-server command on a separate Linux backup server. The target must be outside the ERPNext VM/account to protect against VM or disk loss.
+
+On the ERPNext VPS:
+
+```bash
+sudo erpnext-dev generate-off-vm-backup-key
+sudo erpnext-dev off-vm-backup-guided-setup
+```
+
+On the separate backup server:
+
+```bash
+sudo apt-get update && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" backup-server-setup
+```
+
+The backup-server setup creates/uses a backup user, prepares `/srv/erpnext-backups/<site>/`, optionally installs the ERPNext VM public key, and prints the rsync target URI to use on the ERPNext VPS. After configuration, validate in this order:
+
+```bash
+sudo erpnext-dev off-vm-backup-dry-run
+sudo erpnext-dev run-off-vm-backup
+sudo erpnext-dev off-vm-backup-status
+sudo erpnext-dev production-checklist
+```
+
+Keep `rsync --delete` disabled for the first validation run. Off-VM backup does not replace a restore rehearsal on a disposable VM.
+
+
 Example production site name:
 
 ```text

@@ -1,3 +1,18 @@
+## v1.1.58 completed guided off-VM backup setup foundation
+
+Status: implementation package ready for validation.
+
+- Added a backup-server command that can be pulled and run on a separate Linux backup server.
+- Added ERPNext-side key generation and guided off-VM setup commands.
+- Kept existing manual rsync target, dry-run, real-run, and status commands.
+- Remaining readiness movement requires real two-server validation: dry run, real off-VM run, backup-server file verification, and restore rehearsal.
+
+Updated readiness target after validation:
+
+- Local VM/developer workflow: 9.3/10, passed.
+- Production VPS core workflow: 8.7/10, validated with Let’s Encrypt and Cloudflare Origin CA paths.
+- Production backup/resilience workflow: pending off-VM backup and restore rehearsal validation.
+
 ## v1.1.57 completed Cloudflare Origin CA validation record
 
 - Recorded successful Cloudflare Origin CA / Full (strict) validation on the real Hetzner VPS production path.

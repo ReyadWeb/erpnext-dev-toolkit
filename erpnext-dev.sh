@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.57"
+SCRIPT_VERSION="1.1.58"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -107,6 +107,7 @@ OFF_VM_BACKUP_CONFIG_FILE="${OFF_VM_BACKUP_CONFIG_FILE:-/etc/erpnext-dev/off-vm-
 OFF_VM_BACKUP_STATE_FILE="${OFF_VM_BACKUP_STATE_FILE:-/etc/erpnext-dev/off-vm-backup.state}"
 OFF_VM_BACKUP_TARGET="${OFF_VM_BACKUP_TARGET:-}"
 OFF_VM_BACKUP_SSH_IDENTITY="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
+OFF_VM_BACKUP_DEFAULT_IDENTITY="${OFF_VM_BACKUP_DEFAULT_IDENTITY:-/root/.ssh/erpnext_offvm_backup}"
 OFF_VM_BACKUP_RSYNC_DELETE="${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
 HEALTH_CHECK_SERVICE="${HEALTH_CHECK_SERVICE:-erpnext-dev-health-check.service}"
 HEALTH_CHECK_TIMER="${HEALTH_CHECK_TIMER:-erpnext-dev-health-check.timer}"
@@ -237,7 +238,7 @@ acquire_toolkit_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|public-vm-guided-setup|public-guided-setup|production-guided-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|host-dns-guide|print-hosts-command|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
+    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|public-vm-guided-setup|public-guided-setup|production-guided-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|off-vm-backup-guided-setup|generate-off-vm-backup-key|off-vm-backup-keygen|backup-server-setup|prepare-backup-server|off-vm-backup-server-setup|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|host-dns-guide|print-hosts-command|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit)
       return 0
       ;;
     *)
@@ -12735,6 +12736,257 @@ off_vm_backup_ensure_rsync() {
   $SUDO apt-get install -y rsync
 }
 
+off_vm_backup_default_identity() {
+  if [[ -n "${OFF_VM_BACKUP_SSH_IDENTITY:-}" ]]; then
+    printf '%s\n' "$OFF_VM_BACKUP_SSH_IDENTITY"
+  else
+    printf '%s\n' "$OFF_VM_BACKUP_DEFAULT_IDENTITY"
+  fi
+}
+
+generate_off_vm_backup_key() {
+  require_sudo
+  local key_path key_dir comment pub_file
+  require_site_environment >/dev/null || true
+  key_path="$(off_vm_backup_default_identity)"
+  key_dir="$(dirname "$key_path")"
+  pub_file="${key_path}.pub"
+  comment="erpnext-offvm-backup-${SITE_NAME}"
+
+  ui_box_start "Generate Off-VM Backup SSH Key"
+  status_line "Purpose" "INFO" "dedicated key for rsync backup from this ERPNext VM"
+  status_line "Private key" "INFO" "$key_path"
+  status_line "Public key" "INFO" "$pub_file"
+  echo
+  echo "This key is used by the ERPNext VM to push backup files to the backup server."
+  echo "Do not copy the private key to the backup server. Only copy the public key."
+  echo
+
+  $SUDO mkdir -p "$key_dir"
+  $SUDO chmod 700 "$key_dir" || true
+  if [[ -f "$key_path" && -f "$pub_file" ]]; then
+    status_line "SSH key" "OK" "already exists"
+  else
+    if [[ -f "$key_path" || -f "$pub_file" ]]; then
+      fail "Partial key exists at ${key_path}. Move it aside or set OFF_VM_BACKUP_SSH_IDENTITY to another path."
+    fi
+    log "Generating dedicated off-VM backup SSH key"
+    $SUDO ssh-keygen -t ed25519 -f "$key_path" -C "$comment" -N ""
+    $SUDO chmod 600 "$key_path" || true
+    $SUDO chmod 644 "$pub_file" || true
+    status_line "SSH key" "OK" "generated"
+  fi
+
+  echo
+  echo "Public key to paste into the backup server setup command:"
+  echo "------------------------------------------------------------"
+  $SUDO cat "$pub_file"
+  echo "------------------------------------------------------------"
+  echo
+  echo "Next on the backup server, run:"
+  echo "  sudo erpnext-dev backup-server-setup"
+  echo
+  echo "Or bootstrap it directly from GitHub on the backup server:"
+  echo "  sudo apt-get update && sudo apt-get install -y curl ca-certificates && tmp=\"\$(mktemp /tmp/erpnext-dev.XXXXXX.sh)\" && curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o \"\$tmp\" && chmod +x \"\$tmp\" && sudo \"\$tmp\" backup-server-setup"
+  ui_next "$(toolkit_cmd backup-server-setup) on the backup server" "$(toolkit_cmd off-vm-backup-guided-setup) on this ERPNext VM"
+  ui_box_end
+}
+
+safe_backup_username() {
+  local name="$1"
+  [[ "$name" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+}
+
+normalize_backup_server_dir() {
+  local dir="$1"
+  [[ -n "$dir" ]] || return 1
+  [[ "$dir" == /* ]] || return 1
+  [[ "$dir" != *[[:space:]]* ]] || return 1
+  [[ "$dir" != *".."* ]] || return 1
+  printf '%s\n' "${dir%/}"
+}
+
+backup_server_setup() {
+  require_sudo
+  local backup_user backup_root site_name source_ip public_key ssh_dir auth_file target_dir target_uri host_hint key_line opts
+  backup_user="${BACKUP_SERVER_USER:-erpbackup}"
+  backup_root="${BACKUP_SERVER_ROOT:-/srv/erpnext-backups}"
+  site_name="${BACKUP_SITE_NAME:-}"
+  source_ip="${BACKUP_SOURCE_IP:-}"
+  public_key="${BACKUP_SOURCE_PUBLIC_KEY:-}"
+
+  ui_box_start "Prepare Off-VM Backup Server"
+  echo "Run this on the remote backup server, not on the ERPNext application VM."
+  echo "It creates a locked-down backup user/folder and optionally installs the ERPNext VM public key."
+  echo
+
+  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+    read -r -p "Backup Linux user [${backup_user}]: " answer_backup_user
+    backup_user="${answer_backup_user:-$backup_user}"
+    read -r -p "Backup root folder [${backup_root}]: " answer_backup_root
+    backup_root="${answer_backup_root:-$backup_root}"
+    read -r -p "ERPNext site/domain folder [${site_name:-erp.example.com}]: " answer_site_name
+    site_name="${answer_site_name:-$site_name}"
+    read -r -p "Restrict SSH key to ERPNext VM source IP (optional) [${source_ip}]: " answer_source_ip
+    source_ip="${answer_source_ip:-$source_ip}"
+    echo
+    echo "Paste the ERPNext VM public key from 'sudo erpnext-dev generate-off-vm-backup-key'."
+    echo "Leave blank to create the user/folder only and add the key later."
+    read -r -p "Public key: " answer_public_key
+    public_key="${answer_public_key:-$public_key}"
+  fi
+
+  safe_backup_username "$backup_user" || fail "Invalid backup user: ${backup_user}. Use a simple Linux username such as erpbackup."
+  backup_root="$(normalize_backup_server_dir "$backup_root")" || fail "Invalid backup root folder: ${backup_root}. Use an absolute path without spaces."
+  [[ -n "$site_name" ]] || fail "Site/domain folder is required. Example: erp.flowmaya.com"
+  [[ "$site_name" != *[[:space:]]* && "$site_name" != *".."* && "$site_name" != /* ]] || fail "Invalid site/domain folder: ${site_name}"
+  if [[ -n "$source_ip" ]]; then
+    valid_ipv4_address "$source_ip" || warn "Source IP does not look like a plain IPv4 address. Key restriction will not use from= unless valid."
+  fi
+
+  status_line "Backup user" "INFO" "$backup_user"
+  status_line "Backup folder" "INFO" "${backup_root}/${site_name}"
+  status_line "SSH source IP" "$([[ -n "$source_ip" ]] && echo INFO || echo WARN)" "${source_ip:-not restricted by source IP}"
+  echo
+
+  log "Installing backup server packages"
+  $SUDO apt-get update
+  $SUDO apt-get install -y openssh-server rsync
+
+  if id "$backup_user" >/dev/null 2>&1; then
+    status_line "Linux user" "OK" "exists: $backup_user"
+  else
+    log "Creating backup user ${backup_user}"
+    if command -v adduser >/dev/null 2>&1; then
+      $SUDO adduser --disabled-password --gecos "" "$backup_user"
+    else
+      $SUDO useradd --create-home --shell /bin/bash "$backup_user"
+      $SUDO passwd -l "$backup_user" >/dev/null 2>&1 || true
+    fi
+    status_line "Linux user" "OK" "created: $backup_user"
+  fi
+  $SUDO passwd -l "$backup_user" >/dev/null 2>&1 || true
+
+  target_dir="${backup_root}/${site_name}"
+  $SUDO mkdir -p "$target_dir"
+  $SUDO chown -R "${backup_user}:${backup_user}" "$backup_root"
+  $SUDO chmod 750 "$backup_root" "$target_dir" || true
+  status_line "Backup folder" "OK" "$target_dir"
+
+  ssh_dir="/home/${backup_user}/.ssh"
+  auth_file="${ssh_dir}/authorized_keys"
+  $SUDO mkdir -p "$ssh_dir"
+  $SUDO chown -R "${backup_user}:${backup_user}" "$ssh_dir"
+  $SUDO chmod 700 "$ssh_dir"
+
+  if [[ -n "$public_key" ]]; then
+    if [[ ! "$public_key" =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp[0-9]+)[[:space:]]+ ]]; then
+      fail "The pasted public key does not look like an OpenSSH public key."
+    fi
+    opts="no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty"
+    if valid_ipv4_address "$source_ip" 2>/dev/null; then
+      opts="from=\"${source_ip}\",${opts}"
+    fi
+    key_line="${opts} ${public_key}"
+    if $SUDO test -f "$auth_file" && $SUDO grep -Fq -- "$public_key" "$auth_file"; then
+      status_line "Authorized key" "OK" "already present"
+    else
+      printf '%s\n' "$key_line" | $SUDO tee -a "$auth_file" >/dev/null
+      status_line "Authorized key" "OK" "installed"
+    fi
+  else
+    status_line "Authorized key" "WARN" "not installed; add the ERPNext VM public key before testing rsync"
+  fi
+  $SUDO chown "${backup_user}:${backup_user}" "$auth_file" 2>/dev/null || true
+  $SUDO chmod 600 "$auth_file" 2>/dev/null || true
+
+  if command -v hostname >/dev/null 2>&1; then
+    host_hint="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  fi
+  host_hint="${host_hint:-BACKUP_SERVER_IP}"
+  target_uri="${backup_user}@${host_hint}:${target_dir}/"
+
+  ui_box_start "Backup Server Result Summary"
+  status_line "Backup server" "OK" "prepared"
+  status_line "Target URI" "INFO" "$target_uri"
+  status_line "Delete mode" "INFO" "do not enable rsync --delete for first validation"
+  echo
+  echo "Next on the ERPNext VM:"
+  echo "  sudo erpnext-dev generate-off-vm-backup-key"
+  echo "  sudo erpnext-dev configure-rsync-backup-target"
+  echo "  sudo erpnext-dev off-vm-backup-dry-run"
+  echo "  sudo erpnext-dev run-off-vm-backup"
+  echo
+  echo "Use this target when prompted:"
+  echo "  ${target_uri}"
+  ui_box_end
+}
+
+off_vm_backup_guided_setup() {
+  require_sudo
+  require_site_environment >/dev/null || return 1
+  local target identity delete_mode config_dir backup_server_hint
+
+  ui_box_start "Guided Off-VM Backup Setup"
+  status_line "Site" "INFO" "$SITE_NAME"
+  status_line "Local backup folder" "INFO" "$(site_backup_dir)"
+  echo
+  echo "This guided flow prepares the ERPNext VM side of rsync off-VM backups."
+  echo "Use a different server/account as the target. Do not target this same VM."
+  ui_box_end
+
+  generate_off_vm_backup_key
+
+  echo
+  echo "Prepare the backup server next. On the backup server, run:"
+  echo "  sudo apt-get update && sudo apt-get install -y curl ca-certificates && tmp=\"\$(mktemp /tmp/erpnext-dev.XXXXXX.sh)\" && curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o \"\$tmp\" && chmod +x \"\$tmp\" && sudo \"\$tmp\" backup-server-setup"
+  echo
+  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+    read -r -p "After preparing the backup server, enter rsync target user@host:/path/: " target
+    validate_off_vm_backup_target "$target" || fail "Invalid target. Use user@host:/absolute/path/"
+    identity="$(off_vm_backup_default_identity)"
+    read -r -p "SSH identity file on this ERPNext VM [${identity}]: " answer_identity
+    identity="${answer_identity:-$identity}"
+    read -r -p "Enable rsync --delete on remote target? [y/N]: " delete_mode
+    if [[ "$delete_mode" =~ ^[Yy]$|^[Yy][Ee][Ss]$ ]]; then
+      delete_mode="true"
+    else
+      delete_mode="false"
+    fi
+  else
+    target="${OFF_VM_BACKUP_TARGET:-}"
+    validate_off_vm_backup_target "$target" || fail "Set OFF_VM_BACKUP_TARGET=user@host:/path before using --yes."
+    identity="$(off_vm_backup_default_identity)"
+    delete_mode="${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
+  fi
+
+  [[ -r "$identity" ]] || fail "SSH identity file is not readable: $identity"
+  config_dir="$(dirname "$OFF_VM_BACKUP_CONFIG_FILE")"
+  $SUDO mkdir -p "$config_dir"
+  $SUDO tee "$OFF_VM_BACKUP_CONFIG_FILE" >/dev/null <<EOF_OFF_VM_GUIDED_CONFIG
+# ERPNext Developer Toolkit off-VM backup configuration
+# Non-secret settings only. Use SSH keys/agent for authentication.
+OFF_VM_BACKUP_TARGET=${target}
+OFF_VM_BACKUP_SSH_IDENTITY=${identity}
+OFF_VM_BACKUP_RSYNC_DELETE=${delete_mode}
+SITE_NAME=${SITE_NAME}
+EOF_OFF_VM_GUIDED_CONFIG
+  $SUDO chown root:root "$OFF_VM_BACKUP_CONFIG_FILE" || true
+  $SUDO chmod 600 "$OFF_VM_BACKUP_CONFIG_FILE" || true
+  OFF_VM_BACKUP_TARGET="$target"
+  OFF_VM_BACKUP_SSH_IDENTITY="$identity"
+  OFF_VM_BACKUP_RSYNC_DELETE="$delete_mode"
+
+  ui_box_start "Off-VM Backup Configured"
+  status_line "Target" "OK" "$OFF_VM_BACKUP_TARGET"
+  status_line "SSH key" "OK" "$OFF_VM_BACKUP_SSH_IDENTITY"
+  status_line "Delete mode" "INFO" "$OFF_VM_BACKUP_RSYNC_DELETE"
+  echo
+  echo "Next run the dry run. If it passes, run the real off-VM backup."
+  ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd run-off-vm-backup)" "$(toolkit_cmd off-vm-backup-status)"
+  ui_box_end
+}
+
 off_vm_backup_rsync_command() {
   local mode="$1" backup_dir ssh_cmd_str rsync_cmd=()
   backup_dir="$(site_backup_dir)"
@@ -12958,20 +13210,26 @@ off_vm_backup_wizard() {
   while true; do
     ui_box_start "Off-VM Backup"
     echo "1) Off-VM backup plan"
-    echo "2) Configure rsync target"
-    echo "3) Off-VM backup dry run"
-    echo "4) Run off-VM backup"
-    echo "5) Off-VM backup status"
-    echo "6) Disable off-VM backup config"
+    echo "2) Guided off-VM backup setup"
+    echo "3) Generate backup SSH key"
+    echo "4) Configure rsync target"
+    echo "5) Off-VM backup dry run"
+    echo "6) Run off-VM backup"
+    echo "7) Off-VM backup status"
+    echo "8) Disable off-VM backup config"
+    echo "9) Prepare this server as backup target"
     menu_footer
     menu_read_choice off_choice
     case "$off_choice" in
       1) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      2) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      3) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      4) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      5) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      6) disable_off_vm_backup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      2) off_vm_backup_guided_setup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      3) generate_off_vm_backup_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      4) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      5) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      6) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      7) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      8) disable_off_vm_backup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      9) backup_server_setup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -14226,6 +14484,9 @@ Backup / Restore:
   backup-retention-plan Show local backup retention policy
   cleanup-old-backups-dry-run Preview old backup cleanup
   off-vm-backup-plan  Show rsync off-VM backup plan
+  off-vm-backup-guided-setup Guided two-server off-VM backup setup
+  generate-off-vm-backup-key Create dedicated rsync SSH key on ERPNext VM
+  backup-server-setup Prepare a remote Linux server to receive backups
   configure-rsync-backup-target Save off-VM rsync target
   off-vm-backup-dry-run Preview off-VM rsync copy
   run-off-vm-backup   Copy backups to configured off-VM target
@@ -14370,7 +14631,7 @@ parse_args() {
         DOCTOR_FORMAT="json"
         shift
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|public-vm-guided-setup|public-guided-setup|production-guided-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|menu-self-test|menu-navigation-self-test|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|public-vm-guided-setup|public-guided-setup|production-guided-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|access-menu|access-info|education-access-info|portal-access-info|desk-url|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|off-vm-backup-guided-setup|generate-off-vm-backup-key|off-vm-backup-keygen|backup-server-setup|prepare-backup-server|off-vm-backup-server-setup|configure-rsync-backup-target|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password|admin-password-reset|health-check|configure-health-check-timer|health-check-status|disable-health-check-timer|service-recovery-plan|restore-preflight|production-ops-wizard|operations-wizard|ops-wizard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|wait-ready|menu|help|-h|--help|version|--version|where-installed|install-cli|repair-cli|update-toolkit|menu-self-test|menu-navigation-self-test|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -14486,6 +14747,9 @@ main() {
     cleanup-old-backups|backup-cleanup) cleanup_old_backups prompt ;;
     cleanup-old-backups-dry-run|backup-cleanup-dry-run) cleanup_old_backups dry-run ;;
     off-vm-backup-plan) show_off_vm_backup_plan ;;
+    off-vm-backup-guided-setup) off_vm_backup_guided_setup ;;
+    generate-off-vm-backup-key|off-vm-backup-keygen) generate_off_vm_backup_key ;;
+    backup-server-setup|prepare-backup-server|off-vm-backup-server-setup) backup_server_setup ;;
     configure-rsync-backup-target) configure_rsync_backup_target ;;
     off-vm-backup-dry-run) run_off_vm_backup_rsync dry-run ;;
     run-off-vm-backup) run_off_vm_backup_rsync run ;;

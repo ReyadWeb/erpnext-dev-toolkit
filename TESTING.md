@@ -1,3 +1,37 @@
+## v1.1.58 guided off-VM backup setup validation
+
+Purpose: validate the new two-server off-VM backup onboarding flow before relying on it for production.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+./erpnext-dev.sh --help | grep -n "backup-server-setup"
+./erpnext-dev.sh --help | grep -n "generate-off-vm-backup-key"
+./erpnext-dev.sh --help | grep -n "off-vm-backup-guided-setup"
+printf 'q\n' | ./erpnext-dev.sh off-vm-backup-wizard
+```
+
+Expected:
+
+- Version prints `ERPNext Developer Toolkit v1.1.58`.
+- Off-VM Backup menu shows guided setup, key generation, rsync configuration, dry run, real run, status, disable config, and backup-server preparation.
+- `backup-server-setup` is run only on a separate backup Linux server, not on the ERPNext application VM.
+
+Production validation order:
+
+1. On ERPNext VPS, run `sudo erpnext-dev generate-off-vm-backup-key`.
+2. On backup server, run the GitHub bootstrap command ending in `backup-server-setup`.
+3. Paste the ERPNext VM public key when prompted.
+4. On ERPNext VPS, run `sudo erpnext-dev off-vm-backup-guided-setup` or `sudo erpnext-dev configure-rsync-backup-target`.
+5. Run `sudo erpnext-dev off-vm-backup-dry-run`.
+6. Run `sudo erpnext-dev run-off-vm-backup`.
+7. Confirm `sudo erpnext-dev off-vm-backup-status` reports a successful last run.
+8. Confirm copied files exist on the backup server under `/srv/erpnext-backups/<site>/`.
+
+Do not enable rsync delete mode during first validation.
+
 ## v1.1.57 Cloudflare Origin CA validation record
 
 This release records the successful real VPS validation of the Cloudflare Origin CA / Full (strict) SSL path after the v1.1.56 proxied-DNS gate fix.
