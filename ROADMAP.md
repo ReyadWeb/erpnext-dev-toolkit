@@ -1,3 +1,30 @@
+# v1.1.71 roadmap update - verify-toolkit command
+
+Status: **implemented as the second release-trust hardening patch after v1.1.70**.
+
+v1.1.71 adds `verify-toolkit` so operators can report the active script hash, stable toolkit hash, CLI target hash, and checksum match status when `SHA256SUMS` is available. This builds on the v1.1.70 tag-pinned checksum bootstrap workflow.
+
+Completed in v1.1.71:
+
+- Added `verify-toolkit`, `toolkit-verify`, and `verify-install` aliases.
+- Added checksum-file discovery with `CHECKSUM_FILE` override support.
+- Added active/stable/CLI SHA256 reporting.
+- Added match/mismatch reporting against `SHA256SUMS`.
+- Added a Support and Diagnostics dashboard entry for toolkit verification.
+- Updated README, SECURITY.md, RELIABILITY-PLAN.md, TESTING.md, CHANGELOG.md, and PRODUCTION-VALIDATION.md.
+
+Next active milestones:
+
+1. **v1.1.72 — minimal GitHub Actions CI and `scripts/validate-release.sh`**.
+2. **v1.1.73+ — support-bundle audit test and package validation expansion**.
+3. Later: begin careful modularization only after release integrity and CI are in place.
+
+Important limitation:
+
+- `verify-toolkit` validates file integrity when a trusted checksum file is available. It does not prove maintainer identity. GPG-signed releases remain a later optional milestone.
+
+---
+
 # v1.1.70 roadmap update - SHA256 checksums and tag-pinned bootstrap docs
 
 Status: **implemented as the first release-trust hardening patch after v1.1.69**.
@@ -14,8 +41,8 @@ Completed in v1.1.70:
 
 Next active milestones:
 
-1. **v1.1.71 — `verify-toolkit` command** for installed-file hash verification.
-2. **v1.1.72 — minimal GitHub Actions CI and `scripts/validate-release.sh`**.
+1. **v1.1.72 — minimal GitHub Actions CI and `scripts/validate-release.sh`**.
+2. **v1.1.73+ — support-bundle audit test and package validation expansion**.
 3. Later: begin careful modularization only after release integrity and CI are in place.
 
 Important limitation:
@@ -39,8 +66,8 @@ Completed in v1.1.69:
 
 Next active milestones:
 
-1. **v1.1.71 — `verify-toolkit` command** for installed-file hash verification.
-2. **v1.1.72 — minimal GitHub Actions CI and `scripts/validate-release.sh`**.
+1. **v1.1.72 — minimal GitHub Actions CI and `scripts/validate-release.sh`**.
+2. **v1.1.73+ — support-bundle audit test and package validation expansion**.
 3. Later: begin careful modularization only after release integrity and CI are in place.
 
 Rationale:

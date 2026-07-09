@@ -60,10 +60,10 @@ The preferred direction is now partially implemented:
 1. install from pinned release tags instead of `main`;
 2. publish SHA256 checksums per release;
 3. document checksum verification before `sudo` execution;
-4. add a `verify-toolkit` command that reports installed path, installed version, installed SHA256, and match/mismatch against a known checksum when available;
+4. add a `verify-toolkit` command that reports installed path, installed version, installed SHA256, and match/mismatch against a known checksum when available; **implemented in v1.1.71**;
 5. optionally add GPG-signed releases after the checksum workflow is stable.
 
-v1.1.70 implements items 1-3 for the `erpnext-dev.sh` script artifact by adding `SHA256SUMS` and tag-pinned README examples. Operators should prefer the verified tag workflow for production systems. The mutable `main` branch raw URL remains a development convenience path only.
+v1.1.70 implements items 1-3 for the `erpnext-dev.sh` script artifact by adding `SHA256SUMS` and tag-pinned README examples. v1.1.71 implements item 4 with `verify-toolkit`. Operators should prefer the verified tag workflow for production systems. The mutable `main` branch raw URL remains a development convenience path only.
 
 This is integrity verification, not maintainer identity verification. A malicious actor who can change both the script and checksum in the release can still defeat SHA256-only verification. GPG-signed releases remain a later optional hardening milestone.
 
@@ -134,7 +134,7 @@ Implemented: release checksum artifacts and tag-pinned install instructions for 
 Current workflow:
 
 ```bash
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -144,7 +144,7 @@ sudo ./erpnext-dev.sh start-here
 
 ### v1.1.71
 
-Add a `verify-toolkit` command that checks the installed toolkit hash and reports whether it matches a known checksum file when present.
+Adds `verify-toolkit`, which checks the active/installed toolkit hash and reports whether it matches a known checksum file when present.
 
 ### v1.1.72
 

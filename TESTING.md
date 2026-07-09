@@ -1,3 +1,44 @@
+## v1.1.71 verify-toolkit command
+
+Purpose: add installed-file integrity reporting after the v1.1.70 tag-pinned checksum workflow. This patch adds a read-only `verify-toolkit` command and exposes it from the Production Operations > Support and Diagnostics menu.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+sha256sum -c SHA256SUMS
+./erpnext-dev.sh verify-toolkit
+
+grep -n "v1.1.71" CHANGELOG.md TESTING.md ROADMAP.md PRODUCTION-VALIDATION.md
+grep -n "verify-toolkit" README.md SECURITY.md RELIABILITY-PLAN.md TESTING.md CHANGELOG.md
+grep -n 'VERSION="v1.1.71"' README.md SECURITY.md
+
+printf '10\n10\n\nb\nq\n' | sudo ./erpnext-dev.sh production-ops-wizard
+
+unzip -l erpnext-dev-installer-v1.1.71.zip | grep "GITHUB-UPDATE" && echo "BAD" || echo "OK"
+```
+
+Expected:
+
+- Version prints `ERPNext Developer Toolkit v1.1.71`.
+- `bash -n erpnext-dev.sh` passes.
+- `sha256sum -c SHA256SUMS` reports `erpnext-dev.sh: OK`.
+- `verify-toolkit` prints active/stable/CLI SHA256 details.
+- When run beside the matching v1.1.71 `SHA256SUMS`, `verify-toolkit` reports `Active match OK`.
+- Production Operations > Support and Diagnostics includes `10) Verify toolkit integrity`.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
+Validation focus:
+
+```text
+Installed toolkit integrity reporting added.
+Production operations behavior unchanged.
+Runtime/install/backup/restore/SSL/firewall/monitoring/go-live logic unchanged.
+```
+
+---
+
 ## v1.1.70 SHA256 checksums and tag-pinned bootstrap documentation
 
 Purpose: add checksum verification for the release script artifact and update bootstrap documentation to prefer pinned release tags rather than the mutable `main` branch. This patch does not change production runtime behavior.

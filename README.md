@@ -39,15 +39,15 @@ Most users should start with the **general guided setup** because it lets them c
 
 ### Verified release bootstrap
 
-v1.1.70 introduces a release checksum artifact: `SHA256SUMS`. The preferred production pattern is to pin the download to a release tag, download `SHA256SUMS`, run `sha256sum -c SHA256SUMS`, and only then execute the script with `sudo`.
+v1.1.70 introduced a release checksum artifact: `SHA256SUMS`. v1.1.71 adds `verify-toolkit` for installed-file hash reporting. The preferred production pattern is to pin the download to a release tag, download `SHA256SUMS`, run `sha256sum -c SHA256SUMS`, and only then execute the script with `sudo`.
 
-The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that release tag. Future releases may add a broader package checksum workflow and a `verify-toolkit` command for installed-file verification.
+The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that release tag. Future releases may add a broader package checksum workflow and GPG-signed releases for stronger maintainer identity verification.
 
 ### General guided setup — choose local or production
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -76,7 +76,7 @@ For local VMs, the installer prints the correct host `/etc/hosts` command using 
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -106,7 +106,7 @@ Run the printed `/etc/hosts` command on the **host machine**, not inside the VM.
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -140,7 +140,7 @@ sudo erpnext-dev generate-off-vm-backup-key
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -267,7 +267,7 @@ See [`PRODUCTION-VALIDATION.md`](PRODUCTION-VALIDATION.md) for the full VPS vali
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -282,7 +282,7 @@ If the VM is clearly unsafe for ERPNext, the installer blocks the install and pr
 ### Update or repair the `erpnext-dev` command
 
 ```bash
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -319,6 +319,7 @@ After the first quickstart or `install-cli` run, use `erpnext-dev` for normal op
 erpnext-dev --help
 erpnext-dev version
 erpnext-dev where-installed
+erpnext-dev verify-toolkit
 sudo erpnext-dev menu
 sudo erpnext-dev doctor --plain
 sudo erpnext-dev verify-access
@@ -338,6 +339,24 @@ Toolkit file:  /opt/erpnext-dev/erpnext-dev.sh
 CLI command:   /usr/local/bin/erpnext-dev
 Daily command: sudo erpnext-dev <command>
 ```
+
+### Toolkit integrity verification
+
+v1.1.71 adds an installed-file verification command:
+
+```bash
+erpnext-dev verify-toolkit
+```
+
+The command reports the active script path, stable toolkit path, CLI target, installed SHA256 values, and whether the active script matches `SHA256SUMS` when a checksum file is available.
+
+The command looks for `SHA256SUMS` in the current directory, beside the active script, beside the stable toolkit path, or in `/opt/erpnext-dev`. You can also provide a file explicitly:
+
+```bash
+CHECKSUM_FILE=/path/to/SHA256SUMS erpnext-dev verify-toolkit
+```
+
+Use this after a tag-pinned verified update to confirm that the installed toolkit matches the published checksum.
 
 The temporary file under `/tmp` is only used for the first bootstrap or update. It is not the long-term toolkit location.
 
@@ -474,7 +493,7 @@ Run this inside a fresh local Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -596,7 +615,7 @@ Run this inside a fresh public Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -728,7 +747,7 @@ sudo erpnext-dev production-ops-wizard
 To update or repair the toolkit command from a verified release tag:
 
 ```bash
-VERSION="v1.1.70"
+VERSION="v1.1.71"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -880,7 +899,7 @@ ERPNext Production Operations > Health Monitoring
 ERPNext Production Operations > Support and Diagnostics
 ```
 
-The dashboard intentionally reuses existing tested commands. For example, the backup section calls the same backup-status, backup-verify, scheduled backup, and retention commands; the restore section calls the same restore rehearsal and restore preflight commands; and the support section creates the same redacted evidence bundle.
+The dashboard intentionally reuses existing tested commands. For example, the backup section calls the same backup-status, backup-verify, scheduled backup, and retention commands; the restore section calls the same restore rehearsal and restore preflight commands; and the support section creates the same redacted evidence bundle. v1.1.71 also exposes `verify-toolkit` from Support and Diagnostics as option 10.
 
 Use direct commands for automation and scripts. Use the dashboard for interactive operations and handoff.
 

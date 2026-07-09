@@ -1,3 +1,53 @@
+# v1.1.71 verify-toolkit command
+
+v1.1.71 is a release-trust hardening patch. It adds a read-only `verify-toolkit` command that reports installed toolkit paths, SHA256 values, and checksum match status when `SHA256SUMS` is available.
+
+## Production behavior impact
+
+```text
+Install behavior: unchanged
+Backup behavior: unchanged
+Restore behavior: unchanged
+SSL behavior: unchanged
+Firewall/security behavior: unchanged
+Health monitoring behavior: unchanged
+Go-live validation behavior: unchanged
+Dashboard behavior: support menu adds toolkit verification entry only
+```
+
+## Why this patch exists
+
+v1.1.70 added tag-pinned downloads and checksum verification before install. v1.1.71 adds the matching post-install visibility command so an operator can verify what is currently installed or active on a VM.
+
+## Validation commands
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+sha256sum -c SHA256SUMS
+./erpnext-dev.sh verify-toolkit
+printf '10\n10\n\nb\nq\n' | sudo ./erpnext-dev.sh production-ops-wizard
+```
+
+Expected version:
+
+```text
+ERPNext Developer Toolkit v1.1.71
+```
+
+Expected checksum result:
+
+```text
+erpnext-dev.sh: OK
+Active match                 OK      active script matches SHA256SUMS
+```
+
+## Result
+
+v1.1.71 should be treated as a release-trust hardening patch, not a production operations feature patch. Production alignment requires a verified tag-pinned update, `verify-toolkit`, and Final QA option 1.
+
+---
+
 # v1.1.70 SHA256 checksums and tag-pinned bootstrap documentation
 
 v1.1.70 is a release-trust documentation/checksum patch. It adds `SHA256SUMS` for `erpnext-dev.sh` and updates the README to prefer pinned release-tag downloads with checksum verification before running the toolkit with `sudo`.

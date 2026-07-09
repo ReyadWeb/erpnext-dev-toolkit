@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.1.71 - Verify installed toolkit integrity
+
+### Added
+
+- Added `verify-toolkit` command with aliases `toolkit-verify` and `verify-install`.
+- Added installed SHA256 reporting for the active script, stable toolkit path, and CLI target when present.
+- Added checksum-file discovery for `SHA256SUMS` via current directory, active script directory, stable toolkit directory, `/opt/erpnext-dev`, or `CHECKSUM_FILE=/path/SHA256SUMS`.
+- Added `verify-toolkit` to the Production Operations > Support and Diagnostics menu as option 10.
+
+### Changed
+
+- Updated the toolkit version to v1.1.71.
+- Updated README, SECURITY.md, RELIABILITY-PLAN.md, TESTING.md, ROADMAP.md, and PRODUCTION-VALIDATION.md for installed-file verification.
+- Updated `SHA256SUMS` for the v1.1.71 `erpnext-dev.sh` artifact.
+
+### Security impact
+
+- Operators can now verify the installed or active toolkit file against the published checksum when a `SHA256SUMS` file is available.
+- This improves post-install confidence after the tag-pinned checksum workflow introduced in v1.1.70.
+- SHA256 verification still provides file integrity only; it does not prove maintainer identity.
+
+### Validation scope
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` prints v1.1.71.
+- `sha256sum -c SHA256SUMS` passes.
+- `erpnext-dev verify-toolkit` reports `Active match OK` when run beside the v1.1.71 `SHA256SUMS`.
+- Production Operations > Support and Diagnostics exposes option 10 for toolkit verification.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
 ## v1.1.70 - SHA256 checksums and tag-pinned bootstrap docs
 
 ### Added

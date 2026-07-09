@@ -65,7 +65,7 @@ Each release should consistently verify:
 Target versions: v1.1.70 to v1.1.72.
 
 1. Add checksum artifacts and tag-pinned install documentation. **Implemented in v1.1.70 for `erpnext-dev.sh`.**
-2. Add a `verify-toolkit` command for installed hash verification.
+2. Add a `verify-toolkit` command for installed hash verification. **Implemented in v1.1.71.**
 3. Add `scripts/validate-release.sh` to run local package checks consistently.
 4. Add minimal GitHub Actions CI.
 5. Keep CI conservative at first: warn where appropriate, fail only on high-signal errors.
@@ -168,7 +168,7 @@ Repeat restore rehearsal after major ERPNext upgrades, migration work, backup-po
 |---|---|
 | v1.1.69 | Add security and reliability planning docs |
 | v1.1.70 | Add checksum artifacts and tag-pinned bootstrap docs — implemented for `erpnext-dev.sh` |
-| v1.1.71 | Add `verify-toolkit` command |
+| v1.1.71 | Add `verify-toolkit` command — implemented |
 | v1.1.72 | Add minimal CI and release validation script |
 | Later | Begin low-risk modularization after CI exists |
 
