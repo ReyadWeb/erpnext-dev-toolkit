@@ -6,7 +6,9 @@ cd "$ROOT_DIR"
 
 checksum_files=(
   erpnext-dev.sh
+  lib/common.sh
   scripts/validate-release.sh
+  scripts/run-shellcheck.sh
   RELEASE-MANIFEST.txt
 )
 

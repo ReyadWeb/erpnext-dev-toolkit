@@ -1,3 +1,24 @@
+## v1.1.75 lib/common.sh and shellcheck
+
+Purpose: begin careful modularization and add static analysis for release scripts and the first extracted module.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+bash -n lib/common.sh
+./erpnext-dev.sh version
+scripts/run-shellcheck.sh
+scripts/validate-release.sh
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.75`.
+- `lib/common.sh` exists and is sourced by `erpnext-dev.sh`.
+- `scripts/run-shellcheck.sh` passes when shellcheck is installed.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.1.74 release manifest, expanded checksums, and quality assessment
 
 Purpose: add release manifest validation, expanded checksum coverage, version consistency checks, menu smoke tests, and a tracked quality assessment document.

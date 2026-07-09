@@ -1,3 +1,31 @@
+## v1.1.75 - Begin modularization and add shellcheck to CI
+
+### Added
+
+- Added `lib/common.sh` with shared logging, locking, UI/menu helpers, prompts, and command helpers.
+- Added `scripts/run-shellcheck.sh` and a shellcheck step in GitHub Actions CI.
+- Expanded `SHA256SUMS` and `RELEASE-MANIFEST.txt` to include `lib/common.sh` and `scripts/run-shellcheck.sh`.
+
+### Changed
+
+- Updated the toolkit version to v1.1.75.
+- `erpnext-dev.sh` now sources `lib/common.sh` from beside the active script path.
+- `install-cli`, quickstart reuse, and `update-toolkit` now copy or download the toolkit `lib/` tree into `/opt/erpnext-dev/lib`.
+- `scripts/validate-release.sh` now checks `lib/common.sh` syntax and runs shellcheck when available.
+
+### Security and reliability impact
+
+- Reduces monolith regression blast radius for shared logging, menu, and lock behavior.
+- Adds static analysis for the first extracted module and release scripts before broader modularization.
+
+### Validation scope
+
+- `bash -n erpnext-dev.sh` and `bash -n lib/common.sh` pass.
+- `erpnext-dev version` prints v1.1.75.
+- `scripts/run-shellcheck.sh` passes when shellcheck is installed.
+- `scripts/validate-release.sh` passes locally.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
 ## v1.1.74 - Release manifest, expanded checksums, and quality assessment
 
 ### Added

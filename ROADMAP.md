@@ -1,3 +1,25 @@
+# v1.1.75 roadmap update - lib/common.sh and shellcheck in CI
+
+Status: **implemented as the first careful modularization patch**.
+
+v1.1.75 extracts shared logging, locking, UI/menu helpers, prompts, and command helpers into `lib/common.sh`, and adds shellcheck to CI.
+
+Completed in v1.1.75:
+
+- Added `lib/common.sh` and wired `erpnext-dev.sh` to source it.
+- Updated install/update reuse paths to copy or download the toolkit `lib/` tree.
+- Added `scripts/run-shellcheck.sh`.
+- Added shellcheck installation and execution to `.github/workflows/ci.yml`.
+- Expanded `SHA256SUMS` and `RELEASE-MANIFEST.txt` for the new module and script.
+
+Next active milestones:
+
+1. **v1.1.76 — extract support/diagnostics module**.
+2. **v1.1.77+ — extract backup/restore modules**.
+3. Later: optional GPG-signed release artifacts.
+
+---
+
 # v1.1.74 roadmap update - release manifest, expanded checksums, and quality assessment
 
 Status: **implemented as the fifth release-trust hardening patch after v1.1.70 through v1.1.73**.

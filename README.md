@@ -4,14 +4,19 @@ v1.1.73 adds a `support-bundle-audit` command and exposes it in **Production Ope
 
 ## Release manifest, expanded checksums, and quality assessment
 
-v1.1.74 adds [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md), [`RELEASE-MANIFEST.txt`](RELEASE-MANIFEST.txt), and expanded release validation:
+v1.1.74 adds [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md), [`RELEASE-MANIFEST.txt`](RELEASE-MANIFEST.txt), and expanded release validation.
+
+## Modularization and shellcheck
+
+v1.1.75 begins careful modularization by extracting shared helpers into [`lib/common.sh`](lib/common.sh). GitHub Actions CI now runs `scripts/run-shellcheck.sh` before `scripts/validate-release.sh`.
 
 ```bash
 scripts/validate-release.sh
 scripts/generate-release-checksums.sh
+scripts/run-shellcheck.sh
 ```
 
-`SHA256SUMS` now covers `erpnext-dev.sh`, `scripts/validate-release.sh`, and `RELEASE-MANIFEST.txt`. Validation also checks version consistency across the script, README bootstrap pins, CHANGELOG, and manifest header, and runs `menu-self-test` plus a safe `production-ops-wizard` quit smoke test.
+`SHA256SUMS` covers `erpnext-dev.sh`, `lib/common.sh`, release validation scripts, and `RELEASE-MANIFEST.txt`. Validation checks version consistency, manifest entries, support-bundle audit fixtures, and menu smoke tests when passwordless sudo is available.
 
 ```bash
 sudo erpnext-dev support-bundle
@@ -71,7 +76,7 @@ Most users should start with the **general guided setup** because it lets them c
 
 ### Verified release bootstrap
 
-v1.1.70 introduced a release checksum artifact: `SHA256SUMS`. v1.1.71 added `verify-toolkit` for installed-file hash reporting. v1.1.72 adds minimal GitHub Actions CI and `scripts/validate-release.sh` for repeatable release checks. v1.1.73 adds `support-bundle-audit` and expands release validation with a clean support-bundle audit fixture. v1.1.74 adds `RELEASE-MANIFEST.txt`, expanded checksum coverage, and version/menu regression checks in release validation. The preferred production pattern is to pin the download to a release tag, download `SHA256SUMS`, run `sha256sum -c SHA256SUMS`, and only then execute the script with `sudo`.
+v1.1.74 adds [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md), [`RELEASE-MANIFEST.txt`](RELEASE-MANIFEST.txt), and expanded release validation. v1.1.75 extracts shared helpers into `lib/common.sh` and adds shellcheck to CI.
 
 The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that release tag. Future releases may add a broader package checksum workflow and GPG-signed releases for stronger maintainer identity verification.
 
@@ -79,7 +84,7 @@ The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that releas
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -108,7 +113,7 @@ For local VMs, the installer prints the correct host `/etc/hosts` command using 
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -138,7 +143,7 @@ Run the printed `/etc/hosts` command on the **host machine**, not inside the VM.
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -172,7 +177,7 @@ sudo erpnext-dev generate-off-vm-backup-key
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -299,7 +304,7 @@ See [`PRODUCTION-VALIDATION.md`](PRODUCTION-VALIDATION.md) for the full VPS vali
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -314,7 +319,7 @@ If the VM is clearly unsafe for ERPNext, the installer blocks the install and pr
 ### Update or repair the `erpnext-dev` command
 
 ```bash
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -525,7 +530,7 @@ Run this inside a fresh local Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -647,7 +652,7 @@ Run this inside a fresh public Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -779,7 +784,7 @@ sudo erpnext-dev production-ops-wizard
 To update or repair the toolkit command from a verified release tag:
 
 ```bash
-VERSION="v1.1.74"
+VERSION="v1.1.75"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS

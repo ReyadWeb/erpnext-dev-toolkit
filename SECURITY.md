@@ -1,6 +1,6 @@
-## v1.1.74 release manifest and expanded checksums
+## v1.1.75 modularization and shellcheck
 
-v1.1.74 adds `RELEASE-MANIFEST.txt`, `scripts/generate-release-checksums.sh`, and expanded `SHA256SUMS` coverage for `erpnext-dev.sh`, `scripts/validate-release.sh`, and the manifest itself. `scripts/validate-release.sh` now also checks version consistency and runs `menu-self-test`. See [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md) for the full quality evaluation.
+v1.1.75 extracts shared helpers into `lib/common.sh` and adds `scripts/run-shellcheck.sh` to CI. Install and update paths now keep `/opt/erpnext-dev/lib/common.sh` beside the stable toolkit script.
 
 # Security Policy and Threat Model
 

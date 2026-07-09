@@ -22,9 +22,18 @@ pass() {
 [[ -f QUALITY-ASSESSMENT.md ]] || fail "QUALITY-ASSESSMENT.md is missing"
 
 bash -n erpnext-dev.sh
+[[ -f lib/common.sh ]] || fail "lib/common.sh is missing"
+bash -n lib/common.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh
+
+if command -v shellcheck >/dev/null 2>&1; then
+  scripts/run-shellcheck.sh
+  pass "shellcheck passed"
+else
+  pass "skipped shellcheck (not installed)"
+fi
 
 version_output="$(./erpnext-dev.sh version)"
 echo "$version_output"

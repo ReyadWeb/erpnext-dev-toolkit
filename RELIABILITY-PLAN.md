@@ -1,3 +1,9 @@
+## v1.1.75 reliability update
+
+v1.1.75 extracts `lib/common.sh` from the monolith and adds shellcheck to CI via `scripts/run-shellcheck.sh`. Install and update paths now copy or download the toolkit `lib/` tree into `/opt/erpnext-dev/lib`.
+
+Next reliability milestone: extract support/diagnostics helpers into `lib/support.sh`.
+
 ## v1.1.74 reliability update
 
 v1.1.74 adds `RELEASE-MANIFEST.txt`, `scripts/generate-release-checksums.sh`, expanded `SHA256SUMS` coverage, version-consistency checks, and menu smoke tests in `scripts/validate-release.sh`. See also [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md) for the structured quality evaluation and improvement plan.
