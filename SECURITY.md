@@ -1,3 +1,7 @@
+## v1.1.77 backup module extraction
+
+v1.1.77 extracts local backup, off-VM backup, restore, and rehearsal helpers into `lib/backup.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
+
 ## v1.1.76 support module extraction
 
 v1.1.76 extracts doctor, support-bundle, support-bundle audit, and command-audit helpers into `lib/support.sh`. Install and update paths keep `/opt/erpnext-dev/lib/support.sh` beside the stable toolkit script.

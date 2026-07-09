@@ -1,26 +1,28 @@
-# v1.1.76 production validation notes
+# v1.1.77 production validation notes
 
-v1.1.76 extracts support and diagnostics helpers into `lib/support.sh`.
+v1.1.77 extracts backup and restore helpers into `lib/backup.sh`.
 
 Production validation should confirm:
 
 ```bash
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 sudo erpnext-dev version
 sudo erpnext-dev verify-toolkit
 scripts/validate-release.sh
-sudo erpnext-dev support-bundle-audit
+sudo erpnext-dev backup-status
+sudo erpnext-dev off-vm-backup-status
+sudo erpnext-dev restore-rehearsal-status
 sudo erpnext-dev final-qa
 ```
 
 Expected:
 
-- Version prints `ERPNext Developer Toolkit v1.1.76`.
-- `/opt/erpnext-dev/lib/support.sh` exists after install/update reuse.
-- `support-bundle-audit` and Final QA still work.
+- Version prints `ERPNext Developer Toolkit v1.1.77`.
+- `/opt/erpnext-dev/lib/backup.sh` exists after install/update reuse.
+- Backup and restore status commands still run.
 
-Runtime/install/backup/restore/SSL/firewall/health/go-live behavior is unchanged.
+Runtime/install/SSL/firewall/health/go-live behavior is unchanged aside from modularization.
 
 ---
 
-# v1.1.75 production validation notes
+# v1.1.76 production validation notes

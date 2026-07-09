@@ -1,3 +1,22 @@
+# v1.1.77 roadmap update - lib/backup.sh extraction
+
+Status: **implemented as the third careful modularization patch**.
+
+v1.1.77 extracts local backup, off-VM backup, restore, and rehearsal helpers into `lib/backup.sh`.
+
+Completed in v1.1.77:
+
+- Added `lib/backup.sh` and wired `erpnext-dev.sh` to source it.
+- Simplified `update-toolkit` to download all toolkit lib modules.
+- Expanded checksum, manifest, shellcheck, and validation coverage.
+
+Next active milestones:
+
+1. **v1.1.78 — extract SSL/firewall helpers into dedicated lib modules**.
+2. Later: optional GPG-signed release artifacts.
+
+---
+
 # v1.1.76 roadmap update - lib/support.sh extraction
 
 Status: **implemented as the second careful modularization patch**.

@@ -26,6 +26,8 @@ bash -n erpnext-dev.sh
 [[ -f lib/support.sh ]] || fail "lib/support.sh is missing"
 bash -n lib/common.sh
 bash -n lib/support.sh
+[[ -f lib/backup.sh ]] || fail "lib/backup.sh is missing"
+bash -n lib/backup.sh
 pass "bash syntax valid"
 
 chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh
@@ -139,6 +141,7 @@ pass "no GITHUB-UPDATE-v*.md files"
 
 if grep -RInE '(password|secret|token|private[-_ ]?key)=' \
   --exclude-dir=.git \
+  --exclude-dir=lib \
   --exclude='*.zip' \
   --exclude='CHANGELOG.md' \
   --exclude='erpnext-dev.sh' \

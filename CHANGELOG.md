@@ -1,3 +1,22 @@
+## v1.1.77 - Extract lib/backup.sh for backup and restore workflows
+
+### Added
+
+- Added `lib/backup.sh` with local backup, scheduled backup, retention, off-VM backup, restore, and rehearsal helpers.
+
+### Changed
+
+- Updated the toolkit version to v1.1.77.
+- `erpnext-dev.sh` now sources `lib/backup.sh` after `lib/support.sh`.
+- `update-toolkit` now downloads `common.sh`, `support.sh`, and `backup.sh` into `/opt/erpnext-dev/lib/`.
+- Expanded `SHA256SUMS`, `RELEASE-MANIFEST.txt`, and shellcheck targets for `lib/backup.sh`.
+
+### Validation scope
+
+- `bash -n` passes for `erpnext-dev.sh`, `lib/common.sh`, `lib/support.sh`, and `lib/backup.sh`.
+- `erpnext-dev version` prints v1.1.77.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.1.76 - Extract lib/support.sh for diagnostics and support bundles
 
 ### Added

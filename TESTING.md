@@ -1,3 +1,24 @@
+## v1.1.77 lib/backup.sh extraction
+
+Purpose: move local backup, off-VM backup, restore, and rehearsal helpers into `lib/backup.sh`.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+bash -n lib/common.sh
+bash -n lib/support.sh
+bash -n lib/backup.sh
+./erpnext-dev.sh version
+scripts/validate-release.sh
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.77`.
+- `lib/backup.sh` exists and is sourced by `erpnext-dev.sh`.
+- Backup-related commands remain available in help output.
+
 ## v1.1.76 lib/support.sh extraction
 
 Purpose: move doctor, support-bundle, support-bundle audit, and command-audit helpers into `lib/support.sh`.

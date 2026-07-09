@@ -12,6 +12,7 @@ fi
 targets=(
   lib/common.sh
   lib/support.sh
+  lib/backup.sh
   scripts/validate-release.sh
   scripts/generate-release-checksums.sh
   scripts/run-shellcheck.sh

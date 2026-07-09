@@ -8,7 +8,7 @@ v1.1.74 adds [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md), [`RELEASE-MANIFES
 
 ## Modularization and shellcheck
 
-v1.1.75 begins careful modularization by extracting shared helpers into [`lib/common.sh`](lib/common.sh). v1.1.76 extracts support and diagnostics into [`lib/support.sh`](lib/support.sh). GitHub Actions CI runs `scripts/run-shellcheck.sh` before `scripts/validate-release.sh`.
+v1.1.75 begins careful modularization by extracting shared helpers into [`lib/common.sh`](lib/common.sh). v1.1.76 extracts support and diagnostics into [`lib/support.sh`](lib/support.sh). v1.1.77 extracts backup and restore workflows into [`lib/backup.sh`](lib/backup.sh). GitHub Actions CI runs `scripts/run-shellcheck.sh` before `scripts/validate-release.sh`.
 
 ```bash
 scripts/validate-release.sh
@@ -84,7 +84,7 @@ The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that releas
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -113,7 +113,7 @@ For local VMs, the installer prints the correct host `/etc/hosts` command using 
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -143,7 +143,7 @@ Run the printed `/etc/hosts` command on the **host machine**, not inside the VM.
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -177,7 +177,7 @@ sudo erpnext-dev generate-off-vm-backup-key
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -304,7 +304,7 @@ See [`PRODUCTION-VALIDATION.md`](PRODUCTION-VALIDATION.md) for the full VPS vali
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -319,7 +319,7 @@ If the VM is clearly unsafe for ERPNext, the installer blocks the install and pr
 ### Update or repair the `erpnext-dev` command
 
 ```bash
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -530,7 +530,7 @@ Run this inside a fresh local Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -652,7 +652,7 @@ Run this inside a fresh public Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -784,7 +784,7 @@ sudo erpnext-dev production-ops-wizard
 To update or repair the toolkit command from a verified release tag:
 
 ```bash
-VERSION="v1.1.76"
+VERSION="v1.1.77"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS

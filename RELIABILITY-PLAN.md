@@ -1,3 +1,9 @@
+## v1.1.77 reliability update
+
+v1.1.77 extracts backup and restore helpers into `lib/backup.sh`, continuing modularization with unchanged command names and runtime behavior.
+
+Next reliability milestone: extract SSL and firewall helpers into dedicated lib modules.
+
 ## v1.1.76 reliability update
 
 v1.1.76 extracts support and diagnostics helpers into `lib/support.sh`, reducing monolith size for doctor, support-bundle, and audit workflows.
