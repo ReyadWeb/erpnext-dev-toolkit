@@ -1,3 +1,22 @@
+# v1.1.81 roadmap update - lib/storage.sh extraction
+
+Status: **implemented as the seventh careful modularization patch**.
+
+v1.1.81 extracts root storage detection, status, and expansion helpers into `lib/storage.sh`.
+
+Completed in v1.1.81:
+
+- Added `lib/storage.sh` and wired `erpnext-dev.sh` to source it.
+- Expanded `update-toolkit` to download the full toolkit lib module set.
+- Expanded checksum, manifest, shellcheck, and validation coverage.
+
+Next active milestones:
+
+1. **v1.1.82+ — extract install/setup helpers**.
+2. Later: optional GPG-signed release artifacts.
+
+---
+
 # v1.1.80 roadmap update - lib/health.sh extraction
 
 Status: **implemented as the sixth careful modularization patch**.

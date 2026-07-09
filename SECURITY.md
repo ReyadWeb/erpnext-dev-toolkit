@@ -1,3 +1,7 @@
+## v1.1.81 storage module extraction
+
+v1.1.81 extracts root storage detection, status, and expansion helpers into `lib/storage.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
+
 ## v1.1.80 health module extraction
 
 v1.1.80 extracts health checks, timers, go-live validation, and production readiness helpers into `lib/health.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
@@ -140,10 +144,10 @@ lib/ssl.sh                 local and production SSL
 lib/firewall.sh            UFW, Fail2Ban, rollback helpers
 lib/apps.sh                curated app install library
 lib/health.sh              health check and timers
+lib/storage.sh             root storage detection and expansion
 lib/backup.sh              local backup and retention
 lib/offvm-backup.sh        off-VM backup setup and rsync
 lib/restore.sh             restore preflight and rehearsal
-lib/health.sh              health check and timers
 lib/support.sh             support bundle and diagnostics
 ```
 

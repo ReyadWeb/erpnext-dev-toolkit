@@ -1,3 +1,26 @@
+# v1.1.81 production validation notes
+
+v1.1.81 extracts root storage detection and expansion helpers into `lib/storage.sh`.
+
+Production validation should confirm:
+
+```bash
+VERSION="v1.1.81"
+sudo erpnext-dev version
+sudo erpnext-dev verify-toolkit
+scripts/validate-release.sh
+sudo erpnext-dev storage-status
+sudo erpnext-dev final-qa
+```
+
+Expected:
+
+- Version prints `ERPNext Developer Toolkit v1.1.81`.
+- `/opt/erpnext-dev/lib/storage.sh` exists after install/update reuse.
+- Storage status commands still run.
+
+---
+
 # v1.1.80 production validation notes
 
 v1.1.80 extracts health monitoring and go-live readiness helpers into `lib/health.sh`.

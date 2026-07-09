@@ -1,3 +1,23 @@
+## v1.1.81 - Extract lib/storage.sh for root storage detection and expansion
+
+### Added
+
+- Added `lib/storage.sh` with root storage detection, status reporting, expansion, and preflight offer helpers.
+
+### Changed
+
+- Updated the toolkit version to v1.1.81.
+- Fixed a shellcheck issue in `lib/health.sh` where nginx health gating used `! is_public_vm_workflow` inside `[[ ]]`.
+- `erpnext-dev.sh` now sources `lib/storage.sh` after `lib/health.sh`.
+- `update-toolkit` now downloads `storage.sh` into `/opt/erpnext-dev/lib/`.
+- Expanded `SHA256SUMS`, `RELEASE-MANIFEST.txt`, and shellcheck targets for `lib/storage.sh`.
+
+### Validation scope
+
+- `bash -n` passes for `erpnext-dev.sh` and all `lib/*.sh` modules.
+- `erpnext-dev version` prints v1.1.81.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.1.80 - Extract lib/health.sh for health monitoring and go-live readiness
 
 ### Added

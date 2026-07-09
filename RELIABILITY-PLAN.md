@@ -1,3 +1,9 @@
+## v1.1.81 reliability update
+
+v1.1.81 extracts root storage detection and expansion helpers into `lib/storage.sh`, continuing modularization with unchanged command names and runtime behavior.
+
+Next reliability milestone: extract install/setup helpers into dedicated lib modules.
+
 ## v1.1.80 reliability update
 
 v1.1.80 extracts health monitoring and go-live readiness helpers into `lib/health.sh`, continuing modularization with unchanged command names and runtime behavior.

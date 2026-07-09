@@ -1,3 +1,22 @@
+## v1.1.81 lib/storage.sh extraction
+
+Purpose: move root storage detection, status, and expansion helpers into `lib/storage.sh`.
+
+Package checks:
+
+```bash
+bash -n lib/storage.sh
+./erpnext-dev.sh version
+scripts/validate-release.sh
+sudo erpnext-dev storage-status
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.81`.
+- `lib/storage.sh` exists and is sourced by `erpnext-dev.sh`.
+- Storage commands remain available in help output.
+
 ## v1.1.80 lib/health.sh extraction
 
 Purpose: move health checks, timers, go-live validation, and production readiness helpers into `lib/health.sh`.

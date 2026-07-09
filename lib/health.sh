@@ -162,7 +162,7 @@ run_health_check() {
   status_line "Nginx" "${nginx_pair%%|*}" "${nginx_pair#*|}"
   status_line "MariaDB" "${mariadb_pair%%|*}" "${mariadb_pair#*|}"
   status_line "Redis" "${redis_pair%%|*}" "${redis_pair#*|}"
-  [[ "${nginx_pair%%|*}" == "OK" || ! is_public_vm_workflow ]] || overall="WARN"
+  [[ "${nginx_pair%%|*}" == "OK" ]] || ! is_public_vm_workflow || overall="WARN"
   [[ "${mariadb_pair%%|*}" == "OK" ]] || overall="WARN"
   [[ "${redis_pair%%|*}" == "OK" ]] || overall="WARN"
 
