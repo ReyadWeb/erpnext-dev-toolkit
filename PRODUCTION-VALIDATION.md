@@ -1,3 +1,24 @@
+## v1.1.72 validation note - minimal CI and release validation
+
+v1.1.72 is a release-engineering patch. It adds `.github/workflows/ci.yml` and `scripts/validate-release.sh`, and updates the `verify-toolkit` update example to use the stable installed path.
+
+Production runtime behavior is unchanged from the already validated path:
+
+- ERPNext install/runtime logic unchanged.
+- HTTPS/Cloudflare Origin CA logic unchanged.
+- UFW and Fail2Ban logic unchanged.
+- Local backup, off-VM backup, restore rehearsal, health monitoring, go-live validation, and dashboard behavior unchanged.
+
+Recommended production validation after installing v1.1.72:
+
+```bash
+sudo erpnext-dev version
+sudo erpnext-dev verify-toolkit
+sudo erpnext-dev final-qa
+```
+
+Inside Final QA, choose option `1` and confirm `Script version INFO 1.1.72` and `Release state OK ready for production use`.
+
 # v1.1.71 verify-toolkit command
 
 v1.1.71 is a release-trust hardening patch. It adds a read-only `verify-toolkit` command that reports installed toolkit paths, SHA256 values, and checksum match status when `SHA256SUMS` is available.

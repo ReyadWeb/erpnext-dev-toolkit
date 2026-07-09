@@ -1,3 +1,32 @@
+## v1.1.72 - Minimal GitHub Actions CI and release validation script
+
+### Added
+
+- Added `.github/workflows/ci.yml` for minimal release validation on pushes, pull requests, and version tags.
+- Added `scripts/validate-release.sh` for local and CI release checks.
+- Added checks for Bash syntax, version output, `SHA256SUMS`, required help commands, `verify-toolkit` active checksum matching, absence of `GITHUB-UPDATE-v*.md` files, and a basic secret-pattern scan.
+
+### Changed
+
+- Updated the toolkit version to v1.1.72.
+- Updated the `verify-toolkit` verified update example to install through the stable `/opt/erpnext-dev` path and symlink `/usr/local/bin/erpnext-dev`.
+- Updated README, SECURITY.md, RELIABILITY-PLAN.md, TESTING.md, ROADMAP.md, and PRODUCTION-VALIDATION.md for the new release validation workflow.
+- Updated `SHA256SUMS` for the v1.1.72 `erpnext-dev.sh` artifact.
+
+### Reliability impact
+
+- Releases now have a repeatable validation entrypoint that can run locally and in GitHub Actions.
+- This starts closing the manual-validation gap identified in the project review while keeping the checks conservative and low-risk.
+
+### Validation scope
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` prints v1.1.72.
+- `sha256sum -c SHA256SUMS` passes.
+- `scripts/validate-release.sh` passes locally.
+- GitHub Actions workflow file is included.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
 # Changelog
 
 ## v1.1.71 - Verify installed toolkit integrity

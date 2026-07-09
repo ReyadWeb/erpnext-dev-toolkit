@@ -182,3 +182,13 @@ The release-hardening track should be considered complete when:
 - every pull request or tag runs automated syntax and smoke tests;
 - packages are automatically checked for unwanted files and obvious secret leaks;
 - manual field QA remains documented for production-impacting behavior.
+
+## v1.1.72 implementation note
+
+The first automated validation layer is now present:
+
+```bash
+scripts/validate-release.sh
+```
+
+GitHub Actions runs the same script from `.github/workflows/ci.yml`. The checks are intentionally conservative: syntax, version, checksum, help smoke checks, `verify-toolkit`, package hygiene, and basic secret-pattern scanning. Full VM install tests remain a later milestone.

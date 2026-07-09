@@ -1,3 +1,27 @@
+# v1.1.72 roadmap update - minimal CI and validate-release script
+
+Status: **implemented as the third release-trust hardening patch after v1.1.70 and v1.1.71**.
+
+v1.1.72 adds `.github/workflows/ci.yml` and `scripts/validate-release.sh` so release checks can run consistently before tags are published.
+
+Completed in v1.1.72:
+
+- Added GitHub Actions workflow for push, pull request, and version-tag validation.
+- Added `scripts/validate-release.sh`.
+- Added syntax, version, checksum, help, `verify-toolkit`, package hygiene, and basic secret-pattern checks.
+- Updated `verify-toolkit` guidance to use the stable `/opt/erpnext-dev` install path.
+- Updated README, SECURITY.md, RELIABILITY-PLAN.md, TESTING.md, CHANGELOG.md, and PRODUCTION-VALIDATION.md.
+
+Next active milestones:
+
+1. **v1.1.73 — support-bundle audit test and package validation expansion**.
+2. **v1.1.74+ — begin careful modularization planning with CI as a safety net**.
+3. Later: optional GPG-signed release artifacts.
+
+Important limitation:
+
+- The v1.1.72 CI is intentionally minimal. It does not run a full ERPNext install in CI. It catches release/package regressions before heavier VM-level tests are added.
+
 # v1.1.71 roadmap update - verify-toolkit command
 
 Status: **implemented as the second release-trust hardening patch after v1.1.70**.

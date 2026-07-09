@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.71"
+SCRIPT_VERSION="1.1.72"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -572,12 +572,17 @@ verify_toolkit_integrity() {
   fi
 
   echo
-  echo "Verified update example:"
+  echo "Verified stable-path update example:"
   echo "  VERSION=\"v${SCRIPT_VERSION}\""
-  echo "  curl -fsSLO \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/\${VERSION}/erpnext-dev.sh\""
-  echo "  curl -fsSLO \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/\${VERSION}/SHA256SUMS\""
+  echo '  workdir="$(mktemp -d /tmp/erpnext-dev-update.XXXXXX)"; cd "$workdir" || exit 1'
+  echo '  curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"'
+  echo '  curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"'
   echo "  sha256sum -c SHA256SUMS"
-  echo "  sudo install -m 0755 erpnext-dev.sh /usr/local/bin/erpnext-dev"
+  echo "  sudo mkdir -p /opt/erpnext-dev"
+  echo "  sudo install -m 0755 erpnext-dev.sh /opt/erpnext-dev/erpnext-dev.sh"
+  echo "  sudo install -m 0644 SHA256SUMS /opt/erpnext-dev/SHA256SUMS"
+  echo "  sudo ln -sf /opt/erpnext-dev/erpnext-dev.sh /usr/local/bin/erpnext-dev"
+  echo "  sudo erpnext-dev verify-toolkit"
   ui_box_end
   return "$match_state"
 }

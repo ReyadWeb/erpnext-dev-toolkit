@@ -1,3 +1,35 @@
+## v1.1.72 minimal CI and release validation script
+
+Purpose: add a repeatable release validation entrypoint and a minimal GitHub Actions workflow before larger structural changes.
+
+Local validation:
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+sha256sum -c SHA256SUMS
+scripts/validate-release.sh
+
+grep -n "v1.1.72" CHANGELOG.md TESTING.md ROADMAP.md PRODUCTION-VALIDATION.md
+grep -n "validate-release.sh" README.md SECURITY.md RELIABILITY-PLAN.md TESTING.md CHANGELOG.md
+grep -n "Release validation" .github/workflows/ci.yml
+
+unzip -l erpnext-dev-installer-v1.1.72.zip | grep "GITHUB-UPDATE" && echo "BAD" || echo "OK"
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.72`.
+- `sha256sum -c SHA256SUMS` reports `erpnext-dev.sh: OK`.
+- `scripts/validate-release.sh` reports release validation complete.
+- `.github/workflows/ci.yml` exists and runs `scripts/validate-release.sh`.
+- Package contains no `GITHUB-UPDATE-v*.md` files.
+
+Production validation scope:
+
+- This patch does not change ERPNext install, backup, restore, SSL, firewall, health-monitoring, go-live, or dashboard behavior.
+- Production validation can be limited to the verified tag-pinned update, `verify-toolkit`, and Final QA option 1.
+
 ## v1.1.71 verify-toolkit command
 
 Purpose: add installed-file integrity reporting after the v1.1.70 tag-pinned checksum workflow. This patch adds a read-only `verify-toolkit` command and exposes it from the Production Operations > Support and Diagnostics menu.
