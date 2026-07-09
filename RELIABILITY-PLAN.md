@@ -1,3 +1,9 @@
+## v1.1.74 reliability update
+
+v1.1.74 adds `RELEASE-MANIFEST.txt`, `scripts/generate-release-checksums.sh`, expanded `SHA256SUMS` coverage, version-consistency checks, and menu smoke tests in `scripts/validate-release.sh`. See also [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md) for the structured quality evaluation and improvement plan.
+
+Next reliability milestone: begin careful modularization with shellcheck in CI.
+
 ## v1.1.73 reliability update
 
 v1.1.73 expands release validation with support-bundle audit fixture coverage. `scripts/validate-release.sh` now verifies that a clean support-bundle archive passes the toolkit audit command, which improves regression coverage for support/evidence bundle safety.

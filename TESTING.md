@@ -1,3 +1,33 @@
+## v1.1.74 release manifest, expanded checksums, and quality assessment
+
+Purpose: add release manifest validation, expanded checksum coverage, version consistency checks, menu smoke tests, and a tracked quality assessment document.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+sha256sum -c SHA256SUMS
+scripts/validate-release.sh
+scripts/generate-release-checksums.sh
+./erpnext-dev.sh menu-self-test
+
+grep -n "v1.1.74" CHANGELOG.md TESTING.md ROADMAP.md PRODUCTION-VALIDATION.md QUALITY-ASSESSMENT.md
+grep -n "RELEASE-MANIFEST" README.md RELIABILITY-PLAN.md SECURITY.md
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.74`.
+- `sha256sum -c SHA256SUMS` reports OK for `erpnext-dev.sh`, `scripts/validate-release.sh`, and `RELEASE-MANIFEST.txt`.
+- `scripts/validate-release.sh` reports manifest, version, menu, and support-bundle audit checks passed.
+- `QUALITY-ASSESSMENT.md` and `RELEASE-MANIFEST.txt` exist.
+
+Production validation scope:
+
+- This patch does not change ERPNext install, backup, restore, SSL, firewall, health-monitoring, go-live, or dashboard behavior.
+- Production validation should include verified tag-pinned update, `verify-toolkit`, Final QA option 1, and `scripts/validate-release.sh` passing on the release tree.
+
 ## v1.1.73 support-bundle audit and package validation expansion
 
 Purpose: add a best-effort support-bundle audit command and expand the repeatable release validation script.

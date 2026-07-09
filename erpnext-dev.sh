@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.73"
+SCRIPT_VERSION="1.1.74"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -15904,7 +15904,19 @@ menu_navigation_self_test() {
   # It does not choose install, SSL, firewall, backup, app, or destructive actions.
   local script rc out failures=0 tested=0
   local action input
+  local invoke=(bash)
   script="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+      invoke=(sudo -E bash)
+    else
+      ui_box_start "Menu Navigation Self-Test"
+      status_line "Menu navigation" "FAIL" "menu-self-test requires root or sudo"
+      ui_box_end
+      return 1
+    fi
+  fi
 
   ui_box_start "Menu Navigation Self-Test"
   echo "Testing q/Q and b/B handling for non-destructive menu entry points."
@@ -15935,7 +15947,7 @@ menu_navigation_self_test() {
   for action in "${quit_actions[@]}"; do
     for input in q Q; do
       tested=$((tested + 1))
-      out="$(printf '%s\n' "$input" | timeout 5 bash "$script" "$action" 2>&1)"
+      out="$(printf '%s\n' "$input" | timeout 5 "${invoke[@]}" "$script" "$action" 2>&1)"
       rc=$?
       if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
         failures=$((failures + 1))
@@ -15967,7 +15979,7 @@ menu_navigation_self_test() {
   for action in "${back_actions[@]}"; do
     for input in b B; do
       tested=$((tested + 1))
-      out="$(printf '%s\nq\n' "$input" | timeout 5 bash "$script" "$action" 2>&1)"
+      out="$(printf '%s\nq\n' "$input" | timeout 5 "${invoke[@]}" "$script" "$action" 2>&1)"
       rc=$?
       if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
         failures=$((failures + 1))
@@ -15994,7 +16006,7 @@ menu_navigation_self_test() {
   for row in "${nested_tests[@]}"; do
     IFS='|' read -r root select quit <<< "$row"
     tested=$((tested + 1))
-    out="$(printf '%s\n%s\n' "$select" "$quit" | timeout 5 bash "$script" "$root" 2>&1)"
+    out="$(printf '%s\n%s\n' "$select" "$quit" | timeout 5 "${invoke[@]}" "$script" "$root" 2>&1)"
     rc=$?
     if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'command not found|unbound variable|syntax error'; then
       failures=$((failures + 1))

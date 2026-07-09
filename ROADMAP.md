@@ -1,3 +1,26 @@
+# v1.1.74 roadmap update - release manifest, expanded checksums, and quality assessment
+
+Status: **implemented as the fifth release-trust hardening patch after v1.1.70 through v1.1.73**.
+
+v1.1.74 adds structured quality assessment documentation, a release manifest, expanded checksum coverage, and stronger automated release validation.
+
+Completed in v1.1.74:
+
+- Added `QUALITY-ASSESSMENT.md` with reliability, security, and ease-of-use evaluation.
+- Added `RELEASE-MANIFEST.txt` and manifest validation in `scripts/validate-release.sh`.
+- Added `scripts/generate-release-checksums.sh`.
+- Expanded `SHA256SUMS` to cover `erpnext-dev.sh`, `scripts/validate-release.sh`, and `RELEASE-MANIFEST.txt`.
+- Added version-consistency checks across `SCRIPT_VERSION`, README, CHANGELOG, and manifest header.
+- Added `menu-self-test` and `production-ops-wizard` quit smoke tests to release validation.
+
+Next active milestones:
+
+1. **v1.1.75 — begin careful modularization planning with shellcheck in CI**.
+2. Later: optional GPG-signed release artifacts.
+3. Later: disposable VM integration testing.
+
+---
+
 # v1.1.73 roadmap update - support-bundle audit and package validation expansion
 
 Status: **implemented as the fourth release-trust hardening patch after v1.1.70, v1.1.71, and v1.1.72**.

@@ -1,6 +1,6 @@
-## v1.1.73 support-bundle audit
+## v1.1.74 release manifest and expanded checksums
 
-v1.1.73 adds `support-bundle-audit`, a best-effort command that audits the latest support bundle, or the archive named in `SUPPORT_BUNDLE_AUDIT_ARCHIVE`, for forbidden filenames and obvious unredacted secret patterns. This reduces accidental sharing risk for diagnostic bundles. It does not prove that every custom secret format has been removed, so manual review remains required before external sharing.
+v1.1.74 adds `RELEASE-MANIFEST.txt`, `scripts/generate-release-checksums.sh`, and expanded `SHA256SUMS` coverage for `erpnext-dev.sh`, `scripts/validate-release.sh`, and the manifest itself. `scripts/validate-release.sh` now also checks version consistency and runs `menu-self-test`. See [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md) for the full quality evaluation.
 
 # Security Policy and Threat Model
 

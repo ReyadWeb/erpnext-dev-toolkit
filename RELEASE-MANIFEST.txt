@@ -1,0 +1,22 @@
+# ERPNext Developer Toolkit Release Manifest v1.1.74
+# One repository-relative path per line. Blank lines and # comments are ignored.
+# validate-release.sh verifies every listed path exists before a tag is published.
+
+erpnext-dev.sh
+SHA256SUMS
+RELEASE-MANIFEST.txt
+LICENSE
+README.md
+CHANGELOG.md
+SECURITY.md
+RELIABILITY-PLAN.md
+QUALITY-ASSESSMENT.md
+TESTING.md
+ROADMAP.md
+PRODUCTION-VALIDATION.md
+scripts/validate-release.sh
+scripts/generate-release-checksums.sh
+.github/workflows/ci.yml
+docs/assets/erp_installer_readme_banner.png
+docs/assets/production_backup_architecture_diagram.png
+docs/assets/local_testing_vm_architecture_diagram.png

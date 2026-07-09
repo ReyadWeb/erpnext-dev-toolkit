@@ -1,3 +1,33 @@
+## v1.1.74 - Release manifest, expanded checksums, and quality assessment
+
+### Added
+
+- Added [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md) with reliability, security, and ease-of-use evaluation plus an improvement plan.
+- Added [`RELEASE-MANIFEST.txt`](RELEASE-MANIFEST.txt) listing expected files per release.
+- Added `scripts/generate-release-checksums.sh` to regenerate `SHA256SUMS` for release artifacts.
+- Expanded `scripts/validate-release.sh` with manifest checks, version consistency checks, `menu-self-test`, and a `production-ops-wizard` quit smoke test.
+
+### Changed
+
+- Updated the toolkit version to v1.1.74.
+- Expanded `SHA256SUMS` to cover `erpnext-dev.sh`, `scripts/validate-release.sh`, and `RELEASE-MANIFEST.txt`.
+- Improved `menu-self-test` so nested menu checks use `sudo` automatically when not already running as root.
+- Updated README, SECURITY.md, RELIABILITY-PLAN.md, TESTING.md, ROADMAP.md, and PRODUCTION-VALIDATION.md for the v1.1.74 release-engineering work.
+
+### Security and reliability impact
+
+- Release packages now have an explicit manifest and broader checksum coverage for validation tooling.
+- CI/local validation now catches version drift between `SCRIPT_VERSION`, README bootstrap pins, CHANGELOG, and the manifest header.
+- Menu navigation regressions are caught earlier through automated `menu-self-test` coverage.
+
+### Validation scope
+
+- `bash -n erpnext-dev.sh` passes.
+- `erpnext-dev version` prints v1.1.74.
+- `sha256sum -c SHA256SUMS` passes for all listed artifacts.
+- `scripts/validate-release.sh` passes locally, including manifest, version, menu, and support-bundle audit checks.
+- Package contains no `GITHUB-UPDATE-v*.md` file.
+
 ## v1.1.73 - Support bundle audit and release validation expansion
 
 ### Added
