@@ -1,3 +1,7 @@
+## v1.1.84 install Tier B extension
+
+v1.1.84 extends `lib/install.sh` with post-install checkpoint and summary helpers.
+
 ## v1.1.83 install module extraction (Tier A)
 
 v1.1.83 extracts install preflight, system package setup, Frappe stack bootstrap, and install/repair/uninstall commands into `lib/install.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.

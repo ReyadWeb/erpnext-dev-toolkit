@@ -1,3 +1,15 @@
+# v1.1.84 production validation notes
+
+v1.1.84 extends `lib/install.sh` with post-install checkpoint and summary helpers.
+
+```bash
+VERSION="v1.1.84"
+sudo erpnext-dev version
+scripts/validate-release.sh
+```
+
+---
+
 # v1.1.83 production validation notes
 
 v1.1.83 extracts the core install engine into `lib/install.sh`.

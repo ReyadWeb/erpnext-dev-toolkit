@@ -1,3 +1,16 @@
+## v1.1.84 - lib/install.sh Tier B post-install summaries
+
+### Changed
+
+- Extended `lib/install.sh` with `post_core_install_checkpoint`, `post_install_validation_summary`, and `print_summary`.
+- Updated the toolkit version to v1.1.84.
+
+### Validation scope
+
+- `bash -n` passes for `erpnext-dev.sh` and `lib/install.sh`.
+- `erpnext-dev version` prints v1.1.84.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.1.83 - Extract lib/install.sh Tier A for core install engine
 
 ### Added

@@ -1,3 +1,15 @@
+# v1.1.84 roadmap update - lib/install.sh Tier B post-install summaries
+
+Status: **implemented as the tenth careful modularization patch**.
+
+v1.1.84 extends `lib/install.sh` with post-install checkpoint and summary helpers.
+
+Next active milestone:
+
+1. **v1.1.85 — install Tier C** (guided setup and quickstart workflows).
+
+---
+
 # v1.1.83 roadmap update - lib/install.sh Tier A extraction
 
 Status: **implemented as the ninth careful modularization patch**.

@@ -1,3 +1,9 @@
+## v1.1.84 reliability update
+
+v1.1.84 extends `lib/install.sh` with post-install summaries, continuing modularization with unchanged behavior.
+
+Next reliability milestone: install Tier C (guided setup and quickstart workflows).
+
 ## v1.1.83 reliability update
 
 v1.1.83 extracts the core install engine into `lib/install.sh`, continuing modularization with unchanged command names and runtime behavior.

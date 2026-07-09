@@ -1,3 +1,14 @@
+## v1.1.84 lib/install.sh Tier B extraction
+
+Purpose: extend `lib/install.sh` with post-install checkpoint and summary helpers.
+
+```bash
+bash -n lib/install.sh
+scripts/validate-release.sh
+```
+
+Expected: version prints v1.1.84; `print_summary` and checkpoint behavior unchanged after install.
+
 ## v1.1.83 lib/install.sh Tier A extraction
 
 Purpose: move install preflight, package setup, Frappe stack bootstrap, and install/repair/uninstall into `lib/install.sh`.

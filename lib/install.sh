@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Install preflight, system packages, Frappe stack bootstrap, repair, and uninstall.
+# Install preflight, system packages, Frappe stack bootstrap, repair, uninstall, and post-install summaries.
 [[ -n "${_ERPNEXT_DEV_INSTALL_LOADED:-}" ]] && return 0
 _ERPNEXT_DEV_INSTALL_LOADED=1
 
@@ -703,4 +703,123 @@ run_uninstall_menu() {
     q|Q) exit 0 ;;
     *) warn "Invalid option" ;;
   esac
+}
+
+post_core_install_checkpoint() {
+  local reply
+  echo
+  echo "Core install checkpoint recommended."
+  echo "Create a database + files backup now, and take a VM/provider snapshot if this VM is important."
+
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    create_site_backup true || warn "Core install backup failed. Create a manual checkpoint before HTTPS/hardening/apps."
+    return 0
+  fi
+
+  if [[ -t 0 ]]; then
+    read -r -p "Create database + files backup now? [Y/n]: " reply
+    reply="${reply:-Y}"
+    if [[ "$reply" =~ ^[Yy]$ ]]; then
+      create_site_backup true || warn "Core install backup failed. Create a manual checkpoint before HTTPS/hardening/apps."
+    else
+      warn "Core install backup skipped. Take a VM snapshot or backup before HTTPS, hardening, or app installs."
+    fi
+  fi
+}
+
+post_install_validation_summary() {
+  local free_gb service_status autostart_status
+  free_gb="$(df -BG / | awk 'NR==2 {gsub("G", "", $4); print $4}' 2>/dev/null || echo 0)"
+  service_status="$(service_state 2>/dev/null || echo unknown)"
+  autostart_status="$(autostart_state 2>/dev/null || echo unknown)"
+
+  echo
+  echo "============================================================"
+  echo "Post-Install Validation"
+  echo "============================================================"
+
+  if [[ "$free_gb" =~ ^[0-9]+$ && "$free_gb" -ge 30 ]]; then
+    status_line "Root free space" "OK" "${free_gb}G available"
+  else
+    status_line "Root free space" "WARN" "${free_gb}G available; 60G+ recommended"
+  fi
+
+  if [[ "$service_status" == "Running" ]]; then
+    status_line "ERPNext service" "OK" "$service_status"
+  else
+    status_line "ERPNext service" "INFO" "$service_status"
+  fi
+
+  if [[ "$autostart_status" == "Enabled" ]]; then
+    status_line "Autostart" "OK" "$autostart_status"
+  else
+    status_line "Autostart" "WARN" "$autostart_status"
+  fi
+
+  if path_is_file "${FRAPPE_HOME}/erpnext-dev-credentials.txt"; then
+    status_line "Credentials file" "OK" "${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  else
+    status_line "Credentials file" "WARN" "missing at ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  fi
+
+  echo "============================================================"
+}
+
+print_summary() {
+  local vm_ip bench_dir
+  vm_ip="$(get_vm_ip)"
+  bench_dir="$(active_bench_dir)"
+
+  echo
+  echo "============================================================"
+  echo "ERPNext Developer Environment Installed"
+  echo "============================================================"
+  echo
+  echo "Site: ${SITE_NAME}"
+  echo "Bench: ${bench_dir}"
+  echo
+  echo "Login:"
+  echo "  Username: Administrator"
+  echo "  Password: saved in the credentials file"
+  echo "  Credentials help: $(toolkit_cmd credentials-info)"
+  echo "  Show password: $(toolkit_cmd credentials-show)"
+  echo
+  echo "Start ERPNext:"
+  echo "  $(toolkit_cmd start)"
+  echo
+  echo "Manual start command:"
+  echo "  sudo -iu ${FRAPPE_USER}"
+  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo "  cd ${bench_dir}"
+  echo "  bench start"
+  echo
+  echo "Browser access:"
+  echo "  Direct IP:    http://${vm_ip}:8000"
+  echo "  Friendly URL: http://${SITE_NAME}:8000"
+  echo
+  if ! is_public_vm_workflow; then
+    echo "Required host mapping checkpoint before local HTTPS:"
+    echo "  $(toolkit_cmd local-host-checkpoint)"
+    echo "Recommended next local step after HTTP works:"
+    echo "  $(toolkit_cmd local-ssl-wizard)"
+    echo "More local SSL options:"
+    echo "  $(toolkit_cmd local-ssl-menu)"
+    echo "Keep the local VM IP stable, especially on KVM/libvirt:"
+    echo "  $(toolkit_cmd local-fixed-ip-guide)"
+    echo
+  fi
+  echo "Run this on the HOST for the friendly URL."
+  echo "Safe to repeat after VM recreation or DHCP IP changes:"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
+  echo
+  echo "Verify access after setup:"
+  echo "  $(toolkit_cmd verify-access)"
+  echo
+  echo "Credentials file:"
+  echo "  ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  echo
+  echo "Install log:"
+  echo "  ${LOG_FILE}"
+  echo
+  echo "============================================================"
 }
