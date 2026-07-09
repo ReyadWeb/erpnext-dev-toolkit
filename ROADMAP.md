@@ -1,3 +1,16 @@
+# v1.1.85 roadmap update - lib/install.sh Tier C completes install module
+
+Status: **implemented — install module extraction complete (Tiers A–C)**.
+
+v1.1.85 extends `lib/install.sh` with guided setup, quickstarts, and first-run wizard workflows.
+
+Next active milestones:
+
+1. **v1.1.86+ — extract config/access helpers or thin dispatcher (Phase B5)**.
+2. Later: optional GPG-signed release artifacts.
+
+---
+
 # v1.1.84 roadmap update - lib/install.sh Tier B post-install summaries
 
 Status: **implemented as the tenth careful modularization patch**.

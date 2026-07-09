@@ -1,3 +1,9 @@
+## v1.1.85 reliability update
+
+v1.1.85 completes `lib/install.sh` with guided setup and quickstart workflows. Install modularization (Tiers A–C) is done.
+
+Next reliability milestone: config/access extraction or dispatcher thinning (Phase B5).
+
 ## v1.1.84 reliability update
 
 v1.1.84 extends `lib/install.sh` with post-install summaries, continuing modularization with unchanged behavior.

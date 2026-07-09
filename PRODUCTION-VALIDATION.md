@@ -1,3 +1,16 @@
+# v1.1.85 production validation notes
+
+v1.1.85 completes `lib/install.sh` with guided setup and quickstart workflows.
+
+```bash
+VERSION="v1.1.85"
+sudo erpnext-dev version
+scripts/validate-release.sh
+sudo erpnext-dev first-run
+```
+
+---
+
 # v1.1.84 production validation notes
 
 v1.1.84 extends `lib/install.sh` with post-install checkpoint and summary helpers.

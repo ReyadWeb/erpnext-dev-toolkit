@@ -1,3 +1,12 @@
+## v1.1.85 lib/install.sh Tier C extraction
+
+```bash
+bash -n lib/install.sh
+scripts/validate-release.sh
+sudo erpnext-dev first-run
+sudo erpnext-dev local-dev-quickstart  # on test VM only
+```
+
 ## v1.1.84 lib/install.sh Tier B extraction
 
 Purpose: extend `lib/install.sh` with post-install checkpoint and summary helpers.

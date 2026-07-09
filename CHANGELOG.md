@@ -1,3 +1,17 @@
+## v1.1.85 - lib/install.sh Tier C guided setup and quickstart workflows
+
+### Changed
+
+- Extended `lib/install.sh` with guided setup, local/public quickstarts, public VM guided flow, and first-run wizard.
+- Updated the toolkit version to v1.1.85.
+- `lib/install.sh` is now the complete install module (Tiers A–C).
+
+### Validation scope
+
+- `bash -n` passes for `erpnext-dev.sh` and `lib/install.sh`.
+- `erpnext-dev version` prints v1.1.85.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.1.84 - lib/install.sh Tier B post-install summaries
 
 ### Changed

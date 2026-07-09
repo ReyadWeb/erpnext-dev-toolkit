@@ -1,3 +1,7 @@
+## v1.1.85 install module complete (Tiers A–C)
+
+v1.1.85 completes `lib/install.sh` with guided setup, local/public quickstarts, and first-run wizard workflows.
+
 ## v1.1.84 install Tier B extension
 
 v1.1.84 extends `lib/install.sh` with post-install checkpoint and summary helpers.
