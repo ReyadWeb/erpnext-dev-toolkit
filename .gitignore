@@ -4,3 +4,6 @@ erpnext-dev-credentials.txt
 credentials.txt
 secrets.txt
 .DS_Store
+
+# Local release handoff notes
+GITHUB-UPDATE-v*.md
