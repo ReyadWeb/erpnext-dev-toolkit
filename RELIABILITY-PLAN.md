@@ -1,3 +1,9 @@
+## v1.1.80 reliability update
+
+v1.1.80 extracts health monitoring and go-live readiness helpers into `lib/health.sh`, continuing modularization with unchanged command names and runtime behavior.
+
+Next reliability milestone: extract storage or install/setup helpers into dedicated lib modules.
+
 ## v1.1.79 reliability update
 
 v1.1.79 extracts curated app installation helpers into `lib/apps.sh`, continuing modularization with unchanged command names and runtime behavior.

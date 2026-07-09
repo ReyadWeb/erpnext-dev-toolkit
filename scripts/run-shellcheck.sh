@@ -16,6 +16,7 @@ targets=(
   lib/ssl.sh
   lib/firewall.sh
   lib/apps.sh
+  lib/health.sh
   scripts/validate-release.sh
   scripts/generate-release-checksums.sh
   scripts/run-shellcheck.sh

@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Quality Assessment
 
-**Version assessed:** v1.1.79  
+**Version assessed:** v1.1.80  
 **Assessment date:** July 9, 2026  
 **Scope:** `erpnext-dev.sh` and the release/operations package around it
 

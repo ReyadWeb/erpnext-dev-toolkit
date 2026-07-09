@@ -1,3 +1,22 @@
+## v1.1.80 - Extract lib/health.sh for health monitoring and go-live readiness
+
+### Added
+
+- Added `lib/health.sh` with health checks, timers, go-live validation, production checklist, release readiness, and final QA helpers.
+
+### Changed
+
+- Updated the toolkit version to v1.1.80.
+- `erpnext-dev.sh` now sources `lib/health.sh` after `lib/apps.sh`.
+- `update-toolkit` now downloads `health.sh` into `/opt/erpnext-dev/lib/`.
+- Expanded `SHA256SUMS`, `RELEASE-MANIFEST.txt`, and shellcheck targets for `lib/health.sh`.
+
+### Validation scope
+
+- `bash -n` passes for `erpnext-dev.sh` and all `lib/*.sh` modules.
+- `erpnext-dev version` prints v1.1.80.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.1.79 - Extract lib/apps.sh for curated app installation
 
 ### Added

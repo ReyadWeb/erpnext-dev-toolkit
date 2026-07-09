@@ -1,3 +1,27 @@
+# v1.1.80 production validation notes
+
+v1.1.80 extracts health monitoring and go-live readiness helpers into `lib/health.sh`.
+
+Production validation should confirm:
+
+```bash
+VERSION="v1.1.80"
+sudo erpnext-dev version
+sudo erpnext-dev verify-toolkit
+scripts/validate-release.sh
+sudo erpnext-dev health-check-status
+sudo erpnext-dev go-live-status
+sudo erpnext-dev final-qa
+```
+
+Expected:
+
+- Version prints `ERPNext Developer Toolkit v1.1.80`.
+- `/opt/erpnext-dev/lib/health.sh` exists after install/update reuse.
+- Health and go-live commands still run.
+
+---
+
 # v1.1.79 production validation notes
 
 v1.1.79 extracts curated app installation helpers into `lib/apps.sh`.

@@ -1,3 +1,22 @@
+# v1.1.80 roadmap update - lib/health.sh extraction
+
+Status: **implemented as the sixth careful modularization patch**.
+
+v1.1.80 extracts health monitoring, go-live validation, and production readiness helpers into `lib/health.sh`.
+
+Completed in v1.1.80:
+
+- Added `lib/health.sh` and wired `erpnext-dev.sh` to source it.
+- Expanded `update-toolkit` to download the full toolkit lib module set.
+- Expanded checksum, manifest, shellcheck, and validation coverage.
+
+Next active milestones:
+
+1. **v1.1.81+ — extract storage or install/setup helpers**.
+2. Later: optional GPG-signed release artifacts.
+
+---
+
 # v1.1.79 roadmap update - lib/apps.sh extraction
 
 Status: **implemented as the fifth careful modularization patch**.

@@ -1,3 +1,7 @@
+## v1.1.80 health module extraction
+
+v1.1.80 extracts health checks, timers, go-live validation, and production readiness helpers into `lib/health.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
+
 ## v1.1.79 app library module extraction
 
 v1.1.79 extracts curated Frappe app profiles, install wizards, and compatibility helpers into `lib/apps.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
@@ -135,6 +139,7 @@ lib/install.sh             install and preflight
 lib/ssl.sh                 local and production SSL
 lib/firewall.sh            UFW, Fail2Ban, rollback helpers
 lib/apps.sh                curated app install library
+lib/health.sh              health check and timers
 lib/backup.sh              local backup and retention
 lib/offvm-backup.sh        off-VM backup setup and rsync
 lib/restore.sh             restore preflight and rehearsal

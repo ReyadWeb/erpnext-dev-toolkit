@@ -1,3 +1,23 @@
+## v1.1.80 lib/health.sh extraction
+
+Purpose: move health checks, timers, go-live validation, and production readiness helpers into `lib/health.sh`.
+
+Package checks:
+
+```bash
+bash -n lib/health.sh
+./erpnext-dev.sh version
+scripts/validate-release.sh
+sudo erpnext-dev health-check-status
+sudo erpnext-dev go-live-status
+```
+
+Expected results:
+
+- Version prints `ERPNext Developer Toolkit v1.1.80`.
+- `lib/health.sh` exists and is sourced by `erpnext-dev.sh`.
+- Health and go-live commands remain available in help output.
+
 ## v1.1.79 lib/apps.sh extraction
 
 Purpose: move curated app installation, compatibility checks, and app library menus into `lib/apps.sh`.

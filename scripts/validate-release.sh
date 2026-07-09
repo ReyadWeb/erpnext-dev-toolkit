@@ -34,6 +34,8 @@ bash -n lib/ssl.sh
 bash -n lib/firewall.sh
 [[ -f lib/apps.sh ]] || fail "lib/apps.sh is missing"
 bash -n lib/apps.sh
+[[ -f lib/health.sh ]] || fail "lib/health.sh is missing"
+bash -n lib/health.sh
 pass "bash syntax valid"
 
 chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh
