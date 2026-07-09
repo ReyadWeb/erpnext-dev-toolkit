@@ -10,3 +10,7 @@ GITHUB-UPDATE-v*.md
 
 # Local release handoff notes
 GITHUB-UPDATE-v*.md
+
+# Local cert/key files
+*.crt
+*.key

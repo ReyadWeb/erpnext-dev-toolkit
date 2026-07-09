@@ -1,3 +1,47 @@
+## v1.1.59 off-VM backup validation and onboarding polish
+
+Purpose: validate the real two-server off-VM backup result and the smoother backup-server wizard defaults.
+
+Package checks:
+
+```bash
+bash -n erpnext-dev.sh
+./erpnext-dev.sh version
+./erpnext-dev.sh --help | grep -n "backup-server-setup"
+./erpnext-dev.sh --help | grep -n "generate-off-vm-backup-key"
+./erpnext-dev.sh --help | grep -n "off-vm-backup-guided-setup"
+grep -n "Off-VM copy" erpnext-dev.sh
+grep -n "backup_server_suggested_root" erpnext-dev.sh
+grep -n "Do you already have the ERPNext VM public key ready" erpnext-dev.sh
+printf 'q
+' | ./erpnext-dev.sh off-vm-backup-wizard
+```
+
+Expected:
+
+- Version prints `ERPNext Developer Toolkit v1.1.59`.
+- `backup-status` reports the actual off-VM status instead of always saying off-VM copy is still required.
+- `production-checklist` marks off-VM backup as OK after a successful run and leaves restore rehearsal as the remaining production decision.
+- `backup-server-setup` shows the ERPNext-side key generation command before prompting for backup server values.
+- On a Hetzner backup server with `/mnt/HC_Volume_<id>` mounted, the suggested backup root becomes `/mnt/HC_Volume_<id>/erpnext-backups`.
+- If the site/domain prompt is left blank and the generated public key has the standard `erpnext-offvm-backup-<site>` comment, the backup-server wizard infers the site/domain folder.
+
+Validated real path:
+
+```text
+ERPNext VPS: 65.109.221.4
+Backup VPS: 65.109.220.250
+Backup user: erpbackup
+Backup root: /mnt/HC_Volume_106276869/erpnext-backups
+Site folder: erp.flowmaya.com
+Rsync delete: false
+Dry run: OK
+Real run: OK
+Production checklist: off-VM backup OK
+```
+
+Restore rehearsal on a disposable VM is still required before relying on the backup process for a real client production system.
+
 ## v1.1.58 guided off-VM backup setup validation
 
 Purpose: validate the new two-server off-VM backup onboarding flow before relying on it for production.

@@ -1,3 +1,22 @@
+## v1.1.59 completed off-VM backup validation and onboarding polish
+
+Status: real two-server off-VM backup validation passed.
+
+- Confirmed dedicated SSH-key rsync from ERPNext VPS to a separate backup VPS.
+- Confirmed backup files landed on the attached 200 GB backup volume.
+- Confirmed `off-vm-backup-status` and `production-checklist` report the successful last off-VM run.
+- Improved backup-server onboarding so the wizard tells the user to generate the ERPNext-side public key first.
+- Improved Enter-to-accept defaults for backup root paths by detecting mounted Hetzner volumes.
+- Improved status wording so the toolkit does not imply off-VM backup is still untested after a successful run.
+
+Updated readiness target after validation:
+
+- Local VM/developer workflow: 9.5/10, passed.
+- Production VPS core workflow: 8.9/10, validated with Let’s Encrypt and Cloudflare Origin CA paths.
+- Production backup/resilience workflow: 8.6/10, local backup + off-VM copy validated; restore rehearsal still required.
+
+Active next milestone: rehearse restore from the off-VM backup on a disposable VM, then add optional health timer monitoring if needed.
+
 ## v1.1.58 completed guided off-VM backup setup foundation
 
 Status: implementation package ready for validation.

@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.1.59 - Off-VM backup validation and smoother onboarding
+
+### Changed
+
+- Updated the toolkit version to v1.1.59.
+- Fixed `backup-status` so it no longer says off-VM copy is still required when off-VM backup is configured and the last rsync run succeeded.
+- Updated `production-checklist` wording so completed off-VM backup validation is shown as verified, while restore rehearsal remains the remaining production decision.
+- Improved `backup-server-setup` onboarding with stronger inline guidance before the prompts, including the ERPNext-side key-generation command the user should run first.
+- Improved backup-server defaults so Enter can accept a detected Hetzner mounted volume path such as `/mnt/HC_Volume_.../erpnext-backups` instead of defaulting blindly to `/srv/erpnext-backups`.
+- Allowed the backup-server wizard to infer the site/domain folder from the generated public-key comment when the site prompt is left blank.
+- Updated README, TESTING, ROADMAP, and PRODUCTION-VALIDATION with the validated two-server off-VM backup flow.
+
+### Validated
+
+- Real two-server validation passed using ERPNext VPS `65.109.221.4` and separate backup VPS `65.109.220.250`.
+- Backup target used dedicated user `erpbackup` and a 200 GB Hetzner volume mounted at `/mnt/HC_Volume_106276869`.
+- Public key was installed with `from="65.109.221.4",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty` restrictions.
+- `off-vm-backup-dry-run` completed successfully.
+- `run-off-vm-backup` completed successfully.
+- `off-vm-backup-status` reported last run OK.
+- `production-checklist` reported off-VM backup OK.
+- Backup server contained database, public files, private files, and site config backup files after rsync.
+
 ## v1.1.58 - Guided off-VM backup server setup
 
 ### Changed

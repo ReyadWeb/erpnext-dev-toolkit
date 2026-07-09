@@ -1,3 +1,48 @@
+## v1.1.59 off-VM backup validation record
+
+The two-server off-VM backup flow has now been validated on the real Hetzner production test path.
+
+```text
+ERPNext VPS: 65.109.221.4
+ERPNext domain: erp.flowmaya.com
+Backup VPS: 65.109.220.250
+Backup OS: Ubuntu 26.04 LTS
+Backup volume: /dev/sdb mounted at /mnt/HC_Volume_106276869
+Backup target: erpbackup@65.109.220.250:/mnt/HC_Volume_106276869/erpnext-backups/erp.flowmaya.com/
+Delete mode: false
+```
+
+Validated commands:
+
+```bash
+sudo erpnext-dev generate-off-vm-backup-key
+sudo erpnext-dev off-vm-backup-guided-setup
+sudo erpnext-dev off-vm-backup-dry-run
+sudo erpnext-dev run-off-vm-backup
+sudo erpnext-dev off-vm-backup-status
+sudo erpnext-dev production-checklist
+```
+
+Observed result:
+
+- Backup server user `erpbackup` exists.
+- Backup folder is owned by `erpbackup:erpbackup` on the attached 200 GB volume.
+- Authorized key is restricted to the ERPNext VPS source IP and disables agent forwarding, X11 forwarding, port forwarding, and pseudo-terminal allocation.
+- `off-vm-backup-dry-run` completed successfully.
+- `run-off-vm-backup` copied the latest complete local backup set.
+- Backup server contains database, public files, private files, and site config backup files.
+- `off-vm-backup-status` reports last run OK.
+- `production-checklist` reports off-VM backup OK.
+
+Remaining required production validation:
+
+```text
+Rehearse restore from the off-VM backup on a disposable VM.
+Confirm retention policy after real backup size is known.
+Optionally configure health timer/monitoring.
+Create a named cloud snapshot after final validation.
+```
+
 ## v1.1.58 off-VM backup server setup validation plan
 
 The next production validation target is off-VM backup. The toolkit now supports a two-server flow:

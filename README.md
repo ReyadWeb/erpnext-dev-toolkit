@@ -96,24 +96,40 @@ During the production HTTPS step, the guided setup recommends **Let's Encrypt** 
 
 ### Guided off-VM backup server setup
 
-**v1.1.58 backup note:** the toolkit now supports a two-server off-VM backup setup. Run the ERPNext-side key/setup command on the ERPNext VPS, then run the backup-server command on a separate Linux backup server. The target must be outside the ERPNext VM/account to protect against VM or disk loss.
+**v1.1.59 backup note:** the toolkit supports a two-server off-VM backup setup and now provides safer, lower-input prompts. The backup-server wizard reminds the user to generate the ERPNext-side public key first, suggests a detected Hetzner volume path such as `/mnt/HC_Volume_.../erpnext-backups`, and can infer the site/domain folder from the generated key comment when the site prompt is left blank.
 
-On the ERPNext VPS:
+The target must be outside the ERPNext VM/account to protect against VM or disk loss.
+
+Recommended order:
+
+1. On the ERPNext VPS, generate the dedicated public key and copy the single `ssh-ed25519 ...` public key line:
 
 ```bash
 sudo erpnext-dev generate-off-vm-backup-key
-sudo erpnext-dev off-vm-backup-guided-setup
 ```
 
-On the separate backup server:
+2. On the separate backup server, run the backup-server setup and paste that public key when prompted:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates && tmp="$(mktemp /tmp/erpnext-dev.XXXXXX.sh)" && curl -fsSL "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=$(date +%s)" -o "$tmp" && chmod +x "$tmp" && sudo "$tmp" backup-server-setup
 ```
 
-The backup-server setup creates/uses a backup user, prepares `/srv/erpnext-backups/<site>/`, optionally installs the ERPNext VM public key, and prints the rsync target URI to use on the ERPNext VPS. After configuration, validate in this order:
+The backup-server setup creates/uses a backup user, prepares the backup folder, installs the ERPNext VM public key when provided, and prints the rsync target URI to use on the ERPNext VPS. Press **Enter** to accept suggested values when they are correct.
+
+Typical backup-server prompts:
+
+```text
+Backup Linux user: erpbackup
+Backup root folder: /mnt/HC_Volume_<id>/erpnext-backups
+ERPNext site/domain folder: erp.example.com
+Restrict SSH key to ERPNext VM source IP: <ERPNext VPS public IP>
+Public key: ssh-ed25519 ... erpnext-offvm-backup-erp.example.com
+```
+
+3. Back on the ERPNext VPS, configure the target and validate:
 
 ```bash
+sudo erpnext-dev off-vm-backup-guided-setup
 sudo erpnext-dev off-vm-backup-dry-run
 sudo erpnext-dev run-off-vm-backup
 sudo erpnext-dev off-vm-backup-status

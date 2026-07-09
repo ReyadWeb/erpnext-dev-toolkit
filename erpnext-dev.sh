@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.1.58"
+SCRIPT_VERSION="1.1.59"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -12061,6 +12061,30 @@ backup_latest_set_paths() {
   return 1
 }
 
+
+off_vm_backup_summary_pair() {
+  off_vm_backup_load_config
+  local last_status last_run last_detail
+  if off_vm_backup_configured; then
+    last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
+    last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
+    last_detail="$(off_vm_backup_last_state LAST_DETAIL 2>/dev/null || echo "no previous run")"
+    case "$last_status" in
+      OK)
+        printf 'OK|configured; last run OK at %s\n' "$last_run"
+        ;;
+      FAIL)
+        printf 'WARN|configured; last run failed at %s (%s)\n' "$last_run" "$last_detail"
+        ;;
+      *)
+        printf 'INFO|configured; no successful off-VM run recorded yet\n'
+        ;;
+    esac
+  else
+    printf 'WARN|not configured; run off-vm-backup-guided-setup\n'
+  fi
+}
+
 show_backup_status() {
   require_sudo
   local bench_dir backup_dir count_all count_db count_public count_private latest_lines prefix db_file public_file private_file config_file backup_total completeness
@@ -12108,8 +12132,18 @@ show_backup_status() {
   fi
 
   echo
-  echo "Off-VM copy: still required for production readiness."
-  ui_next "$(toolkit_cmd backup-verify)" "$(toolkit_cmd off-vm-backup-guide)"
+  local off_pair off_state off_detail
+  off_pair="$(off_vm_backup_summary_pair)"
+  off_state="${off_pair%%|*}"
+  off_detail="${off_pair#*|}"
+  status_line "Off-VM copy" "$off_state" "$off_detail"
+  if [[ "$off_state" == "OK" ]]; then
+    echo "Off-VM copy is configured and the last copy completed. Restore rehearsal is still required before relying on production backups."
+    ui_next "$(toolkit_cmd backup-verify)" "$(toolkit_cmd off-vm-backup-status)" "$(toolkit_cmd restore-rehearsal-guide)"
+  else
+    echo "Off-VM copy is not fully proven yet. Configure it, run dry-run, then run a real off-VM backup."
+    ui_next "$(toolkit_cmd backup-verify)" "$(toolkit_cmd off-vm-backup-guided-setup)" "$(toolkit_cmd off-vm-backup-status)"
+  fi
   ui_box_end
 }
 
@@ -12806,11 +12840,52 @@ normalize_backup_server_dir() {
   printf '%s\n' "${dir%/}"
 }
 
+
+backup_server_suggested_root() {
+  local configured="${1:-}" volume_mount=""
+  if [[ -n "$configured" && "$configured" != "/srv/erpnext-backups" ]]; then
+    printf '%s\n' "$configured"
+    return 0
+  fi
+  if command -v findmnt >/dev/null 2>&1; then
+    volume_mount="$(findmnt -rn -o TARGET 2>/dev/null | awk '/^\/mnt\/HC_Volume_[0-9]+$/ {print; exit}')"
+  fi
+  if [[ -z "$volume_mount" ]]; then
+    local candidate
+    for candidate in /mnt/HC_Volume_*; do
+      [[ -d "$candidate" ]] || continue
+      if command -v mountpoint >/dev/null 2>&1 && mountpoint -q "$candidate"; then
+        volume_mount="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -n "$volume_mount" ]]; then
+    printf '%s\n' "${volume_mount%/}/erpnext-backups"
+  else
+    printf '%s\n' "/srv/erpnext-backups"
+  fi
+}
+
+infer_site_name_from_public_key() {
+  local key="$1" comment=""
+  [[ -n "$key" ]] || return 1
+  comment="$(printf '%s\n' "$key" | awk '{print $3}')"
+  case "$comment" in
+    erpnext-offvm-backup-*)
+      printf '%s\n' "${comment#erpnext-offvm-backup-}"
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 backup_server_setup() {
   require_sudo
   local backup_user backup_root site_name source_ip public_key ssh_dir auth_file target_dir target_uri host_hint key_line opts
   backup_user="${BACKUP_SERVER_USER:-erpbackup}"
   backup_root="${BACKUP_SERVER_ROOT:-/srv/erpnext-backups}"
+  backup_root="$(backup_server_suggested_root "$backup_root")"
   site_name="${BACKUP_SITE_NAME:-}"
   source_ip="${BACKUP_SOURCE_IP:-}"
   public_key="${BACKUP_SOURCE_PUBLIC_KEY:-}"
@@ -12818,16 +12893,32 @@ backup_server_setup() {
   ui_box_start "Prepare Off-VM Backup Server"
   echo "Run this on the remote backup server, not on the ERPNext application VM."
   echo "It creates a locked-down backup user/folder and optionally installs the ERPNext VM public key."
+  echo "Press Enter to accept suggested values shown in brackets."
+  echo
+  echo "Before continuing, generate/copy the public key on the ERPNext application VM:"
+  echo "  sudo erpnext-dev generate-off-vm-backup-key"
+  echo "Paste the single ssh-ed25519 public key line here when this wizard asks for it."
+  echo
+  status_line "Suggested user" "INFO" "$backup_user"
+  status_line "Suggested backup root" "INFO" "$backup_root"
+  status_line "Site/domain example" "INFO" "erp.flowmaya.com"
   echo
 
   if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+    read -r -p "Do you already have the ERPNext VM public key ready? [Y/n]: " answer_key_ready
+    if [[ "$answer_key_ready" =~ ^[Nn]$|^[Nn][Oo]$ ]]; then
+      warn "Generate the key on the ERPNext application VM first, then paste only the .pub line here."
+      echo "Command to run on ERPNext VM: sudo erpnext-dev generate-off-vm-backup-key"
+      echo "You can still continue now to create the user/folder and add the key later."
+      echo
+    fi
     read -r -p "Backup Linux user [${backup_user}]: " answer_backup_user
     backup_user="${answer_backup_user:-$backup_user}"
     read -r -p "Backup root folder [${backup_root}]: " answer_backup_root
     backup_root="${answer_backup_root:-$backup_root}"
-    read -r -p "ERPNext site/domain folder [${site_name:-erp.example.com}]: " answer_site_name
+    read -r -p "ERPNext site/domain folder [auto from public key if blank; example erp.flowmaya.com]: " answer_site_name
     site_name="${answer_site_name:-$site_name}"
-    read -r -p "Restrict SSH key to ERPNext VM source IP (optional) [${source_ip}]: " answer_source_ip
+    read -r -p "Restrict SSH key to ERPNext VM source IP (optional; example 65.109.221.4) [${source_ip}]: " answer_source_ip
     source_ip="${answer_source_ip:-$source_ip}"
     echo
     echo "Paste the ERPNext VM public key from 'sudo erpnext-dev generate-off-vm-backup-key'."
@@ -12836,9 +12927,16 @@ backup_server_setup() {
     public_key="${answer_public_key:-$public_key}"
   fi
 
+  if [[ -z "$site_name" && -n "$public_key" ]]; then
+    site_name="$(infer_site_name_from_public_key "$public_key" 2>/dev/null || true)"
+    if [[ -n "$site_name" ]]; then
+      status_line "Site/domain folder" "OK" "inferred from public key: ${site_name}"
+    fi
+  fi
+
   safe_backup_username "$backup_user" || fail "Invalid backup user: ${backup_user}. Use a simple Linux username such as erpbackup."
   backup_root="$(normalize_backup_server_dir "$backup_root")" || fail "Invalid backup root folder: ${backup_root}. Use an absolute path without spaces."
-  [[ -n "$site_name" ]] || fail "Site/domain folder is required. Example: erp.flowmaya.com"
+  [[ -n "$site_name" ]] || fail "Site/domain folder is required if no ERPNext public-key comment is available. Example: erp.flowmaya.com"
   [[ "$site_name" != *[[:space:]]* && "$site_name" != *".."* && "$site_name" != /* ]] || fail "Invalid site/domain folder: ${site_name}"
   if [[ -n "$source_ip" ]]; then
     valid_ipv4_address "$source_ip" || warn "Source IP does not look like a plain IPv4 address. Key restriction will not use from= unless valid."
@@ -12942,7 +13040,9 @@ off_vm_backup_guided_setup() {
   echo "  sudo apt-get update && sudo apt-get install -y curl ca-certificates && tmp=\"\$(mktemp /tmp/erpnext-dev.XXXXXX.sh)\" && curl -fsSL \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/main/erpnext-dev.sh?cache_bust=\$(date +%s)\" -o \"\$tmp\" && chmod +x \"\$tmp\" && sudo \"\$tmp\" backup-server-setup"
   echo
   if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
-    read -r -p "After preparing the backup server, enter rsync target user@host:/path/: " target
+    echo "Paste the Target URI printed by backup-server-setup."
+    echo "Example: erpbackup@65.109.220.250:/mnt/HC_Volume_106276869/erpnext-backups/${SITE_NAME}/"
+    read -r -p "Rsync target URI: " target
     validate_off_vm_backup_target "$target" || fail "Invalid target. Use user@host:/absolute/path/"
     identity="$(off_vm_backup_default_identity)"
     read -r -p "SSH identity file on this ERPNext VM [${identity}]: " answer_identity
@@ -13101,10 +13201,11 @@ configure_rsync_backup_target() {
   status_line "Site" "INFO" "$SITE_NAME"
   echo
   echo "Enter the rsync SSH target for off-VM backups."
-  echo "Example: backup@example-backup-server:/srv/erpnext-backups/${SITE_NAME}/"
+  echo "Use the Target URI printed by backup-server-setup."
+  echo "Example: erpbackup@65.109.220.250:/mnt/HC_Volume_106276869/erpnext-backups/${SITE_NAME}/"
   echo
   if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
-    read -r -p "Rsync target: " target
+    read -r -p "Rsync target URI: " target
     if ! validate_off_vm_backup_target "$target"; then
       fail "Invalid target. Use user@host:/absolute/or/remote/path with no spaces."
     fi
@@ -13612,10 +13713,17 @@ show_production_checklist() {
   else
     status_line "Fail2Ban" "WARN" "sshd jail not confirmed"
   fi
-  local bcount
+  local bcount off_pair_for_local off_state_for_local off_detail_for_local
   bcount="$(production_backup_count)"
+  off_pair_for_local="$(off_vm_backup_summary_pair)"
+  off_state_for_local="${off_pair_for_local%%|*}"
+  off_detail_for_local="${off_pair_for_local#*|}"
   if [[ "$bcount" =~ ^[0-9]+$ && "$bcount" -gt 0 ]]; then
-    status_line "Local backups" "OK" "${bcount} backup file(s); off-VM copy required"
+    if [[ "$off_state_for_local" == "OK" ]]; then
+      status_line "Local backups" "OK" "${bcount} backup file(s); off-VM copy verified"
+    else
+      status_line "Local backups" "OK" "${bcount} backup file(s); off-VM copy still needs validation"
+    fi
   else
     status_line "Local backups" "WARN" "no local backup files detected"
   fi
@@ -13627,14 +13735,11 @@ show_production_checklist() {
   local retention_candidates
   retention_candidates="$(backup_retention_candidate_sets 2>/dev/null | wc -l | awk '{print $1+0}')"
   status_line "Retention candidates" "$([[ "$retention_candidates" -gt 0 ]] && echo WARN || echo OK)" "${retention_candidates} old backup set(s)"
-  if off_vm_backup_configured; then
-    local off_last_status off_last_run
-    off_last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
-    off_last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
-    status_line "Off-VM backup" "$([[ "$off_last_status" == OK ]] && echo OK || echo INFO)" "configured; last run ${off_last_status} at ${off_last_run}"
-  else
-    status_line "Off-VM backup" "WARN" "not configured"
-  fi
+  local off_pair off_state off_detail
+  off_pair="$(off_vm_backup_summary_pair)"
+  off_state="${off_pair%%|*}"
+  off_detail="${off_pair#*|}"
+  status_line "Off-VM backup" "$off_state" "$off_detail"
   if health_check_timer_active; then
     status_line "Health timer" "OK" "active"
   else
@@ -13643,9 +13748,12 @@ show_production_checklist() {
   status_line "Snapshot" "INFO" "take/verify cloud snapshot before go-live"
   echo
   echo "Remaining production decisions:"
-  echo "  - Confirm off-VM backup target and restore rehearsal."
+  if [[ "$off_state" == "OK" ]]; then
+    echo "  - Rehearse restore from the off-VM backup on a disposable VM."
+  else
+    echo "  - Configure and run off-VM backup, then rehearse restore on a disposable VM."
+  fi
   echo "  - Confirm scheduled local backups and retention policy."
-  echo "  - Run/test off-VM backup after local backup verification."
   echo "  - Configure health timer if ongoing monitoring is required."
   echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
   echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
