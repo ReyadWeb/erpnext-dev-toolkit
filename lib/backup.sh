@@ -535,16 +535,6 @@ run_maintenance_menu() {
 # Backup / Restore Hardening
 # ============================================================
 
-backup_find_latest() {
-  local pattern="$1"
-  local backup_dir
-  backup_dir="$(site_backup_dir)"
-  if ! path_is_dir "$backup_dir"; then
-    return 1
-  fi
-  $SUDO find "$backup_dir" -maxdepth 1 -type f -name "$pattern" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-
-}
-
 backup_file_size_human() {
   local file="$1"
   if [[ -f "$file" ]]; then
@@ -1117,11 +1107,6 @@ show_restore_rehearsal_report() {
   ui_box_end
 }
 
-
-backup_schedule_unit_paths() {
-  echo "/etc/systemd/system/${BACKUP_SCHEDULE_SERVICE}"
-  echo "/etc/systemd/system/${BACKUP_SCHEDULE_TIMER}"
-}
 
 backup_schedule_timer_active() {
   command -v systemctl >/dev/null 2>&1 || return 1
@@ -2265,20 +2250,6 @@ EOF_OFF_VM_GUIDED_CONFIG
   echo "Next run the dry run. If it passes, run the real off-VM backup."
   ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd run-off-vm-backup)" "$(toolkit_cmd off-vm-backup-status)"
   ui_box_end
-}
-
-off_vm_backup_rsync_command() {
-  local mode="$1" backup_dir ssh_cmd_str rsync_cmd=()
-  backup_dir="$(site_backup_dir)"
-  ssh_cmd_str="$(off_vm_backup_ssh_command_string)"
-  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "$ssh_cmd_str")
-  [[ "$mode" == "dry-run" ]] && rsync_cmd+=(--dry-run)
-  if [[ "${OFF_VM_BACKUP_RSYNC_DELETE:-false}" == "true" ]]; then
-    rsync_cmd+=(--delete)
-  fi
-  rsync_cmd+=("${backup_dir}/" "${OFF_VM_BACKUP_TARGET}")
-  printf '%q ' "${rsync_cmd[@]}"
-  printf '\n'
 }
 
 run_off_vm_backup_rsync() {

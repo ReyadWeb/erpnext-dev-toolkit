@@ -503,28 +503,6 @@ validate_certificate_and_key_pair() {
   [[ -n "$cert_pub" && -n "$key_pub" && "$cert_pub" == "$key_pub" ]]
 }
 
-read_multiline_secret_to_file() {
-  local label="$1" end_marker="$2" output_file="$3" line had_tty=0
-  echo
-  echo "Paste the ${label}. End with a line containing only: ${end_marker}"
-  echo "Input is hidden while you paste. Nothing is printed to the toolkit log."
-  : > "$output_file"
-  chmod 600 "$output_file" 2>/dev/null || true
-  if [[ -t 0 ]]; then
-    had_tty=1
-    stty -echo 2>/dev/null || true
-  fi
-  while IFS= read -r line; do
-    [[ "$line" == "$end_marker" ]] && break
-    printf '%s
-' "$line" >> "$output_file"
-  done
-  if [[ "$had_tty" -eq 1 ]]; then
-    stty echo 2>/dev/null || true
-    echo
-  fi
-}
-
 read_pem_block_to_file() {
   local label="$1" begin_regex="$2" end_regex="$3" output_file="$4" begin_hint="${5:-$2}" end_hint="${6:-$3}"
   local line had_tty=0 in_block=0 found_begin=0 found_end=0
@@ -601,12 +579,6 @@ production_certificate_issuer() {
   certificate_issuer_for_file "$fullchain"
 }
 
-production_certificate_subject() {
-  local fullchain
-  fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
-  certificate_subject_for_file "$fullchain"
-}
-
 production_certificate_dates() {
   local fullchain
   fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
@@ -630,21 +602,6 @@ production_certificate_detail() {
   else
     echo "production/trusted issuer likely; issuer=${issuer}; ${dates}"
   fi
-}
-
-production_ssl_is_configured() {
-  local domain fullchain key enabled_path https_head
-  domain="$(production_ssl_domain 2>/dev/null || true)"
-  [[ -n "$domain" ]] || return 1
-  fullchain="$(production_letsencrypt_fullchain_path 2>/dev/null || true)"
-  key="$(production_letsencrypt_key_path 2>/dev/null || true)"
-  enabled_path="$(production_nginx_enabled_path)"
-
-  [[ -f "$fullchain" && -f "$key" ]] || return 1
-  [[ -L "$enabled_path" || -f "$enabled_path" ]] || return 1
-  port_listens 443 || return 1
-  https_head="$(production_https_status "$domain")"
-  [[ "$https_head" == HTTP/* ]]
 }
 
 production_ssl_runtime_detail() {

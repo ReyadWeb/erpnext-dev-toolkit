@@ -300,10 +300,6 @@ follow_erpnext_service_logs() {
   fi
 }
 
-start_erpnext() {
-  start_erpnext_service
-}
-
 install_state() {
   local bench_dir
   bench_dir="$(active_bench_dir)"

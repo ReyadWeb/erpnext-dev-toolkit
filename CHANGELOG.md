@@ -1,3 +1,28 @@
+## v1.2.2 - Maintenance: remove dead code (Phase F3)
+
+### Removed
+
+- Removed 16 unreferenced helper functions flagged by the v1.2.1 evaluation, with no runtime behavior change:
+  - `lib/storage.sh`: `storage_part_number`, `storage_parent_disk`, `storage_partition_is_growable`, `storage_infer_disk_from_partition`, `storage_root_lsblk_value`
+  - `lib/ssl.sh`: `read_multiline_secret_to_file`, `production_certificate_subject`, `production_ssl_is_configured`
+  - `lib/backup.sh`: `backup_find_latest`, `backup_schedule_unit_paths`, `off_vm_backup_rsync_command`
+  - `lib/access.sh`: `show_access_when_ready`, `show_host_dns_guide`
+  - `lib/common.sh`: `ui_note`
+  - `lib/firewall.sh`: `firewall_latest_snapshot`
+  - `lib/service.sh`: `start_erpnext`
+
+### Changed
+
+- Updated the toolkit version to v1.2.2.
+- Regenerated `SHA256SUMS` for the seven affected modules and `erpnext-dev.sh`.
+
+### Validation scope
+
+- `bash -n` passes for all shell files.
+- Re-ran dead-code cross-reference analysis: 560 -> 544 functions, 0 remaining dead functions (no cascading dead code introduced).
+- `erpnext-dev version` prints v1.2.2.
+- `scripts/validate-release.sh` passes locally.
+
 ## v1.2.1 - Maintenance: shellcheck coverage and repo hygiene
 
 ### Fixed

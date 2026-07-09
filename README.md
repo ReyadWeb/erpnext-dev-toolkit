@@ -8,7 +8,7 @@ v1.1.74 adds [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md), [`RELEASE-MANIFES
 
 ## Modularization and shellcheck
 
-v1.1.75 begins careful modularization by extracting shared helpers into [`lib/common.sh`](lib/common.sh). v1.1.76 extracts support and diagnostics into [`lib/support.sh`](lib/support.sh). v1.1.77 extracts backup and restore workflows into [`lib/backup.sh`](lib/backup.sh). v1.1.78 extracts SSL/HTTPS and firewall helpers into [`lib/ssl.sh`](lib/ssl.sh) and [`lib/firewall.sh`](lib/firewall.sh). v1.1.79 extracts curated app installation into [`lib/apps.sh`](lib/apps.sh). v1.1.80 extracts health monitoring and go-live readiness into [`lib/health.sh`](lib/health.sh). v1.1.81 extracts root storage detection and expansion into [`lib/storage.sh`](lib/storage.sh). v1.1.82 extracts ERPNext service and runtime helpers into [`lib/service.sh`](lib/service.sh). v1.1.83 extracts the core install engine into [`lib/install.sh`](lib/install.sh). v1.1.84 adds post-install summaries to `lib/install.sh`. v1.1.85 completes the install module with guided setup and quickstart workflows. v1.1.86 extracts site and domain configuration into [`lib/config.sh`](lib/config.sh). v1.1.87 extracts browser access, host DNS, networking guides, and credentials UI into [`lib/access.sh`](lib/access.sh). v1.1.88 extracts Frappe/bench helpers into [`lib/frappe.sh`](lib/frappe.sh) and removes duplicate support/doctor code from the main script. v1.1.89 extracts install/runtime status helpers into [`lib/status.sh`](lib/status.sh). v1.1.90 extracts the production operations dashboard into [`lib/ops.sh`](lib/ops.sh), completing Phase B modularization. v1.2.0 adds Phase C security hardening: [`lib/security.sh`](lib/security.sh) with `security-audit`, checksum-gated `update-toolkit`, and production credential handoff prompts. GitHub Actions CI runs `scripts/run-shellcheck.sh` before `scripts/validate-release.sh`. v1.2.1 is a maintenance patch: the main `erpnext-dev.sh` entry point is now covered by shellcheck in CI, and duplicate `.gitignore` entries were removed.
+v1.1.75 begins careful modularization by extracting shared helpers into [`lib/common.sh`](lib/common.sh). v1.1.76 extracts support and diagnostics into [`lib/support.sh`](lib/support.sh). v1.1.77 extracts backup and restore workflows into [`lib/backup.sh`](lib/backup.sh). v1.1.78 extracts SSL/HTTPS and firewall helpers into [`lib/ssl.sh`](lib/ssl.sh) and [`lib/firewall.sh`](lib/firewall.sh). v1.1.79 extracts curated app installation into [`lib/apps.sh`](lib/apps.sh). v1.1.80 extracts health monitoring and go-live readiness into [`lib/health.sh`](lib/health.sh). v1.1.81 extracts root storage detection and expansion into [`lib/storage.sh`](lib/storage.sh). v1.1.82 extracts ERPNext service and runtime helpers into [`lib/service.sh`](lib/service.sh). v1.1.83 extracts the core install engine into [`lib/install.sh`](lib/install.sh). v1.1.84 adds post-install summaries to `lib/install.sh`. v1.1.85 completes the install module with guided setup and quickstart workflows. v1.1.86 extracts site and domain configuration into [`lib/config.sh`](lib/config.sh). v1.1.87 extracts browser access, host DNS, networking guides, and credentials UI into [`lib/access.sh`](lib/access.sh). v1.1.88 extracts Frappe/bench helpers into [`lib/frappe.sh`](lib/frappe.sh) and removes duplicate support/doctor code from the main script. v1.1.89 extracts install/runtime status helpers into [`lib/status.sh`](lib/status.sh). v1.1.90 extracts the production operations dashboard into [`lib/ops.sh`](lib/ops.sh), completing Phase B modularization. v1.2.0 adds Phase C security hardening: [`lib/security.sh`](lib/security.sh) with `security-audit`, checksum-gated `update-toolkit`, and production credential handoff prompts. GitHub Actions CI runs `scripts/run-shellcheck.sh` before `scripts/validate-release.sh`. v1.2.1 is a maintenance patch: the main `erpnext-dev.sh` entry point is now covered by shellcheck in CI, and duplicate `.gitignore` entries were removed. v1.2.2 removes 16 unreferenced helper functions (dead code) identified in the v1.2.1 evaluation, with no runtime behavior change.
 
 ```bash
 scripts/validate-release.sh
@@ -84,7 +84,7 @@ The current `SHA256SUMS` file verifies the `erpnext-dev.sh` file for that releas
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -113,7 +113,7 @@ For local VMs, the installer prints the correct host `/etc/hosts` command using 
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -143,7 +143,7 @@ Run the printed `/etc/hosts` command on the **host machine**, not inside the VM.
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -177,7 +177,7 @@ sudo erpnext-dev generate-off-vm-backup-key
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -304,7 +304,7 @@ See [`PRODUCTION-VALIDATION.md`](PRODUCTION-VALIDATION.md) for the full VPS vali
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -319,7 +319,7 @@ If the VM is clearly unsafe for ERPNext, the installer blocks the install and pr
 ### Update or repair the `erpnext-dev` command
 
 ```bash
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -530,7 +530,7 @@ Run this inside a fresh local Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -652,7 +652,7 @@ Run this inside a fresh public Ubuntu/Debian-family VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -784,7 +784,7 @@ sudo erpnext-dev production-ops-wizard
 To update or repair the toolkit command from a verified release tag:
 
 ```bash
-VERSION="v1.2.1"
+VERSION="v1.2.2"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/erpnext-dev.sh"
 curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-installer/${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS

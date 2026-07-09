@@ -252,12 +252,6 @@ print_two_column_menu() {
   done
 }
 
-ui_note() {
-  echo
-  echo "Note:"
-  printf '  %s\n' "$@"
-}
-
 sync_toolkit_lib_tree() {
   local src_root="$1"
   local dest_root="$2"

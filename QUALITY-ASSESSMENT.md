@@ -76,7 +76,6 @@ As of v1.2.0 the original ~16,500-line monolith has been fully modularized: `erp
 | **Manual release gate still primary** | Medium | Field QA remains the safety net for behavior changes |
 | **No integration test VM** | Medium | Upstream package changes can break installs silently |
 | **Module list duplicated across 4 files** | Low–Medium | Source block, checksum list, shellcheck list, and `toolkit_release_lib_files()` must be hand-synced |
-| **~16 unreferenced helper functions** | Low | Dead code adds audit surface; no runtime impact |
 
 *Resolved in v1.1.75–v1.2.0:* the previous **~16,500-line monolith** (formerly the top structural risk) is now split into `erpnext-dev.sh` (~1,010 lines) plus 16 `lib/*.sh` modules, each guarded against double-sourcing and linted in CI (main entry added to shellcheck in v1.2.1).
 
@@ -250,7 +249,7 @@ Prioritized by impact and dependency order. Status as of v1.2.1 (Phases A–C co
 |---|---|---|---|
 | F1 | Add `erpnext-dev.sh` to shellcheck targets | P1 | **Done (v1.2.1)** |
 | F2 | Fix duplicated `.gitignore` entries | P2 | **Done (v1.2.1)** |
-| F3 | Remove ~16 unreferenced helper functions (dead code) | P2 | Planned |
+| F3 | Remove ~16 unreferenced helper functions (dead code) | P2 | **Done (v1.2.2)** |
 | F4 | Single source of truth for the module list (source block, `SHA256SUMS`, shellcheck, `toolkit_release_lib_files()`) | P2 | Planned |
 | F5 | Raise shellcheck gate from `-S error` to `-S warning` (fix or annotate findings) | P2 | Planned |
 | F6 | CI check that all four module lists agree | P2 | Planned |

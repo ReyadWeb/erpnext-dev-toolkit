@@ -229,10 +229,6 @@ firewall_backup_snapshot() {
   ok "Firewall rollback snapshot saved: ${target}"
 }
 
-firewall_latest_snapshot() {
-  $SUDO find "${FIREWALL_BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -1 || true
-}
-
 show_firewall_rollback_snapshots() {
   require_sudo
   echo

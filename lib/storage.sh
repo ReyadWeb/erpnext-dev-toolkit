@@ -17,34 +17,6 @@ bytes_to_gib() {
   fi
 }
 
-storage_part_number() {
-  local part_name
-  part_name="$(basename "$1")"
-
-  if [[ "$part_name" =~ p([0-9]+)$ ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}"
-    return 0
-  fi
-
-  if [[ "$part_name" =~ ([0-9]+)$ ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}"
-    return 0
-  fi
-
-  return 1
-}
-
-storage_parent_disk() {
-  local part_dev="$1"
-  local parent=""
-  parent="$(lsblk -no PKNAME "$part_dev" 2>/dev/null | head -n 1 | tr -d '[:space:]' || true)"
-  [[ -n "$parent" ]] || return 1
-  printf '/dev/%s\n' "$parent"
-}
-
-
-
-
 storage_partition_tail_free_bytes() {
   local disk_dev="$1"
   local part_dev="$2"
@@ -78,42 +50,6 @@ storage_partition_tail_free_bytes() {
   fi
 
   echo $((tail_sectors * sector_size))
-}
-
-storage_partition_is_growable() {
-  local disk_dev="$1"
-  local part_dev="$2"
-  local tail_free
-  tail_free="$(storage_partition_tail_free_bytes "$disk_dev" "$part_dev")"
-  [[ "$tail_free" =~ ^[0-9]+$ ]] && (( tail_free > 1073741824 ))
-}
-
-storage_infer_disk_from_partition() {
-  local part_dev="$1"
-  local disk_dev=""
-
-  # Common Linux partition names:
-  # /dev/vda3, /dev/sda3, /dev/xvda3, /dev/nvme0n1p3, /dev/mmcblk0p3
-  if [[ "$part_dev" =~ ^(/dev/(nvme[0-9]+n[0-9]+|mmcblk[0-9]+))p([0-9]+)$ ]]; then
-    disk_dev="${BASH_REMATCH[1]}"
-  elif [[ "$part_dev" =~ ^(/dev/[a-zA-Z]+[a-zA-Z0-9]*)([0-9]+)$ ]]; then
-    disk_dev="${BASH_REMATCH[1]}"
-  fi
-
-  if [[ -n "$disk_dev" && -b "$disk_dev" ]]; then
-    printf '%s\n' "$disk_dev"
-    return 0
-  fi
-
-  return 1
-}
-
-storage_root_lsblk_value() {
-  local key line
-  key="$1"
-  line="$(lsblk -P -o NAME,TYPE,PKNAME,MOUNTPOINTS 2>/dev/null | awk 'index($0, "MOUNTPOINTS=\"/\"") {print; exit}')"
-  [[ -n "$line" ]] || return 1
-  printf '%s\n' "$line" | sed -n "s/.*${key}=\"\([^\"]*\)\".*/\1/p"
 }
 
 storage_detect_layout() {

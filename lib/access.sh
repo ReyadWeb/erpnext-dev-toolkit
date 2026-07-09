@@ -5,16 +5,6 @@
 [[ -n "${_ERPNEXT_DEV_ACCESS_LOADED:-}" ]] && return 0
 _ERPNEXT_DEV_ACCESS_LOADED=1
 
-show_access_when_ready() {
-  if port_listens 8000; then
-    show_access_instructions
-  else
-    warn "Browser access was not shown because web port 8000 is not listening yet."
-    echo "Run this after a few seconds:"
-    echo "  $(toolkit_cmd runtime-status)"
-  fi
-}
-
 show_ready_summary() {
   local vm_ip
   vm_ip="$(get_vm_ip)"
@@ -208,10 +198,6 @@ show_local_domain_status() {
   echo "Then test from the HOST machine:"
   print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo "============================================================"
-}
-
-show_host_dns_guide() {
-  show_local_domain_status
 }
 
 show_local_host_mapping_checkpoint() {
