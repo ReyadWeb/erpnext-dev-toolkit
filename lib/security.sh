@@ -155,6 +155,64 @@ verify_toolkit_integrity() {
     else
       status_line "Expected SHA256" "WARN" "no erpnext-dev.sh entry found in checksum file"
     fi
+
+    # Verify every runtime module, not just the entrypoint. A modular toolkit
+    # sources 17 lib/*.sh files; tampering with any one of them must be caught.
+    local active_dir lib_dir mod mod_path mod_hash mod_expected
+    local mods_total=0 mods_ok=0 mods_bad=0 mods_missing=0 mods_unlisted=0
+    active_dir="$(cd "$(dirname "$active")" 2>/dev/null && pwd || dirname "$active")"
+    lib_dir="${active_dir}/lib"
+
+    while IFS= read -r mod; do
+      mods_total=$((mods_total + 1))
+      mod_path="${lib_dir}/${mod}"
+      if [[ ! -f "$mod_path" ]]; then
+        status_line "Module ${mod}" "FAIL" "missing at ${mod_path}"
+        mods_missing=$((mods_missing + 1))
+        match_state=1
+        continue
+      fi
+      mod_expected="$(checksum_expected_for_release_path "$checksum_file" "lib/${mod}" 2>/dev/null || true)"
+      if [[ -z "$mod_expected" ]]; then
+        status_line "Module ${mod}" "WARN" "no lib/${mod} entry in checksum file"
+        continue
+      fi
+      mod_hash="$(sha256sum "$mod_path" | awk '{print $1}')"
+      if [[ "$mod_hash" == "$mod_expected" ]]; then
+        mods_ok=$((mods_ok + 1))
+      else
+        status_line "Module ${mod}" "FAIL" "does not match SHA256SUMS"
+        mods_bad=$((mods_bad + 1))
+        match_state=1
+      fi
+    done < <(toolkit_release_lib_files)
+
+    if (( mods_bad == 0 && mods_missing == 0 )); then
+      status_line "Runtime modules" "OK" "${mods_ok}/${mods_total} match SHA256SUMS"
+    else
+      status_line "Runtime modules" "FAIL" "${mods_ok}/${mods_total} OK, ${mods_bad} mismatched, ${mods_missing} missing"
+    fi
+
+    # Flag any lib/*.sh that ships on disk but is not part of the signed release
+    # list. Such a file would not be sourced, but its presence is suspicious.
+    if [[ -d "$lib_dir" ]]; then
+      local -A _known_mods=()
+      local disk_mod disk_base unlisted=""
+      while IFS= read -r disk_mod; do _known_mods["$disk_mod"]=1; done < <(toolkit_release_lib_files)
+      for disk_mod in "$lib_dir"/*.sh; do
+        [[ -e "$disk_mod" ]] || continue
+        disk_base="$(basename "$disk_mod")"
+        if [[ -z "${_known_mods[$disk_base]:-}" ]]; then
+          unlisted+="${disk_base} "
+          mods_unlisted=$((mods_unlisted + 1))
+        fi
+      done
+      if (( mods_unlisted == 0 )); then
+        status_line "Unexpected modules" "OK" "none"
+      else
+        status_line "Unexpected modules" "WARN" "not in release list: ${unlisted% }"
+      fi
+    fi
   else
     status_line "Checksum file" "WARN" "not found; download SHA256SUMS beside erpnext-dev.sh or set CHECKSUM_FILE=/path/SHA256SUMS"
   fi

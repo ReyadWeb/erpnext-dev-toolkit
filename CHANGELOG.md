@@ -1,3 +1,16 @@
+## v1.4.6 - verify-toolkit now verifies the whole tree, not just the entrypoint
+
+### Changed
+
+- **`verify-toolkit` now verifies every runtime module.** Previously it only
+  checked `erpnext-dev.sh` against `SHA256SUMS`, so a tampered `lib/*.sh` module
+  passed verification. It now hashes all 17 modules from
+  `toolkit_release_lib_files()` against `SHA256SUMS`, reports
+  `Runtime modules OK N/N`, and fails (non-zero exit) on any mismatched or
+  missing module. It also flags any `lib/*.sh` present on disk that is not part
+  of the signed release list (`Unexpected modules`).
+- Bumped the toolkit version to v1.4.6 and regenerated `SHA256SUMS`.
+
 ## v1.4.5 - Pre-create NVM_DIR so the nvm installer accepts it
 
 ### Fixed
