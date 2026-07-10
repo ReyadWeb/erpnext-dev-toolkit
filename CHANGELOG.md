@@ -12,6 +12,11 @@
 - **`scripts/check-module-consistency.sh`** — a CI guard that treats the runtime `source` chain in `erpnext-dev.sh` as the single source of truth and fails the build if `toolkit_release_lib_files()`, the checksum generator, the shellcheck targets, `SHA256SUMS`, or `RELEASE-MANIFEST.txt` describe a different set of `lib/*.sh` modules. It also verifies that every function invoked from the command dispatcher is actually defined (which would have caught the `install-cli`/`repair-cli` regression). Wired into `validate-release.sh` so it runs in both CI and the release workflow.
 - **Version-discipline guard.** With `RELEASE_STRICT=1` (set by the release workflow) `validate-release.sh` now refuses to publish a stable tag whose newest `CHANGELOG.md` entry is not the released version (e.g. an open `## Unreleased` section). Development branches may keep an `Unreleased` section.
 
+### Removed
+
+- Deleted three stale/redundant docs: `QUALITY-ASSESSMENT.md` (assessed v1.2.1 — claimed no CI, no GPG signing, and a monolithic script, all long false), `PRODUCTION-VALIDATION.md` (a private field-evidence log with real domain/IPs), and `RELIABILITY-PLAN.md` (superseded by `ROADMAP.md` + `SECURITY.md`). Removed them from `RELEASE-MANIFEST.txt` and the `validate-release.sh` existence checks.
+- **Rewrote `README.md`** into a clean, organized guide: banner + short description, a "Menu" table of contents whose first item is a per-case "Start here" command reference, no embedded version history, and all private testing data (real domain, VPS/backup IPs, cloud provider, volume IDs) replaced with placeholders. Corrected the supported OS to Ubuntu 24.04 / 26.04 and documented the guarded-upgrade commands. Trimmed from ~1760 to ~620 lines.
+
 ### Changed
 
 - **Pinned bootstrap tool versions for reproducible installs.** Added `NVM_VERSION` (0.40.3) and `UV_VERSION` (0.11.28) config variables; the installer now fetches `uv` from the versioned `https://astral.sh/uv/${UV_VERSION}/install.sh` URL instead of the unversioned "latest" installer, and the pinned nvm version flows from `NVM_VERSION`. Override either via environment variable.
@@ -545,7 +550,7 @@
 
 ### Added
 
-- Added [`QUALITY-ASSESSMENT.md`](QUALITY-ASSESSMENT.md) with reliability, security, and ease-of-use evaluation plus an improvement plan.
+- Added `QUALITY-ASSESSMENT.md` with reliability, security, and ease-of-use evaluation plus an improvement plan.
 - Added [`RELEASE-MANIFEST.txt`](RELEASE-MANIFEST.txt) listing expected files per release.
 - Added `scripts/generate-release-checksums.sh` to regenerate `SHA256SUMS` for release artifacts.
 - Expanded `scripts/validate-release.sh` with manifest checks, version consistency checks, `menu-self-test`, and a `production-ops-wizard` quit smoke test.

@@ -18,8 +18,6 @@ pass() {
 [[ -f RELEASE-MANIFEST.txt ]] || fail "RELEASE-MANIFEST.txt is missing"
 [[ -f README.md ]] || fail "README.md is missing"
 [[ -f SECURITY.md ]] || fail "SECURITY.md is missing"
-[[ -f RELIABILITY-PLAN.md ]] || fail "RELIABILITY-PLAN.md is missing"
-[[ -f QUALITY-ASSESSMENT.md ]] || fail "QUALITY-ASSESSMENT.md is missing"
 
 bash -n erpnext-dev.sh
 [[ -f lib/common.sh ]] || fail "lib/common.sh is missing"

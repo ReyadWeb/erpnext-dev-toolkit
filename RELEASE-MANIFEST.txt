@@ -9,11 +9,8 @@ LICENSE
 README.md
 CHANGELOG.md
 SECURITY.md
-RELIABILITY-PLAN.md
-QUALITY-ASSESSMENT.md
 TESTING.md
 ROADMAP.md
-PRODUCTION-VALIDATION.md
 scripts/validate-release.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
