@@ -52,7 +52,7 @@ First install and verify the toolkit ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.6.0"
+VERSION="v1.6.1"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -160,19 +160,29 @@ After install, map the local domain and enable HTTPS:
 ```bash
 sudo erpnext-dev local-host-checkpoint   # prints the /etc/hosts command for the HOST
 sudo erpnext-dev local-domain-status
-sudo erpnext-dev local-ssl-wizard        # trusted local HTTPS (mkcert)
+sudo erpnext-dev local-ssl-wizard        # option 2 = trusted mkcert (stay in wizard after scp)
 sudo erpnext-dev local-access-doctor
 ```
 
 A local `.test` name is not public DNS — your **host machine** must map it to the
 VM's current IP. The IP is detected dynamically; run the printed `/etc/hosts`
 command on the host, not inside the VM. It is safe to repeat after the VM's IP
-changes. Test from the host:
+changes.
+
+**Use the friendly hostname, not the raw IP.** Open `http://erp.test:8000` after
+`/etc/hosts` is set. Opening `http://<vm-ip>:8000` often shows an unstyled/broken
+login page (Frappe Host-header mismatch). Test from the host:
 
 ```bash
 getent hosts erp.test
 curl -I http://erp.test:8000
 ```
+
+Trusted local HTTPS order: (1) HOST `/etc/hosts`, (2) confirm styled
+`http://erp.test:8000`, (3) HOST `mkcert -install` + generate + `scp` into the VM
+`/tmp/`, (4) stay in `local-ssl-wizard` option 2 and press Enter after scp — it
+installs Nginx HTTPS and you open **`https://erp.test`**. Self-signed (wizard
+option 1) stays entirely in the VM but browsers will warn.
 
 For a stable IP under KVM/libvirt, `sudo erpnext-dev local-fixed-ip-guide` prints
 the host-side DHCP reservation steps. To rename the site later, use

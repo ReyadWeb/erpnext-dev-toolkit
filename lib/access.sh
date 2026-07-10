@@ -37,16 +37,18 @@ show_ready_summary() {
       echo "  Login:        https://${SITE_NAME}/login"
       echo "  Website/root: https://${SITE_NAME}"
       echo
-      echo "Direct Bench fallback, useful for troubleshooting:"
-      echo "  Direct IP:    http://${vm_ip}:8000"
-      echo "  Friendly URL: http://${SITE_NAME}:8000"
+      echo "HTTP fallback (friendly hostname):"
+      echo "  http://${SITE_NAME}:8000"
     else
-      echo "Open one of these URLs:"
-      echo "  Direct IP:    http://${vm_ip}:8000"
-      echo "  Friendly URL: http://${SITE_NAME}:8000"
+      echo "Open this URL from the HOST after /etc/hosts is set:"
+      echo "  Desk:         http://${SITE_NAME}:8000/app"
+      echo "  Login:        http://${SITE_NAME}:8000/login"
+      echo "  Website/root: http://${SITE_NAME}:8000"
     fi
     echo
-    echo "Friendly URL note: your HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."
+    echo "HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."
+    echo "Troubleshooting only (often unstyled — do not use as primary):"
+    echo "  http://${vm_ip}:8000"
   fi
   echo "For full access instructions, run: $(toolkit_cmd access)"
   echo "============================================================"
@@ -150,12 +152,12 @@ print_host_dns_tests_for_site() {
   local site="${1:-$SITE_NAME}" vm_ip="${2:-}"
   vm_ip="${vm_ip:-$(get_vm_ip)}"
   echo "  getent hosts ${site}"
-  if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
-    echo "  curl -I http://${vm_ip}:8000"
-  else
-    echo "  curl -I http://\${VM_IP}:8000"
-  fi
   echo "  curl -I http://${site}:8000"
+  if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
+    echo "  curl -I http://${vm_ip}:8000   # troubleshooting only"
+  else
+    echo "  curl -I http://\${VM_IP}:8000   # troubleshooting only"
+  fi
   if port_listens 443; then
     echo "  curl -kI https://${site}"
   fi
@@ -282,6 +284,8 @@ local_access_doctor() {
   echo "HOST-side tests:"
   print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo
+  echo "If the page loads but looks broken/unstyled when using the raw IP, that is expected:"
+  echo "  open http://${SITE_NAME}:8000 (or https://${SITE_NAME} after local HTTPS) instead."
   echo "If direct IP works but ${SITE_NAME} fails, the fix is /etc/hosts on the HOST."
   echo "If both direct IP and ${SITE_NAME} fail, run:"
   echo "  $(toolkit_cmd repair-local-access)"
@@ -439,15 +443,24 @@ print_primary_access_urls() {
     echo "  ERPNext / Frappe Desk: ${base}/app"
     echo "  Login page:            ${base}/login"
   else
-    echo "Primary URLs from the HOST:"
-    echo "  Website / portal root: http://${vm_ip}:8000"
-    echo "  ERPNext / Frappe Desk: http://${vm_ip}:8000/app"
-    echo "  Login page:            http://${vm_ip}:8000/login"
+    if ssl_is_configured 2>/dev/null && port_listens 443; then
+      base="https://${SITE_NAME}"
+      echo "Primary URLs from the HOST (after /etc/hosts is set):"
+      echo "  Website / portal root: ${base}"
+      echo "  ERPNext / Frappe Desk: ${base}/app"
+      echo "  Login page:            ${base}/login"
+      echo
+      echo "HTTP fallback:"
+      echo "  http://${SITE_NAME}:8000"
+    else
+      echo "Primary URLs from the HOST (after /etc/hosts is set):"
+      echo "  Website / portal root: http://${SITE_NAME}:8000"
+      echo "  ERPNext / Frappe Desk: http://${SITE_NAME}:8000/app"
+      echo "  Login page:            http://${SITE_NAME}:8000/login"
+    fi
     echo
-    echo "Friendly local URLs after /etc/hosts is set:"
-    echo "  Website / portal root: http://${SITE_NAME}:8000"
-    echo "  ERPNext / Frappe Desk: http://${SITE_NAME}:8000/app"
-    echo "  Login page:            http://${SITE_NAME}:8000/login"
+    warn "Raw IP URLs often show an unstyled/broken page (Host header mismatch)."
+    echo "  Use the friendly hostname above. Troubleshooting only: http://${vm_ip}:8000"
   fi
 }
 
@@ -469,15 +482,20 @@ print_education_access_note() {
     echo "  Login page:            ${base}/login"
     echo "  Education portal:      ${base}/edu-portal/students"
   else
-    echo "Education-aware direct URLs:"
-    echo "  ERPNext / Frappe Desk: http://${vm_ip}:8000/app"
-    echo "  Login page:            http://${vm_ip}:8000/login"
-    echo "  Education portal:      http://${vm_ip}:8000/edu-portal/students"
+    if ssl_is_configured 2>/dev/null && port_listens 443; then
+      base="https://${SITE_NAME}"
+      echo "Education-aware URLs (after /etc/hosts is set):"
+      echo "  ERPNext / Frappe Desk: ${base}/app"
+      echo "  Login page:            ${base}/login"
+      echo "  Education portal:      ${base}/edu-portal/students"
+    else
+      echo "Education-aware URLs after /etc/hosts is set:"
+      echo "  ERPNext / Frappe Desk: http://${SITE_NAME}:8000/app"
+      echo "  Login page:            http://${SITE_NAME}:8000/login"
+      echo "  Education portal:      http://${SITE_NAME}:8000/edu-portal/students"
+    fi
     echo
-    echo "Education-aware friendly URLs after /etc/hosts is set:"
-    echo "  ERPNext / Frappe Desk: http://${SITE_NAME}:8000/app"
-    echo "  Login page:            http://${SITE_NAME}:8000/login"
-    echo "  Education portal:      http://${SITE_NAME}:8000/edu-portal/students"
+    echo "Troubleshooting only (often unstyled): http://${vm_ip}:8000/app"
   fi
 }
 

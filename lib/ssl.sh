@@ -1846,12 +1846,11 @@ EOF_MKCERT
 run_trusted_mkcert_setup() {
   require_erpnext_vm_context "trusted-mkcert-setup" || return 1
 
-  local vm_ip src_cert src_key cert_path key_path
+  local vm_ip src_cert src_key reply ssh_user
   vm_ip="$(get_vm_ip)"
   src_cert="${LOCAL_SSL_CERT_SOURCE:-/tmp/${SITE_NAME}.crt}"
   src_key="${LOCAL_SSL_KEY_SOURCE:-/tmp/${SITE_NAME}.key}"
-  cert_path="$(ssl_cert_path)"
-  key_path="$(ssl_key_path)"
+  ssh_user="$(suggested_vm_ssh_user)"
 
   echo
   echo "============================================================"
@@ -1860,50 +1859,116 @@ run_trusted_mkcert_setup() {
   echo "This path uses mkcert on the HOST machine so the HOST browser trusts https://${SITE_NAME}."
   echo
   echo "Important machine split:"
-  echo "  HOST machine: generate/trust/copy the mkcert certificate"
-  echo "  ERPNext VM:   install the copied cert and enable local HTTPS"
+  echo "  HOST machine: /etc/hosts, mkcert -install, generate cert, scp to VM"
+  echo "  ERPNext VM:   wait here, then install the copied cert and enable HTTPS"
   echo
-  echo "Current values:"
   status_line "Local domain" "INFO" "${SITE_NAME}"
   status_line "Detected VM IP" "OK" "${vm_ip}"
   status_line "Expected cert source" "INFO" "${src_cert}"
   status_line "Expected key source" "INFO" "${src_key}"
-  echo
-  echo "Run these on the HOST machine if the cert/key are not copied yet:"
-  echo "  mkcert -install"
-  echo "  mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1"
-  echo "  scp ${SITE_NAME}.crt ${SITE_NAME}.key $(suggested_vm_ssh_user)@${vm_ip}:/tmp/"
-  echo
-  echo "Then rerun this wizard option, or run:"
-  echo "  $(toolkit_cmd install-local-ssl-cert)"
-  echo "  $(toolkit_cmd configure-local-ssl)"
-  echo "  $(toolkit_cmd verify-local-ssl)"
-  echo
 
-  if [[ -f "$src_cert" && -f "$src_key" ]]; then
-    status_line "Copied certificate" "OK" "$src_cert"
-    status_line "Copied private key" "OK" "$src_key"
-    echo
-    if confirm "Install the copied mkcert certificate and enable local HTTPS now?"; then
-      install_local_ssl_cert
-      configure_local_ssl
-      verify_local_ssl || true
+  # Step 0: HOST /etc/hosts must map the friendly name before HTTPS is useful.
+  echo
+  echo "------------------------------------------------------------"
+  echo "Step 0 — HOST /etc/hosts (required before friendly HTTP/HTTPS)"
+  echo "------------------------------------------------------------"
+  echo "Run on the HOST machine (not inside this VM):"
+  print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
+  echo
+  echo "Then test from the HOST:"
+  echo "  curl -I http://${SITE_NAME}:8000"
+  echo "  # Prefer http://${SITE_NAME}:8000 — raw IP often shows an unstyled page."
+  echo
+  if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+    if ! confirm "HOST /etc/hosts already maps ${SITE_NAME} to ${vm_ip}?"; then
+      warn "Apply the HOST /etc/hosts commands above, then re-run this setup."
+      echo "  $(toolkit_cmd trusted-mkcert-setup)"
+      echo "============================================================"
+      return 0
+    fi
+  fi
+
+  # Step 1: HOST mkcert + scp
+  echo
+  echo "------------------------------------------------------------"
+  echo "Step 1 — HOST: install CA, generate cert, copy into the VM"
+  echo "------------------------------------------------------------"
+  echo "Run these on the HOST machine:"
+  echo "  1. mkcert -install"
+  echo "  2. mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1"
+  echo "  3. scp ${SITE_NAME}.crt ${SITE_NAME}.key ${ssh_user}@${vm_ip}:/tmp/"
+  echo
+  echo "Stay in this wizard. After scp finishes, press Enter here to continue."
+  echo "Detailed guide: $(toolkit_cmd mkcert-guide)"
+
+  # Step 2: wait/recheck for /tmp certs instead of forcing a menu exit.
+  while true; do
+    if [[ -f "$src_cert" && -f "$src_key" ]]; then
+      status_line "Copied certificate" "OK" "$src_cert"
+      status_line "Copied private key" "OK" "$src_key"
+      break
+    fi
+    if [[ -f "$src_cert" ]]; then
+      status_line "Copied certificate" "OK" "$src_cert"
     else
+      status_line "Copied certificate" "WARN" "not found yet: ${src_cert}"
+    fi
+    if [[ -f "$src_key" ]]; then
+      status_line "Copied private key" "OK" "$src_key"
+    else
+      status_line "Copied private key" "WARN" "not found yet: ${src_key}"
+    fi
+    echo
+    if [[ ! -t 0 || "${ASSUME_YES:-0}" -eq 1 ]]; then
+      warn "Cert/key not in /tmp yet. Non-interactive session cannot wait."
+      echo "Copy the files, then re-run: $(toolkit_cmd trusted-mkcert-setup)"
+      echo "============================================================"
+      return 0
+    fi
+    read -r -p "Press Enter after scp (or type skip / guide): " reply || reply="skip"
+    reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
+    case "$reply" in
+      skip|s|q|quit)
+        warn "Leaving without installing. Re-run when the files are in /tmp:"
+        echo "  $(toolkit_cmd trusted-mkcert-setup)"
+        echo "============================================================"
+        return 0
+        ;;
+      guide|g|help|h)
+        show_mkcert_local_ssl_guide || true
+        ;;
+      *)
+        ;;
+    esac
+  done
+
+  # Step 3: install + configure + verify inside the VM.
+  echo
+  echo "------------------------------------------------------------"
+  echo "Step 2 — VM: install cert, enable Nginx HTTPS, verify"
+  echo "------------------------------------------------------------"
+  if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+    if ! confirm "Install the copied mkcert certificate and enable local HTTPS now?"; then
       warn "mkcert files found, but install was skipped."
       echo "Run later:"
       echo "  $(toolkit_cmd install-local-ssl-cert)"
       echo "  $(toolkit_cmd configure-local-ssl)"
       echo "  $(toolkit_cmd verify-local-ssl)"
+      echo "============================================================"
+      return 0
     fi
-  else
-    status_line "Copied certificate" "WARN" "not found yet"
-    status_line "Copied private key" "WARN" "not found yet"
-    echo
-    echo "Next required action: run the HOST commands above, then copy the files into /tmp/ on the VM."
-    echo "For the detailed guide, run:"
-    echo "  $(toolkit_cmd mkcert-guide)"
   fi
 
+  install_local_ssl_cert
+  configure_local_ssl
+  verify_local_ssl || true
+
+  echo
+  ok "Trusted local HTTPS should now be ready."
+  echo "Open from the HOST browser (only recommended URL):"
+  echo "  https://${SITE_NAME}"
+  echo "  https://${SITE_NAME}/app"
+  echo "  https://${SITE_NAME}/login"
   echo "============================================================"
 }
 
