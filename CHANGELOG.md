@@ -1,3 +1,40 @@
+## v1.6.0 - Gated & mandatory-signed releases, atomic self-update
+
+### Changed
+
+- **Releases are now gated on the full test pipeline.** `release.yml` no longer
+  publishes independently of CI. On a `v*` tag it runs one pipeline: `validate`
+  (reuses `ci.yml`: shellcheck + `validate-release.sh` + bundle quickstart) ->
+  `integration` (reuses `integration.yml`: real disposable-VM install + backup/
+  restore round-trip + production-runtime conversion) -> `publish`. The
+  `publish` job `needs: [validate, integration]`, so a release can never be
+  published unless both the static gate and the full integration run succeed
+  first. `ci.yml` and `integration.yml` are now reusable (`workflow_call`) and no
+  longer fire on tags themselves (release.yml orchestrates them), avoiding
+  duplicate multi-hour runs per tag.
+- **Release signing is mandatory for stable tags.** A stable `vX.Y.Z` tag now
+  FAILS the release if the signing key is missing or signing/verification fails.
+  An explicit escape hatch remains for emergencies: a pre-release tag
+  (e.g. `vX.Y.Z-unsigned`) may publish unsigned and is marked as a GitHub
+  pre-release. Previously any tag would silently publish unsigned when the key
+  was absent.
+- **Self-update is now atomic and rollback-capable.** `update-toolkit` downloads
+  the signed release bundle, verifies whole-tree checksums and (offline) the
+  detached signature against the bundled pinned key, extracts to
+  `/opt/erpnext-dev/releases/<ver>/`, then flips `/opt/erpnext-dev/current` in a
+  single atomic `rename`. A crash mid-update can no longer leave a half-written
+  tree mixing modules from two versions. The previous release is retained
+  (newest `TOOLKIT_RELEASES_KEEP=3` kept), and the new **`toolkit-rollback`**
+  command restores it instantly.
+
+### Fixed
+
+- **Latent CLI/symlink bug:** the entry script now resolves its own real path
+  (`readlink -f`) before locating `lib/`, so invoking the toolkit through the
+  `/usr/local/bin/erpnext-dev` CLI symlink (or the new `current` release symlink)
+  sources modules from the real release directory instead of failing to find
+  `lib/` next to the symlink.
+
 ## v1.5.1 - Local guided setup now walks through HTTPS / hardening / apps
 
 ### Changed

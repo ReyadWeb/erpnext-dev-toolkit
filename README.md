@@ -52,7 +52,7 @@ First install and verify the toolkit ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.5.1"
+VERSION="v1.6.0"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -583,11 +583,17 @@ plan on failure.
 ## Toolkit integrity and updates
 
 ```bash
-erpnext-dev verify-toolkit      # active script matches SHA256SUMS
-erpnext-dev verify-signature    # GPG signature over SHA256SUMS (bundled key)
-sudo erpnext-dev update-toolkit # checksum-gated self-update
-sudo erpnext-dev command-audit  # list available commands
+erpnext-dev verify-toolkit       # active script + all modules match SHA256SUMS
+erpnext-dev verify-signature     # GPG signature over SHA256SUMS (bundled key)
+sudo erpnext-dev update-toolkit  # atomic self-update (releases/<ver> + current symlink)
+sudo erpnext-dev toolkit-rollback # switch back to the previous release
+sudo erpnext-dev command-audit   # list available commands
 ```
+
+`update-toolkit` downloads the signed release bundle, verifies its checksums and
+signature, extracts it to `/opt/erpnext-dev/releases/<ver>/`, then flips the
+`/opt/erpnext-dev/current` symlink in a single atomic step. The previous release
+is kept on disk, so `toolkit-rollback` restores it instantly.
 
 `verify-toolkit` looks for `SHA256SUMS` in the current directory, beside the
 active/stable script, or in `/opt/erpnext-dev`; override with

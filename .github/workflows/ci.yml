@@ -3,9 +3,11 @@ name: Release validation
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
+  # Callable from release.yml so a release is GATED on the same lint/validate/
+  # bundle checks. Not triggered directly on tags anymore (release.yml invokes it).
+  workflow_call: {}
 
 # Least privilege: this job only reads the tree; it never needs write scopes.
 permissions:

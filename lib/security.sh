@@ -236,75 +236,275 @@ verify_toolkit_integrity() {
   return "$match_state"
 }
 
+# ---- Atomic self-update: versioned release dirs + a `current` symlink --------
+#
+# Layout after an atomic update:
+#   /opt/erpnext-dev/releases/<ver>/   (full verified tree)
+#   /opt/erpnext-dev/current       -> releases/<ver>
+#   /opt/erpnext-dev/erpnext-dev.sh -> current/erpnext-dev.sh
+#   /usr/local/bin/erpnext-dev     -> /opt/erpnext-dev/erpnext-dev.sh
+# The entry script resolves its own real path (readlink -f), so lib/ always
+# loads from releases/<ver>. Switching the `current` symlink is a single atomic
+# rename, so a crash mid-update can never leave a half-written live tree, and the
+# previous release stays on disk for rollback.
+
+TOOLKIT_RELEASE_GITHUB="${TOOLKIT_RELEASE_GITHUB:-https://github.com/ReyadWeb/erpnext-dev-installer}"
+TOOLKIT_RELEASES_KEEP="${TOOLKIT_RELEASES_KEEP:-3}"
+
+toolkit_stable_root() {
+  dirname "${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
+}
+
+toolkit_releases_dir() {
+  printf '%s/releases\n' "$(toolkit_stable_root)"
+}
+
+toolkit_current_link() {
+  printf '%s/current\n' "$(toolkit_stable_root)"
+}
+
+# Atomically point <root>/current at a release directory. target_rel is relative
+# to the stable root (e.g. "releases/v1.6.0") so the symlink stays valid if the
+# root is ever moved.
+toolkit_point_current() {
+  local target_rel="$1"
+  local root tmp
+  root="$(toolkit_stable_root)"
+  tmp="${root}/.current.tmp.$$"
+  ln -sfn "$target_rel" "$tmp" || return 1
+  mv -T "$tmp" "$(toolkit_current_link)"
+}
+
+# Replace the top-level convenience entries with symlinks into current/. The
+# entry script (erpnext-dev.sh) is swapped atomically; the rest are best-effort
+# mirrors and are not used at runtime (the resolved release dir is).
+toolkit_link_into_current() {
+  local root name tmp
+  root="$(toolkit_stable_root)"
+
+  tmp="${root}/.entry.tmp.$$"
+  ln -sfn "current/erpnext-dev.sh" "$tmp"
+  mv -T "$tmp" "${root}/erpnext-dev.sh"
+  chmod 755 "${root}/erpnext-dev.sh" 2>/dev/null || true
+
+  for name in lib SHA256SUMS SHA256SUMS.asc RELEASE-MANIFEST.txt docs; do
+    [[ -e "${root}/current/${name}" ]] || continue
+    rm -rf "${root:?}/${name}"
+    ln -sfn "current/${name}" "${root}/${name}"
+  done
+}
+
+# Keep only the newest N release directories plus whatever `current` and
+# `.previous` reference.
+toolkit_prune_releases() {
+  local keep="${1:-3}"
+  local releases_dir current_target prev keep_set d base count=0
+  releases_dir="$(toolkit_releases_dir)"
+  [[ -d "$releases_dir" ]] || return 0
+
+  current_target="$(readlink "$(toolkit_current_link)" 2>/dev/null | xargs -r basename 2>/dev/null || true)"
+  prev="$(cat "${releases_dir}/.previous" 2>/dev/null || true)"
+  keep_set=" ${current_target} ${prev} "
+
+  # Newest first by mtime.
+  while IFS= read -r d; do
+    [[ -d "$d" ]] || continue
+    base="$(basename "$d")"
+    if [[ "$keep_set" == *" ${base} "* ]]; then
+      continue
+    fi
+    count=$((count + 1))
+    if (( count > keep )); then
+      rm -rf "$d"
+    fi
+  done < <(ls -1dt "${releases_dir}"/*/ 2>/dev/null)
+}
+
+# Verify the detached signature over a staged SHA256SUMS using the pinned key
+# that ships inside the same release tree. Hard-fails on a bad signature; warns
+# (and continues) only when signing material is genuinely absent.
+toolkit_verify_staged_signature() {
+  local tree="$1"
+  local sig="${tree}/SHA256SUMS.asc"
+  local sums="${tree}/SHA256SUMS"
+  local pubkey="${tree}/docs/erpnext-dev-signing-key.asc"
+  local gnupg_home rc=0
+
+  if [[ ! -f "$sig" ]]; then
+    warn "No SHA256SUMS.asc in the release; proceeding on checksums only (unsigned)."
+    return 0
+  fi
+  if ! command -v gpg >/dev/null 2>&1; then
+    warn "gpg not available; verified checksums but could not verify the signature."
+    return 0
+  fi
+  if [[ ! -f "$pubkey" ]]; then
+    warn "No bundled signing key; verified checksums but could not verify the signature."
+    return 0
+  fi
+
+  gnupg_home="$(mktemp -d)"
+  if gpg --homedir "$gnupg_home" --batch --import "$pubkey" >/dev/null 2>&1 \
+     && gpg --homedir "$gnupg_home" --batch --verify "$sig" "$sums" >/dev/null 2>&1; then
+    ok "Release signature verified against the bundled pinned key."
+  else
+    rc=1
+    err "Release signature verification FAILED for ${version:-release}."
+  fi
+  rm -rf "$gnupg_home"
+  return "$rc"
+}
+
 update_toolkit() {
   require_sudo
 
-  local version release_base workdir checksum_file lib_file lib_dest stable_dir
+  local version release_base workdir tree stable_root releases_dir new_release
+  local prev_version current_target lib_file checksum_file
 
   command -v curl >/dev/null 2>&1 || fail "curl is required. Install it with: sudo apt-get install -y curl ca-certificates"
   command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required for checksum-gated updates."
 
   toolkit_update_guard_production_channel
   version="$(resolve_toolkit_update_version)"
+
+  stable_root="$(toolkit_stable_root)"
+  releases_dir="${stable_root}/releases"
+  mkdir -p "$releases_dir" || fail "Could not create ${releases_dir}."
+
+  # Stage on the SAME filesystem as releases/ so the promotion is an atomic rename.
+  workdir="$(mktemp -d "${stable_root}/.staging.XXXXXX")" || fail "Could not create staging directory under ${stable_root}."
+
+  ui_box_start "Update ERPNext Toolkit (atomic)"
+  status_line "Release tag" "INFO" "$version"
+  status_line "Stable root" "INFO" "$stable_root"
+  status_line "Model" "INFO" "releases/<ver> + current symlink (rollback-capable)"
+  status_line "Checksum gate" "OK" "whole-tree sha256sum -c required"
+
   if toolkit_update_uses_main_branch; then
+    # main channel: no release bundle exists; assemble the tree from raw files.
     release_base="${TOOLKIT_RELEASE_REPO}/main"
+    tree="${workdir}/tree"
+    mkdir -p "${tree}/lib"
+    status_line "Channel" "INFO" "main (raw files, unsigned)"
+
+    log "Downloading SHA256SUMS"
+    curl -fsSL "${release_base}/SHA256SUMS" -o "${tree}/SHA256SUMS" || fail "Failed to download SHA256SUMS from main."
+    checksum_file="${tree}/SHA256SUMS"
+
+    log "Downloading erpnext-dev.sh"
+    curl -fsSL "${release_base}/erpnext-dev.sh" -o "${tree}/erpnext-dev.sh" || fail "Failed to download erpnext-dev.sh from main."
+    verify_release_file_checksum "$checksum_file" "erpnext-dev.sh" "${tree}/erpnext-dev.sh"
+
+    while IFS= read -r lib_file; do
+      [[ -n "$lib_file" ]] || continue
+      curl -fsSL "${release_base}/lib/${lib_file}" -o "${tree}/lib/${lib_file}" || fail "Failed to download lib/${lib_file} from main."
+      verify_release_file_checksum "$checksum_file" "lib/${lib_file}" "${tree}/lib/${lib_file}"
+    done < <(toolkit_release_lib_files)
   else
-    release_base="${TOOLKIT_RELEASE_REPO}/${version}"
+    # tag channel: download the signed, self-contained release bundle.
+    command -v tar >/dev/null 2>&1 || fail "tar is required to extract the release bundle."
+    release_base="${TOOLKIT_RELEASE_GITHUB}/releases/download/${version}"
+    status_line "Channel" "INFO" "tag ${version} (signed bundle)"
+
+    log "Downloading release bundle erpnext-dev-${version}.tar.gz"
+    curl -fsSL "${release_base}/erpnext-dev-${version}.tar.gz" -o "${workdir}/bundle.tar.gz" \
+      || fail "Failed to download release bundle for ${version}. Does the release exist?"
+
+    log "Extracting bundle"
+    tar -C "$workdir" -xzf "${workdir}/bundle.tar.gz" || fail "Failed to extract the release bundle."
+    tree="${workdir}/erpnext-dev-${version}"
+    [[ -d "$tree" && -f "${tree}/erpnext-dev.sh" && -f "${tree}/SHA256SUMS" ]] \
+      || fail "Release bundle layout unexpected; missing erpnext-dev.sh or SHA256SUMS."
+
+    log "Verifying whole-tree checksums"
+    ( cd "$tree" && sha256sum -c SHA256SUMS >/dev/null ) || fail "Checksum verification failed for the ${version} bundle."
+    status_line "Checksums" "OK" "every packaged file matches SHA256SUMS"
+
+    toolkit_verify_staged_signature "$tree" || fail "Refusing to install a release with an invalid signature."
   fi
 
-  workdir="$(mktemp -d /tmp/erpnext-dev-update.XXXXXX)" || fail "Could not create temporary update directory."
+  bash -n "${tree}/erpnext-dev.sh" || fail "Downloaded toolkit failed bash syntax validation."
+  chmod 755 "${tree}/erpnext-dev.sh" 2>/dev/null || true
 
-  ui_box_start "Update ERPNext Toolkit"
-  status_line "Release tag" "INFO" "$version"
-  status_line "Download base" "INFO" "$release_base"
-  status_line "Stable toolkit" "INFO" "$INSTALLER_CANONICAL_PATH"
-  status_line "Checksum gate" "OK" "required before install"
+  # Promote the verified tree into releases/<ver> (atomic rename, same fs).
+  new_release="${releases_dir}/${version}"
+  rm -rf "$new_release"
+  mv -T "$tree" "$new_release" || fail "Could not move the verified tree into ${new_release}."
+  chown -R root:root "$new_release" 2>/dev/null || true
 
-  log "Downloading release manifest checksums"
-  curl -fsSL "${release_base}/SHA256SUMS" -o "${workdir}/SHA256SUMS" || fail "Failed to download SHA256SUMS for ${version}."
-  checksum_file="${workdir}/SHA256SUMS"
+  # Remember what we are replacing so rollback can restore it.
+  if [[ -L "$(toolkit_current_link)" ]]; then
+    current_target="$(readlink "$(toolkit_current_link)" 2>/dev/null || true)"
+    prev_version="$(basename "$current_target" 2>/dev/null || true)"
+  else
+    prev_version=""
+  fi
 
-  log "Downloading erpnext-dev.sh"
-  curl -fsSL "${release_base}/erpnext-dev.sh" -o "${workdir}/erpnext-dev.sh" || fail "Failed to download erpnext-dev.sh for ${version}."
-  verify_release_file_checksum "$checksum_file" "erpnext-dev.sh" "${workdir}/erpnext-dev.sh"
-  chmod +x "${workdir}/erpnext-dev.sh"
-  bash -n "${workdir}/erpnext-dev.sh" || fail "Downloaded toolkit failed bash syntax validation."
+  # Atomic switchover.
+  toolkit_point_current "releases/${version}" || fail "Could not switch the current symlink."
+  toolkit_link_into_current
 
-  mkdir -p "${workdir}/lib"
-  while IFS= read -r lib_file; do
-    [[ -n "$lib_file" ]] || continue
-    log "Downloading lib/${lib_file}"
-    curl -fsSL "${release_base}/lib/${lib_file}" -o "${workdir}/lib/${lib_file}" || fail "Failed to download lib/${lib_file} for ${version}."
-    verify_release_file_checksum "$checksum_file" "lib/${lib_file}" "${workdir}/lib/${lib_file}"
-    status_line "Library ${lib_file}" "OK" "checksum verified"
-  done < <(toolkit_release_lib_files)
-
-  stable_dir="$(dirname "$INSTALLER_CANONICAL_PATH")"
-  mkdir -p "$stable_dir"
-  mkdir -p "${stable_dir}/lib"
-
-  cp "${workdir}/erpnext-dev.sh" "$INSTALLER_CANONICAL_PATH"
-  chmod 755 "$INSTALLER_CANONICAL_PATH"
-  chown root:root "$INSTALLER_CANONICAL_PATH" 2>/dev/null || true
-
-  cp "$checksum_file" "${stable_dir}/SHA256SUMS"
-  chmod 644 "${stable_dir}/SHA256SUMS" 2>/dev/null || true
-  chown root:root "${stable_dir}/SHA256SUMS" 2>/dev/null || true
-
-  while IFS= read -r lib_file; do
-    [[ -n "$lib_file" ]] || continue
-    lib_dest="${stable_dir}/lib/${lib_file}"
-    cp "${workdir}/lib/${lib_file}" "$lib_dest"
-    chmod 644 "$lib_dest" 2>/dev/null || true
-    chown root:root "$lib_dest" 2>/dev/null || true
-  done < <(toolkit_release_lib_files)
+  if [[ -n "$prev_version" && "$prev_version" != "$version" ]]; then
+    printf '%s\n' "$prev_version" > "${releases_dir}/.previous"
+  fi
 
   rm -rf "$workdir"
+  toolkit_prune_releases "$TOOLKIT_RELEASES_KEEP"
 
-  install_toolkit_cli_entry || fail "Updated toolkit, but failed to recreate ${TOOLKIT_CLI_PATH}."
+  install_toolkit_cli_entry || warn "Updated toolkit, but could not recreate ${TOOLKIT_CLI_PATH}. Run: $(toolkit_cmd install-cli)"
 
-  ok "Toolkit updated from verified release ${version}."
-  "$INSTALLER_CANONICAL_PATH" version
+  ok "Toolkit updated to ${version} (atomic). Previous release kept for rollback."
+  if [[ -n "$prev_version" && "$prev_version" != "$version" ]]; then
+    echo "  Roll back with: $(toolkit_cmd toolkit-rollback)"
+  fi
+  "$(toolkit_current_link)/erpnext-dev.sh" version || true
+  ui_box_end
+}
+
+# Roll the `current` symlink back to the previously installed release. Optional
+# TOOLKIT_ROLLBACK_VERSION overrides the recorded previous version.
+rollback_toolkit() {
+  require_sudo
+
+  local stable_root releases_dir target target_dir
+  stable_root="$(toolkit_stable_root)"
+  releases_dir="${stable_root}/releases"
+
+  target="${TOOLKIT_ROLLBACK_VERSION:-}"
+  if [[ -z "$target" ]]; then
+    target="$(cat "${releases_dir}/.previous" 2>/dev/null || true)"
+  fi
+
+  ui_box_start "Roll Back ERPNext Toolkit"
+  if [[ -z "$target" ]]; then
+    err "No previous release recorded. Set TOOLKIT_ROLLBACK_VERSION=vX.Y.Z to pick one."
+    echo "Available releases:"
+    local rel found=0
+    for rel in "${releases_dir}"/v*/; do
+      [[ -d "$rel" ]] || continue
+      echo "  $(basename "$rel")"
+      found=1
+    done
+    (( found )) || echo "  (none)"
+    ui_box_end
+    return 1
+  fi
+
+  [[ "$target" == v* ]] || target="v${target}"
+  target_dir="${releases_dir}/${target}"
+  if [[ ! -d "$target_dir" || ! -f "${target_dir}/erpnext-dev.sh" ]]; then
+    err "Release ${target} is not present under ${releases_dir}."
+    ui_box_end
+    return 1
+  fi
+
+  status_line "Rolling back to" "INFO" "$target"
+  toolkit_point_current "releases/${target}" || { err "Could not switch the current symlink."; ui_box_end; return 1; }
+  toolkit_link_into_current
+  install_toolkit_cli_entry || warn "Rolled back, but could not recreate ${TOOLKIT_CLI_PATH}."
+
+  ok "Rolled back to ${target}."
+  "$(toolkit_current_link)/erpnext-dev.sh" version || true
   ui_box_end
 }
 

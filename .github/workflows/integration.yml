@@ -19,9 +19,16 @@ on:
   schedule:
     # Mondays 06:00 UTC. Catches upstream package/repo drift once a week.
     - cron: "0 6 * * 1"
-  push:
-    tags:
-      - "v*"
+  # Callable from release.yml so a release is GATED on a real install+restore+
+  # production-conversion run. Not triggered directly on tags anymore (release.yml
+  # invokes it) to avoid a duplicate multi-hour run per tag.
+  workflow_call:
+    inputs:
+      site_name:
+        description: "ERPNext site name to install"
+        type: string
+        default: "erp.test"
+        required: false
 
 concurrency:
   group: integration-${{ github.ref }}
@@ -45,8 +52,8 @@ jobs:
           # steps below are OS-agnostic and need no other change.
           # - ubuntu-26.04
     env:
-      # erp.test keeps parity with the toolkit default; workflow_dispatch can override.
-      SITE_NAME: ${{ github.event.inputs.site_name || 'erp.test' }}
+      # erp.test keeps parity with the toolkit default; dispatch/call can override.
+      SITE_NAME: ${{ inputs.site_name || 'erp.test' }}
       # Hosted runners expose well under the 30 GB preflight minimum, so the
       # blocking disk gate must be overridden for CI. Real VMs should not.
       ERPNEXT_ALLOW_UNSAFE_INSTALL: "true"

@@ -1,26 +1,44 @@
-name: Release (sign & publish)
+name: Release (gate, sign & publish)
 
-# On every v* tag: validate the release tree, sign SHA256SUMS with the
-# maintainer GPG key (if configured), and publish a GitHub Release with the
-# checksums and detached signature attached.
+# On every v* tag, run a single gated pipeline:
+#   validate     -> lint + validate-release + bundle quickstart (reuses ci.yml)
+#   integration  -> real install + backup/restore + production conversion (reuses integration.yml)
+#   publish      -> sign SHA256SUMS (MANDATORY for stable tags) and publish the release
 #
-# Signing is gated on the GPG_PRIVATE_KEY secret so the workflow does not hard
-# fail before a key is configured; once the secret is set, releases are signed
-# automatically. See SECURITY.md ("Verifying release signatures") for the
-# operator setup and end-user verification steps.
+# publish `needs: [validate, integration]`, so a release is NEVER published unless
+# both the static gate and the full disposable-VM integration run succeed first.
+#
+# Signing policy:
+#   - Stable tags (vX.Y.Z)            -> signing is REQUIRED; the job fails if the
+#                                        GPG key is missing or signing/verify fails.
+#   - Pre-release tags (vX.Y.Z-...)   -> may publish unsigned (escape hatch, e.g.
+#                                        v1.6.0-unsigned for an emergency build).
+# See SECURITY.md ("Verifying release signatures").
 
 on:
   push:
     tags:
       - "v*"
 
+# Workflow-level ceiling. The reused validate/integration workflows self-limit to
+# `contents: read`; only the publish job below uses write (to create the release).
 permissions:
   contents: write
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+
+  integration:
+    needs: validate
+    uses: ./.github/workflows/integration.yml
+
   publish:
     name: Sign and publish ${{ github.ref_name }}
+    needs: [validate, integration]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     env:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -47,14 +65,29 @@ jobs:
             exit 1
           fi
 
-      - name: Sign SHA256SUMS
+      - name: Sign SHA256SUMS (mandatory for stable tags)
         run: |
           set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+
+          # A stable release tag is exactly vMAJOR.MINOR.PATCH (no pre-release suffix).
+          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            stable=1
+          else
+            stable=0
+          fi
+
           if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "::warning::GPG_PRIVATE_KEY secret is not set; publishing WITHOUT a signature."
-            echo "Configure the signing key to enable signed releases (see SECURITY.md)."
+            if [[ "$stable" -eq 1 ]]; then
+              echo "::error::GPG_PRIVATE_KEY is not set. Stable releases MUST be signed."
+              echo "Configure the signing key (see SECURITY.md), or cut an unsigned emergency"
+              echo "build using a pre-release tag such as ${tag}-unsigned."
+              exit 1
+            fi
+            echo "::warning::No signing key; publishing pre-release ${tag} UNSIGNED (escape hatch)."
             exit 0
           fi
+
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           keyid="$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')"
           [[ -n "$keyid" ]] || { echo "::error::No secret key found after import."; exit 1; }
@@ -70,7 +103,7 @@ jobs:
 
       - name: Build release bundle
         # Runs after signing so the tarball includes SHA256SUMS.asc, letting
-        # `erpnext-dev verify-signature` work offline from the extracted tree.
+        # `erpnext-dev verify-signature` (and atomic update-toolkit) verify offline.
         run: scripts/build-release-bundle.sh
 
       - name: Verify bundle installs from a clean extract
@@ -92,6 +125,11 @@ jobs:
           assets=(SHA256SUMS erpnext-dev.sh RELEASE-MANIFEST.txt "dist/erpnext-dev-${tag}.tar.gz")
           [[ -f SHA256SUMS.asc ]] && assets+=(SHA256SUMS.asc)
 
+          prerelease_flag=""
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            prerelease_flag="--prerelease"
+          fi
+
           notes="Automated release for ${GITHUB_REF_NAME}.
 
           Install (self-contained bundle — includes all lib/ modules):
@@ -109,6 +147,7 @@ jobs:
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
           else
+            # shellcheck disable=SC2086
             gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
-              --title "${GITHUB_REF_NAME}" --notes "$notes"
+              --title "${GITHUB_REF_NAME}" --notes "$notes" $prerelease_flag
           fi
