@@ -333,7 +333,17 @@ set -Eeuo pipefail
 export HOME="${FRAPPE_HOME}"
 export PATH="\$HOME/.local/bin:\$PATH"
 
-mkdir -p "\$HOME"
+# Pin XDG base dirs under the frappe home. Otherwise a caller-inherited
+# XDG_CONFIG_HOME/XDG_* (e.g. /home/runner/.config in CI, or a sudo env that
+# preserves it) leaks in, and tools like the uv installer try to write their
+# receipt there and fail with a permission error. Installs must not depend on
+# the invoking user's XDG environment.
+export XDG_CONFIG_HOME="\$HOME/.config"
+export XDG_DATA_HOME="\$HOME/.local/share"
+export XDG_STATE_HOME="\$HOME/.local/state"
+export XDG_CACHE_HOME="\$HOME/.cache"
+
+mkdir -p "\$HOME" "\$XDG_CONFIG_HOME" "\$XDG_DATA_HOME" "\$XDG_STATE_HOME" "\$XDG_CACHE_HOME"
 cd "\$HOME"
 
 echo

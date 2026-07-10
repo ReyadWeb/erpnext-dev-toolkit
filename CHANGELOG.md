@@ -1,3 +1,18 @@
+## v1.4.1 - Fix XDG environment leak in the installer
+
+### Fixed
+
+- The disposable-VM integration workflow caught a real install bug: when the toolkit runs the stack build as the `frappe` user it sets `HOME`, but a caller-inherited `XDG_CONFIG_HOME` (e.g. `/home/runner/.config` under the CI runner, or any `sudo` invocation whose env preserves it) leaked through unchanged. The `uv` installer derives its receipt directory from `XDG_CONFIG_HOME` and failed with `unable to create receipt directory at /home/runner/.config/uv` (`Permission denied`), aborting the install. On a normal fresh VM `XDG_CONFIG_HOME` is unset so the bug was invisible outside CI.
+- The installer now pins `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME` under the `frappe` home (and pre-creates them) inside the frappe login shell, so tool state is written to a writable, deterministic location regardless of the invoking user's environment.
+
+### Changed
+
+- Bumped the toolkit version to v1.4.1 and regenerated `SHA256SUMS`.
+
+### Validation scope
+
+- `bash -n` passes for `lib/install.sh` and `erpnext-dev.sh`; `scripts/validate-release.sh` passes locally. The fix is exercised end-to-end by the next integration run.
+
 ## v1.4.0 - Guarded ERPNext upgrades (E5)
 
 ### Added
