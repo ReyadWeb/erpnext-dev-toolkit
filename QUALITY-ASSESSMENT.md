@@ -241,7 +241,7 @@ Prioritized by impact and dependency order. Status as of v1.2.1 (Phases A–C co
 | E2 | `vm-state-report` command | P1 | Planned |
 | E3 | Expand structured `--json` output | P2 | Planned |
 | E4 | Health alert hooks (email/webhook) | P2 | Planned |
-| E5 | `update-preflight` + `safe-update-wizard` | P2 | Planned |
+| E5 | `update-preflight` + `safe-update-wizard` | P2 | **Done (v1.4.0)** |
 
 ### Phase F — Code Hygiene & Maintainability (from v1.2.1 evaluation)
 
@@ -263,7 +263,8 @@ v1.1.74 (done)  → A1–A4   Manifest, checksums, version checks, menu CI
 v1.1.75         → B1, B6   Start modularization + shellcheck
 v1.2.0          → B2–B5, C1–C4
 v1.2.x          → D1–D3    Integration test VM
-v1.3.0          → A5, D4, E4–E5
+v1.3.0          → A5, D4
+v1.4.0          → E5        Guarded, backup-first upgrades
 ```
 
 ---

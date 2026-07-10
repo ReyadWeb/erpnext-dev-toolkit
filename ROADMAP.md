@@ -1,6 +1,28 @@
+# v1.4.0 roadmap update - guarded ERPNext upgrades (E5)
+
+Status: **implemented**.
+
+Upgrades were the last unguarded high-risk operation: `bench update` pulls new upstream code, migrates the schema, rebuilds, and restarts — any step can take a healthy site down, and there was no toolkit path that made it safe. v1.4.0 adds `lib/update.sh`:
+
+- **`update-preflight`** — read-only readiness report (environment, service state, free disk, uncommitted app changes, current versions, backup recency); returns non-zero on hard blockers.
+- **`safe-update-wizard`** — preflight -> typed confirmation -> full backup -> record pre-upgrade commit state -> `bench update` -> migrate -> post-upgrade health gate, with a concrete rollback plan printed on any failure.
+- **`update-rollback`** — checks out the recorded pre-upgrade commits and points to `restore-full` for the recorded database backup.
+
+This completes the operator-trust arc: install (v1.2.x), verify/sign (v1.3.0), and now upgrade/rollback (v1.4.0) are all guarded, backup-first flows.
+
+## Next milestones after v1.4.0
+
+1. **Confirm the first live integration + restore run** on hosted runners; tune timing windows.
+2. **Add an upgrade rehearsal to CI** — run `safe-update-wizard` against the freshly installed site so upstream breakage is caught automatically (extends D4).
+3. **Enable the Ubuntu 26.04 matrix leg** once a hosted runner label exists (D2).
+4. **F4/F6 — module-list single source of truth** + a CI consistency check (now four module lists: source chain, shellcheck, manifest, release lib files).
+5. **F5 — raise shellcheck to `-S warning`** after triage.
+
+---
+
 # v1.3.0 roadmap update - "verified & signed" milestone
 
-Status: **implemented** (activation of signing pending maintainer key).
+Status: **implemented** (signing active; maintainer key configured).
 
 v1.3.0 closes the two highest-value maturity gaps from the professional evaluation: an unverified restore path and integrity-only (unsigned) releases.
 
@@ -17,7 +39,7 @@ v1.3.0 closes the two highest-value maturity gaps from the professional evaluati
 
 1. **Confirm the first live integration run** (install + restore round trip) on hosted runners; tune the reachability/restore windows from real timing.
 2. **Enable the Ubuntu 26.04 matrix leg** once a hosted runner label exists (D2).
-3. **E5 — `update-preflight` + `safe-update-wizard`:** guarded, backup-first ERPNext version upgrades (the next big operator-trust item).
+3. **E5 — `update-preflight` + `safe-update-wizard`:** guarded, backup-first ERPNext version upgrades (the next big operator-trust item). **Done (v1.4.0).**
 4. **F4/F6 — module-list single source of truth** + a CI consistency check.
 5. **F5 — raise shellcheck to `-S warning`** after triage.
 

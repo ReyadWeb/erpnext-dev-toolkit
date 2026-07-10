@@ -1,3 +1,26 @@
+## v1.4.0 - Guarded ERPNext upgrades (E5)
+
+### Added
+
+- **`lib/update.sh`** implementing a backup-first, verified upgrade flow for installed ERPNext/Frappe apps. `bench update` (pull + migrate + build + restart) is the riskiest routine operation on a working site; this module wraps it so an upgrade is always pre-checked, backed up, health-verified, and rollback-documented.
+- **`update-preflight`** (aliases `upgrade-preflight`): read-only readiness report — environment/production caution, service state, free disk (needs >= 5 GiB), uncommitted changes in app working trees (a hard blocker), current app branch@commit, and backup recency. Returns non-zero on blockers.
+- **`safe-update-wizard`** (aliases `safe-update`, `update-erpnext`, `upgrade-erpnext`): runs the preflight (abort on blockers unless `UPDATE_FORCE=1`), requires a typed `UPDATE` confirmation (bypassable with `-y`/`ASSUME_YES=1`), takes a full backup, records pre-upgrade commit state to a rollback file, runs `bench update`, then re-runs migrate and gates on a post-upgrade health check. Prints a concrete rollback plan on any failure.
+- **`update-rollback`** (alias `rollback-update`): checks out the app commits recorded before the last upgrade (typed `ROLLBACK` confirmation), rebuilds, restarts, and points to `restore-full` for the recorded database backup.
+- Registered `lib/update.sh` in the source chain, shellcheck targets, and `RELEASE-MANIFEST.txt`; documented the new commands in `help`.
+
+### Changed
+
+- Updated the toolkit version to v1.4.0 and regenerated `SHA256SUMS`.
+
+### Notes
+
+- Code rollback does not by itself revert database schema migrations; the wizard and rollback both direct the operator to the recorded backup via `restore-full` for a full revert.
+
+### Validation scope
+
+- `bash -n` passes for `lib/update.sh` and `erpnext-dev.sh`; the toolkit sources cleanly and `version`/`help` expose the new commands.
+- `scripts/validate-release.sh` passes locally. shellcheck runs in CI.
+
 ## v1.3.0 - Verified & signed: restore-rehearsal CI and GPG-signed releases
 
 ### Added
