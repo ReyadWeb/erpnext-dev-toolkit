@@ -949,6 +949,7 @@ show_access_menu() {
     echo "27) Production SSL guide"
     echo "28) Environment / location check"
     menu_footer
+    local access_choice=""
     menu_read_choice access_choice
 
     case "$access_choice" in

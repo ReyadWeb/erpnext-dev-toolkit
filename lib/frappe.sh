@@ -351,7 +351,6 @@ active_bench_dir() {
 
 bench_site_candidates() {
   local bench_dir="$1"
-  local site
 
   [[ -d "${bench_dir}/sites" ]] || return 1
 

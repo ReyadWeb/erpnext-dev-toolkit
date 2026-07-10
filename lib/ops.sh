@@ -76,6 +76,7 @@ production_ops_services_menu() {
     echo "7) Follow service logs"
     echo "8) Service recovery plan"
     menu_footer
+    local services_choice=""
     menu_read_choice services_choice
     case "$services_choice" in
       1) show_erpnext_service_status; pause_after_screen "Press Enter to return to Services and Recovery..." ;;
@@ -109,6 +110,7 @@ production_ops_backups_menu() {
     echo "10) Cleanup old backups"
     echo "11) Full backup/maintenance menu"
     menu_footer
+    local local_backup_choice=""
     menu_read_choice local_backup_choice
     case "$local_backup_choice" in
       1) create_site_backup true; pause_after_screen "Press Enter to return to Local Backups..." ;;
@@ -143,6 +145,7 @@ production_ops_restore_menu() {
     echo "8) Restore database only"
     echo "9) Restore database + files"
     menu_footer
+    local restore_choice=""
     menu_read_choice restore_choice
     case "$restore_choice" in
       1) show_restore_rehearsal_status; pause_after_screen "Press Enter to return to Restore Readiness..." ;;
@@ -175,6 +178,7 @@ production_ops_security_menu() {
     echo "8) Security audit"
     echo "9) Cloud firewall checklist"
     menu_footer
+    local security_choice=""
     menu_read_choice security_choice
     case "$security_choice" in
       1) show_firewall_hardening_status; pause_after_screen "Press Enter to return to Security and Firewall..." ;;
@@ -204,6 +208,7 @@ production_ops_https_menu() {
     echo "5) Cloudflare checklist"
     echo "6) SSL compatibility guide"
     menu_footer
+    local https_choice=""
     menu_read_choice https_choice
     case "$https_choice" in
       1) show_production_ssl_status; pause_after_screen "Press Enter to return to HTTPS and Certificates..." ;;
@@ -235,6 +240,7 @@ production_ops_support_menu() {
     echo "10) Verify toolkit integrity"
     echo "11) Audit latest support bundle"
     menu_footer
+    local support_choice=""
     menu_read_choice support_choice
     case "$support_choice" in
       1) run_doctor_plain; pause_after_screen "Press Enter to return to Support and Diagnostics..." ;;
@@ -276,6 +282,7 @@ production_ops_wizard() {
     echo "10) Support and diagnostics"
     echo "11) Final QA"
     menu_footer quit-only
+    local ops_choice=""
     menu_read_choice ops_choice
     case "$ops_choice" in
       1) show_release_readiness; pause_after_screen "Press Enter to return to Production Operations..." ;;

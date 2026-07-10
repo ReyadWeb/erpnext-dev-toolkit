@@ -34,7 +34,6 @@ app_profile_branch_overrides() {
 app_profile_defaults() {
   local profile="$1"
 
-  LIB_APP_KEY=""
   LIB_APP_DISPLAY=""
   LIB_APP_NAME=""
   LIB_APP_REPO=""
@@ -43,7 +42,6 @@ app_profile_defaults() {
 
   case "$profile" in
     crm)
-      LIB_APP_KEY="crm"
       LIB_APP_DISPLAY="Frappe CRM"
       LIB_APP_NAME="crm"
       LIB_APP_REPO="https://github.com/frappe/crm"
@@ -51,7 +49,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Standalone modern CRM app. ERPNext already includes classic CRM features; install this if you want the separate Frappe CRM experience."
       ;;
     hrms|hr)
-      LIB_APP_KEY="hrms"
       LIB_APP_DISPLAY="Frappe HR / HRMS"
       LIB_APP_NAME="hrms"
       LIB_APP_REPO="https://github.com/frappe/hrms"
@@ -59,7 +56,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="HR, payroll, attendance, leave, employee lifecycle, and HR operations app for Frappe/ERPNext."
       ;;
     education|school|school-erp)
-      LIB_APP_KEY="education"
       LIB_APP_DISPLAY="Frappe Education"
       LIB_APP_NAME="education"
       LIB_APP_REPO="https://github.com/frappe/education"
@@ -67,7 +63,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Education and school-management ERP app for admissions, students, teachers, attendance, fees, course scheduling, exams, and student portal. Defaults to EDUCATION_BRANCH=version-16."
       ;;
     telephony)
-      LIB_APP_KEY="telephony"
       LIB_APP_DISPLAY="Frappe Telephony"
       LIB_APP_NAME="telephony"
       LIB_APP_REPO="https://github.com/frappe/telephony"
@@ -75,7 +70,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Dependency app used by Frappe Helpdesk for telephony integrations. Installed automatically before Helpdesk when required."
       ;;
     helpdesk)
-      LIB_APP_KEY="helpdesk"
       LIB_APP_DISPLAY="Frappe Helpdesk"
       LIB_APP_NAME="helpdesk"
       LIB_APP_REPO="https://github.com/frappe/helpdesk"
@@ -83,7 +77,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Ticketing and customer support app. Requires the Frappe Telephony app; the toolkit handles that dependency automatically."
       ;;
     insights)
-      LIB_APP_KEY="insights"
       LIB_APP_DISPLAY="Frappe Insights"
       LIB_APP_NAME="insights"
       LIB_APP_REPO="https://github.com/frappe/insights"
@@ -91,7 +84,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Business intelligence, reporting, and dashboard app for Frappe sites."
       ;;
     payments|payment)
-      LIB_APP_KEY="payments"
       LIB_APP_DISPLAY="Frappe Payments"
       LIB_APP_NAME="payments"
       LIB_APP_REPO="https://github.com/frappe/payments"
@@ -99,7 +91,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Payment gateway integrations for Frappe apps, including Stripe, PayPal, Razorpay, Braintree, and PayTM. Uses the repository default branch unless PAYMENTS_BRANCH is set."
       ;;
     webshop|ecommerce|e-commerce)
-      LIB_APP_KEY="webshop"
       LIB_APP_DISPLAY="Frappe Webshop / E-Commerce"
       LIB_APP_NAME="webshop"
       LIB_APP_REPO="https://github.com/frappe/webshop"
@@ -107,7 +98,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Open-source eCommerce storefront app for ERPNext-backed catalogs and orders. For Frappe/ERPNext v16, upstream guidance currently points to the develop branch."
       ;;
     builder|frappe-builder)
-      LIB_APP_KEY="builder"
       LIB_APP_DISPLAY="Frappe Builder"
       LIB_APP_NAME="builder"
       LIB_APP_REPO="https://github.com/frappe/builder"
@@ -115,7 +105,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Low-code website builder for Frappe. Uses the repository default branch unless BUILDER_BRANCH is set."
       ;;
     lms|learning)
-      LIB_APP_KEY="lms"
       LIB_APP_DISPLAY="Frappe Learning / LMS"
       LIB_APP_NAME="lms"
       LIB_APP_REPO="https://github.com/frappe/lms"
@@ -123,7 +112,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Learning management app for courses, lessons, batches, and knowledge sharing. Uses the repository default branch unless LMS_BRANCH is set."
       ;;
     wiki|frappe-wiki)
-      LIB_APP_KEY="wiki"
       LIB_APP_DISPLAY="Frappe Wiki"
       LIB_APP_NAME="wiki"
       LIB_APP_REPO="https://github.com/frappe/wiki"
@@ -131,7 +119,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Documentation and knowledge-base app for text-heavy content, revisions, and publishing workflows. Uses the repository default branch unless WIKI_BRANCH is set."
       ;;
     print_designer|print-designer|printdesigner)
-      LIB_APP_KEY="print_designer"
       LIB_APP_DISPLAY="Frappe Print Designer"
       LIB_APP_NAME="print_designer"
       LIB_APP_REPO="https://github.com/frappe/print_designer"
@@ -139,7 +126,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="Visual print-format designer for ERPNext/Frappe invoices, quotes, delivery notes, and other print formats. Uses the repository default branch unless PRINT_DESIGNER_BRANCH is set."
       ;;
     drive|frappe-drive)
-      LIB_APP_KEY="drive"
       LIB_APP_DISPLAY="Frappe Drive"
       LIB_APP_NAME="drive"
       LIB_APP_REPO="https://github.com/frappe/drive"
@@ -147,7 +133,6 @@ app_profile_defaults() {
       LIB_APP_NOTES="File storage, sharing, and collaboration app. Treat as advanced for ERPNext stacks and test on a disposable VM snapshot first."
       ;;
     raven|chat)
-      LIB_APP_KEY="raven"
       LIB_APP_DISPLAY="Raven Team Chat"
       LIB_APP_NAME="raven"
       LIB_APP_REPO="https://github.com/The-Commit-Company/raven"
@@ -1267,7 +1252,7 @@ install_frappe_app() {
   local repo="$3"
   local branch="$4"
   local notes="$5"
-  local bench_dir repo_q branch_q downloaded_branch was_running
+  local bench_dir repo_q branch_q downloaded_branch
 
   bench_dir="$(require_site_environment)" || return 1
 
@@ -1300,11 +1285,6 @@ install_frappe_app() {
 
   ensure_app_library_node_tools
   install_app_dependencies "$bench_dir" "$app_name"
-
-  was_running=0
-  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    was_running=1
-  fi
 
   if app_folder_exists "$bench_dir" "$app_name"; then
     downloaded_branch="$(get_app_current_branch "$bench_dir" "$app_name" | tail -1 | tr -d '[:space:]')"
@@ -1428,6 +1408,7 @@ show_advanced_app_tools_menu() {
     echo
     warn "Custom Git apps are not curated by this toolkit and may break the site if incompatible."
     menu_footer
+    local advanced_app_choice=""
     menu_read_choice advanced_app_choice
 
     case "$advanced_app_choice" in
@@ -1454,6 +1435,7 @@ show_app_library_menu() {
     echo
     echo "Notes: one app at a time; keep a backup checkpoint."
     menu_footer
+    local app_choice=""
     menu_read_choice app_choice
 
     case "$app_choice" in

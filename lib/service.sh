@@ -84,6 +84,7 @@ bench_readiness_line() {
     "$elapsed" "$timeout" "$web" "$socket" "$queue" "$cache"
 }
 
+# shellcheck disable=SC2120 # timeout/interval are optional overrides with sane defaults
 wait_for_erpnext_ready() {
   local timeout="${1:-$READY_TIMEOUT}"
   local interval="${2:-$READY_INTERVAL}"
@@ -124,7 +125,7 @@ ensure_bench_services_for_site_commands() {
     err "ERPNext service is not configured, so Bench services are not managed by this toolkit yet."
     echo
     echo "Start Bench manually as the ${FRAPPE_USER} user if you are using development mode:"
-    echo "  sudo -iu ${FRAPPE_USER} bash -lc 'export PATH="\$HOME/.local/bin:\$PATH"; cd ${bench_dir} && bench start'"
+    echo "  sudo -iu ${FRAPPE_USER} bash -lc 'export PATH=\"\$HOME/.local/bin:\$PATH\"; cd ${bench_dir} && bench start'"
     return 1
   fi
 
@@ -396,6 +397,7 @@ show_service_menu() {
     echo "7) Show recent service logs"
     echo "8) Follow service logs"
     menu_footer
+    local service_choice=""
     menu_read_choice service_choice
 
     case "$service_choice" in

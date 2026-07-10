@@ -38,7 +38,7 @@ for target in "${targets[@]}"; do
     echo "missing shellcheck target: $target" >&2
     exit 1
   }
-  shellcheck -x -S error "$target"
+  shellcheck -x -S warning "$target"
 done
 
 echo "shellcheck passed for ${#targets[@]} file(s)"

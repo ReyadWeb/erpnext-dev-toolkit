@@ -181,7 +181,7 @@ verify_toolkit_integrity() {
 update_toolkit() {
   require_sudo
 
-  local version release_base workdir checksum_file lib_file lib_dest lib_dir stable_dir
+  local version release_base workdir checksum_file lib_file lib_dest stable_dir
 
   command -v curl >/dev/null 2>&1 || fail "curl is required. Install it with: sudo apt-get install -y curl ca-certificates"
   command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required for checksum-gated updates."
@@ -305,8 +305,8 @@ security_audit_sshd_setting() {
 run_security_audit() {
   require_sudo
 
-  local cred_file sshd_config root_login password_auth ufw_detail fail2ban_detail
-  local ssl_pair ssl_state ssl_detail reboot_required pending_upgrades
+  local cred_file sshd_config root_login password_auth ufw_detail
+  local ssl_pair ssl_state ssl_detail pending_upgrades
 
   ui_box_start "ERPNext VM Security Audit"
   status_line "Mode" "INFO" "read-only checks; no changes applied automatically"
@@ -375,7 +375,6 @@ run_security_audit() {
   status_line "Production HTTPS" "$ssl_state" "$ssl_detail"
 
   if [[ -f /var/run/reboot-required ]]; then
-    reboot_required="yes"
     status_line "Reboot required" "WARN" "$(cat /var/run/reboot-required 2>/dev/null | head -n 1 || echo yes)"
   else
     status_line "Reboot required" "OK" "no"

@@ -1,3 +1,22 @@
+## Unreleased - Lint hardening: raise the shellcheck gate to `-S warning`
+
+### Changed
+
+- `scripts/run-shellcheck.sh` now fails the build on shellcheck **warnings** (`-S warning`), not just errors. The full toolkit (21 files) is clean at this level.
+
+### Fixed / cleaned (behavior-preserving)
+
+- **Deduplicated the command allowlists**: the argument-parser case in `erpnext-dev.sh` (332 -> 307 patterns) and the `action_requires_lock` case in `lib/common.sh` (213 -> 207 patterns) had repeated command tokens (SC2221/SC2222). A repeated `case` pattern (`a|a`) is a no-op, so this changes no behavior; it just removes the overlap that shellcheck flagged and makes the lists easier to audit.
+- Fixed a quoting bug in `lib/service.sh` where the double quotes meant to appear in the printed `bench start` hint were consumed by the shell (SC2140); the hint now prints `export PATH="$HOME/.local/bin:$PATH"` verbatim.
+- Removed dead `was_running` capture blocks in `lib/backup.sh` (x2) and `lib/apps.sh` that were written but never read; the surrounding restart logic is unchanged.
+- Removed unused local declarations and dead assignments flagged by SC2034 (`lib/health.sh`, `lib/security.sh`, `lib/status.sh`, `lib/ssl.sh`, `lib/frappe.sh`, `lib/backup.sh`, `lib/support.sh`), dropped the unused `DIM` color, and removed the dead `LIB_APP_KEY` metadata column from `lib/apps.sh` (set for every app, read nowhere).
+- Declared the menu `*_choice` variables `local` at their call sites so shellcheck can see they are assigned via `menu_read_choice` (SC2154); this also stops them leaking into the global scope between menu invocations.
+- Annotated intentional patterns with scoped `# shellcheck disable` directives: cross-module globals `SUDO`/`PRODUCTION_SSL_MODE` (consumed by sourced modules), the optional-argument functions `wait_for_erpnext_ready`/`run_local_ssl_wizard` (SC2120), and the two `sudo ... > /tmp/...$$` redirects in `scripts/validate-release.sh` that intentionally write the invoking user's temp file (SC2024).
+
+### Notes
+
+- No `SCRIPT_VERSION` bump: these are internal, behavior-preserving changes. `SHA256SUMS` is regenerated to match the edited files.
+
 ## v1.4.1 - Fix XDG environment leak in the installer
 
 ### Fixed

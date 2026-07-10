@@ -35,7 +35,7 @@ recommended_action() {
 run_status() {
   require_sudo
 
-  local vm_ip installed runtime auto svc bench_dir url_status
+  local vm_ip installed runtime auto svc bench_dir
   vm_ip="$(get_vm_ip)"
   installed="$(install_state)"
   runtime="$(runtime_state)"
@@ -249,6 +249,7 @@ show_status_menu() {
     echo "5) Optional App Status"
     echo "6) Full Health Report"
     menu_footer
+    local status_choice=""
     menu_read_choice status_choice
 
     case "$status_choice" in

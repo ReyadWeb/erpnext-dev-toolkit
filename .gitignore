@@ -11,3 +11,6 @@ GITHUB-UPDATE-v*.md
 # Local cert/key files
 *.crt
 *.key
+
+# Locally downloaded dev tools (e.g. a static shellcheck binary for the gate)
+.tools/

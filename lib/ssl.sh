@@ -1093,6 +1093,7 @@ configure_cloudflare_origin_ssl() {
   $SUDO systemctl enable --now nginx
   $SUDO systemctl reload nginx
 
+  # shellcheck disable=SC2034 # PRODUCTION_SSL_MODE is a shared global persisted by write_dev_config_file / config.sh
   PRODUCTION_SSL_MODE="cloudflare-origin-ca"
   write_dev_config_file >/dev/null || true
 
@@ -1154,7 +1155,7 @@ show_cloudflare_origin_ssl_status() {
 
 
 ssl_mode_context() {
-  local vm_ip domain dns_ip provider local_mode recommendation detail
+  local vm_ip domain dns_ip provider recommendation detail
   vm_ip="$(get_vm_ip 2>/dev/null || echo unknown)"
   domain="${PRODUCTION_DOMAIN:-}"
   provider="$(active_production_ssl_provider 2>/dev/null || echo "not configured")"
@@ -2543,6 +2544,7 @@ verify_ssl_rollback() {
   return "$failed"
 }
 
+# shellcheck disable=SC2120 # back_target is an optional caller override with a default
 run_local_ssl_wizard() {
   local back_target="${1:-return}"
   while true; do
@@ -2564,6 +2566,7 @@ run_local_ssl_wizard() {
       "8) Disable local HTTPS" \
       "9) Local security profile"
     menu_footer
+    local wizard_choice=""
     menu_read_choice wizard_choice
 
     case "$wizard_choice" in
@@ -2640,6 +2643,7 @@ show_production_ssl_menu() {
       "11) SSL Mode Guide" \
       "12) Disable Production SSL"
     menu_footer
+    local prod_ssl_choice=""
     menu_read_choice prod_ssl_choice
 
     case "$prod_ssl_choice" in
@@ -2674,6 +2678,7 @@ show_local_ssl_menu() {
     echo
     print_two_column_menu       "1) Local SSL Wizard"       "2) Local SSL Status"       "3) Local SSL Guide"       "4) Trusted mkcert Guide"       "5) Browser Trust Check"       "6) Install/Replace Cert"       "7) Verify Local SSL"       "8) Create Self-Signed Cert"       "9) Configure Local SSL"       "10) Disable Local SSL"       "11) Verify SSL Rollback"       "12) Change Local Domain"       "13) Local Domain / Host DNS Status"       "14) Local Access Doctor"       "15) Print Host /etc/hosts Command"       "16) SSL/HTTPS Roadmap"       "17) Local Security Profile"
     menu_footer
+    local ssl_choice=""
     menu_read_choice ssl_choice
 
     case "$ssl_choice" in

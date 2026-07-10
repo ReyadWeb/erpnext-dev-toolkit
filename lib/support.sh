@@ -49,7 +49,7 @@ doctor_run_as_frappe_one_line() {
 }
 
 doctor_storage_detail() {
-  local data layout root_bytes vg_free_bytes tail_free_bytes can_expand reason
+  local data layout root_bytes vg_free_bytes tail_free_bytes reason
   data="$(storage_eval 2>/dev/null || true)"
 
   while IFS='=' read -r k v; do
@@ -58,7 +58,6 @@ doctor_storage_detail() {
       ROOT_BYTES) root_bytes="$v" ;;
       VG_FREE_BYTES) vg_free_bytes="$v" ;;
       TAIL_FREE_BYTES) tail_free_bytes="$v" ;;
-      CAN_EXPAND) can_expand="$v" ;;
       REASON) reason="$v" ;;
     esac
   done <<< "$data"

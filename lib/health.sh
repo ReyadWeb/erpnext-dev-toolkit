@@ -92,7 +92,7 @@ run_health_check() {
   require_sudo
 
   local overall="OK" installed runtime ssl_pair ssl_status ssl_detail disk_percent disk_state
-  local latest_lines completeness backup_age backup_state backup_msg svc_pair redis_pair mariadb_pair nginx_pair
+  local latest_lines completeness backup_age backup_state backup_msg redis_pair mariadb_pair nginx_pair
   local off_last_status off_last_run
 
   installed="$(install_state 2>/dev/null || echo "Unknown")"
@@ -351,6 +351,7 @@ health_monitoring_wizard() {
     echo "6) Service recovery plan"
     echo "7) Production checklist"
     menu_footer
+    local health_choice=""
     menu_read_choice health_choice
     case "$health_choice" in
       1) run_health_check; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
@@ -636,11 +637,10 @@ show_production_checklist() {
   else
     status_line "Fail2Ban" "WARN" "sshd jail not confirmed"
   fi
-  local bcount off_pair_for_local off_state_for_local off_detail_for_local
+  local bcount off_pair_for_local off_state_for_local
   bcount="$(production_backup_count)"
   off_pair_for_local="$(off_vm_backup_summary_pair)"
   off_state_for_local="${off_pair_for_local%%|*}"
-  off_detail_for_local="${off_pair_for_local#*|}"
   if [[ "$bcount" =~ ^[0-9]+$ && "$bcount" -gt 0 ]]; then
     if [[ "$off_state_for_local" == "OK" ]]; then
       status_line "Local backups" "OK" "${bcount} backup file(s); off-VM copy verified"
@@ -844,6 +844,7 @@ final_qa_wizard() {
     echo "8) Health monitoring status"
     echo "9) Go-live validation status"
     menu_footer
+    local choice=""
     menu_read_choice choice
 
     case "$choice" in

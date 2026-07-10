@@ -328,7 +328,7 @@ run_post_restore_maintenance() {
 restore_site_database() {
   require_sudo
 
-  local bench_dir db_input db_file db_quoted db_admin_user_quoted db_admin_password_quoted was_running
+  local bench_dir db_input db_file db_quoted db_admin_user_quoted db_admin_password_quoted
   bench_dir="$(require_site_environment)" || return 1
 
   list_site_backups
@@ -342,11 +342,6 @@ restore_site_database() {
 
   read_restore_database_admin_credentials
   confirm_restore || fail "Restore cancelled."
-
-  was_running=0
-  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    was_running=1
-  fi
 
   log "Creating emergency backup before restore"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' backup --with-files" || warn "Emergency backup failed; continuing only because restore was explicitly confirmed."
@@ -369,7 +364,7 @@ restore_site_database() {
 restore_site_full() {
   require_sudo
 
-  local bench_dir db_input public_input private_input db_file public_file private_file cmd was_running
+  local bench_dir db_input public_input private_input db_file public_file private_file cmd
   local db_quoted public_quoted private_quoted db_admin_user_quoted db_admin_password_quoted
   local latest_lines prefix config_file completeness use_latest
   bench_dir="$(require_site_environment)" || return 1
@@ -445,11 +440,6 @@ restore_site_full() {
   read_restore_database_admin_credentials
   confirm_restore || fail "Restore cancelled."
 
-  was_running=0
-  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    was_running=1
-  fi
-
   log "Creating emergency backup before full restore"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' backup --with-files" || warn "Emergency backup failed; continuing only because restore was explicitly confirmed."
 
@@ -514,6 +504,7 @@ run_maintenance_menu() {
     echo "5) Run safe repair"
     echo "6) Show recent service logs"
     menu_footer
+    local maintenance_choice=""
     menu_read_choice maintenance_choice
 
     case "$maintenance_choice" in
@@ -598,7 +589,7 @@ backup_set_paths_for_db() {
 }
 
 backup_latest_set_paths() {
-  local backup_dir db_file latest_db="" latest_partial="" candidate completeness
+  local backup_dir db_file latest_partial="" candidate completeness
   backup_dir="$(site_backup_dir)"
   if ! path_is_dir "$backup_dir"; then
     return 1
@@ -1974,6 +1965,7 @@ restore_rehearsal_wizard() {
     echo "6) Post-restore status/access checks"
     echo "7) Print backup-server cleanup reminder"
     menu_footer
+    local restore_choice=""
     menu_read_choice restore_choice
     case "$restore_choice" in
       1) restore_clean_vm_preflight; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
@@ -2187,7 +2179,7 @@ backup_server_setup() {
 off_vm_backup_guided_setup() {
   require_sudo
   require_site_environment >/dev/null || return 1
-  local target identity delete_mode config_dir backup_server_hint
+  local target identity delete_mode config_dir
 
   ui_box_start "Guided Off-VM Backup Setup"
   status_line "Site" "INFO" "$SITE_NAME"
@@ -2475,6 +2467,7 @@ off_vm_backup_wizard() {
     echo "12) Add restore key on backup server"
     echo "13) Remove restore key on backup server"
     menu_footer
+    local off_choice=""
     menu_read_choice off_choice
     case "$off_choice" in
       1) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
@@ -2514,6 +2507,7 @@ backup_hardening_wizard() {
     echo "12) Retention status"
     echo "13) Cleanup dry run"
     menu_footer
+    local backup_harden_choice=""
     menu_read_choice backup_harden_choice
     case "$backup_harden_choice" in
       1) create_site_backup true; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
@@ -2558,6 +2552,7 @@ run_backup_maintenance_menu() {
     echo "14) Cleanup old backups dry run"
     echo "15) Maintenance tasks"
     menu_footer
+    local backup_choice=""
     menu_read_choice backup_choice
 
     case "$backup_choice" in

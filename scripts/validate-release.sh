@@ -135,6 +135,7 @@ rm -rf "$fixture_dir" /tmp/erpnext-dev-support-audit.$$
 pass "support-bundle-audit clean fixture passed"
 
 if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+  # shellcheck disable=SC2024 # redirect is intentionally to the invoking user's /tmp file, not root's
   sudo -E ./erpnext-dev.sh menu-self-test >/tmp/erpnext-dev-menu-self-test.$$ 2>&1 || {
     cat /tmp/erpnext-dev-menu-self-test.$$
     rm -f /tmp/erpnext-dev-menu-self-test.$$
@@ -148,6 +149,7 @@ if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
   rm -f /tmp/erpnext-dev-menu-self-test.$$
   pass "menu-self-test passed"
 
+  # shellcheck disable=SC2024 # redirect is intentionally to the invoking user's /tmp file, not root's
   printf 'q\n' | sudo -E ./erpnext-dev.sh production-ops-wizard >/tmp/erpnext-dev-ops-wizard.$$ 2>&1 || {
     cat /tmp/erpnext-dev-ops-wizard.$$
     rm -f /tmp/erpnext-dev-ops-wizard.$$
