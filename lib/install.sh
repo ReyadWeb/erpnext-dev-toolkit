@@ -1297,6 +1297,31 @@ public_vm_guided_install_core() {
   verify_access || true
 }
 
+public_vm_guided_production_runtime() {
+  public_vm_guided_step "5b" "Production runtime"
+  echo "Production serves ERPNext with gunicorn + background workers + scheduler +"
+  echo "socket.io under supervisor, not the development 'bench start' server"
+  echo "(which runs a debugger and a live-reload watcher)."
+  echo
+
+  if runtime_is_production && production_runtime_configured; then
+    ok "Production runtime already configured (supervisor)."
+    return 0
+  fi
+
+  if [[ "$(install_state 2>/dev/null)" != Installed* ]]; then
+    warn "ERPNext is not fully installed yet; skipping production runtime setup."
+    return 0
+  fi
+
+  if [[ "$ASSUME_YES" -eq 1 ]] || confirm "Switch this VM to the production runtime now?"; then
+    setup_production_runtime || warn "Production runtime setup did not complete; staying on the development runtime."
+  else
+    warn "Keeping the development bench-start runtime."
+    echo "  Switch later with: $(toolkit_cmd setup-production-runtime)"
+  fi
+}
+
 public_vm_guided_backup_checkpoint() {
   public_vm_guided_step "6" "Backup checkpoint"
   public_quickstart_maybe_initial_backup || return 1
@@ -1449,6 +1474,7 @@ run_public_vm_guided_setup() {
   public_vm_guided_require_dns_ready || return 1
   public_vm_guided_external_gate || return 1
   public_vm_guided_install_core || return 1
+  public_vm_guided_production_runtime || true
   public_vm_guided_backup_checkpoint || true
   public_vm_guided_configure_https || return 1
   public_vm_guided_security_profile || return 1

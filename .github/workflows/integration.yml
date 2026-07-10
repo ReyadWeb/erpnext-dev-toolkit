@@ -210,11 +210,65 @@ jobs:
           sudo journalctl -u erpnext-dev.service --no-pager -n 200 2>/dev/null || true
           exit 1
 
+      - name: Convert to production runtime and assert (hard gate)
+        run: |
+          set -uo pipefail
+          echo "== Switch to supervisor-managed production runtime =="
+          sudo -E ./erpnext-dev.sh -y setup-production-runtime
+
+          echo "== Runtime status =="
+          sudo -E ./erpnext-dev.sh production-runtime-status || true
+
+          echo "== supervisorctl status =="
+          sudo supervisorctl status || true
+
+          # 1. The dev bench-start service must be disabled in production.
+          if sudo systemctl is-active --quiet erpnext-dev.service; then
+            echo "::error::erpnext-dev.service (bench start) is still active in production mode."
+            exit 1
+          fi
+
+          # 2. No 'bench start' process may be running (no dev server/watcher/debugger).
+          if pgrep -af "bench start" ; then
+            echo "::error::A 'bench start' process is running in production mode."
+            exit 1
+          fi
+
+          # 3. Supervisor must be managing a running program group.
+          if ! sudo supervisorctl status | grep -q "RUNNING"; then
+            echo "::error::No supervisor programs are RUNNING."
+            sudo supervisorctl status || true
+            exit 1
+          fi
+
+          # 4. gunicorn must actually serve HTTP on :8000.
+          ok=0
+          for i in $(seq 1 24); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${SITE_NAME}" http://127.0.0.1:8000/api/method/ping || true)"
+            echo "prod attempt ${i}/24: http=${code}"
+            case "$code" in
+              200|401|403) echo "Production runtime serving on :8000 (http=${code})"; ok=1; break ;;
+            esac
+            sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Production runtime not serving on :8000."
+            sudo supervisorctl status || true
+            sudo ss -ltnp 2>/dev/null | grep -E ':8000|:9000' || echo "nothing on :8000/:9000"
+            exit 1
+          fi
+
+          # 5. socket.io must be listening on :9000.
+          sudo ss -ltnp 2>/dev/null | grep -q ':9000' || { echo "::error::socket.io not listening on :9000"; exit 1; }
+
+          echo "Production runtime conversion verified: supervisor up, gunicorn serving, no bench start."
+
       - name: Collect diagnostics
         if: always()
         run: |
           mkdir -p artifacts
           cp -v doctor.out doctor.err doctor-post-restore.out doctor-post-restore.err artifacts/ 2>/dev/null || true
+          sudo supervisorctl status > artifacts/supervisorctl-status.txt 2>&1 || true
           sudo -E ./erpnext-dev.sh list-backups > artifacts/list-backups.txt 2>&1 || true
           sudo cp -rv /var/log/erpnext-dev artifacts/toolkit-logs 2>/dev/null || true
           sudo journalctl -u erpnext-dev.service --no-pager > artifacts/service-journal.txt 2>/dev/null || true

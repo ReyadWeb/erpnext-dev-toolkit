@@ -52,7 +52,7 @@ First install and verify the toolkit ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.4.6"
+VERSION="v1.5.0"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -191,10 +191,29 @@ sudo ./erpnext-dev.sh public-vm-guided-setup
 ```
 
 The guided flow: detect the public IP, confirm domain and site name, check DNS,
-confirm the cloud-firewall baseline, install/repair ERPNext, create a verified
-backup checkpoint, configure production HTTPS, apply the production security
-profile + Fail2Ban, configure scheduled backups, review the off-VM backup plan,
-optionally install apps, then run the production checklist and Final QA.
+confirm the cloud-firewall baseline, install/repair ERPNext, offer to switch to
+the production runtime, create a verified backup checkpoint, configure production
+HTTPS, apply the production security profile + Fail2Ban, configure scheduled
+backups, review the off-VM backup plan, optionally install apps, then run the
+production checklist and Final QA.
+
+### Production runtime (no `bench start`)
+
+Development uses `bench start` — a development server with a live-reload watcher
+and an active debugger. **Production must not** use it. Switch a public VM to a
+supervisor-managed production runtime (gunicorn web workers, background workers,
+scheduler, and the socket.io process):
+
+```bash
+sudo erpnext-dev setup-production-runtime   # convert to gunicorn + workers under supervisor
+sudo erpnext-dev production-runtime-status   # supervisor programs, ports, HTTP readiness
+sudo erpnext-dev convert-to-dev-runtime      # revert to the bench start dev runtime
+```
+
+The toolkit's Nginx/TLS layer is unchanged — it keeps proxying `:443/:80` to
+gunicorn (`:8000`) and socket.io (`:9000`). After conversion, `start`, `stop`,
+`restart`, `service-status`, and `logs` all operate on the supervisor stack, and
+the development `erpnext-dev.service` is disabled.
 
 **Cloud firewall baseline** (set at the provider before installing):
 

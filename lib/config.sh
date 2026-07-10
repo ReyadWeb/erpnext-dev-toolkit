@@ -11,6 +11,22 @@ is_public_vm_workflow() {
   return 1
 }
 
+# Runtime mode controls HOW ERPNext is served:
+#   dev        -> `bench start` (development server + watcher + debugger)
+#   production -> gunicorn + workers + scheduler + socket.io under supervisor
+# It is independent of DEPLOYMENT_MODE (local vs public-vm) and defaults to dev
+# unless explicitly set (via setup-production-runtime or the saved config).
+runtime_mode() {
+  case "${RUNTIME_MODE:-}" in
+    production|dev) printf '%s\n' "${RUNTIME_MODE}" ;;
+    *) printf 'dev\n' ;;
+  esac
+}
+
+runtime_is_production() {
+  [[ "$(runtime_mode)" == "production" ]]
+}
+
 validate_site_name_value() {
   local name="$1"
 
@@ -175,6 +191,12 @@ load_future_domain_config_if_available() {
 
   if saved="$(read_saved_config_value PRODUCTION_SSL_MODE 2>/dev/null)" && [[ -n "$saved" && "${PRODUCTION_SSL_MODE}" == "planned" ]]; then
     PRODUCTION_SSL_MODE="$saved"
+  fi
+
+  if [[ -z "${RUNTIME_MODE:-}" ]]; then
+    if saved="$(read_saved_config_value RUNTIME_MODE 2>/dev/null)" && [[ -n "$saved" ]]; then
+      RUNTIME_MODE="$saved"
+    fi
   fi
 }
 
@@ -453,6 +475,7 @@ SITE_NAME=${SITE_NAME}
 DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
 PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN}
 PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
+RUNTIME_MODE=$(runtime_mode)
 FRAPPE_USER=${FRAPPE_USER}
 BENCH_PARENT=${BENCH_PARENT}
 BENCH_NAME=${BENCH_NAME}
@@ -471,6 +494,7 @@ SITE_NAME=${SITE_NAME}
 DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
 PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN}
 PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
+RUNTIME_MODE=$(runtime_mode)
 FRAPPE_USER=${FRAPPE_USER}
 BENCH_PARENT=${BENCH_PARENT}
 BENCH_NAME=${BENCH_NAME}
