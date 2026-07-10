@@ -98,8 +98,15 @@ wait_for_erpnext_ready() {
   while (( elapsed <= timeout )); do
     bench_readiness_line "$elapsed" "$timeout"
 
-    if bench_ports_ready; then
-      ok "ERPNext is ready. Required development ports are listening."
+    # In production the ports belong to gunicorn/socketio/redis under supervisor;
+    # additionally require an HTTP 200 from the app before declaring readiness so
+    # we do not report "ready" while gunicorn is still booting workers.
+    if bench_ports_ready && { ! runtime_is_production || bench_http_ready; }; then
+      if runtime_is_production; then
+        ok "ERPNext is ready. Production runtime is serving (gunicorn + socket.io)."
+      else
+        ok "ERPNext is ready. Required development ports are listening."
+      fi
       return 0
     fi
 
@@ -215,6 +222,11 @@ disable_autostart_service() {
 start_erpnext_service() {
   require_sudo
 
+  if runtime_is_production; then
+    production_runtime_start
+    return
+  fi
+
   if ! service_exists; then
     create_erpnext_service || return 1
   fi
@@ -236,6 +248,11 @@ start_erpnext_service() {
 stop_erpnext_service() {
   require_sudo
 
+  if runtime_is_production; then
+    production_runtime_stop
+    return
+  fi
+
   if service_exists; then
     log "Stopping ERPNext service"
     $SUDO systemctl stop "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
@@ -252,6 +269,11 @@ stop_erpnext_service() {
 
 restart_erpnext_service() {
   require_sudo
+
+  if runtime_is_production; then
+    production_runtime_restart
+    return
+  fi
 
   if ! service_exists; then
     create_erpnext_service || return 1
@@ -274,6 +296,11 @@ restart_erpnext_service() {
 show_erpnext_service_status() {
   require_sudo
 
+  if runtime_is_production; then
+    show_production_runtime_status
+    return
+  fi
+
   if service_exists; then
     $SUDO systemctl status "${ERPNEXT_SERVICE_NAME}" --no-pager || true
   else
@@ -283,6 +310,11 @@ show_erpnext_service_status() {
 
 show_erpnext_service_logs() {
   require_sudo
+
+  if runtime_is_production; then
+    show_production_runtime_logs
+    return
+  fi
 
   if service_exists; then
     $SUDO journalctl -u "${ERPNEXT_SERVICE_NAME}" -n 160 --no-pager || true
@@ -321,6 +353,19 @@ install_state() {
 runtime_state() {
   local ready_count
   ready_count="$(bench_ready_count)"
+
+  if runtime_is_production; then
+    if production_runtime_configured && production_processes_running && bench_ports_ready; then
+      echo "Running via supervisor (production)"
+    elif production_runtime_configured && production_processes_running; then
+      echo "Starting via supervisor (production)"
+    elif production_runtime_configured; then
+      echo "Stopped (production/supervisor)"
+    else
+      echo "Production runtime not set up"
+    fi
+    return
+  fi
 
   if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
     if bench_ports_ready; then
@@ -414,4 +459,236 @@ show_service_menu() {
       *) warn "Invalid option" ;;
     esac
   done
+}
+
+# ============================================================
+# Production runtime (supervisor: gunicorn + workers + scheduler + socket.io)
+#
+# In production the toolkit does NOT use `bench start` (a development server
+# with a live-reload watcher and debugger). Instead it uses Frappe's own
+# `bench setup supervisor` to generate the correct, version-matched process set
+# and runs it under supervisord. The toolkit's existing Nginx/TLS layer stays in
+# front, proxying :443/:80 to gunicorn (:8000) and socket.io (:9000) exactly as
+# it already does for the dev runtime.
+# ============================================================
+
+supervisor_conf_link() {
+  echo "/etc/supervisor/conf.d/frappe-bench.conf"
+}
+
+supervisorctl_bin() {
+  command -v supervisorctl 2>/dev/null || echo /usr/bin/supervisorctl
+}
+
+production_runtime_configured() {
+  [[ -L "$(supervisor_conf_link)" || -f "$(supervisor_conf_link)" ]]
+}
+
+production_supervisor_status() {
+  $SUDO "$(supervisorctl_bin)" status 2>/dev/null || true
+}
+
+production_processes_running() {
+  production_supervisor_status | grep -q "RUNNING"
+}
+
+# HTTP-level readiness: gunicorn must actually answer, not just listen.
+bench_http_ready() {
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${SITE_NAME}" \
+    "http://127.0.0.1:8000/api/method/ping" 2>/dev/null || echo 000)"
+  [[ "$code" == "200" ]]
+}
+
+production_runtime_start() {
+  require_sudo
+  if ! production_runtime_configured; then
+    err "Production runtime is not set up. Run: $(toolkit_cmd setup-production-runtime)"
+    return 1
+  fi
+  log "Starting production runtime (supervisor)"
+  $SUDO "$(supervisorctl_bin)" start all >/dev/null 2>&1 || true
+  if wait_for_erpnext_ready; then
+    show_ready_summary
+  else
+    return 1
+  fi
+}
+
+production_runtime_stop() {
+  require_sudo
+  log "Stopping production runtime (supervisor)"
+  $SUDO "$(supervisorctl_bin)" stop all >/dev/null 2>&1 || true
+  ok "Production processes stopped."
+}
+
+production_runtime_restart() {
+  require_sudo
+  if ! production_runtime_configured; then
+    err "Production runtime is not set up. Run: $(toolkit_cmd setup-production-runtime)"
+    return 1
+  fi
+  log "Restarting production runtime (supervisor)"
+  $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || true
+  if wait_for_erpnext_ready; then
+    show_ready_summary
+  else
+    return 1
+  fi
+}
+
+show_production_runtime_logs() {
+  require_sudo
+  local bench_dir logf
+  bench_dir="$(active_bench_dir)"
+
+  echo "Supervisor programs:"
+  production_supervisor_status
+  echo
+  for logf in web.error.log web.log worker.error.log worker.log schedule.log; do
+    if [[ -f "${bench_dir}/logs/${logf}" ]]; then
+      echo "== ${bench_dir}/logs/${logf} (last 40 lines) =="
+      $SUDO tail -n 40 "${bench_dir}/logs/${logf}" 2>/dev/null || true
+      echo
+    fi
+  done
+}
+
+show_production_runtime_status() {
+  require_sudo
+  ui_box_start "Production Runtime Status"
+  status_line "Runtime mode" "INFO" "$(runtime_mode)"
+  status_line "Supervisor config" "$(production_runtime_configured && echo OK || echo WARN)" "$(supervisor_conf_link)"
+  status_line "Web (gunicorn) :8000" "$(port_listens 8000 && echo OK || echo WARN)" "backend web workers"
+  status_line "Socket.IO :9000" "$(port_listens 9000 && echo OK || echo WARN)" "realtime"
+  status_line "HTTP ping" "$(bench_http_ready && echo OK || echo WARN)" "http://127.0.0.1:8000/api/method/ping"
+  echo
+  echo "Supervisor programs:"
+  production_supervisor_status
+  ui_box_end
+}
+
+# Convert an existing install from the dev bench-start runtime to a supervisor
+# managed production runtime. Idempotent: safe to re-run.
+setup_production_runtime() {
+  require_sudo
+  local bench_dir
+  bench_dir="$(require_bench_dir)" || return 1
+
+  if [[ "$(install_state)" != Installed* ]]; then
+    err "ERPNext is not fully installed yet. Run the install first: $(toolkit_cmd install)"
+    return 1
+  fi
+
+  ui_box_start "Set up production runtime (supervisor)"
+
+  log "Installing supervisor package"
+  if ! command -v supervisorctl >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive $SUDO apt-get update -y >/dev/null 2>&1 || true
+    if ! DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y supervisor >/dev/null 2>&1; then
+      err "Could not install the supervisor package."
+      ui_box_end
+      return 1
+    fi
+  fi
+  $SUDO systemctl enable --now supervisor >/dev/null 2>&1 || true
+
+  log "Generating supervisor config from bench (bench setup supervisor)"
+  if ! frappe_login_bash <<EOF_PROD
+set -Eeuo pipefail
+export PATH="\$HOME/.local/bin:\$PATH"
+export NVM_DIR="\$HOME/.nvm"
+[ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+cd "${bench_dir}"
+bench setup supervisor --user "${FRAPPE_USER}" --yes
+EOF_PROD
+  then
+    err "bench setup supervisor failed. See the output above."
+    ui_box_end
+    return 1
+  fi
+
+  if [[ -f "${bench_dir}/config/supervisor.conf" ]]; then
+    $SUDO ln -sf "${bench_dir}/config/supervisor.conf" "$(supervisor_conf_link)"
+    ok "Linked supervisor config -> $(supervisor_conf_link)"
+  else
+    err "Expected ${bench_dir}/config/supervisor.conf was not generated."
+    ui_box_end
+    return 1
+  fi
+
+  # Stop and disable the development bench-start service; production must never
+  # silently fall back to the dev server.
+  if service_exists; then
+    log "Disabling development bench-start service"
+    $SUDO systemctl disable --now "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
+  fi
+  if id "$FRAPPE_USER" >/dev/null 2>&1; then
+    $SUDO pkill -u "$FRAPPE_USER" -f "bench start" >/dev/null 2>&1 || true
+  fi
+
+  # shellcheck disable=SC2034 # cross-module global read via runtime_mode()/config.sh
+  RUNTIME_MODE="production"
+  write_dev_config_file
+
+  log "Reloading supervisor"
+  $SUDO "$(supervisorctl_bin)" reread >/dev/null 2>&1 || true
+  $SUDO "$(supervisorctl_bin)" update >/dev/null 2>&1 || true
+  $SUDO "$(supervisorctl_bin)" start all >/dev/null 2>&1 || true
+
+  if wait_for_erpnext_ready; then
+    ok "Production runtime active: gunicorn + workers + scheduler + socket.io under supervisor."
+  else
+    warn "Production processes were started but readiness did not pass yet."
+    echo "  Inspect with: $(toolkit_cmd production-runtime-status)"
+  fi
+
+  echo
+  echo "The development bench-start service is now disabled; ERPNext runs under supervisor."
+  echo "Nginx/TLS remain managed by the toolkit (proxying to 127.0.0.1:8000 / :9000)."
+  echo "Manage the runtime with: $(toolkit_cmd service-status) / $(toolkit_cmd restart) / $(toolkit_cmd logs)"
+  ui_box_end
+}
+
+run_setup_production_runtime() {
+  require_sudo
+  if runtime_is_production && production_runtime_configured; then
+    warn "Production runtime already configured. Re-running to refresh the supervisor config."
+  fi
+  setup_production_runtime
+}
+
+# Revert from the supervisor production runtime back to the dev bench-start
+# service. Does not touch the database or apps.
+convert_to_dev_runtime() {
+  require_sudo
+  require_bench_dir >/dev/null || return 1
+
+  ui_box_start "Convert back to development runtime (bench start)"
+
+  if production_runtime_configured; then
+    log "Stopping supervisor-managed processes"
+    $SUDO "$(supervisorctl_bin)" stop all >/dev/null 2>&1 || true
+    $SUDO rm -f "$(supervisor_conf_link)"
+    $SUDO "$(supervisorctl_bin)" reread >/dev/null 2>&1 || true
+    $SUDO "$(supervisorctl_bin)" update >/dev/null 2>&1 || true
+    ok "Removed the supervisor program group."
+  fi
+
+  # shellcheck disable=SC2034 # cross-module global read via runtime_mode()/config.sh
+  RUNTIME_MODE="dev"
+  write_dev_config_file
+
+  if create_erpnext_service; then
+    ok "Development runtime restored. Start it with: $(toolkit_cmd start)"
+  else
+    ui_box_end
+    return 1
+  fi
+  ui_box_end
+}
+
+run_convert_to_dev_runtime() {
+  require_sudo
+  convert_to_dev_runtime
 }

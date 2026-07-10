@@ -1,3 +1,37 @@
+## v1.5.0 - Production runtime mode (no `bench start` in production)
+
+### Added
+
+- **A real production runtime.** Production no longer serves ERPNext with
+  `bench start` (a development server with a live-reload watcher and an active
+  debugger, which logs "do not use in a production deployment"). New commands:
+  - `setup-production-runtime` (aliases: `convert-to-production`) — installs
+    `supervisor`, runs Frappe's own `bench setup supervisor` to generate the
+    correct, version-matched process set (**gunicorn** web workers, **scheduler**,
+    background **workers**, and the **socket.io** node process), links it into
+    `/etc/supervisor/conf.d/`, disables the dev `erpnext-dev.service`, and starts
+    the supervised stack. The toolkit's existing Nginx/TLS layer is unchanged and
+    keeps proxying `:443/:80` to gunicorn (`:8000`) and socket.io (`:9000`).
+  - `convert-to-dev-runtime` — reverts to the `bench start` development runtime.
+  - `production-runtime-status` — shows supervisor programs, gunicorn/socket.io
+    ports, and HTTP readiness.
+- The public-vm / production guided setup now offers to switch to the production
+  runtime after install.
+- A persisted `RUNTIME_MODE` (`dev` | `production`) in
+  `/etc/erpnext-dev/config.env`, independent of `DEPLOYMENT_MODE`. `start`,
+  `stop`, `restart`, `service-status`, `logs`, and `runtime_state` all route to
+  the supervisor stack when `RUNTIME_MODE=production`.
+
+### Changed
+
+- `wait_for_erpnext_ready` additionally requires an HTTP `200` from
+  `/api/method/ping` in production, so readiness is not reported while gunicorn
+  is still booting workers.
+- CI: the disposable-VM integration test now converts to the production runtime
+  and asserts supervisor is up, gunicorn serves `:8000`, socket.io listens on
+  `:9000`, and **no `bench start` process is running**.
+- Bumped the toolkit version to v1.5.0 and regenerated `SHA256SUMS`.
+
 ## v1.4.6 - verify-toolkit now verifies the whole tree, not just the entrypoint
 
 ### Changed
