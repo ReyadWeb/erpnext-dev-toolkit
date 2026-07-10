@@ -181,7 +181,7 @@ To override (e.g. fetch the key from an independent channel), set `TOOLKIT_SIGNI
 ```text
 Key type:    Ed25519 (sign)
 UID:         ERPNext Dev Installer Signing Key <235979268+ReyadWeb@users.noreply.github.com>
-Fingerprint: 49CE 4CAA 2E67 57C6 13D3  1DD1 06F9 A48F 9AD3 E369
+Fingerprint: BFC1 0C79 427C F734 96EA  6F5A 30BF D17D D559 C8B6
 ```
 
 The public key is published in this repository at [`docs/erpnext-dev-signing-key.asc`](docs/erpnext-dev-signing-key.asc). Because it ships alongside the script, the real trust anchor is the fingerprint above (also baked into `lib/security.sh`): verify the fingerprint out-of-band before trusting a fresh download.

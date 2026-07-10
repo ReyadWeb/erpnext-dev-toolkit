@@ -12,6 +12,10 @@
 
 - Updated the toolkit version to v1.4.0 and regenerated `SHA256SUMS`.
 
+### Security
+
+- Rotated the release-signing key. The pinned maintainer fingerprint is now `BFC10C79427CF73496EA6F5A30BFD17DD559C8B6` (Ed25519); the previous key was retired. `SHA256SUMS.asc` on `v1.4.0`+ is produced by the new key, and `verify-signature` enforces the new fingerprint. Signatures made by the old key no longer validate by design.
+
 ### Notes
 
 - Code rollback does not by itself revert database schema migrations; the wizard and rollback both direct the operator to the recorded backup via `restore-full` for a full revert.

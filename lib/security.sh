@@ -410,7 +410,7 @@ run_security_audit() {
 # Fingerprint of the maintainer release-signing key. This is the trust anchor:
 # it travels inside the (checksum-verifiable) script, so verify-signature can
 # enforce the signer identity even when the public key is fetched separately.
-TOOLKIT_SIGNING_FINGERPRINT_DEFAULT="49CE4CAA2E6757C613D31DD106F9A48F9AD3E369"
+TOOLKIT_SIGNING_FINGERPRINT_DEFAULT="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
 
 # Locate the maintainer public key bundled with the toolkit.
 find_toolkit_pubkey_file() {
