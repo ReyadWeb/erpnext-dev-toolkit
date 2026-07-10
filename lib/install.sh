@@ -350,7 +350,7 @@ echo
 echo "==> Installing nvm / Node ${NODE_VERSION} / Yarn"
 
 if [[ ! -d "\$HOME/.nvm" ]]; then
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash
 fi
 
 export NVM_DIR="\$HOME/.nvm"
@@ -369,7 +369,9 @@ echo
 echo "==> Installing uv / Python ${PYTHON_VERSION} / Bench"
 
 if ! command -v uv >/dev/null 2>&1; then
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # Pin the uv installer to a known version instead of the unversioned "latest"
+  # URL, so bootstrap is reproducible. Override with UV_VERSION if needed.
+  curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
 fi
 
 export PATH="\$HOME/.local/bin:\$PATH"

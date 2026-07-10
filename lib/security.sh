@@ -10,7 +10,7 @@ TOOLKIT_RELEASE_REPO="${TOOLKIT_RELEASE_REPO:-https://raw.githubusercontent.com/
 toolkit_release_lib_files() {
   printf '%s\n' \
     common.sh config.sh access.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
-    apps.sh health.sh storage.sh service.sh status.sh install.sh ops.sh security.sh
+    apps.sh health.sh storage.sh service.sh status.sh install.sh ops.sh security.sh update.sh
 }
 
 find_toolkit_checksum_file() {

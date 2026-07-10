@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.4.2"
+SCRIPT_VERSION="1.4.3"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -53,6 +53,11 @@ ERPNEXT_BRANCH="${ERPNEXT_BRANCH:-version-16}"
 
 NODE_VERSION="${NODE_VERSION:-24}"
 PYTHON_VERSION="${PYTHON_VERSION:-3.14}"
+# Pin bootstrap tool versions for reproducible installs. nvm is already pinned
+# in lib/install.sh; UV_VERSION pins the uv installer instead of always pulling
+# "latest" from the unversioned install URL.
+NVM_VERSION="${NVM_VERSION:-0.40.3}"
+UV_VERSION="${UV_VERSION:-0.11.28}"
 
 DB_ADMIN_USER="${DB_ADMIN_USER:-frappe_db_admin}"
 DB_ADMIN_PASSWORD="${DB_ADMIN_PASSWORD:-}"
@@ -251,6 +256,32 @@ install_toolkit_cli_entry() {
   ln -sf "$dest" "${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}" 2>/dev/null || return 1
   chmod 755 "${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}" 2>/dev/null || true
   return 0
+}
+
+# `install-cli` / `repair-cli` dispatcher entry points. Both (re)create the
+# short `erpnext-dev` command that points at the installed toolkit. They share
+# one implementation because "repair" is just an idempotent reinstall.
+install_toolkit_cli() {
+  require_sudo
+  local cli_path="${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}"
+  local dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
+
+  if [[ ! -f "$dest" ]]; then
+    warn "Toolkit is not installed at ${dest} yet."
+    echo "Run a quickstart or 'setup' first so the toolkit lives in a stable location,"
+    echo "then re-run '$(basename "$0") install-cli'."
+    return 1
+  fi
+
+  if install_toolkit_cli_entry; then
+    ok "Installed the erpnext-dev command at ${cli_path} -> ${dest}"
+  else
+    fail "Could not create ${cli_path}. Re-run with sudo, or check permissions on $(dirname "$cli_path")."
+  fi
+}
+
+repair_toolkit_cli() {
+  install_toolkit_cli
 }
 
 install_self_for_reuse() {

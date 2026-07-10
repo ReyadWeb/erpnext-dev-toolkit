@@ -32,6 +32,8 @@ jobs:
           persist-credentials: false
 
       - name: Validate release tree
+        env:
+          RELEASE_STRICT: "1"
         run: scripts/validate-release.sh
 
       - name: Confirm tag matches SCRIPT_VERSION
@@ -66,20 +68,43 @@ jobs:
           gpg --verify SHA256SUMS.asc SHA256SUMS
           echo "Signed SHA256SUMS with key ${keyid}."
 
+      - name: Build release bundle
+        # Runs after signing so the tarball includes SHA256SUMS.asc, letting
+        # `erpnext-dev verify-signature` work offline from the extracted tree.
+        run: scripts/build-release-bundle.sh
+
+      - name: Verify bundle installs from a clean extract
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          workdir="$(mktemp -d)"
+          tar -C "$workdir" -xzf "dist/erpnext-dev-${tag}.tar.gz"
+          cd "${workdir}/erpnext-dev-${tag}"
+          sha256sum -c SHA256SUMS
+          ./erpnext-dev.sh version
+          ./erpnext-dev.sh verify-toolkit | grep -qi "active match.*OK"
+          echo "Bundle is self-contained and verifies from a clean extract."
+
       - name: Publish GitHub release
         run: |
           set -euo pipefail
-          assets=(SHA256SUMS erpnext-dev.sh RELEASE-MANIFEST.txt)
+          tag="${GITHUB_REF_NAME}"
+          assets=(SHA256SUMS erpnext-dev.sh RELEASE-MANIFEST.txt "dist/erpnext-dev-${tag}.tar.gz")
           [[ -f SHA256SUMS.asc ]] && assets+=(SHA256SUMS.asc)
 
           notes="Automated release for ${GITHUB_REF_NAME}.
 
-          Verify integrity:
-          1. Download SHA256SUMS (and SHA256SUMS.asc if present).
-          2. If signed: import the maintainer key, then \`gpg --verify SHA256SUMS.asc SHA256SUMS\`.
-          3. \`sha256sum -c SHA256SUMS\` for the files you downloaded.
+          Install (self-contained bundle — includes all lib/ modules):
+          \`\`\`
+          curl -fsSLO https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/erpnext-dev-${GITHUB_REF_NAME}.tar.gz
+          tar -xzf erpnext-dev-${GITHUB_REF_NAME}.tar.gz && cd erpnext-dev-${GITHUB_REF_NAME}
+          sha256sum -c SHA256SUMS
+          sudo ./erpnext-dev.sh local-dev-quickstart   # or public-vm-guided-setup
+          \`\`\`
 
-          See SECURITY.md for the pinned key fingerprint and \`erpnext-dev verify-signature\`."
+          Stronger (authenticity): run \`sudo ./erpnext-dev.sh verify-signature\` from the extracted
+          bundle (bundled key + pinned fingerprint), or \`gpg --verify SHA256SUMS.asc SHA256SUMS\`.
+          See SECURITY.md for the pinned key fingerprint."
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber

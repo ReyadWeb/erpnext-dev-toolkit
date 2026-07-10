@@ -14,3 +14,6 @@ GITHUB-UPDATE-v*.md
 
 # Locally downloaded dev tools (e.g. a static shellcheck binary for the gate)
 .tools/
+
+# Built release bundles (scripts/build-release-bundle.sh)
+dist/

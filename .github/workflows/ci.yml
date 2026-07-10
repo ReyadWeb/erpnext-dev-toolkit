@@ -32,3 +32,20 @@ jobs:
 
       - name: Validate release tree
         run: scripts/validate-release.sh
+
+      - name: Bundle installs from a clean extract (quickstart path)
+        # Guards the documented download-and-run flow: the modular toolkit needs
+        # the whole lib/ tree, so a bundle missing any module must fail here
+        # rather than on a user's VM.
+        run: |
+          set -euo pipefail
+          scripts/build-release-bundle.sh
+          ver="v$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n1 | cut -d'"' -f2)"
+          workdir="$(mktemp -d)"
+          tar -C "$workdir" -xzf "dist/erpnext-dev-${ver}.tar.gz"
+          cd "${workdir}/erpnext-dev-${ver}"
+          sha256sum -c SHA256SUMS
+          ./erpnext-dev.sh version
+          ./erpnext-dev.sh verify-toolkit | grep -qi "active match.*OK"
+          ./erpnext-dev.sh --help >/dev/null
+          echo "Quickstart bundle path OK."

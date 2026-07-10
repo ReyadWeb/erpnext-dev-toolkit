@@ -18,8 +18,6 @@ pass() {
 [[ -f RELEASE-MANIFEST.txt ]] || fail "RELEASE-MANIFEST.txt is missing"
 [[ -f README.md ]] || fail "README.md is missing"
 [[ -f SECURITY.md ]] || fail "SECURITY.md is missing"
-[[ -f RELIABILITY-PLAN.md ]] || fail "RELIABILITY-PLAN.md is missing"
-[[ -f QUALITY-ASSESSMENT.md ]] || fail "QUALITY-ASSESSMENT.md is missing"
 
 bash -n erpnext-dev.sh
 [[ -f lib/common.sh ]] || fail "lib/common.sh is missing"
@@ -54,9 +52,18 @@ bash -n lib/install.sh
 bash -n lib/ops.sh
 [[ -f lib/security.sh ]] || fail "lib/security.sh is missing"
 bash -n lib/security.sh
+[[ -f lib/update.sh ]] || fail "lib/update.sh is missing"
+bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh
+
+# Module lists and dispatcher targets must all agree. This is the single guard
+# that prevents a module from being sourced at runtime while missing from the
+# integrity/self-update chain, and catches dispatcher commands with no backing
+# function.
+scripts/check-module-consistency.sh
+pass "module consistency verified"
 
 if command -v shellcheck >/dev/null 2>&1; then
   scripts/run-shellcheck.sh
@@ -76,6 +83,18 @@ tag_version="v${script_version}"
 
 grep -q "^## ${tag_version}" CHANGELOG.md || fail "CHANGELOG.md missing top entry for ${tag_version}"
 pass "CHANGELOG version matches SCRIPT_VERSION (${tag_version})"
+
+# Version discipline: a stable release must not be cut from a tree whose
+# CHANGELOG still has an open "## Unreleased" section, and the newest entry must
+# be the version being released. Enforced when RELEASE_STRICT=1 (set by the
+# release workflow); dev branches may keep an Unreleased section during work.
+if [[ "${RELEASE_STRICT:-0}" == "1" ]]; then
+  first_heading="$(grep -m1 -E '^## ' CHANGELOG.md || true)"
+  if [[ "$first_heading" != "## ${tag_version}"* ]]; then
+    fail "RELEASE_STRICT: newest CHANGELOG entry is '${first_heading}', expected '## ${tag_version}' (fold any Unreleased section into the release)"
+  fi
+  pass "RELEASE_STRICT: newest CHANGELOG entry is ${tag_version}"
+fi
 
 grep -q "VERSION=\"${tag_version}\"" README.md || fail "README.md missing VERSION=\"${tag_version}\""
 pass "README VERSION pin matches SCRIPT_VERSION (${tag_version})"
