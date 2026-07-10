@@ -355,6 +355,12 @@ echo "==> Installing nvm / Node ${NODE_VERSION} / Yarn"
 # script, the systemd unit, frappe.sh, apps.sh) all source \$HOME/.nvm/nvm.sh.
 export NVM_DIR="\$HOME/.nvm"
 if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
+  # Pre-create NVM_DIR. With XDG_CONFIG_HOME set, nvm's "default install dir"
+  # is \$XDG_CONFIG_HOME/nvm, and the installer only auto-creates NVM_DIR when
+  # it matches that default. Since we force \$HOME/.nvm, the installer would
+  # otherwise abort with "that directory does not exist"; creating it first
+  # makes the installer clone straight into it.
+  mkdir -p "\$NVM_DIR"
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | NVM_DIR="\$NVM_DIR" bash
 fi
 

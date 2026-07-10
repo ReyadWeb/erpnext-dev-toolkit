@@ -1,3 +1,19 @@
+## v1.4.5 - Pre-create NVM_DIR so the nvm installer accepts it
+
+### Fixed
+
+- **The install still aborted at the Node step on a fresh VM** (a follow-on to
+  the v1.4.4 fix). With `XDG_CONFIG_HOME` set, the nvm installer's default
+  install dir is `$XDG_CONFIG_HOME/nvm`, and the installer only auto-creates
+  `NVM_DIR` when it matches that default. Because we force `NVM_DIR=$HOME/.nvm`,
+  the installer refused with `You have $NVM_DIR set to "/home/frappe/.nvm", but
+  that directory does not exist`. The installer now `mkdir -p "$NVM_DIR"` before
+  running the nvm installer, so nvm clones straight into `$HOME/.nvm`.
+
+### Changed
+
+- Bumped the toolkit version to v1.4.5 and regenerated `SHA256SUMS`.
+
 ## v1.4.4 - Fix nvm install location broken by the XDG pins
 
 ### Fixed
