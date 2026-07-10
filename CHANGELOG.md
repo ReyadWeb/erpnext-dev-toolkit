@@ -1,3 +1,25 @@
+## v1.4.4 - Fix nvm install location broken by the XDG pins
+
+### Fixed
+
+- **The install aborted at the Node step on a fresh VM.** The v1.4.1 XDG fix
+  exports `XDG_CONFIG_HOME="$HOME/.config"`, and the nvm installer honors
+  `XDG_CONFIG_HOME` when `NVM_DIR` is unset — so nvm was installed into
+  `$HOME/.config/nvm`, while the rest of the toolkit (this installer, the
+  systemd unit, `frappe.sh`, `apps.sh`) all source `$HOME/.nvm/nvm.sh`. The
+  install failed with `/home/frappe/.nvm/nvm.sh: No such file or directory`.
+  The installer now exports `NVM_DIR="$HOME/.nvm"` **before** running the nvm
+  installer (and passes it through to the installer), so nvm always lands in
+  `$HOME/.nvm` regardless of the XDG environment. The presence guard now checks
+  for `$NVM_DIR/nvm.sh` instead of the `.nvm` directory.
+- This was masked in CI because GitHub-hosted runners pre-set `NVM_DIR`, which
+  happened to point nvm at the expected path; a genuinely fresh VM (no
+  `NVM_DIR`) exposed it.
+
+### Changed
+
+- Bumped the toolkit version to v1.4.4 and regenerated `SHA256SUMS`.
+
 ## v1.4.3 - Integrity/self-update chain fixes, working CLI commands, and drift guards
 
 ### Fixed

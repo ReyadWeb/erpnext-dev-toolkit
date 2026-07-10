@@ -349,11 +349,15 @@ cd "\$HOME"
 echo
 echo "==> Installing nvm / Node ${NODE_VERSION} / Yarn"
 
-if [[ ! -d "\$HOME/.nvm" ]]; then
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash
+# Pin NVM_DIR BEFORE running the installer. The nvm installer honors
+# XDG_CONFIG_HOME when NVM_DIR is unset, so with the XDG pins above it would
+# otherwise install into \$HOME/.config/nvm while the rest of the toolkit (this
+# script, the systemd unit, frappe.sh, apps.sh) all source \$HOME/.nvm/nvm.sh.
+export NVM_DIR="\$HOME/.nvm"
+if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | NVM_DIR="\$NVM_DIR" bash
 fi
 
-export NVM_DIR="\$HOME/.nvm"
 # shellcheck disable=SC1091
 source "\$NVM_DIR/nvm.sh"
 

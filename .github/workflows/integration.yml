@@ -57,6 +57,10 @@ jobs:
       ENABLE_AUTOSTART: "false"
       DEPLOYMENT_MODE: "development"
       DEBIAN_FRONTEND: noninteractive
+      # GitHub-hosted runners pre-set NVM_DIR, which masked a real fresh-VM bug
+      # (nvm installing under XDG_CONFIG_HOME instead of $HOME/.nvm). Blank it so
+      # the integration install mirrors a genuinely fresh machine.
+      NVM_DIR: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v4
