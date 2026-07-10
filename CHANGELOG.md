@@ -1,3 +1,23 @@
+## v1.6.1 - Local access + mkcert UX fix
+
+### Fixed
+
+- **Unstyled page via raw IP.** Access messaging (`access-info`, `desk-url`,
+  ready summary, education URLs) now prefers the friendly hostname
+  (`http://${SITE_NAME}:8000` or `https://${SITE_NAME}` when local HTTPS is up).
+  Raw `http://<vm-ip>:8000` is labeled troubleshooting-only with an explicit
+  warning that it often shows a broken/unstyled login (Host-header mismatch).
+  `local-access-doctor` diagnoses the same symptom.
+- **mkcert wizard no longer forces a menu exit.** `trusted-mkcert-setup` now:
+  (0) prints the HOST `/etc/hosts` checkpoint and confirms it, (1) prints
+  numbered HOST mkcert/scp commands, (2) **waits and rechecks** `/tmp` for the
+  cert/key (Enter after scp, or `skip` / `guide`), then (3) installs, configures,
+  and verifies HTTPS in the same session. Recommended browser URL is
+  `https://${SITE_NAME}` only.
+- **Wrong “Next:” path after `verify-signature`.** `active_toolkit_path` now
+  prefers `ERPNEXT_DEV_ENTRY_SCRIPT` instead of `BASH_SOURCE[1]`, so hints no
+  longer point at `lib/common.sh`.
+
 ## v1.6.0 - Gated & mandatory-signed releases, atomic self-update
 
 ### Changed

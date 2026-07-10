@@ -276,8 +276,16 @@ active_toolkit_path() {
     return 0
   fi
 
-  src="$(readlink -f "${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}" 2>/dev/null || true)"
-  if [[ -n "$src" && -f "$src" ]]; then
+  # Prefer the entry script resolved at bootstrap (readlink -f of erpnext-dev.sh).
+  # Do NOT use BASH_SOURCE[1] here: callers live in lib/*.sh, so that would print
+  # a library path (e.g. lib/common.sh) instead of the toolkit entrypoint.
+  if [[ -n "${ERPNEXT_DEV_ENTRY_SCRIPT:-}" && -f "${ERPNEXT_DEV_ENTRY_SCRIPT}" ]]; then
+    printf '%s' "$ERPNEXT_DEV_ENTRY_SCRIPT"
+    return 0
+  fi
+
+  src="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+  if [[ -n "$src" && -f "$src" && "$(basename "$src")" == "erpnext-dev.sh" ]]; then
     printf '%s' "$src"
     return 0
   fi
