@@ -1,3 +1,31 @@
+## v1.6.0 release governance and atomic self-update
+
+v1.6.0 turns release integrity from "available" into "enforced":
+
+- **Publishing is gated on the full test pipeline.** `release.yml` is now a
+  single tag pipeline — `validate` (shellcheck + `validate-release.sh` + bundle
+  quickstart) → `integration` (a real disposable-VM install + backup/restore
+  round-trip + production-runtime conversion) → `publish`. The publish job
+  `needs: [validate, integration]`, so a release can never be published unless
+  both gates pass first. A compromised or broken tree fails before any artifact
+  is shipped.
+- **Signing is mandatory for stable tags.** A stable `vX.Y.Z` tag FAILS the
+  release if the signing key is missing or signing/verification fails — it no
+  longer silently publishes unsigned. The only unsigned path is an explicit
+  emergency pre-release tag (e.g. `vX.Y.Z-unsigned`), which is marked as a
+  GitHub pre-release.
+- **Self-update is atomic and verified end to end.** `update-toolkit` downloads
+  the signed release bundle, verifies whole-tree checksums (`sha256sum -c`) and
+  the detached GPG signature offline against the bundled pinned key, extracts to
+  `/opt/erpnext-dev/releases/<ver>/`, then flips `/opt/erpnext-dev/current` with
+  a single atomic `rename`. A crash mid-update can no longer leave a tree that
+  mixes modules from two versions, and the previous release is retained for
+  instant `toolkit-rollback`.
+- **Symlink resolution fix.** The entry script resolves its own real path
+  (`readlink -f`) before locating `lib/`, so running through the CLI symlink or
+  the `current` release symlink always sources modules from the real, verified
+  release directory.
+
 ## v1.3.0 signed releases (Phase C P0 milestone)
 
 v1.3.0 adds maintainer-identity verification on top of the existing SHA256 integrity workflow: a `release.yml` workflow signs `SHA256SUMS` with the maintainer GPG key on every `v*` tag and attaches `SHA256SUMS.asc` to the GitHub Release, and a new `verify-signature` command verifies that signature. See "Verifying release signatures" below. This closes the gap noted under P0: SHA256-only verification cannot detect an attacker who controls both the script and its checksum, whereas a signature they cannot forge can.
@@ -133,7 +161,7 @@ The preferred direction is now partially implemented:
 2. publish SHA256 checksums per release;
 3. document checksum verification before `sudo` execution;
 4. add a `verify-toolkit` command that reports installed path, installed version, installed SHA256, and match/mismatch against a known checksum when available; **implemented in v1.1.71**;
-5. GPG-signed releases; **implemented in v1.3.0** (`release.yml` signs `SHA256SUMS`; `verify-signature` checks it).
+5. GPG-signed releases; **implemented in v1.3.0** and made **mandatory for stable tags in v1.6.0** (`release.yml` signs `SHA256SUMS`; `verify-signature` checks it), with publishing **gated on CI + a real integration run**.
 
 v1.1.70 implements items 1-3 for the `erpnext-dev.sh` script artifact by adding `SHA256SUMS` and tag-pinned README examples. v1.1.71 implements item 4 with `verify-toolkit`. v1.1.72 adds minimal CI and `scripts/validate-release.sh` so release checks are repeatable before publishing tags. v1.3.0 implements item 5. Operators should prefer the verified, signed tag workflow for production systems. The mutable `main` branch raw URL remains a development convenience path only.
 
@@ -149,7 +177,7 @@ With signing enabled, verification is no longer integrity-only: SHA256 proves th
 3. Publish the public key and its fingerprint (in this file and/or the repository), so users can pin it:
    `gpg --armor --export <KEYID>` and `gpg --fingerprint <KEYID>`.
 
-Once `GPG_PRIVATE_KEY` is set, `release.yml` signs `SHA256SUMS` on every `v*` tag and attaches `SHA256SUMS.asc` to the release. Until then, releases publish unsigned (with a CI warning).
+Once `GPG_PRIVATE_KEY` is set, `release.yml` signs `SHA256SUMS` on every `v*` tag and attaches `SHA256SUMS.asc` to the release. As of v1.6.0 this is **required** for stable `vX.Y.Z` tags: if the key is missing, the release fails rather than shipping unsigned. An unsigned build is only possible via an explicit emergency pre-release tag such as `vX.Y.Z-unsigned`.
 
 **End-user verification** — before running the toolkit as root:
 
@@ -223,28 +251,26 @@ mkdir -p /tmp/erpnext-support-review
 tar -xzf "$latest_bundle" -C /tmp/erpnext-support-review
 ```
 
-### P1: Root-level monolithic script risk
+### Resolved: root-level monolithic script risk
 
-The toolkit is currently a large Bash script. This keeps installation simple and portable, but it increases audit and regression risk. Modularization should happen after the release-integrity and CI foundations are in place.
+The toolkit was a single large Bash script. As of the Phase B work it is a thin
+`erpnext-dev.sh` entry/dispatcher sourcing 17 `lib/*.sh` modules, each verified
+against `SHA256SUMS` by `verify-toolkit`. The former monolith audit/regression
+risk is retired.
 
-Recommended direction:
+### Known open: shared `/tmp` lock-file hardening (multi-user hosts)
 
-```text
-erpnext-dev.sh             thin entry point and command dispatcher
-lib/common.sh              logging, prompts, locks, shared helpers
-lib/install.sh             install and preflight
-lib/ssl.sh                 local and production SSL
-lib/firewall.sh            UFW, Fail2Ban, rollback helpers
-lib/apps.sh                curated app install library
-lib/health.sh              health check and timers
-lib/storage.sh             root storage detection and expansion
-lib/service.sh             ERPNext systemd service and runtime state
-lib/install.sh             install and preflight (Tier A core engine)
-lib/backup.sh              local backup and retention
-lib/offvm-backup.sh        off-VM backup setup and rsync
-lib/restore.sh             restore preflight and rehearsal
-lib/support.sh             support bundle and diagnostics
-```
+The toolkit's single-instance lock still defaults to a predictable, world-shared
+path (`/tmp/erpnext-dev-locks/toolkit.lock`, dir mode `1777`, file mode `666`),
+and the lock is created with a plain truncate that follows symlinks. On a
+**single-admin dedicated VM** (the toolkit's target) the practical risk is low.
+On a **multi-user host**, an unprivileged user could pre-create the predictable
+path as a symlink and cause a later root run to follow/truncate it.
+
+Planned hardening: root → `/run/lock/erpnext-dev/` (root-owned, mode `0700`),
+non-root → `${XDG_RUNTIME_DIR}/erpnext-dev/`, refuse symlinked lock files, and
+drop the `chmod 666`. Until then, do not run the toolkit as root on a host that
+shares `/tmp` with untrusted local users.
 
 ## Recommended release-security roadmap
 

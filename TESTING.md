@@ -1727,7 +1727,7 @@ erpnext-dev where-installed
 
 ## Fresh VM preflight validation
 
-Run inside a fresh Ubuntu/Debian-family VM:
+Run inside a fresh Ubuntu 24.04 or 26.04 LTS VM (the only supported targets):
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
