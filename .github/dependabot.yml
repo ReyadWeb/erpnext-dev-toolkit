@@ -1,0 +1,25 @@
+version: 2
+
+# CI supply-chain hardening (v1.9.1): GitHub Actions are pinned to immutable
+# commit SHAs in the workflows (with a "# vX.Y.Z" comment). Dependabot watches
+# those pins and opens PRs that bump both the SHA and the version comment, so
+# action updates are deliberate, reviewable, and never silently follow a moving
+# tag. Grouped weekly to keep noise low.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

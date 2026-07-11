@@ -1,3 +1,29 @@
+## v1.9.1 - CI supply-chain hardening
+
+### Security
+
+- **GitHub Actions pinned to immutable commit SHAs.** `actions/checkout` (v4.2.2 →
+  `11bd71901bbe5b1630ceea73d27597364c9af683`) and `actions/upload-artifact` (v4.6.2 →
+  `ea165f8d65b6e75b540449e92b4886f43607fa02`) are now pinned by commit SHA across
+  [`ci.yml`](.github/workflows/ci.yml), [`integration.yml`](.github/workflows/integration.yml),
+  and [`release.yml`](.github/workflows/release.yml). A retagged or compromised action
+  release can no longer silently enter the pipeline that builds and signs releases.
+- **Deliberate updates via Dependabot.** [`.github/dependabot.yml`](.github/dependabot.yml)
+  opens weekly, grouped `github-actions` PRs that bump the pinned SHA and its
+  `# vX.Y.Z` comment together, keeping updates reviewable instead of implicit.
+
+### Changed
+
+- **Ubuntu 26.04 integration leg enabled (non-blocking preview).** The integration
+  matrix now runs `ubuntu-24.04` (mandatory, release-gating) and `ubuntu-26.04`
+  (`continue-on-error` via `matrix.experimental`, since the 26.04 hosted image is a
+  GitHub public preview). The 26.04 leg becomes a hard gate once the image is GA.
+
+### Docs
+
+- `README.md`, `ROADMAP.md`, `SECURITY.md`: OS-support wording clarified (24.04
+  gating + 26.04 preview); v1.9.1 marked shipped; supply-chain rating raised to 9.6.
+
 ## v1.9.0 - Signing authority separation
 
 ### Security

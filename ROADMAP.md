@@ -1,7 +1,7 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.9.0 (July 2026)  
-**External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + VPS pass)  
+**Current release:** v1.9.1 (July 2026)  
+**External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
 
 ---
@@ -12,8 +12,8 @@
 |----------|--------|--------|
 | Local dev VM (single admin) | **9.5 / 10** | Field-tested; guided HTTPS, apps, backups |
 | Public VPS production (single admin) | **9.4 / 10** | CI-proven install + restore + production runtime; **VPS validation in progress** |
-| Supply chain / release trust | **9.5 / 10** | Self-update fingerprint gate (v1.8.2); signing authority separated to `release-signing` env (v1.9.0) |
-| Reproducibility | **9.0 / 10** | Pinned toolchain (`versions`); Ubuntu 26.04 not yet in integration CI |
+| Supply chain / release trust | **9.6 / 10** | Self-update fingerprint gate (v1.8.2); signing separated to `release-signing` env (v1.9.0); Actions pinned to commit SHAs + Dependabot (v1.9.1) |
+| Reproducibility | **9.3 / 10** | Pinned toolchain (`versions`); Actions pinned to SHAs; Ubuntu 26.04 now in integration CI (non-blocking preview leg) |
 | Enterprise / multi-user host | **8.5 / 10** | Lock hardened; not a shared-shell product |
 | Community / packaging polish | **8.0 / 10** | No CONTRIBUTING/templates yet |
 
@@ -59,15 +59,18 @@ key is an environment secret gated by required-reviewer approval, so a signed re
 cannot be produced by repository write access alone. Setup + key-rotation runbook in
 [`SECURITY.md`](SECURITY.md#signing-authority-separation-v190).
 
-### P1 — v1.9.1: CI supply-chain hardening
+### P1 — v1.9.1: CI supply-chain hardening — **implemented**
 
-- Pin GitHub Actions to immutable commit SHAs (Dependabot/Renovate for updates)
-- Enable Ubuntu 26.04 integration (mandatory CI or self-hosted disposable VM)
-- Until then: *"Supports Ubuntu 24.04 and 26.04; automated integration coverage currently runs on Ubuntu 24.04."*
+- GitHub Actions pinned to immutable commit SHAs (`actions/checkout@…v4.2.2`,
+  `actions/upload-artifact@…v4.6.2`) across `ci.yml`, `integration.yml`, `release.yml`
+- `.github/dependabot.yml` (weekly, grouped) bumps the SHA pins deliberately
+- Ubuntu 26.04 integration leg enabled as a **non-blocking preview** leg (24.04 stays
+  the release-gating leg); it becomes a hard gate when the 26.04 runner reaches GA
+- Support wording: *"Supports Ubuntu 24.04 and 26.04; integration runs on 24.04 (gating) + 26.04 (preview, non-blocking)."*
 
 ### P2 — v1.10.0: Object-storage backups
 
-S3-compatible off-site target (AWS S3, Backblaze B2, MinIO) — after v1.8.2 and v1.9.0.
+S3-compatible off-site target (AWS S3, Backblaze B2, MinIO) — after v1.9.1.
 
 ### P2 — v1.11.0: Community polish
 
@@ -75,7 +78,7 @@ CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation.
 
 ---
 
-## Completed (v1.4.0 → v1.9.0)
+## Completed (v1.4.0 → v1.9.1)
 
 | Area | Version | What shipped |
 |------|---------|--------------|
@@ -89,6 +92,7 @@ CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation.
 | Reliability proof | v1.8.0–1.8.1 | Atomic update CI smoke; signing policy tests; tamper negatives |
 | Self-update authenticity | v1.8.2 | Staged signature + pinned-fingerprint gate; staged-signature CI matrix |
 | Signing authority separation | v1.9.0 | `publish` gated by `release-signing` environment (reviewer approval) |
+| CI supply-chain hardening | v1.9.1 | Actions pinned to commit SHAs + Dependabot; Ubuntu 26.04 non-blocking integration leg |
 
 **CI today:** lint/shellcheck → validate-release → atomic-update-smoke → (on tag) integration install + backup/restore + production runtime + tamper negative → **environment-approved** sign → publish.
 
@@ -120,14 +124,23 @@ unit tests retained.
 
 **Rating after v1.9.0:** **9.6–9.7** (pending VPS validation).
 
-### Phase 1b — v1.9.1: CI supply-chain hardening (~3–5 days) **P1**
+### Phase 1b — v1.9.1: CI supply-chain hardening — **shipped**
 
-**Goal:** CI trust matches release trust story.
+**Goal:** CI trust matches release trust story. Supply chain **9.5 → 9.6**.
 
-**Deliverables:**
-- Pin GitHub Actions to immutable commit SHAs; Dependabot/Renovate for deliberate updates
-- Ubuntu 26.04 integration leg (GitHub runner or self-hosted disposable VM)
-- README support wording: 26.04 supported; integration currently 24.04-only until leg enabled
+**Shipped:**
+- GitHub Actions pinned to immutable commit SHAs (`actions/checkout@11bd719…` v4.2.2,
+  `actions/upload-artifact@ea165f8…` v4.6.2) across all three workflows
+- [`.github/dependabot.yml`](.github/dependabot.yml): weekly grouped `github-actions`
+  updates that bump the SHA pin + version comment (deliberate, reviewable)
+- Ubuntu 26.04 integration leg enabled as a **non-blocking preview** leg
+  (`continue-on-error` via `matrix.experimental`); 24.04 remains the release gate
+- README support wording updated to reflect 24.04-gating + 26.04-preview coverage
+
+**Follow-up:** flip the 26.04 leg to a hard gate (`experimental: false`) once the
+GitHub-hosted `ubuntu-26.04` image reaches general availability.
+
+**Rating after v1.9.1:** **9.6–9.7** (pending VPS validation).
 
 ### Phase 2 — v1.10.0: Object-storage off-site backups (~1–2 weeks) **P2**
 
@@ -156,9 +169,8 @@ Post-install `update-toolkit` smoke against real GitHub release assets; document
 ## Near-term priority order
 
 1. **VPS production validation** — confirms enterprise-candidate rating is real-world, not CI-only
-2. **v1.9.1** — Actions SHA pinning + Ubuntu 26.04 integration **(P1)**
-3. **v1.10.0** — object-storage backups **(P2)**
-4. **v1.11.0** — community + docs polish → **9.8+**
+2. **v1.10.0** — object-storage backups **(P2)**
+3. **v1.11.0** — community + docs polish → **9.8+**
 
 ---
 
@@ -182,7 +194,7 @@ Post-install `update-toolkit` smoke against real GitHub release assets; document
 |------|--------|---------|
 | 1 | VPS production test; **v1.8.2 self-update hardening** | **v1.8.2** ✅ |
 | 1 | **Signing authority separation (Phase 1)** | **v1.9.0** ✅ |
-| 2 | Actions SHA pinning; Ubuntu 26.04 integration | **v1.9.1** |
+| 2 | Actions SHA pinning; Ubuntu 26.04 integration | **v1.9.1** ✅ |
 | 3–4 | S3-compatible backups + MinIO CI (Phase 2) | **v1.10.0** |
 | 5 | CONTRIBUTING, templates, docs trim (Phase 3) | **v1.11.0** → **9.8+** |
 

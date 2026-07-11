@@ -42,15 +42,23 @@ jobs:
     name: Install + smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
+    # The 26.04 image is still a GitHub public preview (capacity/stability may
+    # vary), so its leg is marked experimental and runs non-blocking: it must
+    # execute and report on every tag, but a preview-only flake must never block
+    # a release. Ubuntu 24.04 remains the mandatory, release-gating leg.
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-24.04
-          # The toolkit targets Ubuntu 24.04 and 26.04. Enable the 26.04 entry
-          # once a GitHub-hosted "ubuntu-26.04" runner label is available; the
-          # steps below are OS-agnostic and need no other change.
-          # - ubuntu-26.04
+        include:
+          # Mandatory, release-gating integration leg.
+          - os: ubuntu-24.04
+            experimental: false
+          # Ubuntu 26.04 (public preview as of 2026-06). Steps are OS-agnostic;
+          # non-blocking until the image reaches GA, at which point flip
+          # experimental to false to make it a hard gate too.
+          - os: ubuntu-26.04
+            experimental: true
     env:
       # erp.test keeps parity with the toolkit default; dispatch/call can override.
       SITE_NAME: ${{ inputs.site_name || 'erp.test' }}
@@ -70,7 +78,7 @@ jobs:
       NVM_DIR: ""
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
 
@@ -317,7 +325,7 @@ jobs:
 
       - name: Upload diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: integration-${{ matrix.os }}
           path: artifacts/

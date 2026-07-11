@@ -18,8 +18,13 @@ It supports two setup paths:
 > the path to **9.8+** are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.9.0 · **Readiness:** ~9.5/10 for single-admin local/public VM
-(after VPS production validation). Next milestone: **v1.9.1** (CI supply-chain hardening).
+**Current release:** v1.9.1 · **Readiness:** ~9.5/10 for single-admin local/public VM
+(after VPS production validation). Next milestone: **v1.10.0** (object-storage off-site backups).
+
+> **OS support:** Ubuntu 24.04 and 26.04 LTS are supported. Automated integration
+> coverage runs on **Ubuntu 24.04 (release-gating)** plus **Ubuntu 26.04 (GitHub
+> public-preview runner, non-blocking)**; the 26.04 leg becomes a hard gate once
+> that runner image reaches general availability.
 
 ---
 
@@ -57,7 +62,7 @@ First install and verify the toolkit ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.9.0"
+VERSION="v1.9.1"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -100,8 +105,8 @@ After install, everything else uses the stable `erpnext-dev` command:
 |------|--------|--------|
 | Local dev VM | 9.5 | Guided install, HTTPS, apps, backups — field-tested |
 | Public VPS production | 9.5 | Production runtime, gated releases — **validate on your VPS** |
-| Supply chain | 9.5 | Signed + gated CI; signing key gated by `release-signing` environment (v1.9.0) |
-| Path to 9.8+ | — | v1.9.1 CI SHA pinning + 26.04 → v1.10.0 object-storage backups → v1.11.0 community polish |
+| Supply chain | 9.6 | Signed + gated CI; signing key gated by `release-signing` environment (v1.9.0); Actions pinned to commit SHAs + Dependabot (v1.9.1) |
+| Path to 9.8+ | — | v1.10.0 object-storage backups → v1.11.0 community polish |
 
 See [`ROADMAP.md`](ROADMAP.md) for the full plan and timeline. VPS production checklist:
 [`TESTING.md` — VPS production validation](TESTING.md#vps-production-validation-v190).

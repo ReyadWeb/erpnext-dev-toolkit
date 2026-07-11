@@ -293,7 +293,7 @@ pinned toolchain. Full detail: [`ROADMAP.md`](ROADMAP.md#external-security-revie
 
 **One P0 gap remains on the consumer (self-update) path** — documented below.
 
-### Implemented (v1.6.0 – v1.9.0)
+### Implemented (v1.6.0 – v1.9.1)
 
 - **Gated publish:** validate → integration → sign → publish on every stable tag
 - **Mandatory signing** for stable tags (`vX.Y.Z`); pre-release tags may publish unsigned
@@ -301,6 +301,9 @@ pinned toolchain. Full detail: [`ROADMAP.md`](ROADMAP.md#external-security-revie
 - **Atomic self-update:** bundle verify + signature/fingerprint gate + `releases/<ver>` + rollback
 - **Self-update authenticity (v1.8.2):** tag-channel updates require the same signature
   and pinned-fingerprint bar as bootstrap `verify-signature`
+- **CI supply-chain hardening (v1.9.1):** every GitHub Action is pinned to an immutable
+  commit SHA (not a moving tag), Dependabot bumps those pins deliberately, and the
+  Ubuntu 26.04 integration leg runs as a non-blocking preview leg alongside 24.04
 - **Signing authority separation (v1.9.0):** signing key lives in the protected
   `release-signing` environment; a signed release requires reviewer approval, not just
   repository write access
@@ -389,14 +392,21 @@ is published. Denying the approval blocks signing and publishing.
 > changes. This is intentional — communicate rotations in release notes so operators
 > re-pin. Historical releases keep their original (now-untrusted) signatures.
 
-### Planned — v1.9.1 (CI supply-chain hardening)
+### Implemented — v1.9.1 (CI supply-chain hardening)
 
-- Pin GitHub Actions to immutable commit SHAs (Dependabot/Renovate for updates)
-- Ubuntu 26.04 integration testing (toolkit supports 26.04; CI currently 24.04-only)
+- **Actions pinned to commit SHAs.** `actions/checkout` and `actions/upload-artifact`
+  are pinned to immutable commit SHAs (with `# vX.Y.Z` comments) in all three
+  workflows, so a compromised or retagged action version cannot silently enter CI.
+- **Dependabot.** [`.github/dependabot.yml`](.github/dependabot.yml) opens weekly,
+  grouped PRs that bump both the pinned SHA and its version comment — updates are
+  deliberate and reviewable, never an implicit follow of a moving tag.
+- **Ubuntu 26.04 integration leg.** Added to the integration matrix as a non-blocking
+  preview leg (`continue-on-error` via `matrix.experimental`); Ubuntu 24.04 stays the
+  mandatory release gate. Flip the 26.04 leg to blocking once the runner image is GA.
 
 ### Planned — v1.10.0 (object-storage backups)
 
-S3-compatible off-site backup target alongside rsync — after v1.8.2 and v1.9.0.
+S3-compatible off-site backup target alongside rsync — after v1.9.1.
 
 ### Historical milestones (implemented)
 

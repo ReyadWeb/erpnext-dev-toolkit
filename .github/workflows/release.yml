@@ -22,8 +22,10 @@ name: Release (gate, sign & publish)
 #   The signing key is then reachable only after a human approves the deployment, so
 #   repository write access alone cannot produce a signed release. See SECURITY.md
 #   ("Signing authority separation") for the one-time setup and key-rotation runbook.
-#   If the environment is not yet configured, GitHub creates it unprotected on first
-#   run and signing falls back to repository secrets (no regression, no protection).
+#   The `release-signing` environment is configured with a required reviewer, a `v*`
+#   deployment tag rule, admin-bypass disabled, and the GPG secrets stored ONLY at the
+#   environment scope (the repository-level copies were removed in v1.9.1), so the
+#   signing key is unreachable without an approved deployment.
 
 on:
   push:
@@ -59,7 +61,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
 
