@@ -1,6 +1,7 @@
 # ERPNext Developer Toolkit — Roadmap
 
 **Current release:** v1.8.1 (July 2026)  
+**External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10**  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
 
 ---
@@ -10,13 +11,76 @@
 | Use case | Rating | Status |
 |----------|--------|--------|
 | Local dev VM (single admin) | **9.5 / 10** | Field-tested; guided HTTPS, apps, backups |
-| Public VPS production (single admin) | **9.5 / 10** | CI-proven install + restore + production runtime; **VPS validation in progress** |
-| Supply chain / release trust | **9.0 / 10** | Gated signed releases, atomic update CI, signing policy unit tests |
-| Reproducibility | **9.0 / 10** | Pinned toolchain (`versions`), integration CI |
+| Public VPS production (single admin) | **9.4 / 10** | CI-proven install + restore + production runtime; **VPS validation in progress** |
+| Supply chain / release trust | **9.0 / 10** | Gated signed releases; **self-update signature gap → v1.8.2 (P0)** |
+| Reproducibility | **9.0 / 10** | Pinned toolchain (`versions`); Ubuntu 26.04 not yet in integration CI |
 | Enterprise / multi-user host | **8.5 / 10** | Lock hardened; not a shared-shell product |
 | Community / packaging polish | **8.0 / 10** | No CONTRIBUTING/templates yet |
 
-**Overall (single-admin dedicated VM): 9.5 / 10** after VPS production checklist passes.
+**Overall (single-admin dedicated VM): 9.4 / 10** — enterprise-candidate after VPS checklist; **9.6–9.7** after v1.8.2 + v1.9.0 + VPS pass.
+
+**Positioning:** Advanced lifecycle and operations platform for **non-containerized** ERPNext/Frappe on dedicated Ubuntu VMs — aligned with Frappe's Supervisor + Nginx model, not marketed as superior to Frappe's recommended Docker deployment.
+
+---
+
+## External security review — resolved blockers (v1.8.1)
+
+Independent review (July 2026) confirms prior architectural objections are **resolved**:
+
+| # | Area | Verdict |
+|---|------|---------|
+| 1 | **Production runtime** — Supervisor/Gunicorn/workers/scheduler/Socket.IO; dev `systemd` disabled; integration fails if `bench start` remains | ✅ Resolved |
+| 2 | **`install-cli` / `repair-cli`** — real `install_toolkit_cli()` / `repair_toolkit_cli()` implementations | ✅ Resolved |
+| 3 | **Module integrity** — all 17 runtime modules in manifest + `SHA256SUMS`; `check-module-consistency.sh` prevents drift | ✅ Resolved |
+| 4 | **Lock-file hardening** — private dirs (`/run/lock/erpnext-dev/` or `$XDG_RUNTIME_DIR`); `0700`/`0600`; symlink rejection | ✅ Resolved |
+| 5 | **`verify-toolkit`** — full runtime + tamper negatives in CI and integration (installed `/opt` tree) | ✅ Resolved |
+| 6 | **Gated publication** — validate → integration (real install, backup, destructive restore, production conversion) → sign → publish | ✅ Resolved |
+| 7 | **Stable signing** — stable `vX.Y.Z` tags fail without GPG key; pre-release escape hatch only | ✅ Resolved (publication layer) |
+| 8 | **Atomic self-update** — `releases/<ver>` + `current` symlink; CI atomic update/rollback smoke | ✅ Resolved (integrity layer) |
+| 9 | **Support-bundle negatives** — clean bundle passes; unsafe fixture (secrets, forbidden names) must fail | ✅ Resolved |
+| 10 | **Toolchain pins** — `NVM_VERSION`, `UV_VERSION`, `BENCH_VERSION` (default 5.31.0); `versions` command | ✅ Substantially resolved |
+
+**Classification:** v1.8.1 is an **enterprise-candidate** ERPNext/Frappe VM operations toolkit for dedicated single-admin Ubuntu deployments.
+
+---
+
+## Open findings from external review
+
+### P0 — v1.8.2: Self-update authenticity hardening
+
+**Issue:** `update-toolkit` checksum verification is strong, but `toolkit_verify_staged_signature()` is weaker than standalone `verify-signature`:
+
+| Check | `verify-signature` | `update-toolkit` (today) |
+|-------|-------------------|--------------------------|
+| Signature required | ✅ fail | ⚠️ warn, continue |
+| GPG required | ✅ fail | ⚠️ warn, continue |
+| Bundled pubkey required | ✅ fail | ⚠️ warn, continue |
+| Pinned maintainer fingerprint | ✅ enforced | ❌ not enforced on staged path |
+
+An attacker who controls a release asset could supply matching checksums + attacker GPG key + valid signature against that key. The pinned fingerprint (`BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`) is meant to block exactly that — but the staged-update path does not yet enforce it.
+
+**v1.8.2 deliverables:**
+- Stable tag updates: missing `SHA256SUMS.asc`, missing `gpg`, missing bundled pubkey, bad signature, or wrong signer fingerprint → **FAIL**
+- Align `toolkit_verify_staged_signature()` with `verify-signature` fingerprint gate
+- CI negatives: missing signature, wrong key, tampered sums, valid sig/wrong fingerprint, missing pubkey
+
+### P1 — v1.9.0: Signing authority separation
+
+Move GPG secrets to GitHub Environment `release-signing` with required reviewers (or OIDC/keyless). See [Path to 9.8+ — Phase 1](#phase-1--v190-signing-authority-separation-1-week-p1).
+
+### P1 — v1.9.1: CI supply-chain hardening
+
+- Pin GitHub Actions to immutable commit SHAs (Dependabot/Renovate for updates)
+- Enable Ubuntu 26.04 integration (mandatory CI or self-hosted disposable VM)
+- Until then: *"Supports Ubuntu 24.04 and 26.04; automated integration coverage currently runs on Ubuntu 24.04."*
+
+### P2 — v1.10.0: Object-storage backups
+
+S3-compatible off-site target (AWS S3, Backblaze B2, MinIO) — after v1.8.2 and v1.9.0.
+
+### P2 — v1.11.0: Community polish
+
+CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation.
 
 ---
 
@@ -39,11 +103,22 @@
 
 ## Path to 9.8+
 
-Target: **9.8+ overall** for single-admin production VPS within **3–5 weeks** of focused work (or **2–3 weeks** if community/docs run in parallel with backups).
+Target: **9.8+ overall** for single-admin production VPS within **4–6 weeks** of focused work.
 
-### Phase 1 — v1.9.0: Signing authority separation (~1 week)
+### Phase 0 — v1.8.2: Self-update authenticity hardening (~2–3 days) **P0**
 
-**Goal:** Signing key compromise ≠ repository compromise. Supply chain **9.0 → 9.5**.
+**Goal:** Close the gap between bootstrap `verify-signature` and `update-toolkit` staged verification. Supply chain **9.0 → 9.3**.
+
+**Deliverables:**
+- Harden [`toolkit_verify_staged_signature()`](lib/security.sh): require signature, GPG, bundled pubkey; enforce pinned `TOOLKIT_SIGNING_FINGERPRINT_DEFAULT`
+- CI negative matrix: missing sig, wrong key, tampered sums, valid sig/wrong fingerprint, missing pubkey
+- Update [`SECURITY.md`](SECURITY.md) threat model; extend atomic update smoke in [`scripts/test-atomic-update.sh`](scripts/test-atomic-update.sh)
+
+**Rating after v1.8.2 + VPS pass:** **9.5**
+
+### Phase 1 — v1.9.0: Signing authority separation (~1 week) **P1**
+
+**Goal:** Signing key compromise ≠ repository compromise. Supply chain **9.3 → 9.5**.
 
 **Recommended track:** GitHub **Environment** `release-signing` with required reviewer(s); move `GPG_PRIVATE_KEY` / `GPG_PASSPHRASE` to environment secrets; `publish` job targets that environment.
 
@@ -54,9 +129,18 @@ Target: **9.8+ overall** for single-admin production VPS within **3–5 weeks** 
 - Updated [`SECURITY.md`](SECURITY.md) threat model + key rotation runbook
 - Keep [`scripts/release-signing-policy.sh`](scripts/release-signing-policy.sh) unit tests
 
-**Rating after VPS pass + v1.9.0:** **9.6–9.7**
+**Rating after v1.9.0:** **9.6–9.7**
 
-### Phase 2 — v1.10.0: Object-storage off-site backups (~1–2 weeks)
+### Phase 1b — v1.9.1: CI supply-chain hardening (~3–5 days) **P1**
+
+**Goal:** CI trust matches release trust story.
+
+**Deliverables:**
+- Pin GitHub Actions to immutable commit SHAs; Dependabot/Renovate for deliberate updates
+- Ubuntu 26.04 integration leg (GitHub runner or self-hosted disposable VM)
+- README support wording: 26.04 supported; integration currently 24.04-only until leg enabled
+
+### Phase 2 — v1.10.0: Object-storage off-site backups (~1–2 weeks) **P2**
 
 **Goal:** Backups not tied to rsync/SSH alone. Ops **~8.5 → 9.2**.
 
@@ -66,7 +150,7 @@ Target: **9.8+ overall** for single-admin production VPS within **3–5 weeks** 
 
 **Rating after v1.10.0:** **9.75**
 
-### Phase 3 — v1.11.0: Community polish + docs consolidation (~3–5 days)
+### Phase 3 — v1.11.0: Community polish + docs consolidation (~3–5 days) **P2**
 
 **Goal:** Market/readiness **8.0 → 9.0**. Can overlap with Phase 2.
 
@@ -82,10 +166,12 @@ Post-install `update-toolkit` smoke against real GitHub release assets; document
 
 ## Near-term priority order
 
-1. **VPS production validation** — confirms 9.5 is real-world, not CI-only
-2. **v1.9.0** — signing environment separation
-3. **v1.10.0** — object-storage backups
-4. **v1.11.0** — community + docs polish → **9.8+**
+1. **VPS production validation** — confirms enterprise-candidate rating is real-world, not CI-only
+2. **v1.8.2** — self-update signature/fingerprint hardening **(P0)**
+3. **v1.9.0** — signing environment separation **(P1)**
+4. **v1.9.1** — Actions SHA pinning + Ubuntu 26.04 integration **(P1)**
+5. **v1.10.0** — object-storage backups **(P2)**
+6. **v1.11.0** — community + docs polish → **9.8+**
 
 ---
 
@@ -95,10 +181,11 @@ Post-install `update-toolkit` smoke against real GitHub release assets; document
 - Supervisor production runtime (not dev server)
 - HTTPS + firewall + hardening guided flows
 - Backup, verify, restore-rehearse (rsync today; object storage after v1.10.0)
-- Atomic self-update + rollback
+- Atomic self-update + rollback with **same authenticity bar as bootstrap** (v1.8.2)
 - Guarded ERPNext upgrades (`safe-update-wizard`)
 - Integrity proof (`verify-toolkit`, `verify-signature`) + support-bundle audit
 - Signing separated from repo write access (v1.9.0)
+- CI supply chain pinned and multi-OS integration (v1.9.1)
 
 ---
 
@@ -106,10 +193,11 @@ Post-install `update-toolkit` smoke against real GitHub release assets; document
 
 | Week | Focus | Release |
 |------|--------|---------|
-| 1 | VPS production test; patch v1.8.x if needed | — |
+| 1 | VPS production test; **v1.8.2 self-update hardening** | **v1.8.2** |
 | 2 | Signing environment / OIDC (Phase 1) | **v1.9.0** |
-| 3–4 | S3-compatible backups + MinIO CI (Phase 2) | **v1.10.0** |
-| 5 | CONTRIBUTING, templates, docs trim (Phase 3) | **v1.11.0** → **9.8+** |
+| 3 | Actions SHA pinning; Ubuntu 26.04 integration | **v1.9.1** |
+| 4–5 | S3-compatible backups + MinIO CI (Phase 2) | **v1.10.0** |
+| 6 | CONTRIBUTING, templates, docs trim (Phase 3) | **v1.11.0** → **9.8+** |
 
 ---
 

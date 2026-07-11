@@ -14,13 +14,12 @@ v1.6.0 turns release integrity from "available" into "enforced":
   longer silently publishes unsigned. The only unsigned path is an explicit
   emergency pre-release tag (e.g. `vX.Y.Z-unsigned`), which is marked as a
   GitHub pre-release.
-- **Self-update is atomic and verified end to end.** `update-toolkit` downloads
-  the signed release bundle, verifies whole-tree checksums (`sha256sum -c`) and
-  the detached GPG signature offline against the bundled pinned key, extracts to
+- **Self-update is atomic and checksum-gated.** `update-toolkit` downloads the
+  release bundle, verifies whole-tree checksums (`sha256sum -c`), extracts to
   `/opt/erpnext-dev/releases/<ver>/`, then flips `/opt/erpnext-dev/current` with
-  a single atomic `rename`. A crash mid-update can no longer leave a tree that
-  mixes modules from two versions, and the previous release is retained for
-  instant `toolkit-rollback`.
+  a single atomic `rename`. The previous release is retained for instant
+  `toolkit-rollback`. **Known gap (v1.8.1):** staged signature verification is
+  weaker than bootstrap `verify-signature` — see [Self-update authenticity gap](#self-update-authenticity-gap-v181--planned-v182) below; **v1.8.2** closes this.
 - **Symlink resolution fix.** The entry script resolves its own real path
   (`readlink -f`) before locating `lib/`, so running through the CLI symlink or
   the `current` release symlink always sources modules from the real, verified
@@ -280,6 +279,17 @@ shared-`/tmp` symlink-redirect risk.
 
 ## Release security status and roadmap
 
+### External review summary (July 2026)
+
+Independent review of v1.8.1 classifies the toolkit as **enterprise-candidate**
+for dedicated single-admin Ubuntu VM deployments (**9.4 / 10** in that scope).
+Ten prior architectural blockers are **resolved** — production Supervisor runtime,
+CLI install/repair, full module integrity, lock hardening, gated CI integration,
+stable signing at publish time, atomic updates, support-bundle negatives, and
+pinned toolchain. Full detail: [`ROADMAP.md`](ROADMAP.md#external-security-review--resolved-blockers-v181).
+
+**One P0 gap remains on the consumer (self-update) path** — documented below.
+
 ### Implemented (v1.6.0 – v1.8.1)
 
 - **Gated publish:** validate → integration → sign → publish on every stable tag
@@ -300,11 +310,59 @@ sudo ./erpnext-dev.sh verify-signature
 sudo ./erpnext-dev.sh verify-toolkit
 ```
 
+### Self-update authenticity gap (v1.8.1 → planned v1.8.2) **P0**
+
+Bootstrap install uses `verify-signature`, which **requires** a valid detached
+signature and enforces the pinned maintainer fingerprint:
+
+`BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`
+
+The `update-toolkit` tag-channel path verifies whole-tree SHA256 checksums (strong),
+then calls `toolkit_verify_staged_signature()`. That helper is **weaker**:
+
+| Condition | `verify-signature` | `update-toolkit` (v1.8.1) |
+|-----------|-------------------|---------------------------|
+| Missing `SHA256SUMS.asc` | FAIL | WARN, continue |
+| Missing `gpg` | FAIL | WARN, continue |
+| Missing bundled pubkey | FAIL | WARN, continue |
+| Bad signature | FAIL | FAIL |
+| Wrong signer fingerprint | FAIL | **Not checked** |
+
+**Threat:** An attacker who controls a malicious release asset could supply
+consistent checksums, an attacker-generated GPG key, and a valid signature against
+that key. Checksum verification alone cannot detect this; the **pinned fingerprint**
+is the control that blocks it — but the staged-update path does not yet enforce it.
+
+**v1.8.2 policy (stable tag updates):**
+
+- Missing `SHA256SUMS.asc` → FAIL
+- Missing `gpg` → FAIL
+- Missing bundled pubkey → FAIL
+- Bad signature → FAIL
+- Signer fingerprint ≠ pinned default → FAIL
+
+**CI additions:** valid signed bundle PASS; missing signature FAIL; wrong key FAIL;
+tampered `SHA256SUMS` FAIL; valid signature + wrong fingerprint FAIL; missing pubkey FAIL.
+
+### Planned — v1.8.2 (self-update authenticity hardening)
+
+Align `toolkit_verify_staged_signature()` with `verify-signature`; extend atomic
+update smoke and release validator negatives. See [`ROADMAP.md`](ROADMAP.md) Phase 0.
+
 ### Planned — v1.9.0 (signing authority separation)
 
 Move release signing secrets out of repository Actions secrets into a GitHub
 **Environment** (`release-signing`) with required reviewer approval, or adopt
-OIDC/keyless signing. See [`ROADMAP.md`](ROADMAP.md) Phase 1.
+OIDC/keyless signing. Key rotation runbook in this file.
+
+### Planned — v1.9.1 (CI supply-chain hardening)
+
+- Pin GitHub Actions to immutable commit SHAs (Dependabot/Renovate for updates)
+- Ubuntu 26.04 integration testing (toolkit supports 26.04; CI currently 24.04-only)
+
+### Planned — v1.10.0 (object-storage backups)
+
+S3-compatible off-site backup target alongside rsync — after v1.8.2 and v1.9.0.
 
 ### Historical milestones (implemented)
 
