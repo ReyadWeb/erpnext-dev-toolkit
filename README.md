@@ -52,7 +52,7 @@ First install and verify the toolkit ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.6.1"
+VERSION="v1.6.2"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -163,6 +163,11 @@ sudo erpnext-dev local-domain-status
 sudo erpnext-dev local-ssl-wizard        # option 2 = trusted mkcert (stay in wizard after scp)
 sudo erpnext-dev local-access-doctor
 ```
+
+From the interactive menu that is **Main menu > 8) Local VM HTTPS / SSL > 1) Local SSL Wizard**.
+Press `b` to go back one level; reopen anytime with the command above (or
+`sudo erpnext-dev local-ssl-menu` for the parent screen). Re-running a wizard
+option continues safely when that step is already done.
 
 A local `.test` name is not public DNS — your **host machine** must map it to the
 VM's current IP. The IP is detected dynamically; run the printed `/etc/hosts`

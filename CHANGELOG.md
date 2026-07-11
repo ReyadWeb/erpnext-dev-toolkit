@@ -1,3 +1,15 @@
+## v1.6.2 - Menu path consistency for Local / Production SSL
+
+### Changed
+
+- **SSL menus show where you are and how to get back.** Local VM HTTPS / SSL,
+  Local SSL Wizard, and Production HTTPS / SSL now print a numbered path
+  (`Main menu > 8) Local VM HTTPS / SSL > 1) Local SSL Wizard`), a copy-paste
+  reopen command (`sudo erpnext-dev local-ssl-wizard`), and a labeled Back line
+  (`b) Back to Local VM HTTPS / SSL`). Re-running the same wizard option is
+  noted as the way to continue after leaving (completed steps are detected
+  where possible).
+
 ## v1.6.1 - Local access + mkcert UX fix
 
 ### Fixed

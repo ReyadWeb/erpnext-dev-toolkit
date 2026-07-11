@@ -2612,13 +2612,19 @@ verify_ssl_rollback() {
 # shellcheck disable=SC2120 # back_target is an optional caller override with a default
 run_local_ssl_wizard() {
   local back_target="${1:-return}"
+  local back_label="Local VM HTTPS / SSL"
+  if [[ "$back_target" == "main" ]]; then
+    back_label="Main menu"
+  fi
   while true; do
     echo
     echo "============================================================"
     echo "Local SSL Wizard"
     echo "============================================================"
+    menu_location_note "Main menu > 8) Local VM HTTPS / SSL > 1) Local SSL Wizard" "local-ssl-wizard"
     echo "Use this only for local VM domains such as ${SITE_NAME}."
     echo "For public domains, use: $(toolkit_cmd production-ssl-menu)"
+    echo "Already finished a step? Re-run the same option — completed work is detected where possible."
     echo
     print_two_column_menu \
       "1) Quick self-signed setup" \
@@ -2630,7 +2636,7 @@ run_local_ssl_wizard() {
       "7) Browser trust guide" \
       "8) Disable local HTTPS" \
       "9) Local security profile"
-    menu_footer
+    menu_footer back "$back_label"
     local wizard_choice=""
     menu_read_choice wizard_choice
 
@@ -2687,12 +2693,15 @@ run_local_ssl_wizard() {
 }
 
 show_production_ssl_menu() {
+  local back_target="${1:-return}"
+  local back_label="Main menu"
   while true; do
     echo
     echo "============================================================"
     echo "Production HTTPS / SSL"
     echo "============================================================"
-    echo "Use this only for public domains. For erp.test/local VM HTTPS, use Local VM HTTPS / SSL."
+    menu_location_note "Main menu > 9) Production HTTPS / SSL" "production-ssl-menu"
+    echo "Use this only for public domains. For local .test HTTPS, use Main menu > 8) Local VM HTTPS / SSL."
     echo
     print_two_column_menu \
       "1) Production SSL Wizard" \
@@ -2707,7 +2716,7 @@ show_production_ssl_menu() {
       "10) SSL Mode Status" \
       "11) SSL Mode Guide" \
       "12) Disable Production SSL"
-    menu_footer
+    menu_footer back "$back_label"
     local prod_ssl_choice=""
     menu_read_choice prod_ssl_choice
 
@@ -2724,7 +2733,13 @@ show_production_ssl_menu() {
       10) show_ssl_mode_status ;;
       11) show_ssl_mode_guide ;;
       12) disable_production_ssl ;;
-      b|B|"") return 0 ;;
+      b|B|"")
+        if [[ "$back_target" == "main" ]]; then
+          show_menu
+          return 0
+        fi
+        return 0
+        ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
@@ -2733,16 +2748,19 @@ show_production_ssl_menu() {
 
 show_local_ssl_menu() {
   local back_target="${1:-return}"
+  local back_label="Main menu"
   while true; do
     echo
     echo "============================================================"
     echo "Local VM HTTPS / SSL"
     echo "============================================================"
-    echo "Use this for local VM domains such as erp.test."
-    echo "For public domains, use Production HTTPS instead."
+    menu_location_note "Main menu > 8) Local VM HTTPS / SSL" "local-ssl-menu"
+    echo "Use this for local VM domains such as ${SITE_NAME}."
+    echo "Day-to-day setup: choose 1) Local SSL Wizard (same as: $(toolkit_cmd local-ssl-wizard))."
+    echo "For public domains, use Main menu > 9) Production HTTPS / SSL."
     echo
     print_two_column_menu       "1) Local SSL Wizard"       "2) Local SSL Status"       "3) Local SSL Guide"       "4) Trusted mkcert Guide"       "5) Browser Trust Check"       "6) Install/Replace Cert"       "7) Verify Local SSL"       "8) Create Self-Signed Cert"       "9) Configure Local SSL"       "10) Disable Local SSL"       "11) Verify SSL Rollback"       "12) Change Local Domain"       "13) Local Domain / Host DNS Status"       "14) Local Access Doctor"       "15) Print Host /etc/hosts Command"       "16) SSL/HTTPS Roadmap"       "17) Local Security Profile"
-    menu_footer
+    menu_footer back "$back_label"
     local ssl_choice=""
     menu_read_choice ssl_choice
 

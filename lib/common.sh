@@ -150,11 +150,26 @@ ui_next() {
   done
 }
 
+# Print where the user is in the menu tree and how to reopen this screen later.
+# Example: menu_location_note "Main menu > 8) Local VM HTTPS / SSL > 1) Local SSL Wizard" "local-ssl-wizard"
+menu_location_note() {
+  local path="${1:-}"
+  local reopen_cmd="${2:-}"
+  [[ -n "$path" ]] && echo "Path: ${path}"
+  if [[ -n "$reopen_cmd" ]]; then
+    echo "Reopen anytime: $(toolkit_cmd "$reopen_cmd")"
+  fi
+}
+
 menu_footer() {
   local mode="${1:-back}"
+  local back_label="${2:-}"
   echo
   echo "-----------------------------"
   if [[ "$mode" == "quit-only" ]]; then
+    printf 'q) Quit\n'
+  elif [[ -n "$back_label" ]]; then
+    printf 'b) Back to %s\n' "$back_label"
     printf 'q) Quit\n'
   else
     printf 'b) Back                        q) Quit\n'

@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.6.1"
+SCRIPT_VERSION="1.6.2"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1046,7 +1046,7 @@ main() {
     security-audit|security-audit-test) run_security_audit ;;
     security-hardening-wizard|vm-firewall-wizard) security_hardening_wizard ;;
     ufw-ssh-admin-only) configure_ufw_ssh_admin_only ;;
-    production-ssl-menu|production-https|production-https-menu) show_production_ssl_menu ;;
+    production-ssl-menu|production-https|production-https-menu) show_production_ssl_menu main ;;
     production-ssl-wizard|ssl-provider-wizard) production_ssl_wizard ;;
     configure-production-ssl) configure_production_ssl ;;
     configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl) configure_cloudflare_origin_ssl ;;
