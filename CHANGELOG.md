@@ -1,3 +1,23 @@
+## v1.9.0 - Signing authority separation
+
+### Security
+
+- **Release signing is separated from repository write access.** The `publish` job in
+  [`.github/workflows/release.yml`](.github/workflows/release.yml) now runs in a
+  protected `release-signing` GitHub Environment. The GPG signing key is stored as an
+  **environment** secret gated by a required-reviewer approval and a `v*` deployment
+  tag rule, so a signed release can only be produced after a human approves the
+  deployment — not by repository write access or an automated workflow alone.
+- **Graceful rollout:** if the environment is not yet configured, GitHub creates it
+  unprotected on the first tagged run and signing falls back to repository secrets
+  (no regression); configuring the reviewer + tag rule activates the gate.
+
+### Docs
+
+- `SECURITY.md`: new "Signing authority separation (v1.9.0)" section with the one-time
+  environment setup, the post-v1.9.0 release flow, and a key-rotation runbook.
+- `ROADMAP.md`: v1.9.0 marked shipped; supply-chain rating raised to 9.5.
+
 ## v1.8.2 - Self-update authenticity hardening
 
 ### Security

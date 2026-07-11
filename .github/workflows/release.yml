@@ -14,6 +14,16 @@ name: Release (gate, sign & publish)
 #   - Pre-release tags (vX.Y.Z-...)   -> may publish unsigned (escape hatch, e.g.
 #                                        v1.6.0-unsigned for an emergency build).
 # See SECURITY.md ("Verifying release signatures").
+#
+# Signing authority separation (v1.9.0):
+#   The publish job runs in the `release-signing` GitHub Environment. Configure that
+#   environment with required reviewer(s) and a `v*` deployment tag rule, and store
+#   GPG_PRIVATE_KEY / GPG_PASSPHRASE as ENVIRONMENT secrets (not repository secrets).
+#   The signing key is then reachable only after a human approves the deployment, so
+#   repository write access alone cannot produce a signed release. See SECURITY.md
+#   ("Signing authority separation") for the one-time setup and key-rotation runbook.
+#   If the environment is not yet configured, GitHub creates it unprotected on first
+#   run and signing falls back to repository secrets (no regression, no protection).
 
 on:
   push:
@@ -37,6 +47,10 @@ jobs:
     name: Sign and publish ${{ github.ref_name }}
     needs: [validate, integration]
     runs-on: ubuntu-24.04
+    # Signing authority separation: the GPG key lives in this protected environment,
+    # so producing a signed release requires passing its protection rules (required
+    # reviewer + `v*` deployment tag rule), not just repository write access.
+    environment: release-signing
     permissions:
       contents: write
     env:

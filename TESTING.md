@@ -1,17 +1,17 @@
 # Testing guide
 
-**Current release:** v1.8.2 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.9.0 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
-## VPS production validation (v1.8.2)
+## VPS production validation (v1.9.0)
 
 Use this checklist on a **fresh Ubuntu 24.04 or 26.04 LTS VPS** with a real domain,
 mimicking production. Install from the signed bundle:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.8.2"
+VERSION="v1.9.0"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz" && cd "erpnext-dev-${VERSION}"
@@ -42,7 +42,29 @@ Record failures with command output; open issues or patch v1.8.x before producti
 
 ---
 
-## CI and developer validation (v1.8.x)
+## CI and developer validation (v1.8.x – v1.9.x)
+
+### v1.9.0 signing authority separation (release-signing environment)
+
+This is a GitHub-side control; validate it once after configuring the environment.
+
+Setup (GitHub → Settings → Environments → `release-signing`): required reviewer(s),
+deployment tag rule `v*`, and `GPG_PRIVATE_KEY` / `GPG_PASSPHRASE` as **environment**
+secrets (repository-level copies deleted). See `SECURITY.md`.
+
+Validation on the next stable tag:
+
+```text
+1. Push a vX.Y.Z tag.
+2. validate + integration run to completion.
+3. The "Sign and publish" job shows "Waiting" for release-signing approval.
+4. Without approval: signing/publishing does NOT proceed.
+5. After a reviewer approves: SHA256SUMS is signed and the release publishes.
+6. verify-signature on the published bundle reports the pinned maintainer fingerprint.
+```
+
+Negative check (optional): with repository-level GPG secrets removed and no approval,
+confirm the job cannot access the key and the release is not signed/published.
 
 ### v1.8.2 staged signature verification (self-update authenticity)
 

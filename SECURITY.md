@@ -176,12 +176,14 @@ The install path still runs external bootstrap installers (nvm, uv), but every m
 **Operator (maintainer) one-time setup** — required to activate signing:
 
 1. Generate a signing key (once): `gpg --full-generate-key` (Ed25519 or RSA 4096).
-2. Export the private key and add it as the repository secret `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE` if the key is protected):
-   `gpg --armor --export-secret-keys <KEYID>` → paste into the Actions secret.
+2. Export the private key and add it as an **environment** secret `GPG_PRIVATE_KEY`
+   (and `GPG_PASSPHRASE` if the key is protected) in the `release-signing` environment:
+   `gpg --armor --export-secret-keys <KEYID>` → paste into the environment secret.
+   See "Signing authority separation (v1.9.0)" below for the full environment setup.
 3. Publish the public key and its fingerprint (in this file and/or the repository), so users can pin it:
    `gpg --armor --export <KEYID>` and `gpg --fingerprint <KEYID>`.
 
-Once `GPG_PRIVATE_KEY` is set, `release.yml` signs `SHA256SUMS` on every `v*` tag and attaches `SHA256SUMS.asc` to the release. As of v1.6.0 this is **required** for stable `vX.Y.Z` tags: if the key is missing, the release fails rather than shipping unsigned. An unsigned build is only possible via an explicit emergency pre-release tag such as `vX.Y.Z-unsigned`.
+Once `GPG_PRIVATE_KEY` is available to the `publish` job, `release.yml` signs `SHA256SUMS` on every `v*` tag and attaches `SHA256SUMS.asc` to the release. As of v1.6.0 this is **required** for stable `vX.Y.Z` tags: if the key is missing, the release fails rather than shipping unsigned. An unsigned build is only possible via an explicit emergency pre-release tag such as `vX.Y.Z-unsigned`. As of v1.9.0 the key lives in the protected `release-signing` environment, so signing also requires the environment's reviewer approval.
 
 **End-user verification** — before running the toolkit as root:
 
@@ -291,7 +293,7 @@ pinned toolchain. Full detail: [`ROADMAP.md`](ROADMAP.md#external-security-revie
 
 **One P0 gap remains on the consumer (self-update) path** — documented below.
 
-### Implemented (v1.6.0 – v1.8.2)
+### Implemented (v1.6.0 – v1.9.0)
 
 - **Gated publish:** validate → integration → sign → publish on every stable tag
 - **Mandatory signing** for stable tags (`vX.Y.Z`); pre-release tags may publish unsigned
@@ -299,6 +301,9 @@ pinned toolchain. Full detail: [`ROADMAP.md`](ROADMAP.md#external-security-revie
 - **Atomic self-update:** bundle verify + signature/fingerprint gate + `releases/<ver>` + rollback
 - **Self-update authenticity (v1.8.2):** tag-channel updates require the same signature
   and pinned-fingerprint bar as bootstrap `verify-signature`
+- **Signing authority separation (v1.9.0):** signing key lives in the protected
+  `release-signing` environment; a signed release requires reviewer approval, not just
+  repository write access
 - **CI proof:** staged signature matrix, atomic update smoke, signing policy tests, tamper negatives
 
 **Current bootstrap workflow:**
@@ -331,11 +336,58 @@ Pinned fingerprint: `BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`
 CI runs `scripts/test-staged-signature.sh` (unit matrix) and signed-bundle atomic
 update smoke (`scripts/test-atomic-update.sh`).
 
-### Planned — v1.9.0 (signing authority separation)
+### Signing authority separation (v1.9.0)
 
-Move release signing secrets out of repository Actions secrets into a GitHub
-**Environment** (`release-signing`) with required reviewer approval, or adopt
-OIDC/keyless signing. Key rotation runbook in this file.
+Before v1.9.0 the signing key lived in ordinary **repository** Actions secrets, so
+anyone (or any workflow) with repository write access could, in principle, run the
+signing step. v1.9.0 separates *signing authority* from *repository write access*:
+the `publish` job in [`release.yml`](.github/workflows/release.yml) now runs in a
+protected GitHub **Environment** named `release-signing`. The GPG key is stored as an
+**environment** secret and is only exposed to a job that clears the environment's
+protection rules (a required human approval), so a signed release cannot be produced
+by repository write access alone.
+
+**Threat addressed:** a compromised repository token, a malicious workflow change, or
+an unattended automation can no longer sign a release. A named reviewer must approve
+the deployment to `release-signing` before the key is ever decrypted into a runner.
+
+**One-time maintainer setup (GitHub → Settings → Environments):**
+
+1. Create an environment named exactly `release-signing`.
+2. **Required reviewers:** add yourself (and any co-maintainers). Every stable release
+   then pauses at `publish` until a reviewer approves.
+3. **Deployment tags rule:** restrict deployments to the tag pattern `v*` so only
+   release tags can target this environment.
+4. **Move the secrets:** add `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE` if the key is
+   protected) as **environment** secrets, then **delete the repository-level**
+   `GPG_PRIVATE_KEY` / `GPG_PASSPHRASE`. Environment secrets take precedence, and
+   removing the repo-level copies ensures no other job can read the key.
+
+Until the environment is configured, GitHub auto-creates it unprotected on the first
+tagged run and signing falls back to the repository secrets — no regression, but also
+no protection. Configure the reviewer + tag rule to activate the gate.
+
+**Release flow after v1.9.0:** push a `vX.Y.Z` tag → `validate` and `integration`
+run → `publish` shows **Waiting** for `release-signing` approval → an approver
+reviews and approves → the key is imported, `SHA256SUMS` is signed, and the release
+is published. Denying the approval blocks signing and publishing.
+
+**Key-rotation runbook:**
+
+1. Generate the new signing key offline: `gpg --full-generate-key` (Ed25519 preferred).
+2. Update the pinned fingerprint in `lib/security.sh`
+   (`TOOLKIT_SIGNING_FINGERPRINT_DEFAULT`) and the public key at
+   [`docs/erpnext-dev-signing-key.asc`](docs/erpnext-dev-signing-key.asc), and refresh
+   the fingerprint block in this file. Land these on `main` before tagging.
+3. Replace the `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE`) **environment** secrets in
+   `release-signing` with the new key material.
+4. Revoke/retire the old key locally and publish its revocation if it was ever public.
+5. Cut the next stable tag; `verify-signature` on the new release must report the new
+   fingerprint. Signatures made by the retired key no longer validate, by design.
+
+> Note: signatures made by an old key stop validating once the pinned fingerprint
+> changes. This is intentional — communicate rotations in release notes so operators
+> re-pin. Historical releases keep their original (now-untrusted) signatures.
 
 ### Planned — v1.9.1 (CI supply-chain hardening)
 
