@@ -20,6 +20,11 @@
 - **Atomic update smoke** now builds **signed** synthetic bundles with an ephemeral
   test key and asserts unsigned bundles are rejected during update.
 
+### Fixed
+
+- **Atomic update corrupt-bundle negative:** tamper a module without re-signing
+  (checksum gate must fail). Re-signing after tamper made the negative pass incorrectly.
+
 ## v1.8.1 - Fix integration tamper test (verify installed toolkit)
 
 ### Fixed

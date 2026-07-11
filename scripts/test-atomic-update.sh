@@ -223,9 +223,8 @@ echo "== negative: corrupt v9.9.9 bundle must not half-apply =="
 bundle_v999="${srv}/releases/download/v9.9.9/erpnext-dev-v9.9.9.tar.gz"
 work_extract="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-dev-corrupt.XXXXXX")"
 tar -C "$work_extract" -xzf "$bundle_v999"
+# Tamper a file but leave SHA256SUMS + signature unchanged — checksum gate must fail.
 printf '\n# tamper-fixture\n' >> "${work_extract}/erpnext-dev-v9.9.9/lib/common.sh"
-regenerate_checksums_in_tree "${work_extract}/erpnext-dev-v9.9.9"
-sign_checksums_in_tree "${work_extract}/erpnext-dev-v9.9.9"
 tar -C "$work_extract" -czf "$bundle_v999" "erpnext-dev-v9.9.9"
 rm -rf "$work_extract"
 
