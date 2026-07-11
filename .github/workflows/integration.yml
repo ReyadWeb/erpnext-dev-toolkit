@@ -102,18 +102,24 @@ jobs:
       - name: verify-toolkit integrity (positive and tamper negative)
         run: |
           set -euo pipefail
-          sudo -E ./erpnext-dev.sh verify-toolkit | grep -qi "active match.*OK"
+          # Exercise the installed toolkit at /opt, not the CI checkout copy.
+          installed="$(readlink -f /opt/erpnext-dev/erpnext-dev.sh 2>/dev/null || true)"
+          [[ -n "$installed" && -f "$installed" ]] || {
+            echo "::error::installed toolkit not found at /opt/erpnext-dev/erpnext-dev.sh"
+            exit 1
+          }
+          lib="$(dirname "$installed")/lib/common.sh"
+          [[ -f "$lib" ]] || { echo "::error::installed lib/common.sh not found at ${lib}"; exit 1; }
 
-          stable="/opt/erpnext-dev"
-          lib="${stable}/current/lib/common.sh"
-          if [[ ! -f "$lib" ]]; then
-            lib="${stable}/lib/common.sh"
-          fi
-          [[ -f "$lib" ]] || { echo "::error::installed lib/common.sh not found"; exit 1; }
+          checksum="${GITHUB_WORKSPACE}/SHA256SUMS"
+          [[ -f "$checksum" ]] || checksum="./SHA256SUMS"
+
+          cd /tmp
+          CHECKSUM_FILE="$checksum" sudo -E erpnext-dev verify-toolkit | grep -qi "active match.*OK"
 
           sudo cp -a "$lib" /tmp/erpnext-dev-common.sh.bak
           printf '\n# tamper-fixture\n' | sudo tee -a "$lib" >/dev/null
-          if sudo -E ./erpnext-dev.sh verify-toolkit >/tmp/erpnext-dev-vt-tamper.out 2>&1; then
+          if CHECKSUM_FILE="$checksum" sudo -E erpnext-dev verify-toolkit >/tmp/erpnext-dev-vt-tamper.out 2>&1; then
             echo "::error::verify-toolkit passed after tampering ${lib}"
             sudo mv /tmp/erpnext-dev-common.sh.bak "$lib"
             exit 1
@@ -124,7 +130,7 @@ jobs:
             exit 1
           }
           sudo mv /tmp/erpnext-dev-common.sh.bak "$lib"
-          echo "verify-toolkit tamper negative passed."
+          echo "verify-toolkit tamper negative passed (installed toolkit at ${installed})."
 
       - name: Doctor JSON smoke assertions
         run: |
