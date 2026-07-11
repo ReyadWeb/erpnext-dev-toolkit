@@ -1,3 +1,13 @@
+## v1.8.1 - Fix integration tamper test (verify installed toolkit)
+
+### Fixed
+
+- Integration CI tamper negative now runs `verify-toolkit` via the **installed**
+  `erpnext-dev` CLI (with `CHECKSUM_FILE` pinned), and tampers
+  `/opt/erpnext-dev/lib/common.sh`. The previous step used `./erpnext-dev.sh`
+  from the checkout, which verified the repo copy and ignored `/opt` tampering,
+  causing the v1.8.0 release gate to fail.
+
 ## v1.8.0 - Reliability proof: atomic update CI + gate enforcement tests
 
 ### Added
