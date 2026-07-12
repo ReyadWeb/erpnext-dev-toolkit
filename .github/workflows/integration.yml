@@ -123,11 +123,14 @@ jobs:
           [[ -f "$checksum" ]] || checksum="./SHA256SUMS"
 
           cd /tmp
-          CHECKSUM_FILE="$checksum" sudo -E erpnext-dev verify-toolkit | grep -qi "active match.*OK"
+          # Pass CHECKSUM_FILE via `sudo env` rather than `sudo -E`: Ubuntu 26.04
+          # ships sudo-rs, which ignores -E and would drop the variable, breaking
+          # verification. `sudo env VAR=val` works on both classic sudo and sudo-rs.
+          sudo env CHECKSUM_FILE="$checksum" erpnext-dev verify-toolkit | grep -qi "active match.*OK"
 
           sudo cp -a "$lib" /tmp/erpnext-dev-common.sh.bak
           printf '\n# tamper-fixture\n' | sudo tee -a "$lib" >/dev/null
-          if CHECKSUM_FILE="$checksum" sudo -E erpnext-dev verify-toolkit >/tmp/erpnext-dev-vt-tamper.out 2>&1; then
+          if sudo env CHECKSUM_FILE="$checksum" erpnext-dev verify-toolkit >/tmp/erpnext-dev-vt-tamper.out 2>&1; then
             echo "::error::verify-toolkit passed after tampering ${lib}"
             sudo mv /tmp/erpnext-dev-common.sh.bak "$lib"
             exit 1
