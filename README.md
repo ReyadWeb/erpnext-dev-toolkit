@@ -71,6 +71,20 @@ cd "erpnext-dev-${VERSION}"
 sha256sum -c SHA256SUMS
 ```
 
+> **Retrying after a failed download?** If an earlier attempt returned 404, left a
+> partial tarball, or you switched versions (for example from `v1.9.1` to `v1.9.2`),
+> remove leftovers from your home directory first so you do not mix old and new
+> files, then re-run the block above:
+>
+> ```bash
+> cd ~
+> rm -rf erpnext-dev-v1.9.1 erpnext-dev-v1.9.2
+> rm -f erpnext-dev-v*.tar.gz SHA256SUMS SHA256SUMS.asc
+> ```
+>
+> That only cleans the download folder — it does **not** uninstall an already
+> installed ERPNext site. Use toolkit uninstall commands for that.
+
 Then run the command for your case:
 
 | I want to… | Command | Notes |

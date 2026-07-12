@@ -189,6 +189,9 @@ print_host_dns_commands_for_site() {
       echo "  sudo cp /etc/hosts \"/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)\""
       # BSD/macOS sed requires an explicit (empty) backup suffix after -i.
       echo "  sudo sed -i '' \"/[[:space:]]${escaped_site}\\([[:space:]]\\|\$\\)/d\" /etc/hosts"
+      # Guard against a hosts file with no trailing newline (e.g. LocalWP's
+      # \"## Local - End ##\" block), which would otherwise glue the entry.
+      echo "  [ -n \"\$(tail -c1 /etc/hosts)\" ] && echo | sudo tee -a /etc/hosts >/dev/null"
       echo "  echo \"\${VM_IP} \${LOCAL_DOMAIN}\" | sudo tee -a /etc/hosts"
       ;;
     *)
@@ -196,6 +199,9 @@ print_host_dns_commands_for_site() {
       echo "  LOCAL_DOMAIN=\"${site}\""
       echo "  sudo cp /etc/hosts \"/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)\""
       echo "  sudo sed -i \"/[[:space:]]${escaped_site}\\([[:space:]]\\|\$\\)/d\" /etc/hosts"
+      # Guard against a hosts file with no trailing newline (e.g. LocalWP's
+      # \"## Local - End ##\" block), which would otherwise glue the entry.
+      echo "  [ -n \"\$(tail -c1 /etc/hosts)\" ] && echo | sudo tee -a /etc/hosts >/dev/null"
       echo "  echo \"\${VM_IP} \${LOCAL_DOMAIN}\" | sudo tee -a /etc/hosts"
       ;;
   esac

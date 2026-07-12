@@ -34,6 +34,11 @@
   `sanitize_string` can abort when `sudo -E` preserves a caller `HOME` that
   contains nvm test filenames with quotes or Unicode (Actions runners). Same
   pattern applied to backup-user creation.
+- **Host `/etc/hosts` mapping: guarantee a trailing newline.** The emitted
+  host-mapping command now runs `[ -n "$(tail -c1 /etc/hosts)" ] && echo | sudo
+  tee -a /etc/hosts` before appending, so an existing file without a trailing
+  newline (e.g. a LocalWP `## Local - End ##` block) can no longer glue the new
+  `VM_IP LOCAL_DOMAIN` entry onto the previous line and break resolution.
 
 ### Tests
 
