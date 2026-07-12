@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.9.2 (July 2026) — cross-platform local host support (Linux/macOS/Windows)  
+**Current release:** v1.9.3 (July 2026) — local host setup friction reduction  
 **External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
 
@@ -68,6 +68,12 @@ cannot be produced by repository write access alone. Setup + key-rotation runboo
   the release-gating leg); it becomes a hard gate when the 26.04 runner reaches GA
 - Support wording: *"Supports Ubuntu 24.04 and 26.04; integration runs on 24.04 (gating) + 26.04 (preview, non-blocking)."*
 
+### v1.9.3 — Local host setup friction reduction — **implemented**
+
+- README one-command download → verify → `local-dev-quickstart`
+- Host mapping and mkcert/scp emitted as single copy-paste one-liners
+- `/etc/hosts` trailing-newline guard before append (LocalWP glue bug)
+
 ### v1.9.2 — Cross-platform local host support — **implemented**
 
 - Persisted `HOST_OS` (Linux/macOS/Windows/WSL2); `set-host-os` command; asked once in local quickstart
@@ -77,7 +83,7 @@ cannot be produced by repository write access alone. Setup + key-rotation runboo
 
 ### P2 — v1.10.0: Object-storage backups
 
-S3-compatible off-site target (AWS S3, Backblaze B2, MinIO) — after v1.9.2.
+S3-compatible off-site target (AWS S3, Backblaze B2, MinIO) — after v1.9.3.
 
 ### P2 — v1.11.0: Community polish
 
@@ -85,7 +91,7 @@ CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation.
 
 ---
 
-## Completed (v1.4.0 → v1.9.2)
+## Completed (v1.4.0 → v1.9.3)
 
 | Area | Version | What shipped |
 |------|---------|--------------|
@@ -101,6 +107,7 @@ CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation.
 | Signing authority separation | v1.9.0 | `publish` gated by `release-signing` environment (reviewer approval) |
 | CI supply-chain hardening | v1.9.1 | Actions pinned to commit SHAs + Dependabot; Ubuntu 26.04 non-blocking integration leg |
 | Cross-platform local host support | v1.9.2 | Persisted `HOST_OS`; OS-aware hosts-file/test/mkcert/fixed-IP emitters for Linux/macOS/Windows/WSL2 |
+| Local host setup friction reduction | v1.9.3 | One-command install README path; copy-paste host mapping/mkcert one-liners; hosts newline guard |
 
 **CI today:** lint/shellcheck → validate-release → atomic-update-smoke → (on tag) integration install + backup/restore + production runtime + tamper negative → **environment-approved** sign → publish.
 

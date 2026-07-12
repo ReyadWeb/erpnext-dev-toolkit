@@ -1,3 +1,32 @@
+## v1.9.3 - Local host setup friction reduction
+
+### Improved
+
+- **One-command fresh VM install.** README **Start here** now includes a single
+  copy-paste block: download the release tarball, verify `SHA256SUMS`, and run
+  `local-dev-quickstart`.
+- **Copy-paste host commands.** Host `/etc/hosts` mapping and trusted mkcert setup
+  (`mkcert -install`, generate cert/key, `scp` to VM `/tmp/`) are emitted as one
+  line each with a short description, instead of numbered multi-line steps that
+  were easy to copy incompletely.
+
+### Fixed
+
+- **Host `/etc/hosts` mapping: guarantee a trailing newline.** Before appending
+  `VM_IP LOCAL_DOMAIN`, the emitted command ensures the hosts file ends with a
+  newline so a prior line without one (e.g. a LocalWP `## Local - End ##` block)
+  cannot glue the new entry onto the previous line and break resolution.
+
+### Tests
+
+- `scripts/test-host-os-output.sh` asserts the one-liner DNS and mkcert/scp output
+  for Linux, macOS, and Windows host OS values.
+
+### Docs
+
+- README local HTTPS section updated to describe the single-line host mapping and
+  mkcert/scp flow.
+
 ## v1.9.2 - Cross-platform local host support
 
 ### Added
@@ -34,15 +63,6 @@
   `sanitize_string` can abort when `sudo -E` preserves a caller `HOME` that
   contains nvm test filenames with quotes or Unicode (Actions runners). Same
   pattern applied to backup-user creation.
-- **Host `/etc/hosts` mapping: guarantee a trailing newline.** The emitted
-  host-mapping command now runs `[ -n "$(tail -c1 /etc/hosts)" ] && echo | sudo
-  tee -a /etc/hosts` before appending, so an existing file without a trailing
-  newline (e.g. a LocalWP `## Local - End ##` block) can no longer glue the new
-  `VM_IP LOCAL_DOMAIN` entry onto the previous line and break resolution.
-- **Copy-paste host commands.** Host mapping and mkcert/scp steps are now emitted
-  as single one-line commands (with a short description) instead of numbered
-  multi-line steps, so operators can copy the full line without missing a step.
-  README adds a one-command download → verify → `local-dev-quickstart` path.
 
 ### Tests
 
