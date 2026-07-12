@@ -44,6 +44,34 @@ Record failures with command output; open issues or patch v1.8.x before producti
 
 ## CI and developer validation (v1.8.x – v1.9.x)
 
+### v1.9.2 cross-platform local host support (host-mapping regression matrix)
+
+Hermetic check (no VM, no sudo): `scripts/test-host-os-output.sh` asserts the
+per-host-OS markers for the DNS/mapping and connectivity-test emitters. It also
+runs inside `scripts/validate-release.sh`.
+
+```text
+scripts/test-host-os-output.sh
+# expect: "host-os output tests: all checks passed"
+```
+
+Manual matrix — set the host OS, then confirm the printed commands match:
+
+| `set-host-os` choice | `local-host-checkpoint` mapping | `host-dns-guide` test line | mkcert install (`local-ssl-wizard`) |
+|----------------------|---------------------------------|----------------------------|-------------------------------------|
+| Linux | `sudo sed -i "/…/d" /etc/hosts` + `tee -a /etc/hosts` | `getent hosts <site>` | `apt install -y libnss3-tools` |
+| macOS | `sudo sed -i '' "/…/d" /etc/hosts` (BSD form) | `dscacheutil -q host -a name <site>` | `brew install mkcert nss` |
+| Windows | PowerShell `Set-Content`/`Add-Content` on `…\drivers\etc\hosts` | `Resolve-DnsName <site>` / `curl.exe -I` | `choco install mkcert` |
+| Windows + WSL2 | same PowerShell block, but `VM_IP = "127.0.0.1"` | `Resolve-DnsName <site>` | `choco install mkcert` |
+
+```text
+1. sudo erpnext-dev set-host-os   # pick each option in turn
+2. sudo erpnext-dev local-host-checkpoint   # mapping block matches the row above
+3. sudo erpnext-dev host-dns-guide          # resolve/test line matches
+4. sudo erpnext-dev local-fixed-ip-guide    # hypervisor guidance matches host OS
+5. Empty/unset HOST_OS falls back to the Linux row (existing behavior).
+```
+
 ### v1.9.0 signing authority separation (release-signing environment)
 
 This is a GitHub-side control; validate it once after configuring the environment.

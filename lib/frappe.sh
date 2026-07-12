@@ -147,7 +147,7 @@ show_vm_only_guard_message() {
   warn "The command '${action}' must be run inside the ERPNext VM."
   echo
   echo "This script did not detect the ERPNext bench, service, helper, or credentials on this machine."
-  echo "To avoid changing the Linux HOST by mistake, the command was blocked before sudo work."
+  echo "To avoid changing the HOST machine by mistake, the command was blocked before sudo work."
   echo
   echo "Current machine:"
   echo "  Hostname: $(hostname 2>/dev/null || echo unknown)"

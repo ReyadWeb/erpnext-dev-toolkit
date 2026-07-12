@@ -835,11 +835,11 @@ print_summary() {
     echo "  $(toolkit_cmd local-ssl-wizard)"
     echo "More local SSL options:"
     echo "  $(toolkit_cmd local-ssl-menu)"
-    echo "Keep the local VM IP stable, especially on KVM/libvirt:"
+    echo "Keep the local VM IP stable (guidance for your hypervisor/host OS):"
     echo "  $(toolkit_cmd local-fixed-ip-guide)"
     echo
   fi
-  echo "Run this on the HOST for the friendly URL."
+  echo "Run this on the $(host_os_label) HOST for the friendly URL."
   echo "Safe to repeat after VM recreation or DHCP IP changes:"
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
@@ -1074,6 +1074,10 @@ set_local_dev_defaults() {
   DEPLOYMENT_MODE="development"
   PRODUCTION_DOMAIN=""
   PRODUCTION_SSL_MODE="planned"
+  # Normalize to a stored value (defaults to linux) so the config always records
+  # a concrete host OS once local defaults are saved.
+  # shellcheck disable=SC2034  # consumed by write_dev_config_file in lib/config.sh
+  HOST_OS="$(effective_host_os)"
   write_dev_config_file
   SITE_NAME_SOURCE="saved config"
 }
@@ -1092,9 +1096,13 @@ run_local_dev_quickstart() {
 
   choose_local_site_name_for_setup
 
+  # Ask once which host OS is in use; set_local_dev_defaults persists it below.
+  choose_host_os_for_setup 0
+
   ui_box_start "Local VM Setup Confirmation"
   status_line "Local VM domain" "OK" "${SITE_NAME}"
   status_line "Default if skipped" "INFO" "erp.test"
+  status_line "Host OS" "INFO" "$(host_os_label)"
   status_line "Production domain" "INFO" "not used"
   ui_box_end
 

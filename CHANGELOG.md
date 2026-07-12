@@ -1,3 +1,45 @@
+## v1.9.2 - Cross-platform local host support
+
+### Added
+
+- **Host-OS-aware local setup (Linux / macOS / Windows).** A new persisted
+  `HOST_OS` setting tailors every host-side instruction the toolkit prints — the
+  hosts-file mapping, connectivity tests, trusted mkcert HTTPS, and stable VM-IP
+  guidance — to the operator's host machine instead of assuming Linux. The local
+  quickstart asks once; change it anytime with `set-host-os` (aliases `host-os`,
+  `choose-host-os`). Empty/unknown falls back to Linux, so existing Linux users
+  are unaffected.
+- **OS-specific host commands.** `print_host_dns_commands_for_site` /
+  `print_host_dns_tests_for_site` now emit:
+  - **Linux:** `/etc/hosts` via `sudo sed`/`tee`, `getent hosts`.
+  - **macOS:** `/etc/hosts` via BSD `sudo sed -i ''` (fixes a latent bug where the
+    GNU `sed -i` form fails on macOS), `dscacheutil` for resolution.
+  - **Windows:** elevated PowerShell editing `…\drivers\etc\hosts`
+    (`Copy-Item` / `Set-Content` / `Add-Content`), `Resolve-DnsName` + `curl.exe`.
+  - **Windows + WSL2:** maps the domain to `127.0.0.1` (localhost forwarding)
+    rather than the volatile WSL2 IP.
+- **mkcert trust per host** in the SSL wizard, guide, browser-trust, and verify
+  screens: `apt`+`libnss3-tools` (Linux), `brew install mkcert nss` (macOS),
+  `choco install mkcert` (Windows); `mkcert -install` trusts the correct store
+  per OS.
+- **Stable VM-IP guidance beyond KVM.** `local-fixed-ip-guide` now branches by
+  host OS (KVM/libvirt on Linux; UTM/VMware/Parallels on macOS;
+  Hyper-V/VirtualBox/WSL2 on Windows) with a universal in-guest netplan fallback.
+  `kvm-fixed-ip-guide` / `kvm-guide` remain as the Linux/KVM-specific aliases.
+
+### Tests
+
+- New hermetic `scripts/test-host-os-output.sh` asserts the per-OS DNS/test
+  markers (e.g. `/etc/hosts` vs `drivers\etc\hosts`, `getent` vs `Resolve-DnsName`
+  vs `dscacheutil`, and the macOS `sed -i ''` form). Wired into
+  `validate-release.sh` and `run-shellcheck.sh`.
+
+### Docs
+
+- `README.md`: new "Choose your host OS" subsection with a per-OS command table,
+  macOS/Windows/WSL2 notes, and the `set-host-os` command.
+- `TESTING.md`: host-mapping regression matrix per host OS.
+
 ## v1.9.1 - CI supply-chain hardening
 
 ### Security

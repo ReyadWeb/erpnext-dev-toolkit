@@ -18,8 +18,9 @@ It supports two setup paths:
 > the path to **9.8+** are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.9.1 · **Readiness:** ~9.5/10 for single-admin local/public VM
-(after VPS production validation). Next milestone: **v1.10.0** (object-storage off-site backups).
+**Current release:** v1.9.2 · **Readiness:** ~9.5/10 for single-admin local/public VM
+(after VPS production validation). v1.9.2 adds **cross-platform local host support**
+(Linux/macOS/Windows host commands). Next milestone: **v1.10.0** (object-storage off-site backups).
 
 > **OS support:** Ubuntu 24.04 and 26.04 LTS are supported. Automated integration
 > coverage runs on **Ubuntu 24.04 (release-gating)** plus **Ubuntu 26.04 (GitHub
@@ -62,7 +63,7 @@ First install and verify the toolkit ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.9.1"
+VERSION="v1.9.2"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -194,28 +195,56 @@ Press `b` to go back one level; reopen anytime with the command above (or
 option continues safely when that step is already done.
 
 A local `.test` name is not public DNS — your **host machine** must map it to the
-VM's current IP. The IP is detected dynamically; run the printed `/etc/hosts`
+VM's current IP. The IP is detected dynamically; run the printed hosts-file
 command on the host, not inside the VM. It is safe to repeat after the VM's IP
 changes.
 
-**Use the friendly hostname, not the raw IP.** Open `http://erp.test:8000` after
-`/etc/hosts` is set. Opening `http://<vm-ip>:8000` often shows an unstyled/broken
-login page (Frappe Host-header mismatch). Test from the host:
+### Choose your host OS (Linux, macOS, or Windows)
+
+The toolkit prints host-side commands (hosts-file mapping, connectivity tests,
+mkcert trust) tailored to your **host** machine's OS. `local-dev-quickstart`
+asks once and remembers the choice; change it anytime:
 
 ```bash
-getent hosts erp.test
-curl -I http://erp.test:8000
+sudo erpnext-dev set-host-os        # Linux / macOS / Windows / Windows+WSL2
 ```
 
-Trusted local HTTPS order: (1) HOST `/etc/hosts`, (2) confirm styled
-`http://erp.test:8000`, (3) HOST `mkcert -install` + generate + `scp` into the VM
-`/tmp/`, (4) stay in `local-ssl-wizard` option 2 and press Enter after scp — it
-installs Nginx HTTPS and you open **`https://erp.test`**. Self-signed (wizard
-option 1) stays entirely in the VM but browsers will warn.
+Every host command then matches your OS:
 
-For a stable IP under KVM/libvirt, `sudo erpnext-dev local-fixed-ip-guide` prints
-the host-side DHCP reservation steps. To rename the site later, use
-`sudo erpnext-dev change-local-domain` (then rebuild local SSL).
+| Host OS | Hosts file | Edit tool | Resolve test | mkcert install |
+|---------|-----------|-----------|--------------|----------------|
+| **Linux** | `/etc/hosts` | `sudo sed`/`tee` | `getent hosts` | `apt` + `libnss3-tools` |
+| **macOS** | `/etc/hosts` | `sudo sed -i ''` | `dscacheutil` | `brew install mkcert nss` |
+| **Windows** | `…\drivers\etc\hosts` | PowerShell (Admin) | `Resolve-DnsName` | `choco install mkcert` |
+| **Windows + WSL2** | `…\drivers\etc\hosts` | PowerShell (Admin) | `Resolve-DnsName` | `choco install mkcert` |
+
+**Use the friendly hostname, not the raw IP.** Open `http://erp.test:8000` after
+the hosts file is set. Opening `http://<vm-ip>:8000` often shows an
+unstyled/broken login page (Frappe Host-header mismatch).
+
+- **Linux/macOS host:** edit `/etc/hosts` (macOS uses BSD `sed -i ''`), then test
+  with `curl -I http://erp.test:8000` (`getent`/`dscacheutil` to confirm DNS).
+- **Windows host:** in **PowerShell as Administrator**, back up and edit
+  `C:\Windows\System32\drivers\etc\hosts` (the toolkit prints `Copy-Item` /
+  `Set-Content` / `Add-Content` commands), then test with
+  `Resolve-DnsName erp.test` and `curl.exe -I http://erp.test:8000`.
+- **Windows + WSL2:** WSL2 services are reachable from Windows over `localhost`
+  and the WSL2 IP changes each boot, so the toolkit maps `erp.test → 127.0.0.1`
+  instead of chasing the VM IP.
+
+Trusted local HTTPS order: (1) HOST hosts file, (2) confirm styled
+`http://erp.test:8000`, (3) on the HOST install mkcert (per the table above),
+`mkcert -install`, generate, and `scp` into the VM `/tmp/`, (4) stay in
+`local-ssl-wizard` option 2 and press Enter after scp — it installs Nginx HTTPS
+and you open **`https://erp.test`**. `mkcert -install` trusts the CA in the right
+store per OS (Keychain on macOS, the certificate store on Windows, NSS on Linux).
+Self-signed (wizard option 1) stays entirely in the VM but browsers will warn.
+
+For a stable IP, `sudo erpnext-dev local-fixed-ip-guide` prints guidance for your
+host OS and hypervisor (KVM/libvirt on Linux; UTM/VMware/Parallels on macOS;
+Hyper-V/VirtualBox/WSL2 on Windows), plus a universal in-guest netplan fallback.
+To rename the site later, use `sudo erpnext-dev change-local-domain` (then rebuild
+local SSL).
 
 Recommended local test order:
 

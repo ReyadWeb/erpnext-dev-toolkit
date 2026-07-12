@@ -27,6 +27,41 @@ runtime_is_production() {
   [[ "$(runtime_mode)" == "production" ]]
 }
 
+normalize_host_os() {
+  # Accept common spellings/aliases and map to the canonical tokens the host
+  # emitters branch on: linux | macos | windows | windows-wsl.
+  local raw="${1:-}"
+  raw="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$raw" in
+    linux|gnu/linux|ubuntu|debian|fedora|arch) printf 'linux\n' ;;
+    macos|mac|osx|darwin|apple) printf 'macos\n' ;;
+    windows|win|win32|win64|pc) printf 'windows\n' ;;
+    wsl|wsl2|windows-wsl|windows/wsl) printf 'windows-wsl\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_host_os_value() {
+  normalize_host_os "$1" >/dev/null 2>&1
+}
+
+# Resolved host OS with a safe default. Empty/unknown -> linux so pre-existing
+# Linux users keep their exact behavior and output.
+effective_host_os() {
+  local resolved
+  if resolved="$(normalize_host_os "${HOST_OS:-}" 2>/dev/null)"; then
+    printf '%s\n' "$resolved"
+  else
+    printf 'linux\n'
+  fi
+}
+
+# True only when the operator has not chosen a host OS yet (config empty and no
+# env override). Callers use this to show a one-time "set-host-os" hint.
+host_os_is_unset() {
+  [[ "$HOST_OS_ENV_PROVIDED" -ne 1 ]] && ! validate_host_os_value "${HOST_OS:-}"
+}
+
 validate_site_name_value() {
   local name="$1"
 
@@ -198,6 +233,17 @@ load_future_domain_config_if_available() {
       RUNTIME_MODE="$saved"
     fi
   fi
+
+  # Load the saved host OS unless it was provided via the environment this run.
+  if [[ "${HOST_OS_ENV_PROVIDED:-0}" -ne 1 ]] && ! validate_host_os_value "${HOST_OS:-}"; then
+    if saved="$(read_saved_config_value HOST_OS 2>/dev/null)" && [[ -n "$saved" ]]; then
+      if saved="$(normalize_host_os "$saved" 2>/dev/null)"; then
+        HOST_OS="$saved"
+      fi
+    fi
+  elif [[ "${HOST_OS_ENV_PROVIDED:-0}" -eq 1 ]] && validate_host_os_value "${HOST_OS:-}"; then
+    HOST_OS="$(normalize_host_os "$HOST_OS")"
+  fi
 }
 
 validate_production_domain_value() {
@@ -300,6 +346,65 @@ choose_local_site_name_for_setup() {
     validate_site_name_value "$SITE_NAME" || fail "Invalid local VM domain."
     echo "Using local VM domain: ${SITE_NAME}"
   fi
+}
+
+# Ask which OS the operator's HOST machine runs so the toolkit can print the
+# correct host-side commands (/etc/hosts vs Windows hosts file, getent vs
+# Resolve-DnsName, apt vs brew/choco for mkcert). Persisted so it is asked once.
+# When persist=1 (default) the choice is written to the config immediately; the
+# quickstart passes persist=0 because set_local_dev_defaults writes right after.
+choose_host_os_for_setup() {
+  local persist="${1:-1}"
+  local reply resolved current
+
+  if [[ "$HOST_OS_ENV_PROVIDED" -eq 1 ]] && validate_host_os_value "${HOST_OS:-}"; then
+    HOST_OS="$(normalize_host_os "$HOST_OS")"
+    echo "Using host OS: $(host_os_label)"
+    return 0
+  fi
+
+  current="$(effective_host_os)"
+
+  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+    echo
+    echo "Which operating system is your HOST machine (the computer running this VM)?"
+    echo "This tailors the /etc/hosts mapping, connectivity tests, and HTTPS trust steps."
+    echo "  1) Linux"
+    echo "  2) macOS"
+    echo "  3) Windows"
+    echo "  4) Windows + WSL2 (VM runs under WSL2)"
+    while true; do
+      read -r -p "Host OS [1-4, default: Linux]: " reply
+      case "${reply,,}" in
+        ""|1|linux) resolved="linux" ;;
+        2|macos|mac|osx) resolved="macos" ;;
+        3|windows|win) resolved="windows" ;;
+        4|wsl|wsl2) resolved="windows-wsl" ;;
+        *) echo "Please choose 1, 2, 3, or 4."; continue ;;
+      esac
+      break
+    done
+  else
+    resolved="$current"
+    echo "Using host OS: $(host_os_label "$resolved") (non-interactive default; change with $(toolkit_cmd set-host-os))"
+  fi
+
+  HOST_OS="$resolved"
+  if [[ "$persist" == "1" ]]; then
+    write_dev_config_file
+  fi
+  echo "Host OS set to: $(host_os_label)"
+  return 0
+}
+
+# Standalone entry point for the set-host-os command: re-prompt, persist, and
+# reprint the host mapping checkpoint so the operator sees the tailored commands.
+run_set_host_os() {
+  require_sudo
+  HOST_OS_ENV_PROVIDED=0
+  choose_host_os_for_setup 1
+  echo
+  show_local_host_mapping_checkpoint
 }
 
 
@@ -441,7 +546,7 @@ change_local_domain_wizard() {
 
   ok "Local VM domain changed to ${SITE_NAME}"
   echo
-  echo "Run this on your HOST machine, not inside the VM:"
+  echo "Run this on your $(host_os_label) HOST machine, not inside the VM:"
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Then test from the HOST:"
@@ -476,6 +581,7 @@ DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
 PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN}
 PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
 RUNTIME_MODE=$(runtime_mode)
+HOST_OS=${HOST_OS}
 FRAPPE_USER=${FRAPPE_USER}
 BENCH_PARENT=${BENCH_PARENT}
 BENCH_NAME=${BENCH_NAME}
@@ -495,6 +601,7 @@ DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
 PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN}
 PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
 RUNTIME_MODE=$(runtime_mode)
+HOST_OS=${HOST_OS}
 FRAPPE_USER=${FRAPPE_USER}
 BENCH_PARENT=${BENCH_PARENT}
 BENCH_NAME=${BENCH_NAME}
@@ -531,6 +638,7 @@ show_site_config() {
   echo "============================================================"
   status_line "Current site" "INFO" "$SITE_NAME"
   status_line "Site source" "INFO" "$SITE_NAME_SOURCE"
+  status_line "Host OS" "INFO" "$(host_os_label)$(host_os_is_unset && printf ' (not set; run %s)' "$(toolkit_cmd set-host-os)")"
   status_line "Config file" "INFO" "${CONFIG_FILE} (${saved})"
   status_line "Legacy config" "INFO" "${LEGACY_CONFIG_FILE} (${legacy_saved})"
   status_line "Expected bench" "INFO" "$BENCH_DIR"

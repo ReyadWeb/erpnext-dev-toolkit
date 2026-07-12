@@ -135,32 +135,119 @@ escape_hosts_regex() {
   printf '%s' "$1" | sed 's/[.[\*^$()+?{}|]/\\&/g'
 }
 
-print_host_dns_commands_for_site() {
-  local site="${1:-$SITE_NAME}" vm_ip="${2:-}"
-  local escaped_site
-  vm_ip="${vm_ip:-$(get_vm_ip)}"
-  escaped_site="$(escape_hosts_regex "$site")"
-
-  echo "  VM_IP=\"${vm_ip}\""
-  echo "  LOCAL_DOMAIN=\"${site}\""
-  echo "  sudo cp /etc/hosts \"/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)\""
-  echo "  sudo sed -i \"/[[:space:]]${escaped_site}\\([[:space:]]\\|$\\)/d\" /etc/hosts"
-  echo "  echo \"\${VM_IP} \${LOCAL_DOMAIN}\" | sudo tee -a /etc/hosts"
+# Human-readable name for a host OS token (defaults to the resolved host OS).
+# shellcheck disable=SC2120  # arg is optional; most callers rely on the default
+host_os_label() {
+  local os="${1:-$(effective_host_os)}"
+  case "$os" in
+    linux) printf 'Linux\n' ;;
+    macos) printf 'macOS\n' ;;
+    windows) printf 'Windows (PowerShell as Administrator)\n' ;;
+    windows-wsl) printf 'Windows + WSL2\n' ;;
+    *) printf 'Linux\n' ;;
+  esac
 }
 
+# The IP the HOST should map the local domain to. For a WSL2 guest, Windows
+# reaches the services over localhost, so map to 127.0.0.1 rather than the
+# WSL2 interface address (which changes on every boot).
+host_mapping_ip() {
+  local vm_ip="${1:-}"
+  if [[ "$(effective_host_os)" == "windows-wsl" ]]; then
+    printf '127.0.0.1\n'
+    return 0
+  fi
+  printf '%s\n' "$vm_ip"
+}
+
+# Print the exact commands to run on the HOST to map the local domain to the
+# VM IP, tailored to the operator's host OS. Unix hosts (Linux/macOS) edit
+# /etc/hosts; Windows edits the drivers\etc\hosts file from an elevated
+# PowerShell. macOS uses BSD sed (`sed -i ''`), which differs from GNU sed.
+print_host_dns_commands_for_site() {
+  local site="${1:-$SITE_NAME}" vm_ip="${2:-}"
+  local escaped_site map_ip host_os
+  vm_ip="${vm_ip:-$(get_vm_ip)}"
+  escaped_site="$(escape_hosts_regex "$site")"
+  host_os="$(effective_host_os)"
+  map_ip="$(host_mapping_ip "$vm_ip")"
+
+  case "$host_os" in
+    windows|windows-wsl)
+      echo "  # Run in Windows PowerShell opened as Administrator:"
+      echo "  \$VM_IP = \"${map_ip}\""
+      echo "  \$LOCAL_DOMAIN = \"${site}\""
+      echo "  \$hosts = \"\$env:SystemRoot\\System32\\drivers\\etc\\hosts\""
+      echo "  Copy-Item \$hosts \"\$hosts.bak.\$(Get-Date -Format yyyyMMdd-HHmmss)\""
+      echo "  \$pattern = '\\s+' + [regex]::Escape(\$LOCAL_DOMAIN) + '(\\s|\$)'"
+      echo "  (Get-Content \$hosts) -notmatch \$pattern | Set-Content \$hosts"
+      echo "  Add-Content \$hosts \"\$VM_IP \$LOCAL_DOMAIN\""
+      ;;
+    macos)
+      echo "  VM_IP=\"${map_ip}\""
+      echo "  LOCAL_DOMAIN=\"${site}\""
+      echo "  sudo cp /etc/hosts \"/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)\""
+      # BSD/macOS sed requires an explicit (empty) backup suffix after -i.
+      echo "  sudo sed -i '' \"/[[:space:]]${escaped_site}\\([[:space:]]\\|\$\\)/d\" /etc/hosts"
+      echo "  echo \"\${VM_IP} \${LOCAL_DOMAIN}\" | sudo tee -a /etc/hosts"
+      ;;
+    *)
+      echo "  VM_IP=\"${map_ip}\""
+      echo "  LOCAL_DOMAIN=\"${site}\""
+      echo "  sudo cp /etc/hosts \"/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)\""
+      echo "  sudo sed -i \"/[[:space:]]${escaped_site}\\([[:space:]]\\|\$\\)/d\" /etc/hosts"
+      echo "  echo \"\${VM_IP} \${LOCAL_DOMAIN}\" | sudo tee -a /etc/hosts"
+      ;;
+  esac
+}
+
+# Print the HOST-side commands to verify the mapping and reach the site,
+# tailored to the host OS (getent/dscacheutil/Resolve-DnsName differ).
 print_host_dns_tests_for_site() {
   local site="${1:-$SITE_NAME}" vm_ip="${2:-}"
+  local host_os map_ip
   vm_ip="${vm_ip:-$(get_vm_ip)}"
-  echo "  getent hosts ${site}"
-  echo "  curl -I http://${site}:8000"
-  if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
-    echo "  curl -I http://${vm_ip}:8000   # troubleshooting only"
-  else
-    echo "  curl -I http://\${VM_IP}:8000   # troubleshooting only"
-  fi
-  if port_listens 443; then
-    echo "  curl -kI https://${site}"
-  fi
+  host_os="$(effective_host_os)"
+  map_ip="$(host_mapping_ip "$vm_ip")"
+
+  case "$host_os" in
+    windows|windows-wsl)
+      echo "  Resolve-DnsName ${site}    # or: nslookup ${site}"
+      echo "  curl.exe -I http://${site}:8000    # or: Invoke-WebRequest http://${site}:8000"
+      if [[ "$host_os" == "windows-wsl" ]]; then
+        echo "  curl.exe -I http://127.0.0.1:8000   # troubleshooting only"
+      elif [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
+        echo "  curl.exe -I http://${vm_ip}:8000   # troubleshooting only"
+      fi
+      if port_listens 443; then
+        echo "  curl.exe -kI https://${site}"
+      fi
+      ;;
+    macos)
+      echo "  dscacheutil -q host -a name ${site}"
+      echo "  curl -I http://${site}:8000"
+      if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
+        echo "  curl -I http://${vm_ip}:8000   # troubleshooting only"
+      else
+        echo "  curl -I http://\${VM_IP}:8000   # troubleshooting only"
+      fi
+      if port_listens 443; then
+        echo "  curl -kI https://${site}"
+      fi
+      ;;
+    *)
+      echo "  getent hosts ${site}"
+      echo "  curl -I http://${site}:8000"
+      if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
+        echo "  curl -I http://${vm_ip}:8000   # troubleshooting only"
+      else
+        echo "  curl -I http://\${VM_IP}:8000   # troubleshooting only"
+      fi
+      if port_listens 443; then
+        echo "  curl -kI https://${site}"
+      fi
+      ;;
+  esac
 }
 
 show_local_domain_status() {
@@ -185,6 +272,7 @@ show_local_domain_status() {
   echo "============================================================"
   status_line "Local domain" "INFO" "$SITE_NAME"
   status_line "VM IP" "$([[ "$vm_ip" != unknown ]] && echo OK || echo WARN)" "$vm_ip"
+  status_line "Host OS" "INFO" "$(host_os_label)"
   status_line "Network type" "INFO" "$detected_network"
   status_line "Bench" "INFO" "$bench_dir"
   status_line "Direct URL" "INFO" "http://${vm_ip}:8000"
@@ -218,9 +306,15 @@ show_local_host_mapping_checkpoint() {
   echo
   status_line "Local domain" "INFO" "$SITE_NAME"
   status_line "Detected VM IP" "$([[ "$vm_ip" != unknown ]] && echo OK || echo WARN)" "$vm_ip"
+  status_line "Host OS" "INFO" "$(host_os_label)"
+  if host_os_is_unset; then
+    echo
+    echo "Host OS not chosen yet; showing $(host_os_label) commands by default."
+    echo "If your host is macOS or Windows, run: $(toolkit_cmd set-host-os)"
+  fi
   echo
-  echo "Run this on your HOST machine, not inside this VM."
-  echo "It is safe to repeat: it backs up /etc/hosts, removes only the old ${SITE_NAME} entry, then adds the current mapping."
+  echo "Run this on your $(host_os_label) HOST machine, not inside this VM."
+  echo "It is safe to repeat: it backs up the hosts file, removes only the old ${SITE_NAME} entry, then adds the current mapping."
   echo
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
@@ -323,7 +417,7 @@ show_access_instructions() {
   echo
   echo "The friendly URL only works after your HOST machine maps ${SITE_NAME} to this VM IP."
   echo
-  echo "Run this on your Linux HOST machine, not inside the VM:"
+  echo "Run this on your $(host_os_label) HOST machine, not inside the VM:"
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Then test on the host:"
@@ -675,10 +769,15 @@ show_host_hosts_command() {
 
   echo
   echo "============================================================"
-  echo "Host /etc/hosts Command"
+  echo "Host Mapping Command ($(host_os_label))"
   echo "============================================================"
   echo
-  echo "Run these commands on your HOST machine, not inside this VM:"
+  if host_os_is_unset; then
+    echo "Host OS not chosen yet; showing $(host_os_label) commands by default."
+    echo "If your host is macOS or Windows, run: $(toolkit_cmd set-host-os)"
+    echo
+  fi
+  echo "Run these commands on your $(host_os_label) HOST machine, not inside this VM:"
   echo
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
@@ -686,7 +785,7 @@ show_host_hosts_command() {
   print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Expected host mapping:"
-  echo "  ${vm_ip} ${SITE_NAME}"
+  echo "  $(host_mapping_ip "$vm_ip") ${SITE_NAME}"
   echo
   echo "This command is environment-aware. The VM IP is detected from this VM,"
   echo "so it works for KVM, bridged LAN, VirtualBox/UTM-style NAT, or other private networks."
@@ -763,24 +862,20 @@ show_network_status() {
 }
 
 show_host_access_test_guide() {
-  local vm_ip escaped_site
+  local vm_ip
   vm_ip="$(get_vm_ip)"
-  escaped_site="${SITE_NAME//./\\.}"
 
   echo
   echo "============================================================"
   echo "Host Access Test Guide"
   echo "============================================================"
   echo
-  echo "Run these on the HOST machine, not inside this VM:"
+  echo "Run these on the $(host_os_label) HOST machine, not inside this VM:"
   echo
-  echo "1) Confirm the host resolves the friendly name:"
-  echo "  getent hosts ${SITE_NAME}"
-  echo
-  echo "2) If it does not resolve to ${vm_ip}, update /etc/hosts:"
+  echo "1) Update the host mapping if the friendly name does not resolve to $(host_mapping_ip "$vm_ip"):"
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
-  echo "3) Test direct and friendly URLs:"
+  echo "2) Confirm resolution and test direct and friendly URLs:"
   print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "5) Browser URLs:"
@@ -837,6 +932,118 @@ show_kvm_vm_identification_guide() {
 
 
 
+
+# Universal fallback that works regardless of hypervisor/host OS: pin a static
+# address inside the guest with netplan. Printed as guidance only (the toolkit
+# does not rewrite guest networking automatically).
+print_guest_static_ip_fallback() {
+  local vm_ip gateway
+  vm_ip="$(get_vm_ip)"
+  gateway="$(get_default_gateway 2>/dev/null || true)"
+  echo "Universal fallback (works on any hypervisor) — pin a static IP inside THIS VM:"
+  echo
+  echo "  # Inspect the current interface and gateway first:"
+  echo "  ip -brief address"
+  echo "  ip route | awk '/default/ {print \$3; exit}'"
+  echo
+  echo "  # Then create /etc/netplan/99-erpnext-static.yaml inside the VM (adjust"
+  echo "  # the interface name, address, and gateway to match your network):"
+  echo "  network:"
+  echo "    version: 2"
+  echo "    ethernets:"
+  echo "      eth0:"
+  echo "        dhcp4: false"
+  echo "        addresses: [${vm_ip:-192.168.x.y}/24]"
+  echo "        routes:"
+  echo "          - to: default"
+  echo "            via: ${gateway:-192.168.x.1}"
+  echo "        nameservers:"
+  echo "          addresses: [1.1.1.1, 8.8.8.8]"
+  echo
+  echo "  sudo netplan apply"
+}
+
+# Host-OS/hypervisor-aware stable local VM IP guidance. Linux hosts get the
+# KVM/libvirt reservation flow; macOS and Windows hosts get guidance for their
+# common hypervisors, and every host gets the universal guest-netplan fallback.
+show_local_fixed_ip_guide() {
+  local vm_ip host_os
+  vm_ip="$(get_vm_ip)"
+  host_os="$(effective_host_os)"
+
+  case "$host_os" in
+    linux)
+      show_kvm_fixed_ip_guide
+      return 0
+      ;;
+    macos)
+      echo
+      echo "============================================================"
+      echo "Stable Local VM IP Guide (macOS host)"
+      echo "============================================================"
+      echo
+      echo "Purpose:"
+      echo "  Keep this VM on the same IP so ${SITE_NAME} does not break after reboot."
+      echo
+      echo "Current VM IP detected inside this VM: ${vm_ip}"
+      echo
+      echo "UTM (QEMU):"
+      echo "  - Prefer 'Emulated VLAN'/Shared networking, then reserve the IP with a"
+      echo "    static lease, or set a static IP inside the guest (fallback below)."
+      echo "VMware Fusion:"
+      echo "  - Edit /Library/Preferences/VMware\\ Fusion/vmnet8/dhcpd.conf and add a"
+      echo "    'host' stanza binding the VM MAC to a fixed IP, then restart networking."
+      echo "Parallels Desktop:"
+      echo "  - Use Control Center > Network, or 'prlsrvctl net set' to reserve a DHCP"
+      echo "    lease for the VM MAC address."
+      echo
+      print_guest_static_ip_fallback
+      echo
+      echo "Then update the host mapping:"
+      print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
+      echo "============================================================"
+      return 0
+      ;;
+    windows|windows-wsl)
+      echo
+      echo "============================================================"
+      echo "Stable Local VM IP Guide (Windows host)"
+      echo "============================================================"
+      echo
+      echo "Purpose:"
+      echo "  Keep this VM on the same IP so ${SITE_NAME} does not break after reboot."
+      echo
+      echo "Current VM IP detected inside this VM: ${vm_ip}"
+      echo
+      if [[ "$host_os" == "windows-wsl" ]]; then
+        echo "WSL2 note:"
+        echo "  The WSL2 IP changes on every boot, but Windows reaches WSL2 services over"
+        echo "  localhost. Map ${SITE_NAME} to 127.0.0.1 (see host mapping below) instead"
+        echo "  of chasing the WSL2 address; no reservation is needed."
+        echo
+      fi
+      echo "Hyper-V:"
+      echo "  - The Default Switch uses dynamic NAT. For a stable IP, create an External"
+      echo "    virtual switch (or an Internal switch with a static host IP), then set a"
+      echo "    static IP inside the guest (fallback below), or reserve by MAC on your router."
+      echo "VirtualBox:"
+      echo "  - Use a Host-Only adapter and a static guest IP, or reserve via:"
+      echo "    VBoxManage dhcpserver modify --network=HostInterfaceNetworking-VirtualBox\\ Host-Only\\ Ethernet\\ Adapter \\"
+      echo "      --fixed-address <ip> --mac-address <vm-mac>"
+      echo
+      print_guest_static_ip_fallback
+      echo
+      echo "Then update the host mapping:"
+      print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
+      echo "============================================================"
+      return 0
+      ;;
+    *)
+      show_kvm_fixed_ip_guide
+      return 0
+      ;;
+  esac
+}
 
 show_kvm_fixed_ip_guide() {
   local vm_ip clean_name escaped_site
@@ -895,6 +1102,12 @@ show_kvm_fixed_ip_guide() {
 }
 
 show_multi_environment_guide() {
+  local host_label hosts_path
+  host_label="$(host_os_label)"
+  case "$(effective_host_os)" in
+    windows|windows-wsl) hosts_path="%SystemRoot%\\System32\\drivers\\etc\\hosts" ;;
+    *) hosts_path="/etc/hosts" ;;
+  esac
   cat <<EOF_MULTI
 
 ============================================================
@@ -917,7 +1130,7 @@ Install examples inside each VM:
   $(toolkit_cmd_env "SITE_NAME=school.test" setup)
   $(toolkit_cmd_env "SITE_NAME=client-a.test" setup)
 
-Host /etc/hosts examples on your Linux host:
+Host mapping examples (${host_label} hosts file: ${hosts_path}):
 
   192.168.122.61 erp1.test
   192.168.122.62 erp2.test
@@ -946,7 +1159,7 @@ show_access_menu() {
     echo "6) Show host access test guide"
     echo "7) Verify ERPNext HTTP access"
     echo "8) Show KVM VM identification + fixed IP helper"
-    echo "9) Show KVM/libvirt fixed IP guide"
+    echo "9) Show stable VM IP guide (per host OS / hypervisor)"
     echo "10) Show multi-environment naming guide"
     echo "11) Show SSL/HTTPS roadmap"
     echo "12) Show local SSL status"
@@ -979,7 +1192,7 @@ show_access_menu() {
       6) show_host_access_test_guide ;;
       7) verify_access ;;
       8) show_kvm_vm_identification_guide ;;
-      9) show_kvm_fixed_ip_guide ;;
+      9) show_local_fixed_ip_guide ;;
       10) show_multi_environment_guide ;;
       11) show_ssl_roadmap_guide ;;
       12) show_ssl_status ;;

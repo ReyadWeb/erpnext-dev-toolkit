@@ -1748,8 +1748,29 @@ Rollback:
 EOF_LOCAL_SSL
 }
 
+# Print the HOST commands to install mkcert + its trust dependencies for the
+# operator's host OS. `mkcert -install` itself is cross-platform and trusts the
+# right store per OS (Keychain on macOS, cert store on Windows, NSS on Linux).
+# shellcheck disable=SC2120  # arg is optional; most callers rely on the default
+host_mkcert_install_hint() {
+  local os="${1:-$(effective_host_os)}"
+  case "$os" in
+    macos)
+      echo "  brew install mkcert nss        # nss also adds Firefox trust"
+      ;;
+    windows|windows-wsl)
+      echo "  choco install mkcert           # or: scoop bucket add extras; scoop install mkcert"
+      ;;
+    *)
+      echo "  sudo apt update && sudo apt install -y libnss3-tools"
+      echo "  # then install mkcert from your package manager or the official release binary"
+      ;;
+  esac
+}
+
 show_mkcert_local_ssl_guide() {
   local vm_ip cert_path key_path escaped_site vm_ssh_user cmd_install cmd_configure cmd_verify cmd_disable cmd_env
+  local host_label mkcert_deps host_dns_cmds host_dns_tests
   vm_ip="$(get_vm_ip)"
   cert_path="$(ssl_cert_path)"
   key_path="$(ssl_key_path)"
@@ -1760,6 +1781,10 @@ show_mkcert_local_ssl_guide() {
   cmd_verify="${INSTALLER_CANONICAL_PATH} verify-local-ssl"
   cmd_disable="${INSTALLER_CANONICAL_PATH} disable-local-ssl"
   cmd_env="${INSTALLER_CANONICAL_PATH} environment-check"
+  host_label="$(host_os_label)"
+  mkcert_deps="$(host_mkcert_install_hint)"
+  host_dns_cmds="$(print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip")"
+  host_dns_tests="$(print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip")"
 
   cat <<EOF_MKCERT
 
@@ -1775,15 +1800,13 @@ Important:
   - Run toolkit SSL commands inside the ERPNext VM.
   - The reusable toolkit path inside the VM is: ${INSTALLER_CANONICAL_PATH}
   - If unsure which machine you are on, run: ${cmd_env}
+  - Host OS: ${host_label} (change with ${INSTALLER_CANONICAL_PATH} set-host-os)
 
 Checklist:
 
-1) On the HOST, install mkcert dependencies:
+1) On the ${host_label} HOST, install mkcert dependencies:
 
-  sudo apt update
-  sudo apt install -y libnss3-tools
-
-  Install mkcert from your OS package manager or the official mkcert release package.
+${mkcert_deps}
 
 2) On the HOST, trust the local CA:
 
@@ -1818,16 +1841,12 @@ Checklist:
   ${cmd_configure}
   ${cmd_verify}
 
-7) On the HOST, confirm DNS/hosts and HTTPS:
+7) On the ${host_label} HOST, confirm DNS/hosts and HTTPS:
 
-  VM_IP="${vm_ip}"
-  LOCAL_DOMAIN="${SITE_NAME}"
-  sudo cp /etc/hosts "/etc/hosts.bak.\$(date +%Y%m%d-%H%M%S)"
-  sudo sed -i "/[[:space:]]${escaped_site}\([[:space:]]\|$\)/d" /etc/hosts
-  echo "\${VM_IP} \${LOCAL_DOMAIN}" | sudo tee -a /etc/hosts
-  getent hosts ${SITE_NAME}
-  curl -I http://${vm_ip}:8000
-  curl -I https://${SITE_NAME}
+${host_dns_cmds}
+
+  Then test:
+${host_dns_tests}
 
 Expected:
   http://${SITE_NAME}       -> 301 redirect to https://${SITE_NAME}/
@@ -1846,11 +1865,13 @@ EOF_MKCERT
 run_trusted_mkcert_setup() {
   require_erpnext_vm_context "trusted-mkcert-setup" || return 1
 
-  local vm_ip src_cert src_key reply ssh_user
+  local vm_ip src_cert src_key reply ssh_user host_label host_os
   vm_ip="$(get_vm_ip)"
   src_cert="${LOCAL_SSL_CERT_SOURCE:-/tmp/${SITE_NAME}.crt}"
   src_key="${LOCAL_SSL_KEY_SOURCE:-/tmp/${SITE_NAME}.key}"
   ssh_user="$(suggested_vm_ssh_user)"
+  host_os="$(effective_host_os)"
+  host_label="$(host_os_label)"
 
   echo
   echo "============================================================"
@@ -1859,11 +1880,12 @@ run_trusted_mkcert_setup() {
   echo "This path uses mkcert on the HOST machine so the HOST browser trusts https://${SITE_NAME}."
   echo
   echo "Important machine split:"
-  echo "  HOST machine: /etc/hosts, mkcert -install, generate cert, scp to VM"
+  echo "  HOST machine ($(host_os_label)): hosts file, mkcert -install, generate cert, scp to VM"
   echo "  ERPNext VM:   wait here, then install the copied cert and enable HTTPS"
   echo
   status_line "Local domain" "INFO" "${SITE_NAME}"
   status_line "Detected VM IP" "OK" "${vm_ip}"
+  status_line "Host OS" "INFO" "$(host_os_label) (change with $(toolkit_cmd set-host-os))"
   status_line "Expected cert source" "INFO" "${src_cert}"
   status_line "Expected key source" "INFO" "${src_key}"
 
@@ -1893,10 +1915,15 @@ run_trusted_mkcert_setup() {
   echo "------------------------------------------------------------"
   echo "Step 1 — HOST: install CA, generate cert, copy into the VM"
   echo "------------------------------------------------------------"
-  echo "Run these on the HOST machine:"
+  echo "Run these on the ${host_label} HOST machine:"
+  echo "  0. Install mkcert (one time):"
+  host_mkcert_install_hint | sed 's/^  /     /'
   echo "  1. mkcert -install"
   echo "  2. mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1"
   echo "  3. scp ${SITE_NAME}.crt ${SITE_NAME}.key ${ssh_user}@${vm_ip}:/tmp/"
+  if [[ "$host_os" == "windows" || "$host_os" == "windows-wsl" ]]; then
+    echo "     (Windows 10+ ships scp via OpenSSH; run from PowerShell. WSL2: run from the WSL shell.)"
+  fi
   echo
   echo "Stay in this wizard. After scp finishes, press Enter here to continue."
   echo "Detailed guide: $(toolkit_cmd mkcert-guide)"
@@ -2480,13 +2507,11 @@ verify_local_ssl() {
   fi
 
   echo
-  echo "Host-side checks:"
-  echo "  getent hosts ${SITE_NAME}"
-  echo "  curl -kI https://${SITE_NAME}"
-  echo "  curl -I http://${SITE_NAME}:8000"
+  echo "Host-side checks ($(host_os_label)):"
+  print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Expected host mapping:"
-  echo "  ${vm_ip} ${SITE_NAME}"
+  echo "  $(host_mapping_ip "$vm_ip") ${SITE_NAME}"
   if (( failed == 0 )); then
     print_local_https_success_next_steps
   fi
@@ -2495,8 +2520,12 @@ verify_local_ssl() {
 }
 
 show_browser_trust_check_guide() {
-  local vm_ip
+  local vm_ip host_label host_dns_tests mkcert_deps map_ip
   vm_ip="$(get_vm_ip)"
+  host_label="$(host_os_label)"
+  host_dns_tests="$(print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip")"
+  mkcert_deps="$(host_mkcert_install_hint)"
+  map_ip="$(host_mapping_ip "$vm_ip")"
   cat <<EOF_BROWSER_TRUST
 
 ============================================================
@@ -2516,15 +2545,14 @@ Local HTTPS has two possible trust modes:
    - The certificate is trusted by the HOST browser because mkcert installs a local CA on the HOST.
    - curl/browser should work without a certificate warning after the host trusts the CA.
 
-Host checklist:
-  getent hosts ${SITE_NAME}
-  curl -kI https://${SITE_NAME}
-  curl -I http://${SITE_NAME}:8000
+Host checklist (${host_label}):
+${host_dns_tests}
 
-Expected host /etc/hosts entry:
-  ${vm_ip} ${SITE_NAME}
+Expected host mapping entry:
+  ${map_ip} ${SITE_NAME}
 
-For trusted SSL, run on the HOST:
+For trusted SSL, run on the ${host_label} HOST:
+${mkcert_deps}
   mkcert -install
   mkcert -cert-file ${SITE_NAME}.crt -key-file ${SITE_NAME}.key ${SITE_NAME} ${vm_ip} localhost 127.0.0.1
   scp ${SITE_NAME}.crt ${SITE_NAME}.key $(suggested_vm_ssh_user)@${vm_ip}:/tmp/

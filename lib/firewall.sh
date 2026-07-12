@@ -413,12 +413,8 @@ verify_local_firewall_profile() {
     fi
   done
   echo
-  echo "Host-side tests to run from your host machine:"
-  echo "  curl -I http://$(get_vm_ip 2>/dev/null || echo VM_IP):8000"
-  echo "  curl -I http://${SITE_NAME}:8000"
-  if ssl_is_configured 2>/dev/null; then
-    echo "  curl -kI https://${SITE_NAME}"
-  fi
+  echo "Host-side tests to run from your $(host_os_label) host machine:"
+  print_host_dns_tests_for_site "$SITE_NAME" "$(get_vm_ip 2>/dev/null || echo unknown)"
   echo "============================================================"
 }
 

@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.9.1 (July 2026)  
+**Current release:** v1.9.2 (July 2026) — cross-platform local host support (Linux/macOS/Windows)  
 **External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
 
@@ -68,9 +68,16 @@ cannot be produced by repository write access alone. Setup + key-rotation runboo
   the release-gating leg); it becomes a hard gate when the 26.04 runner reaches GA
 - Support wording: *"Supports Ubuntu 24.04 and 26.04; integration runs on 24.04 (gating) + 26.04 (preview, non-blocking)."*
 
+### v1.9.2 — Cross-platform local host support — **implemented**
+
+- Persisted `HOST_OS` (Linux/macOS/Windows/WSL2); `set-host-os` command; asked once in local quickstart
+- OS-aware host emitters for hosts-file mapping, connectivity tests, mkcert HTTPS, and stable VM-IP guidance
+- Fixes latent macOS bug (`sed -i` → BSD `sed -i ''`); WSL2 maps to `127.0.0.1`
+- New hermetic `scripts/test-host-os-output.sh` wired into `validate-release.sh` + `run-shellcheck.sh`
+
 ### P2 — v1.10.0: Object-storage backups
 
-S3-compatible off-site target (AWS S3, Backblaze B2, MinIO) — after v1.9.1.
+S3-compatible off-site target (AWS S3, Backblaze B2, MinIO) — after v1.9.2.
 
 ### P2 — v1.11.0: Community polish
 
@@ -78,7 +85,7 @@ CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation.
 
 ---
 
-## Completed (v1.4.0 → v1.9.1)
+## Completed (v1.4.0 → v1.9.2)
 
 | Area | Version | What shipped |
 |------|---------|--------------|
@@ -93,6 +100,7 @@ CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation.
 | Self-update authenticity | v1.8.2 | Staged signature + pinned-fingerprint gate; staged-signature CI matrix |
 | Signing authority separation | v1.9.0 | `publish` gated by `release-signing` environment (reviewer approval) |
 | CI supply-chain hardening | v1.9.1 | Actions pinned to commit SHAs + Dependabot; Ubuntu 26.04 non-blocking integration leg |
+| Cross-platform local host support | v1.9.2 | Persisted `HOST_OS`; OS-aware hosts-file/test/mkcert/fixed-IP emitters for Linux/macOS/Windows/WSL2 |
 
 **CI today:** lint/shellcheck → validate-release → atomic-update-smoke → (on tag) integration install + backup/restore + production runtime + tamper negative → **environment-approved** sign → publish.
 
