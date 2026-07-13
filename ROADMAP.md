@@ -29,6 +29,12 @@ The toolkit exposes two first-class deployment engines behind one CLI via a
 `DeploymentEngine` contract (`lib/engine.sh`). Native remains the default and is
 byte-for-byte unchanged; Docker only runs when explicitly selected.
 
+The broader deployment model — engines, platforms, deployment topologies
+(single-node → split-app-db → horizontally-scaled → clustered), and the
+app/bench/site/runtime-role vocabulary — is defined in
+[`DEPLOYMENT-ARCHITECTURE.md`](DEPLOYMENT-ARCHITECTURE.md), the architecture of
+record for this dimension.
+
 | Phase | Scope | Status |
 |-------|-------|--------|
 | **v1.10.0** | Engine contract + Docker **local-dev MVP**: install/start/stop/status/logs/health/backup/apps via `docker compose`, wrapping upstream `frappe_docker` `pwd.yml`. Hermetic engine-selection test + non-blocking `docker-install-smoke` CI leg. **Native Debian 13 (trixie)** accepted via the shared Debian-family apt/systemd install path; Debian 11/12/13 accepted as Docker hosts. | **implemented** |
