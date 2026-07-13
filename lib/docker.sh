@@ -278,6 +278,12 @@ EOF_DOCKER_CREDS
 # and recreates the site with the configured name + admin password. Written with
 # a quoted heredoc so ${...} stays literal for compose interpolation and $$ keeps
 # its runtime-shell meaning inside the create-site command (as in upstream).
+#
+# NOTE: the create-site `until` condition is kept on a SINGLE physical line. In a
+# YAML `>` folded scalar, backslash line-continuations become `\ ` (escaped space)
+# once lines are folded, which turns the following `[[` from a bash keyword into a
+# missing command ("[[: command not found") so the wait loop never completes and
+# the site is never created. Do not reintroduce `\` continuations here.
 docker_write_override() {
   require_sudo
   local override
@@ -305,9 +311,7 @@ services:
         wait-for-it -t 120 redis-cache:6379;
         wait-for-it -t 120 redis-queue:6379;
         export start=`date +%s`;
-        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
-        [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
-        [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
         do
           echo "Waiting for sites/common_site_config.json to be created";
           sleep 5;

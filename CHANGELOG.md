@@ -1,7 +1,15 @@
-## v1.10.2 - Docker install verifies site creation (fixes silent 404)
+## v1.10.2 - Docker create-site fix (site now provisions; no more silent 404)
 
 ### Fixed
 
+- **create-site now completes so the site is actually provisioned.** The
+  generated `erpnext-dev.override.yml` copied upstream's `until [[ ... ]] && \`
+  wait loop with backslash line-continuations inside a YAML `>` folded scalar.
+  Folding turns `&& \` + newline + `[[` into `&& \ [[` (an escaped space), which
+  demotes `[[` from a bash keyword to a missing command (`[[: command not
+  found`). The loop never saw `common_site_config.json`, exited 1, and the site
+  was never created -- so the published port answered `404` forever. The wait
+  condition is now a single physical line.
 - **Docker install no longer reports success when site creation fails.**
   `docker compose up -d` returns as soon as containers *start*, not when the
   one-shot `create-site` job *completes*. So a failed `bench new-site` looked
