@@ -1,3 +1,22 @@
+## v1.10.1 - Docker Compose invocation fix + broader Debian host matrix
+
+### Fixed
+
+- **`docker compose: command not found` during Docker install.** The compose
+  program was resolved into a `"docker compose"` string and expanded unquoted,
+  but the toolkit runs with `IFS=$'\n\t'` (no space), so the string never
+  word-split and bash tried to exec a single command literally named
+  `docker compose`. The compose program is now resolved into a bash array
+  (`docker_compose_resolve`), so both the modern `docker compose` plugin and the
+  legacy `docker-compose` binary invoke correctly.
+
+### Changed
+
+- **Docker host OS matrix broadened to Debian 11 / 12 / 13** (was Debian 13 in
+  v1.10.0), matching Docker Engine's official host support. Ubuntu 24.04 / 26.04
+  remain OK; any other Docker-capable host still installs with a soft warning
+  rather than a hard fail.
+
 ## v1.10.0 - Multi-engine architecture: Docker as a first-class engine
 
 ### Added

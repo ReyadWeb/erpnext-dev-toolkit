@@ -18,13 +18,14 @@ It supports two setup paths:
 > the path to **9.8+** are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.10.0 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.10.1 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
 
 > **OS support:** The native engine supports Ubuntu 24.04 / 26.04 LTS and Debian 13
-> (trixie). The Docker engine supports the same hosts. Automated integration coverage
+> (trixie). The Docker engine runs on any Docker-capable host and formally tracks
+> Ubuntu 24.04 / 26.04 and Debian 11 / 12 / 13. Automated integration coverage
 > runs on **Ubuntu 24.04 (release-gating)** plus **Ubuntu 26.04 (GitHub public-preview
 > runner, non-blocking)**; the 26.04 leg becomes a hard gate once that runner image
 > reaches general availability. Debian 13 uses the same Debian-family apt/systemd
@@ -43,7 +44,7 @@ one; the choice is saved and every lifecycle command (`start`, `stop`, `status`,
 | Engine | What it does | Best for |
 | --- | --- | --- |
 | **Native** (default) | Installs ERPNext/Frappe directly on the VM (systemd, bench, host MariaDB/Redis/Nginx). Ubuntu 24.04/26.04, Debian 13. | Maximum host-level control and simplicity. |
-| **Docker** | Containerized stack wrapping the official `frappe_docker` (`pwd.yml`), published on a local port. | Isolation, portability, upstream production alignment. |
+| **Docker** | Containerized stack wrapping the official `frappe_docker` (`pwd.yml`), published on a local port. Ubuntu 24.04/26.04, Debian 11/12/13. | Isolation, portability, upstream production alignment. |
 
 ```bash
 sudo erpnext-dev set-engine       # choose native or docker for a fresh setup
@@ -92,7 +93,7 @@ release-gated, fully validated path.
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.10.0" && \
+VERSION="v1.10.1" && \
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
@@ -111,7 +112,7 @@ Or install step by step ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.10.0"
+VERSION="v1.10.1"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"

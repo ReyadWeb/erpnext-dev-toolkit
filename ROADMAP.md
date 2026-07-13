@@ -31,12 +31,12 @@ byte-for-byte unchanged; Docker only runs when explicitly selected.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| **v1.10.0** | Engine contract + Docker **local-dev MVP**: install/start/stop/status/logs/health/backup/apps via `docker compose`, wrapping upstream `frappe_docker` `pwd.yml`. Hermetic engine-selection test + non-blocking `docker-install-smoke` CI leg. **Native Debian 13 (trixie)** accepted via the shared Debian-family apt/systemd install path; Debian 13 also accepted as a Docker host. | **implemented** |
+| **v1.10.0** | Engine contract + Docker **local-dev MVP**: install/start/stop/status/logs/health/backup/apps via `docker compose`, wrapping upstream `frappe_docker` `pwd.yml`. Hermetic engine-selection test + non-blocking `docker-install-smoke` CI leg. **Native Debian 13 (trixie)** accepted via the shared Debian-family apt/systemd install path; Debian 11/12/13 accepted as Docker hosts. | **implemented** |
 | **v1.11.0** | Docker **production runtime** + SSL / reverse-proxy parity; backups of Docker volumes and off-VM push; durable app installs via custom image build. | planned |
 | **v1.12.0** | Debian **native CI coverage** (GitHub provides no Debian runner today, so v1.10.0 native Debian is field-validated) + broader distro/runtime testing. | planned |
 
 Native engine matrix: Ubuntu 24.04 / 26.04, Debian 13. Docker engine host matrix:
-Ubuntu 24.04 / 26.04, Debian 13.
+Ubuntu 24.04 / 26.04, Debian 11 / 12 / 13.
 
 ---
 

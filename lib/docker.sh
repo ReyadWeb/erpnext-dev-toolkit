@@ -46,18 +46,37 @@ docker_daemon_ready() {
   ${SUDO:-} docker info >/dev/null 2>&1
 }
 
-# Echo the compose program ("docker compose" or the legacy "docker-compose").
-docker_compose_program() {
+# Resolve the compose program into the caller-named array (default: DOCKER_COMPOSE_CMD).
+# Prefers the modern "docker compose" plugin, falls back to the legacy
+# "docker-compose" binary. Returns non-zero when neither is available.
+#
+# NOTE: we deliberately populate an array rather than echoing a "docker compose"
+# string. The toolkit runs with IFS=$'\n\t' (no space), so an unquoted string
+# containing a space would NOT word-split and bash would try to exec a single
+# command literally named "docker compose".
+docker_compose_resolve() {
+  local __out_name="${1:-DOCKER_COMPOSE_CMD}"
   if docker compose version >/dev/null 2>&1; then
-    printf 'docker compose'
+    eval "${__out_name}=(docker compose)"
   elif command -v docker-compose >/dev/null 2>&1; then
-    printf 'docker-compose'
+    eval "${__out_name}=(docker-compose)"
   else
     return 1
   fi
 }
 
-docker_compose_available() { docker_compose_program >/dev/null 2>&1; }
+# Human-readable label for the detected compose program (used in preflight output).
+docker_compose_program() {
+  local -a __cmd=()
+  local IFS=' '
+  docker_compose_resolve __cmd || return 1
+  printf '%s' "${__cmd[*]}"
+}
+
+docker_compose_available() {
+  local -a __cmd=()
+  docker_compose_resolve __cmd
+}
 
 host_arch_label() {
   case "$(uname -m 2>/dev/null || echo unknown)" in
@@ -68,8 +87,9 @@ host_arch_label() {
 }
 
 # Read /etc/os-release and classify Docker-host support. Prints "STATUS|Pretty".
-# Docker is OS-agnostic for the workload, so Ubuntu 24.04/26.04 and Debian 13 are
-# OK; anything else is a soft WARN (still allowed) rather than a hard fail.
+# Docker is OS-agnostic for the workload, so the officially supported Docker
+# Engine hosts we track -- Ubuntu 24.04/26.04 and Debian 11/12/13 -- are OK;
+# anything else is a soft WARN (still allowed) rather than a hard fail.
 docker_host_os_eval() {
   local id="" ver="" pretty="unknown"
   if [[ -f /etc/os-release ]]; then
@@ -80,7 +100,8 @@ docker_host_os_eval() {
     pretty="${PRETTY_NAME:-unknown}"
   fi
   case "${id}:${ver}" in
-    ubuntu:24.04|ubuntu:26.04|debian:13) printf 'OK|%s\n' "$pretty" ;;
+    ubuntu:24.04|ubuntu:26.04) printf 'OK|%s\n' "$pretty" ;;
+    debian:11|debian:12|debian:13) printf 'OK|%s\n' "$pretty" ;;
     *) printf 'WARN|%s\n' "$pretty" ;;
   esac
 }
@@ -91,8 +112,9 @@ docker_host_os_eval() {
 # Run docker compose with the project name, upstream base file, our override,
 # and the generated env file. All extra args are passed straight through.
 docker_compose() {
-  local prog base override envf
-  prog="$(docker_compose_program)" || { err "Docker Compose is not available."; return 1; }
+  local base override envf
+  local -a compose_cmd=()
+  docker_compose_resolve compose_cmd || { err "Docker Compose is not available."; return 1; }
   base="$(docker_compose_base_file)"
   override="$(docker_override_file)"
   envf="$(docker_env_file)"
@@ -100,8 +122,10 @@ docker_compose() {
     err "frappe_docker base compose not found: ${base}. Run the Docker install first."
     return 1
   fi
+  # $SUDO is a single token ("sudo" or empty) so it is safe to leave unquoted;
+  # the compose program is expanded from an array to survive the restricted IFS.
   # shellcheck disable=SC2086
-  ${SUDO:-} $prog -p "$DOCKER_PROJECT_NAME" --env-file "$envf" -f "$base" -f "$override" "$@"
+  ${SUDO:-} "${compose_cmd[@]}" -p "$DOCKER_PROJECT_NAME" --env-file "$envf" -f "$base" -f "$override" "$@"
 }
 
 # ------------------------------------------------------------
