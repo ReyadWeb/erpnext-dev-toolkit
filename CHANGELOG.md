@@ -98,6 +98,17 @@ integration CI job is promoted to a hard release gate.
   `docker-custom-image-status` shows the configured apps and built image. The
   container `get-app` path remains available for evaluation and now points
   operators to the durable image build for production.
+- **Docker CI is now release-gating (P8).** The containerized development stack
+  (`pwd.yml`) integration leg (`docker-install-smoke`) drops `continue-on-error`
+  and now **blocks a release** on failure, alongside the native `install-smoke`
+  leg. It was also hardened to assert the DR chain end to end: install -> serve
+  -> engine-status/doctor -> durable host-artifact backup + verify (P3) ->
+  automated restore rehearsal into a throwaway site (P3). A new
+  `docker-production-smoke` leg exercises the full **production** `compose.yaml`
+  path (explicit site creation, HTTP exposure guardrail, backup + verify, restore
+  rehearsal); it stays non-blocking (`continue-on-error: true`) until proven
+  green, then its gate can be promoted the same way the Ubuntu 26.04 preview leg
+  is promoted.
 
 ## v1.10.4 - Debian mkcert host hint fix (trusted local HTTPS works on Debian)
 

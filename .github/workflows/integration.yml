@@ -370,10 +370,12 @@ jobs:
     name: Docker engine install + smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    # Experimental until the Docker engine reaches parity: the containerized leg
-    # runs and reports on every tag but must NOT block a release yet. Native
-    # remains the release-gating install path (install-smoke, ubuntu-24.04).
-    continue-on-error: true
+    # RELEASE-GATING (P8): the containerized development stack (pwd.yml) is proven
+    # at parity, so this leg now blocks a release on failure just like the native
+    # install-smoke leg. It exercises install -> serve -> engine-status/doctor ->
+    # durable backup + verify (P3) -> restore rehearsal (P3). The heavier
+    # production compose.yaml path is exercised by the separate
+    # docker-production-smoke leg, which stays non-blocking until it is proven.
     env:
       SITE_NAME: "erp.test"
       # Force the Docker deployment engine (non-interactive install would default
@@ -439,6 +441,22 @@ jobs:
           sudo -E env DEPLOYMENT_ENGINE=docker ./erpnext-dev.sh engine-status || true
           sudo -E env DEPLOYMENT_ENGINE=docker ./erpnext-dev.sh doctor --plain || true
 
+      - name: Durable backup + verify (P3, hard gate)
+        run: |
+          set -euo pipefail
+          sudo -E env DEPLOYMENT_ENGINE=docker SITE_NAME=erp.test ./erpnext-dev.sh -y backup-files
+          # backup-verify exits non-zero if the exported host artifact is missing
+          # gzip/tar/checksum integrity, so this is a real assertion.
+          sudo -E env DEPLOYMENT_ENGINE=docker SITE_NAME=erp.test ./erpnext-dev.sh backup-verify
+
+      - name: Restore rehearsal (P3, hard gate)
+        run: |
+          set -euo pipefail
+          # Restores the exported artifact into a throwaway site on the same image,
+          # confirms erpnext is present, then drops it. Non-zero on failure.
+          sudo -E env DEPLOYMENT_ENGINE=docker SITE_NAME=erp.test ./erpnext-dev.sh -y docker-restore-rehearsal
+          sudo -E env DEPLOYMENT_ENGINE=docker SITE_NAME=erp.test ./erpnext-dev.sh docker-restore-evidence || true
+
       - name: Collect Docker diagnostics
         if: always()
         run: |
@@ -452,5 +470,101 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: integration-docker
+          path: artifacts/
+          if-no-files-found: ignore
+
+  docker-production-smoke:
+    name: Docker production compose + smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # NON-BLOCKING (staged promotion): exercises the PRODUCTION compose.yaml path
+    # (P1) end to end -- explicit site creation, HTTP (noproxy) exposure guardrail
+    # (P5), durable backup + verify and restore rehearsal (P3). It runs and
+    # reports on every release but must not block yet; flip continue-on-error to
+    # false to make production a hard gate once this leg is proven green, exactly
+    # as the ubuntu-26.04 preview leg is promoted.
+    continue-on-error: true
+    env:
+      SITE_NAME: "erp.test"
+      DEPLOYMENT_ENGINE: "docker"
+      DOCKER_MODE: "production"
+      DOCKER_PUBLISH_PORT: "8081"
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Report runner + Docker capacity
+        run: |
+          echo "== OS =="; . /etc/os-release && echo "$PRETTY_NAME"
+          echo "== Docker =="; docker version || true
+          echo "== Compose =="; docker compose version || true
+          echo "== Disk =="; df -h /
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup 2>/dev/null || true
+          df -h /
+
+      - name: Verify release checksums
+        run: sha256sum -c SHA256SUMS
+
+      - name: Install ERPNext via Docker PRODUCTION setup (non-interactive)
+        run: sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production DOCKER_PUBLISH_PORT=8081 SITE_NAME=erp.test ./erpnext-dev.sh -y docker-production-setup
+
+      - name: Smoke test published port
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H "Host: ${SITE_NAME}" http://localhost:8081/api/method/ping || true)"
+            echo "attempt ${i}/60: http=${code}"
+            case "$code" in
+              200|401|403) echo "ERPNext (Docker production) serving on :8081 (http=${code})"; ok=1; break ;;
+            esac
+            sleep 10
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Docker production ERPNext not serving on :8081."
+            sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production ./erpnext-dev.sh status || true
+            sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production ./erpnext-dev.sh logs || true
+            exit 1
+          fi
+
+      - name: Production exposure guardrail (P5)
+        run: sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production ./erpnext-dev.sh docker-production-exposure
+
+      - name: Durable backup + verify (P3)
+        run: |
+          set -euo pipefail
+          sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production SITE_NAME=erp.test ./erpnext-dev.sh -y backup-files
+          sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production SITE_NAME=erp.test ./erpnext-dev.sh backup-verify
+
+      - name: Restore rehearsal (P3)
+        run: |
+          set -euo pipefail
+          sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production SITE_NAME=erp.test ./erpnext-dev.sh -y docker-restore-rehearsal
+
+      - name: Engine status + doctor smoke
+        run: |
+          sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production ./erpnext-dev.sh engine-status || true
+          sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production ./erpnext-dev.sh doctor --plain || true
+
+      - name: Collect Docker diagnostics
+        if: always()
+        run: |
+          mkdir -p artifacts
+          sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production ./erpnext-dev.sh status > artifacts/docker-prod-status.txt 2>&1 || true
+          sudo -E env DEPLOYMENT_ENGINE=docker DOCKER_MODE=production ./erpnext-dev.sh logs > artifacts/docker-prod-logs.txt 2>&1 || true
+          sudo chown -R "$USER" artifacts 2>/dev/null || true
+
+      - name: Upload Docker production diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: integration-docker-production
           path: artifacts/
           if-no-files-found: ignore
