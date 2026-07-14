@@ -104,7 +104,7 @@ see the coupling note below.
 | Engine | Status | Description |
 |--------|--------|-------------|
 | `native` | shipped (default) | ERPNext/Frappe installed directly on the host: Supervisor/Gunicorn/workers/scheduler + host MariaDB/Redis/Nginx. |
-| `docker` | shipped (v1.10.0) | Containerized stack wrapping the official [`frappe_docker`](https://github.com/frappe/frappe_docker) (`pwd.yml` + generated override). |
+| `docker` | shipped (v1.10.0); production runtime in progress | Containerized stack wrapping the official [`frappe_docker`](https://github.com/frappe/frappe_docker). Local-dev wraps `pwd.yml` + a generated override; **production** (`DOCKER_MODE=production`) wraps upstream `compose.yaml` + mariadb/redis overrides + a toolkit image-pin override, with immutable pins, durable off-volume host-artifact backups, and an automated restore rehearsal. |
 | `orchestrator` | **documented future** | Wraps Frappe's official [Helm chart](https://github.com/frappe/helm) on Kubernetes. See §6. |
 
 ### Platform — *where* it runs

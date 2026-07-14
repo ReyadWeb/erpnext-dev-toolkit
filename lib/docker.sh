@@ -40,6 +40,13 @@ DOCKER_PINS_FILE="${DOCKER_PINS_FILE:-${DOCKER_WORKDIR}/erpnext-dev.pins}"
 DOCKER_FRAPPE_DOCKER_SHA="${DOCKER_FRAPPE_DOCKER_SHA:-}"
 DOCKER_ERPNEXT_IMAGE_DIGEST="${DOCKER_ERPNEXT_IMAGE_DIGEST:-}"
 
+# Disaster recovery (P3): every Docker backup is exported out of the sites volume
+# to a durable, root-owned host artifact directory (db + files + site config +
+# manifest + SHA256SUMS). Restore consumes those host artifacts, and a restore
+# rehearsal proves the artifact restores into a clean site of the SAME image.
+DOCKER_BACKUP_DIR="${DOCKER_BACKUP_DIR:-/var/backups/erpnext-dev/docker}"
+DOCKER_RESTORE_REHEARSAL_FILE="${DOCKER_RESTORE_REHEARSAL_FILE:-/etc/erpnext-dev/docker-restore-rehearsal.env}"
+
 docker_clone_dir() { printf '%s/frappe_docker\n' "$DOCKER_WORKDIR"; }
 docker_overrides_dir() { printf '%s/frappe_docker/overrides\n' "$DOCKER_WORKDIR"; }
 docker_compose_base_file() { printf '%s/frappe_docker/pwd.yml\n' "$DOCKER_WORKDIR"; }
@@ -718,30 +725,501 @@ docker_bench() {
   docker_compose exec -T backend bench "$@"
 }
 
+# ------------------------------------------------------------
+# Disaster recovery (P3): durable host artifacts + restore + rehearsal
+# ------------------------------------------------------------
+# Absolute bench dir inside the frappe/erpnext image (WORKDIR of every service).
+docker_container_bench_dir() { printf '/home/frappe/frappe-bench\n'; }
+# Per-site root for exported host artifacts: <DOCKER_BACKUP_DIR>/<site>/<prefix>/.
+docker_backup_site_root() { printf '%s/%s\n' "$DOCKER_BACKUP_DIR" "$(docker_site_name)"; }
+
+# Read a single KEY=value from a root-owned env file, permission-safe under sudo.
+docker_env_value() {
+  local envf="$1" key="$2"
+  ${SUDO:-} awk -F= -v k="$key" '$1==k{v=$0; sub(/^[^=]*=/,"",v)} END{print v}' "$envf" 2>/dev/null || true
+}
+
+# Resolve the MariaDB root password used by restore/rehearsal. Production stores a
+# generated password in the prod env file (DB_PASSWORD); development uses
+# DOCKER_DB_ROOT_PASSWORD (default "admin").
+docker_db_root_password() {
+  local envf val
+  envf="$(docker_active_env_file)"
+  if docker_is_production; then
+    val="$(docker_env_value "$envf" DB_PASSWORD)"
+  else
+    val="$(docker_env_value "$envf" DOCKER_DB_ROOT_PASSWORD)"
+  fi
+  printf '%s\n' "${val:-admin}"
+}
+
+# Newest exported host artifact directory for the current site (empty if none).
+docker_latest_host_dir() {
+  local root
+  root="$(docker_backup_site_root)"
+  ${SUDO:-} test -d "$root" || return 1
+  ${SUDO:-} find "$root" -maxdepth 1 -mindepth 1 -type d -printf '%T@ %p\n' 2>/dev/null \
+    | sort -nr | head -n1 | cut -d' ' -f2-
+}
+
+# Write MANIFEST.txt + SHA256SUMS into an exported artifact directory.
+docker_backup_write_manifest() {
+  local dir="$1" prefix="$2" site="$3"
+  ${SUDO:-} tee "${dir}/MANIFEST.txt" >/dev/null <<EOF_DOCKER_BK_MANIFEST
+# ERPNext Developer Toolkit - Docker backup manifest
+site=${site}
+prefix=${prefix}
+created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+engine=docker
+mode=$(docker_mode_label)
+image=${DOCKER_ERPNEXT_IMAGE}
+image_digest=${DOCKER_ERPNEXT_IMAGE_DIGEST:-unrecorded}
+frappe_docker_sha=${DOCKER_FRAPPE_DOCKER_SHA:-unrecorded}
+compose_project=${DOCKER_PROJECT_NAME}
+toolkit_version=${SCRIPT_VERSION:-unknown}
+EOF_DOCKER_BK_MANIFEST
+  # Checksums over every component (excluding SHA256SUMS itself) for verify/restore.
+  ${SUDO:-} sh -c "cd '$dir' && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' | sort | xargs -r sha256sum > SHA256SUMS" 2>/dev/null || true
+  ${SUDO:-} chmod -R go-rwx "$dir" 2>/dev/null || true
+}
+
+# Take a backup inside the backend container, then EXPORT the newest set out of
+# the sites volume to a durable, root-owned host artifact directory. This is the
+# heart of P3: a Docker volume alone is not a backup, so every backup lands as a
+# self-describing host artifact that verify/restore/rehearsal can consume.
 docker_backup() {
   require_sudo
   local include_files="${1:-false}"
-  local site
+  local site bench db_rel db_base prefix host_dir f copied=0
+
   site="$(docker_site_name)"
+  bench="$(docker_container_bench_dir)"
+
   if [[ "$include_files" == "true" ]]; then
     log "Creating database + files backup for ${site} (Docker)"
-    docker_bench --site "$site" backup --with-files
+    docker_bench --site "$site" backup --with-files || { err "bench backup failed."; return 1; }
   else
     log "Creating database backup for ${site} (Docker)"
-    docker_bench --site "$site" backup
+    docker_bench --site "$site" backup || { err "bench backup failed."; return 1; }
   fi
-  ok "Backup completed inside the sites volume (docker volume: ${DOCKER_PROJECT_NAME}_sites)."
-  echo "List backups with: $(toolkit_cmd list-backups)"
+
+  # Identify the newest database file inside the container (relative to bench dir).
+  db_rel="$(docker_compose exec -T backend bash -c "ls -1t sites/${site}/private/backups/*-database.sql.gz 2>/dev/null | head -n1" 2>/dev/null | tr -d '\r')"
+  if [[ -z "$db_rel" ]]; then
+    err "Could not locate the new database backup inside the container."
+    return 1
+  fi
+  db_base="$(basename "$db_rel")"
+  prefix="${db_base%-database.sql.gz}"
+
+  host_dir="$(docker_backup_site_root)/${prefix}"
+  $SUDO mkdir -p "$host_dir" || { err "Could not create host artifact dir ${host_dir}"; return 1; }
+  log "Exporting backup set ${prefix} to ${host_dir}"
+
+  for f in "${prefix}-database.sql.gz" \
+           "${prefix}-site_config_backup.json" \
+           "${prefix}-files.tar" "${prefix}-files.tar.gz" \
+           "${prefix}-private-files.tar" "${prefix}-private-files.tar.gz"; do
+    if docker_compose exec -T backend test -f "sites/${site}/private/backups/${f}" >/dev/null 2>&1; then
+      if docker_compose cp "backend:${bench}/sites/${site}/private/backups/${f}" "${host_dir}/${f}" >/dev/null 2>&1; then
+        copied=$((copied+1))
+      else
+        warn "Could not copy ${f} out of the container."
+      fi
+    fi
+  done
+
+  if [[ "$copied" -eq 0 ]]; then
+    err "No backup files were exported to the host."
+    return 1
+  fi
+
+  docker_backup_write_manifest "$host_dir" "$prefix" "$site"
+  ok "Durable host backup exported: ${host_dir}"
+  echo "Verify with:  $(toolkit_cmd backup-verify)"
+  echo "Restore with: $(toolkit_cmd restore-full)"
+  return 0
 }
 
 docker_list_backups() {
   require_sudo
-  local site
+  local site root
   site="$(docker_site_name)"
-  docker_bench --site "$site" list-backups 2>/dev/null || {
-    warn "Could not list backups. Is the stack running? ($(toolkit_cmd start))"
+  root="$(docker_backup_site_root)"
+
+  echo
+  echo "============================================================"
+  echo "ERPNext Backups (Docker)"
+  echo "============================================================"
+  echo "Site: ${site}"
+  echo "Host artifact folder: ${root}"
+  echo
+  echo "Durable host backup sets (newest first):"
+  if $SUDO test -d "$root"; then
+    $SUDO find "$root" -maxdepth 1 -mindepth 1 -type d -printf '%T@ %p\n' 2>/dev/null \
+      | sort -nr | head -20 \
+      | while read -r _ts dir; do
+          printf '  %s  (%s)\n' "$(basename "$dir")" "$($SUDO du -sh "$dir" 2>/dev/null | awk '{print $1}')"
+        done
+  else
+    echo "  none — create one with: $(toolkit_cmd backup)"
+  fi
+  echo
+  echo "In-container backups (sites volume, not durable on their own):"
+  docker_bench --site "$site" list-backups 2>/dev/null | sed 's/^/  /' || echo "  (stack not running)"
+  echo
+  echo "Tip: restore consumes a host backup set folder from above."
+  echo "============================================================"
+}
+
+# Readability test for an exported tar/tar.gz component.
+docker_backup_tar_ok() {
+  local file="$1"
+  if [[ "$file" == *.gz ]]; then
+    $SUDO tar -tzf "$file" >/dev/null 2>&1
+  else
+    $SUDO tar -tf "$file" >/dev/null 2>&1
+  fi
+}
+
+# Verify an exported host artifact (default: newest). Checks gzip/tar/json
+# integrity and, when present, the SHA256SUMS manifest. No restore is performed.
+docker_backup_verify() {
+  require_sudo
+  local dir="${1:-}" prefix fail_count=0 f
+  [[ -n "$dir" ]] || dir="$(docker_latest_host_dir || true)"
+
+  ui_box_start "Backup Verification (Docker)"
+  status_line "Mode" "INFO" "checks exported host artifact; no restore is performed"
+  status_line "Site" "INFO" "$(docker_site_name)"
+
+  if [[ -z "$dir" ]] || ! $SUDO test -d "$dir"; then
+    status_line "Host backup" "FAIL" "no durable host backup found; run $(toolkit_cmd backup)"
+    ui_box_end
     return 1
-  }
+  fi
+  prefix="$(basename "$dir")"
+  status_line "Artifact" "INFO" "$dir"
+  status_line "Backup set" "INFO" "$prefix"
+
+  if $SUDO test -f "${dir}/${prefix}-database.sql.gz" && $SUDO gzip -t "${dir}/${prefix}-database.sql.gz" >/dev/null 2>&1; then
+    status_line "Database" "OK" "gzip readable ($($SUDO du -h "${dir}/${prefix}-database.sql.gz" 2>/dev/null | awk '{print $1}'))"
+  else
+    status_line "Database" "FAIL" "missing or unreadable"
+    fail_count=$((fail_count+1))
+  fi
+
+  for f in "${prefix}-files.tar" "${prefix}-files.tar.gz"; do
+    if $SUDO test -f "${dir}/${f}"; then
+      if docker_backup_tar_ok "${dir}/${f}"; then
+        status_line "Public files" "OK" "$f readable"
+      else
+        status_line "Public files" "FAIL" "$f unreadable"
+        fail_count=$((fail_count+1))
+      fi
+      break
+    fi
+  done
+  for f in "${prefix}-private-files.tar" "${prefix}-private-files.tar.gz"; do
+    if $SUDO test -f "${dir}/${f}"; then
+      if docker_backup_tar_ok "${dir}/${f}"; then
+        status_line "Private files" "OK" "$f readable"
+      else
+        status_line "Private files" "FAIL" "$f unreadable"
+        fail_count=$((fail_count+1))
+      fi
+      break
+    fi
+  done
+
+  if $SUDO test -f "${dir}/${prefix}-site_config_backup.json"; then
+    status_line "Site config" "OK" "present"
+  else
+    status_line "Site config" "WARN" "not exported"
+  fi
+
+  if $SUDO test -f "${dir}/SHA256SUMS"; then
+    if $SUDO sh -c "cd '$dir' && sha256sum -c SHA256SUMS >/dev/null 2>&1"; then
+      status_line "Checksums" "OK" "SHA256SUMS verified"
+    else
+      status_line "Checksums" "FAIL" "SHA256SUMS mismatch"
+      fail_count=$((fail_count+1))
+    fi
+  else
+    status_line "Checksums" "WARN" "no SHA256SUMS in artifact"
+  fi
+
+  if [[ "$fail_count" -eq 0 ]]; then
+    status_line "Verification" "OK" "artifact is readable and consistent"
+  else
+    status_line "Verification" "FAIL" "${fail_count} problem(s); do not rely on this backup"
+  fi
+  echo
+  echo "This is not a restore test. Prove restore end-to-end with: $(toolkit_cmd docker-restore-rehearsal)"
+  ui_box_end
+  [[ "$fail_count" -eq 0 ]]
+}
+
+# Interactively pick a host artifact directory (default: newest). Non-interactive
+# / -y runs always use the newest set.
+docker_pick_host_dir() {
+  local latest reply root
+  latest="$(docker_latest_host_dir || true)"
+  root="$(docker_backup_site_root)"
+  if [[ -z "$latest" ]]; then
+    return 1
+  fi
+  if [[ ! -t 0 || "${ASSUME_YES:-0}" -eq 1 ]]; then
+    printf '%s\n' "$latest"
+    return 0
+  fi
+  read -r -p "Backup set to restore [$(basename "$latest")]: " reply >&2
+  if [[ -z "$reply" ]]; then
+    printf '%s\n' "$latest"
+  elif [[ "$reply" = /* ]]; then
+    printf '%s\n' "$reply"
+  else
+    printf '%s/%s\n' "$root" "$reply"
+  fi
+}
+
+# Restore the current site from an exported host artifact. kind: db|full.
+# Copies the artifact back into the container backups dir, then runs bench
+# restore. Takes an emergency backup first (destructive operation).
+docker_restore() {
+  require_sudo
+  local kind="${1:-full}" site bench dir prefix pw
+  local db_base f
+  site="$(docker_site_name)"
+  bench="$(docker_container_bench_dir)"
+
+  docker_list_backups
+  echo
+  dir="$(docker_pick_host_dir || true)"
+  if [[ -z "$dir" ]] || ! $SUDO test -d "$dir"; then
+    err "No host backup set selected. Create one with: $(toolkit_cmd backup)"
+    return 1
+  fi
+  prefix="$(basename "$dir")"
+
+  if ! $SUDO test -f "${dir}/${prefix}-database.sql.gz"; then
+    err "Selected set has no database file: ${dir}/${prefix}-database.sql.gz"
+    return 1
+  fi
+
+  echo
+  warn "Restore OVERWRITES the running ${site} database (Docker engine, ${prefix})."
+  if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+    local answer
+    read -r -p "Type the site name (${site}) to confirm restore: " answer
+    [[ "$answer" == "$site" ]] || { err "Confirmation did not match. Restore cancelled."; return 1; }
+  fi
+
+  pw="$(docker_db_root_password)"
+  db_base="${prefix}-database.sql.gz"
+
+  log "Creating emergency backup before restore"
+  docker_backup true || warn "Emergency backup failed; continuing only because restore was explicitly confirmed."
+
+  # Copy the chosen artifact into the container backups dir so bench can read it.
+  docker_compose cp "${dir}/${db_base}" "backend:${bench}/sites/${site}/private/backups/${db_base}" >/dev/null 2>&1 \
+    || { err "Could not copy the database backup into the container."; return 1; }
+
+  local -a restore_args=(--site "$site" --force restore "sites/${site}/private/backups/${db_base}"
+                         --db-root-username root --db-root-password "$pw")
+
+  if [[ "$kind" == "full" ]]; then
+    for f in "${prefix}-files.tar" "${prefix}-files.tar.gz"; do
+      if $SUDO test -f "${dir}/${f}"; then
+        docker_compose cp "${dir}/${f}" "backend:${bench}/sites/${site}/private/backups/${f}" >/dev/null 2>&1 \
+          && restore_args+=(--with-public-files "sites/${site}/private/backups/${f}")
+        break
+      fi
+    done
+    for f in "${prefix}-private-files.tar" "${prefix}-private-files.tar.gz"; do
+      if $SUDO test -f "${dir}/${f}"; then
+        docker_compose cp "${dir}/${f}" "backend:${bench}/sites/${site}/private/backups/${f}" >/dev/null 2>&1 \
+          && restore_args+=(--with-private-files "sites/${site}/private/backups/${f}")
+        break
+      fi
+    done
+  fi
+
+  log "Restoring ${kind} backup ${prefix} into ${site}"
+  if ! docker_compose exec -T backend bench "${restore_args[@]}"; then
+    err "bench restore failed. Inspect with: $(toolkit_cmd logs)"
+    return 1
+  fi
+
+  log "Running post-restore migrate"
+  docker_bench --site "$site" migrate || warn "migrate reported an issue; review the logs."
+  docker_bench --site "$site" clear-cache >/dev/null 2>&1 || true
+  docker_runtime_restart || true
+
+  ok "Restore completed for ${site} from set ${prefix}."
+  docker_verify_access
+  return 0
+}
+
+# Sanitize a value for the flat evidence record.
+docker_rehearsal_sanitize() {
+  printf '%s' "${1:-}" | tr '\n\t' '  ' | sed -E 's/[^A-Za-z0-9._:@/+=, -]/-/g' | cut -c1-240
+}
+
+# Automated Docker restore rehearsal (the containerized analog of the native
+# disposable-VM rehearsal). Proves the exported artifact actually restores into a
+# CLEAN, throwaway site running on the SAME image, WITHOUT touching the live site,
+# then records dated evidence. Safe to run on the production stack because the
+# rehearsal uses a temporary site that is dropped afterward.
+docker_restore_rehearsal() {
+  require_sudo
+  local site bench dir prefix pw temp_site db_base rc=0 apps="" recorded_at result
+
+  site="$(docker_site_name)"
+  bench="$(docker_container_bench_dir)"
+
+  ui_box_start "Docker Restore Rehearsal"
+  status_line "Site" "INFO" "$site"
+  status_line "Mode" "INFO" "$(docker_mode_label)"
+  echo "Restores an exported backup into a throwaway site on the same image, then drops it."
+  echo
+
+  if ! docker_wait_service_running backend 60; then
+    status_line "Stack" "FAIL" "backend container is not running; start it first ($(toolkit_cmd start))"
+    ui_box_end
+    return 1
+  fi
+
+  # Use the newest verified artifact; take a fresh one when none exists yet.
+  dir="$(docker_latest_host_dir || true)"
+  if [[ -z "$dir" ]]; then
+    log "No host backup yet; taking one for the rehearsal"
+    docker_backup false || { status_line "Backup" "FAIL" "could not create a backup to rehearse"; ui_box_end; return 1; }
+    dir="$(docker_latest_host_dir || true)"
+  fi
+  if [[ -z "$dir" ]] || ! $SUDO test -d "$dir"; then
+    status_line "Backup" "FAIL" "no host backup available"
+    ui_box_end
+    return 1
+  fi
+  prefix="$(basename "$dir")"
+  status_line "Backup set" "OK" "$prefix"
+
+  if ! docker_backup_verify "$dir" >/dev/null 2>&1; then
+    status_line "Artifact integrity" "FAIL" "verification failed; aborting rehearsal"
+    ui_box_end
+    return 1
+  fi
+  status_line "Artifact integrity" "OK" "database/tar/checksums verified"
+
+  pw="$(docker_db_root_password)"
+  db_base="${prefix}-database.sql.gz"
+  temp_site="rehearsal-$(date +%s).localhost"
+  status_line "Rehearsal site" "INFO" "$temp_site (temporary)"
+
+  # Copy the artifact DB into the container so bench can read it.
+  if ! docker_compose cp "${dir}/${db_base}" "backend:${bench}/sites/${site}/private/backups/${db_base}" >/dev/null 2>&1; then
+    status_line "Prepare" "FAIL" "could not stage the backup into the container"
+    ui_box_end
+    return 1
+  fi
+
+  log "Creating throwaway site ${temp_site}"
+  if ! docker_compose exec -T backend bench new-site \
+      --mariadb-user-host-login-scope='%' \
+      --admin-password "rehearsal-$(date +%s)" \
+      --db-root-username root \
+      --db-root-password "$pw" \
+      --no-mariadb-socket \
+      "$temp_site" >/dev/null 2>&1; then
+    # Retry without --no-mariadb-socket for older bench versions.
+    docker_compose exec -T backend bench new-site \
+      --mariadb-user-host-login-scope='%' \
+      --admin-password "rehearsal-$(date +%s)" \
+      --db-root-username root \
+      --db-root-password "$pw" \
+      "$temp_site" >/dev/null 2>&1 || rc=1
+  fi
+
+  if [[ "$rc" -eq 0 ]]; then
+    log "Restoring ${prefix} into ${temp_site}"
+    if docker_compose exec -T backend bench --site "$temp_site" --force restore \
+        "sites/${site}/private/backups/${db_base}" \
+        --db-root-username root --db-root-password "$pw" >/dev/null 2>&1; then
+      apps="$(docker_compose exec -T backend bench --site "$temp_site" list-apps 2>/dev/null | tr -d '\r' | tr '\n' ' ' | sed -E 's/ +/ /g; s/^ +| +$//g')"
+      if printf '%s' "$apps" | grep -qi 'erpnext'; then
+        status_line "Restore into clean site" "OK" "erpnext present after restore"
+      else
+        status_line "Restore into clean site" "WARN" "restored, but erpnext not detected (apps: ${apps:-none})"
+        rc=1
+      fi
+    else
+      status_line "Restore into clean site" "FAIL" "bench restore failed on the rehearsal site"
+      rc=1
+    fi
+  else
+    status_line "Rehearsal site" "FAIL" "could not create the throwaway site"
+  fi
+
+  # Always try to drop the throwaway site so no residue is left behind.
+  log "Dropping throwaway site ${temp_site}"
+  if docker_compose exec -T backend bench drop-site "$temp_site" \
+      --db-root-username root --db-root-password "$pw" --force --no-backup >/dev/null 2>&1; then
+    status_line "Cleanup" "OK" "throwaway site dropped"
+  else
+    status_line "Cleanup" "WARN" "could not drop ${temp_site}; drop it manually"
+  fi
+
+  recorded_at="$(date -Is 2>/dev/null || date)"
+  if [[ "$rc" -eq 0 ]]; then
+    result="full_restore_into_clean_site_completed"
+    status_line "Rehearsal" "OK" "backup restores into a clean site of the same image"
+  else
+    result="restore_rehearsal_failed"
+    status_line "Rehearsal" "FAIL" "see messages above"
+  fi
+
+  $SUDO mkdir -p "$(dirname "$DOCKER_RESTORE_REHEARSAL_FILE")"
+  $SUDO tee "$DOCKER_RESTORE_REHEARSAL_FILE" >/dev/null <<EOF_DOCKER_REHEARSAL
+DOCKER_RESTORE_REHEARSAL_STATUS=$([[ "$rc" -eq 0 ]] && echo OK || echo FAIL)
+DOCKER_RESTORE_REHEARSAL_RECORDED_AT=${recorded_at}
+DOCKER_RESTORE_REHEARSAL_SITE=${site}
+DOCKER_RESTORE_REHEARSAL_MODE=$(docker_mode_label)
+DOCKER_RESTORE_REHEARSAL_BACKUP_SET=${prefix}
+DOCKER_RESTORE_REHEARSAL_TEMP_SITE=${temp_site}
+DOCKER_RESTORE_REHEARSAL_IMAGE=${DOCKER_ERPNEXT_IMAGE}
+DOCKER_RESTORE_REHEARSAL_IMAGE_DIGEST=${DOCKER_ERPNEXT_IMAGE_DIGEST:-unrecorded}
+DOCKER_RESTORE_REHEARSAL_APPS=$(docker_rehearsal_sanitize "$apps")
+DOCKER_RESTORE_REHEARSAL_RESULT=${result}
+DOCKER_RESTORE_REHEARSAL_TOOLKIT_VERSION=${SCRIPT_VERSION:-unknown}
+EOF_DOCKER_REHEARSAL
+  $SUDO chown root:root "$DOCKER_RESTORE_REHEARSAL_FILE" 2>/dev/null || true
+  $SUDO chmod 600 "$DOCKER_RESTORE_REHEARSAL_FILE" 2>/dev/null || true
+  status_line "Evidence" "INFO" "$DOCKER_RESTORE_REHEARSAL_FILE"
+  ui_next "$(toolkit_cmd docker-restore-evidence)" "$(toolkit_cmd backup-status)"
+  ui_box_end
+  [[ "$rc" -eq 0 ]]
+}
+
+# Show the recorded Docker restore-rehearsal evidence.
+docker_show_restore_evidence() {
+  require_sudo
+  ui_box_start "Docker Restore Rehearsal Evidence"
+  status_line "Site" "INFO" "$(docker_site_name)"
+  status_line "Record file" "$($SUDO test -f "$DOCKER_RESTORE_REHEARSAL_FILE" && echo OK || echo WARN)" "$DOCKER_RESTORE_REHEARSAL_FILE"
+  if $SUDO test -f "$DOCKER_RESTORE_REHEARSAL_FILE"; then
+    local status
+    status="$(docker_env_value "$DOCKER_RESTORE_REHEARSAL_FILE" DOCKER_RESTORE_REHEARSAL_STATUS)"
+    status_line "Last rehearsal" "$([[ "$status" == OK ]] && echo OK || echo WARN)" "${status:-unknown}"
+    echo
+    echo "Recorded metadata:"
+    $SUDO sed -E 's/(PASSWORD|SECRET|TOKEN|KEY)=.*/=[REDACTED]/' "$DOCKER_RESTORE_REHEARSAL_FILE" | sed 's/^/  /'
+  else
+    echo
+    echo "No Docker restore rehearsal recorded yet. Run:"
+    echo "  $(toolkit_cmd docker-restore-rehearsal)"
+  fi
+  ui_box_end
 }
 
 # Install an app inside the running container. Container app installs are not

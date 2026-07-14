@@ -33,6 +33,24 @@ integration CI job is promoted to a hard release gate.
   one-keystroke default and is unchanged; `DOCKER_MODE` is persisted and shown in
   the preflight, `engine-status`, and `site-config`. Trusted production HTTPS
   (Traefik + Let's Encrypt) lands in the next phase.
+- **Docker disaster recovery (P3).** A Docker volume is not a backup, so the
+  Docker engine now produces **durable, off-volume host artifacts** and can prove
+  they restore. `backup`/`backup-files` (and the new `docker-backup` alias) take a
+  `bench backup` inside the `backend` container and then **export** the newest set
+  out of the `sites` volume to a root-owned artifact directory
+  (`/var/backups/erpnext-dev/docker/<site>/<set>/`) containing the database, file
+  archives, `site_config` JSON, a `MANIFEST.txt` (site, image, digest,
+  `frappe_docker` SHA, timestamp), and a `SHA256SUMS`. `backup-verify`
+  (`docker-backup-verify`) checks gzip/tar/JSON integrity and the checksum
+  manifest without restoring. `restore-db`/`restore-full` (`docker-restore`)
+  restore a chosen host artifact back into the running site, taking an emergency
+  backup first and requiring the site name as confirmation. `docker-restore-rehearsal`
+  is an automated, non-destructive DR proof: it verifies the newest artifact,
+  restores it into a **throwaway site on the same image**, confirms `erpnext` is
+  present, drops the throwaway site, and records dated evidence
+  (`/etc/erpnext-dev/docker-restore-rehearsal.env`); `docker-restore-evidence`
+  prints it. `list-backups` now shows durable host sets alongside in-container
+  backups. Off-VM shipment and object storage for these artifacts land in P6.
 
 ## v1.10.4 - Debian mkcert host hint fix (trusted local HTTPS works on Debian)
 

@@ -339,6 +339,11 @@ run_post_restore_maintenance() {
 restore_site_database() {
   require_sudo
 
+  if deployment_engine_is_docker; then
+    docker_restore db
+    return
+  fi
+
   local bench_dir db_input db_file db_quoted db_admin_user_quoted db_admin_password_quoted
   bench_dir="$(require_site_environment)" || return 1
 
@@ -374,6 +379,11 @@ restore_site_database() {
 
 restore_site_full() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    docker_restore full
+    return
+  fi
 
   local bench_dir db_input public_input private_input db_file public_file private_file cmd
   local db_quoted public_quoted private_quoted db_admin_user_quoted db_admin_password_quoted
@@ -772,6 +782,12 @@ verify_backup_file() {
 
 verify_latest_backup_set() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    docker_backup_verify
+    return
+  fi
+
   local latest_lines prefix db_file public_file private_file config_file completeness ok_count fail_count
   require_site_environment >/dev/null || return 1
 
