@@ -1,3 +1,20 @@
+## v1.10.4 - Debian mkcert host hint fix (trusted local HTTPS works on Debian)
+
+### Fixed
+
+- **Linux host mkcert hint now installs `mkcert` itself.** For a Linux host the
+  guidance printed by the local-SSL wizard, `mkcert-guide`, and
+  `environment-check` only installed `libnss3-tools` and left the actual
+  `mkcert` install as a vague comment. On Debian (and other apt hosts without
+  mkcert preinstalled) this meant `mkcert -install` / `mkcert -cert-file ...`
+  failed with "command not found". The hint now runs
+  `sudo apt update && sudo apt install -y mkcert libnss3-tools` (all supported
+  hosts -- Debian 12/13, Ubuntu 24.04/26.04 -- ship `mkcert` in apt), keeps
+  `libnss3-tools` for the `certutil` that `mkcert -install` needs to trust the
+  Firefox/Chromium NSS store, and points to the official binary as a fallback
+  for hosts that lack the package. README Linux row and the host-OS output
+  test updated to match.
+
 ## v1.10.3 - Docker guided wizard parity (post-install flow, IP/domain access, port conflicts)
 
 ### Added

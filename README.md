@@ -18,7 +18,7 @@ It supports two setup paths:
 > the path to **9.8+** are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.10.3 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.10.4 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -105,7 +105,7 @@ over HTTP on the published port.
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.10.3" && \
+VERSION="v1.10.4" && \
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
@@ -124,7 +124,7 @@ Or install step by step ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.10.3"
+VERSION="v1.10.4"
 BASE="https://github.com/ReyadWeb/erpnext-dev-installer/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -288,7 +288,7 @@ Every host command then matches your OS:
 
 | Host OS | Hosts file | Edit tool | Resolve test | mkcert install |
 |---------|-----------|-----------|--------------|----------------|
-| **Linux** | `/etc/hosts` | `sudo sed`/`tee` | `getent hosts` | `apt` + `libnss3-tools` |
+| **Linux** | `/etc/hosts` | `sudo sed`/`tee` | `getent hosts` | `apt install -y mkcert libnss3-tools` |
 | **macOS** | `/etc/hosts` | `sudo sed -i ''` | `dscacheutil` | `brew install mkcert nss` |
 | **Windows** | `…\drivers\etc\hosts` | PowerShell (Admin) | `Resolve-DnsName` | `choco install mkcert` |
 | **Windows + WSL2** | `…\drivers\etc\hosts` | PowerShell (Admin) | `Resolve-DnsName` | `choco install mkcert` |

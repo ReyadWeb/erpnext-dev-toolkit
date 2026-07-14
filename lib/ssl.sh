@@ -1755,8 +1755,13 @@ host_mkcert_install_hint() {
       echo "  choco install mkcert           # or: scoop bucket add extras; scoop install mkcert"
       ;;
     *)
-      echo "  sudo apt update && sudo apt install -y libnss3-tools"
-      echo "  # then install mkcert from your package manager or the official release binary"
+      # Debian 12/13 and Ubuntu 24.04/26.04 all ship mkcert in apt. libnss3-tools
+      # provides certutil, which `mkcert -install` needs to trust the local CA in
+      # the Firefox/Chromium NSS store (not just the system trust store) -- without
+      # it `mkcert -install` cannot register the CA and browsers keep warning.
+      echo "  sudo apt update && sudo apt install -y mkcert libnss3-tools"
+      echo "  # No apt 'mkcert' package? Install libnss3-tools (above) plus the official"
+      echo "  # binary: https://github.com/FiloSottile/mkcert/releases (chmod +x, move to PATH)"
       ;;
   esac
 }
