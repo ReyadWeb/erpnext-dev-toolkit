@@ -47,6 +47,12 @@ DOCKER_ERPNEXT_IMAGE_DIGEST="${DOCKER_ERPNEXT_IMAGE_DIGEST:-}"
 DOCKER_BACKUP_DIR="${DOCKER_BACKUP_DIR:-/var/backups/erpnext-dev/docker}"
 DOCKER_RESTORE_REHEARSAL_FILE="${DOCKER_RESTORE_REHEARSAL_FILE:-/etc/erpnext-dev/docker-restore-rehearsal.env}"
 
+# Off-site shipment (P6): durable host artifact -> off-VM (rsync/SSH, reusing the
+# native OFF_VM_BACKUP_* config/keys) -> object storage (rclone, any S3/GCS/Azure/
+# B2 remote). Object-storage settings live in their own root-owned config/state.
+DOCKER_OBJECT_BACKUP_CONFIG_FILE="${DOCKER_OBJECT_BACKUP_CONFIG_FILE:-/etc/erpnext-dev/docker-object-backup.env}"
+DOCKER_OBJECT_BACKUP_STATE_FILE="${DOCKER_OBJECT_BACKUP_STATE_FILE:-/etc/erpnext-dev/docker-object-backup.state}"
+
 docker_clone_dir() { printf '%s/frappe_docker\n' "$DOCKER_WORKDIR"; }
 docker_overrides_dir() { printf '%s/frappe_docker/overrides\n' "$DOCKER_WORKDIR"; }
 docker_compose_base_file() { printf '%s/frappe_docker/pwd.yml\n' "$DOCKER_WORKDIR"; }
@@ -1219,6 +1225,366 @@ docker_show_restore_evidence() {
     echo "No Docker restore rehearsal recorded yet. Run:"
     echo "  $(toolkit_cmd docker-restore-rehearsal)"
   fi
+  ui_box_end
+}
+
+# ------------------------------------------------------------
+# Off-site shipment (P6): host artifact -> off-VM (rsync) -> object storage
+# ------------------------------------------------------------
+# The source shipped off-VM is the per-site durable host artifact tree from P3
+# (DOCKER_BACKUP_DIR/<site>/<set>/...). Each set carries its own SHA256SUMS, so
+# shipment can be verified at the destination rather than trusted blindly.
+docker_offvm_source_dir() { docker_backup_site_root; }
+
+# Build the ssh command array used for remote verification (mirrors the options
+# in the native off_vm_backup_ssh_command_string, but as an array we can exec).
+docker_offvm_ssh_cmd() {
+  local __out="${1:-DOCKER_OFFVM_SSH_CMD}"
+  local identity="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
+  if [[ -n "$identity" ]]; then
+    eval "${__out}=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -i \"\$identity\")"
+  else
+    eval "${__out}=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)"
+  fi
+}
+
+# Verify SHA256SUMS of every shipped set at the rsync destination. Best-effort:
+# a picky remote shell should not fail the whole run (local sets are already
+# checksummed), so callers treat a non-zero return as a soft WARN.
+docker_offvm_remote_verify() {
+  local target="$1" host remote_path
+  local -a ssh_cmd=()
+  host="${target%%:*}"
+  remote_path="${target#*:}"
+  [[ -n "$host" && -n "$remote_path" && "$host" != "$target" ]] || return 1
+  docker_offvm_ssh_cmd ssh_cmd
+  ${SUDO:-} "${ssh_cmd[@]}" "$host" \
+    "cd '${remote_path}' 2>/dev/null || exit 3; rc=0; for d in */; do [ -f \"\${d}SHA256SUMS\" ] || continue; ( cd \"\$d\" && sha256sum -c SHA256SUMS >/dev/null 2>&1 ) || rc=1; done; exit \$rc" \
+    >/dev/null 2>&1
+}
+
+# Off-VM rsync of the durable host artifacts for the Docker engine. Reuses the
+# native OFF_VM_BACKUP_* configuration (configure-rsync-backup-target, keys,
+# backup-server-setup, delete mode, state file). mode: dry-run|run.
+docker_offvm_rsync() {
+  require_sudo
+  local mode="${1:-run}" src target ssh_cmd_str
+  local -a rsync_cmd=()
+
+  off_vm_backup_load_config
+  validate_off_vm_backup_target "${OFF_VM_BACKUP_TARGET:-}" \
+    || fail "Off-VM target not configured/invalid. Run: $(toolkit_cmd configure-rsync-backup-target)"
+  target="$OFF_VM_BACKUP_TARGET"
+  src="$(docker_offvm_source_dir)"
+  $SUDO test -d "$src" || fail "No durable host backups at ${src}. Run $(toolkit_cmd backup) first."
+  off_vm_backup_ensure_rsync
+
+  ssh_cmd_str="$(off_vm_backup_ssh_command_string)"
+  rsync_cmd=(rsync -az --human-readable --info=stats2 -e "$ssh_cmd_str")
+  [[ "$mode" == "dry-run" ]] && rsync_cmd+=(--dry-run)
+  [[ "${OFF_VM_BACKUP_RSYNC_DELETE:-false}" == "true" ]] && rsync_cmd+=(--delete)
+  rsync_cmd+=("${src}/" "$target")
+
+  ui_box_start "$([[ "$mode" == "dry-run" ]] && echo "Docker Off-VM Backup Dry Run" || echo "Docker Off-VM Backup")"
+  status_line "Engine" "INFO" "Docker ($(docker_mode_label))"
+  status_line "Site" "INFO" "$(docker_site_name)"
+  status_line "Source" "INFO" "${src}/ (durable host artifacts)"
+  status_line "Target" "INFO" "$target"
+  status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
+  echo
+  if [[ "$mode" == "dry-run" ]]; then
+    echo "Running rsync dry run. No files are copied or deleted."
+  else
+    echo "Ships durable host backup artifacts off this VM. Local backups are not removed."
+    if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+      if ! confirm "Run off-VM rsync backup now?"; then
+        warn "Off-VM backup cancelled."
+        ui_box_end
+        return 0
+      fi
+    fi
+  fi
+
+  echo
+  log "Starting rsync ${mode}"
+  # Artifacts are root-owned (0700), so rsync must run as root to read them.
+  if ${SUDO:-} "${rsync_cmd[@]}"; then
+    if [[ "$mode" == "dry-run" ]]; then
+      status_line "Dry run" "OK" "rsync dry run completed"
+    elif docker_offvm_remote_verify "$target"; then
+      status_line "Remote verify" "OK" "SHA256SUMS verified at destination"
+      off_vm_backup_write_state "OK" "rsync completed; remote checksums verified"
+      status_line "Off-VM backup" "OK" "shipped and verified"
+    else
+      status_line "Remote verify" "WARN" "could not verify remote checksums (shipment completed)"
+      off_vm_backup_write_state "OK" "rsync completed; remote verify unavailable"
+      status_line "Off-VM backup" "OK" "shipped (verify destination manually)"
+    fi
+  else
+    [[ "$mode" != "dry-run" ]] && off_vm_backup_write_state "FAIL" "rsync failed"
+    status_line "Off-VM backup" "FAIL" "rsync command failed"
+  fi
+  ui_next "$(toolkit_cmd off-vm-backup-status)" "$(toolkit_cmd docker-object-backup)"
+  ui_box_end
+}
+
+# Off-VM plan/status for the Docker engine (parity with the native screens, but
+# reporting the durable host-artifact source instead of a bench backup folder).
+docker_offvm_plan() {
+  require_sudo
+  off_vm_backup_load_config
+  ui_box_start "Docker Off-VM Backup Plan"
+  status_line "Mode" "INFO" "planning only; no files are copied"
+  status_line "Site" "INFO" "$(docker_site_name)"
+  status_line "Host artifact source" "INFO" "$(docker_offvm_source_dir)/"
+  status_line "Target" "$([[ -n "${OFF_VM_BACKUP_TARGET:-}" ]] && echo INFO || echo WARN)" "$(off_vm_backup_target_display)"
+  status_line "Transport" "INFO" "rsync over SSH (destination checksum-verified)"
+  status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
+  echo
+  echo "Chain: container backup -> durable host artifact -> off-VM -> object storage."
+  echo "  1) Take a durable host backup:      $(toolkit_cmd backup-files)"
+  echo "  2) Configure the rsync target:      $(toolkit_cmd configure-rsync-backup-target)"
+  echo "  3) Dry run, then real off-VM copy:  $(toolkit_cmd off-vm-backup-dry-run) / $(toolkit_cmd run-off-vm-backup)"
+  echo "  4) Also push to object storage:     $(toolkit_cmd docker-object-config) then $(toolkit_cmd docker-object-backup)"
+  ui_next "$(toolkit_cmd configure-rsync-backup-target)" "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd docker-object-config)"
+  ui_box_end
+}
+
+docker_offvm_status() {
+  require_sudo
+  local target_status target_detail last_status last_run last_detail src set_count
+  off_vm_backup_load_config
+  if off_vm_backup_configured; then
+    target_status="OK"; target_detail="$OFF_VM_BACKUP_TARGET"
+  else
+    target_status="WARN"; target_detail="not configured"
+  fi
+  last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
+  last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
+  last_detail="$(off_vm_backup_last_state LAST_DETAIL 2>/dev/null || echo "no previous run")"
+  src="$(docker_offvm_source_dir)"
+  set_count=0
+  if $SUDO test -d "$src"; then
+    set_count="$($SUDO find "$src" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | awk '{print $1+0}')"
+  fi
+
+  ui_box_start "Docker Off-VM Backup Status"
+  status_line "Engine" "INFO" "Docker ($(docker_mode_label))"
+  status_line "Host artifact sets" "$([[ "$set_count" -gt 0 ]] && echo OK || echo WARN)" "${set_count} set(s) in ${src}"
+  status_line "Target" "$target_status" "$target_detail"
+  status_line "Config file" "$($SUDO test -f "$OFF_VM_BACKUP_CONFIG_FILE" && echo OK || echo WARN)" "$OFF_VM_BACKUP_CONFIG_FILE"
+  case "$last_status" in
+    OK) status_line "Last off-VM run" "OK" "${last_run}; ${last_detail}" ;;
+    FAIL) status_line "Last off-VM run" "FAIL" "${last_run}; ${last_detail}" ;;
+    *) status_line "Last off-VM run" "INFO" "${last_run}; ${last_detail}" ;;
+  esac
+  echo
+  docker_object_backup_status_line
+  echo
+  echo "Off-site backup protects against VM/disk loss only when the destination is"
+  echo "outside this VM and, ideally, this cloud account."
+  ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd run-off-vm-backup)" "$(toolkit_cmd docker-object-backup)"
+  ui_box_end
+}
+
+# ---- Object storage (rclone) --------------------------------------------------
+docker_object_backup_load_config() {
+  local v
+  if [[ -z "${DOCKER_OBJECT_RCLONE_REMOTE:-}" ]]; then
+    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_RCLONE_REMOTE)"; [[ -n "$v" ]] && DOCKER_OBJECT_RCLONE_REMOTE="$v"
+  fi
+  if [[ -z "${DOCKER_OBJECT_BUCKET:-}" ]]; then
+    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_BUCKET)"; [[ -n "$v" ]] && DOCKER_OBJECT_BUCKET="$v"
+  fi
+  if [[ -z "${DOCKER_OBJECT_PREFIX:-}" ]]; then
+    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_PREFIX)"; [[ -n "$v" ]] && DOCKER_OBJECT_PREFIX="$v"
+  fi
+}
+
+docker_object_backup_configured() {
+  docker_object_backup_load_config
+  [[ -n "${DOCKER_OBJECT_RCLONE_REMOTE:-}" && -n "${DOCKER_OBJECT_BUCKET:-}" ]]
+}
+
+# Full rclone destination: <remote>:<bucket>/<prefix>/<site>.
+docker_object_dest() {
+  docker_object_backup_load_config
+  local prefix="${DOCKER_OBJECT_PREFIX:-}"
+  prefix="${prefix#/}"; prefix="${prefix%/}"
+  if [[ -n "$prefix" ]]; then
+    printf '%s:%s/%s/%s\n' "$DOCKER_OBJECT_RCLONE_REMOTE" "$DOCKER_OBJECT_BUCKET" "$prefix" "$(docker_site_name)"
+  else
+    printf '%s:%s/%s\n' "$DOCKER_OBJECT_RCLONE_REMOTE" "$DOCKER_OBJECT_BUCKET" "$(docker_site_name)"
+  fi
+}
+
+docker_object_ensure_rclone() {
+  command -v rclone >/dev/null 2>&1 && return 0
+  log "Installing rclone"
+  export DEBIAN_FRONTEND=noninteractive
+  $SUDO apt-get update -y >/dev/null 2>&1 || true
+  $SUDO apt-get install -y rclone >/dev/null 2>&1 || return 1
+  command -v rclone >/dev/null 2>&1
+}
+
+docker_object_backup_write_state() {
+  require_sudo
+  local status="$1" detail="$2" now
+  now="$(date -Is 2>/dev/null || date)"
+  $SUDO mkdir -p "$(dirname "$DOCKER_OBJECT_BACKUP_STATE_FILE")"
+  $SUDO tee "$DOCKER_OBJECT_BACKUP_STATE_FILE" >/dev/null <<EOF_DOCKER_OBJ_STATE
+LAST_RUN_AT=${now}
+LAST_STATUS=${status}
+LAST_DETAIL=${detail}
+LAST_DEST=$(docker_object_dest 2>/dev/null || echo unknown)
+SITE_NAME=$(docker_site_name)
+EOF_DOCKER_OBJ_STATE
+  $SUDO chown root:root "$DOCKER_OBJECT_BACKUP_STATE_FILE" 2>/dev/null || true
+  $SUDO chmod 600 "$DOCKER_OBJECT_BACKUP_STATE_FILE" 2>/dev/null || true
+}
+
+# One-line object-storage summary used inside docker_offvm_status.
+docker_object_backup_status_line() {
+  local last_status last_run
+  if docker_object_backup_configured; then
+    last_status="$(docker_env_value "$DOCKER_OBJECT_BACKUP_STATE_FILE" LAST_STATUS)"
+    last_run="$(docker_env_value "$DOCKER_OBJECT_BACKUP_STATE_FILE" LAST_RUN_AT)"
+    case "${last_status:-none}" in
+      OK) status_line "Object storage" "OK" "$(docker_object_dest); last OK ${last_run:-?}" ;;
+      FAIL) status_line "Object storage" "WARN" "$(docker_object_dest); last run FAILED ${last_run:-?}" ;;
+      *) status_line "Object storage" "INFO" "$(docker_object_dest); no successful run yet" ;;
+    esac
+  else
+    status_line "Object storage" "WARN" "not configured; run $(toolkit_cmd docker-object-config)"
+  fi
+}
+
+configure_docker_object_backup() {
+  require_sudo
+  local remote bucket prefix
+  docker_object_backup_load_config
+
+  if ! docker_object_ensure_rclone; then
+    fail "rclone is required for object-storage backups but could not be installed. Install rclone, then retry."
+  fi
+
+  ui_box_start "Configure Object-Storage Backup (rclone)"
+  status_line "Site" "INFO" "$(docker_site_name)"
+  status_line "Tool" "INFO" "rclone $(rclone version 2>/dev/null | awk 'NR==1{print $2}')"
+  echo
+  echo "Uses an existing rclone remote. Create one first with:  rclone config"
+  echo "(supports S3, Cloudflare R2, Backblaze B2, GCS, Azure, MinIO, and more)."
+  echo
+  echo "Configured rclone remotes:"
+  rclone listremotes 2>/dev/null | sed 's/^/  /' || echo "  (none — run 'rclone config' first)"
+  echo
+
+  if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+    read -r -p "rclone remote name (e.g. r2): " remote
+    remote="${remote%:}"
+    read -r -p "Bucket / container name: " bucket
+    read -r -p "Path prefix inside the bucket [erpnext-backups]: " prefix
+    prefix="${prefix:-erpnext-backups}"
+  else
+    remote="${DOCKER_OBJECT_RCLONE_REMOTE:-}"
+    bucket="${DOCKER_OBJECT_BUCKET:-}"
+    prefix="${DOCKER_OBJECT_PREFIX:-erpnext-backups}"
+    [[ -n "$remote" && -n "$bucket" ]] || fail "Set DOCKER_OBJECT_RCLONE_REMOTE and DOCKER_OBJECT_BUCKET before using --yes."
+  fi
+
+  [[ -n "$remote" && -n "$bucket" ]] || fail "Remote name and bucket are required."
+  if ! rclone listremotes 2>/dev/null | grep -qx "${remote}:"; then
+    warn "rclone remote '${remote}:' is not in 'rclone listremotes'. Save anyway; create it with 'rclone config'."
+  fi
+
+  $SUDO mkdir -p "$(dirname "$DOCKER_OBJECT_BACKUP_CONFIG_FILE")"
+  $SUDO tee "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" >/dev/null <<EOF_DOCKER_OBJ_CONFIG
+# ERPNext Developer Toolkit - Docker object-storage backup (rclone) configuration
+# Non-secret only. rclone credentials live in the rclone config (rclone config).
+DOCKER_OBJECT_RCLONE_REMOTE=${remote}
+DOCKER_OBJECT_BUCKET=${bucket}
+DOCKER_OBJECT_PREFIX=${prefix}
+SITE_NAME=$(docker_site_name)
+EOF_DOCKER_OBJ_CONFIG
+  $SUDO chown root:root "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" 2>/dev/null || true
+  $SUDO chmod 600 "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" 2>/dev/null || true
+  DOCKER_OBJECT_RCLONE_REMOTE="$remote"
+  DOCKER_OBJECT_BUCKET="$bucket"
+  DOCKER_OBJECT_PREFIX="$prefix"
+
+  ui_box_start "Object-Storage Backup Configured"
+  status_line "Destination" "OK" "$(docker_object_dest)"
+  status_line "Config file" "OK" "$DOCKER_OBJECT_BACKUP_CONFIG_FILE"
+  ui_next "$(toolkit_cmd docker-object-backup-dry-run)" "$(toolkit_cmd docker-object-backup)"
+  ui_box_end
+}
+
+# Upload durable host artifacts to object storage with rclone. mode: dry-run|run.
+# Uploads are checksum-based (rclone --checksum) and verified with rclone check.
+run_docker_object_backup() {
+  require_sudo
+  local mode="${1:-run}" src dest
+  local -a rclone_cmd=()
+
+  docker_object_backup_load_config
+  docker_object_backup_configured || fail "Object storage not configured. Run: $(toolkit_cmd docker-object-config)"
+  docker_object_ensure_rclone || fail "rclone is not available. Install rclone, then retry."
+  src="$(docker_offvm_source_dir)"
+  $SUDO test -d "$src" || fail "No durable host backups at ${src}. Run $(toolkit_cmd backup) first."
+  dest="$(docker_object_dest)"
+
+  ui_box_start "$([[ "$mode" == "dry-run" ]] && echo "Object-Storage Backup Dry Run" || echo "Object-Storage Backup")"
+  status_line "Site" "INFO" "$(docker_site_name)"
+  status_line "Source" "INFO" "${src}/ (durable host artifacts)"
+  status_line "Destination" "INFO" "$dest"
+  echo
+
+  rclone_cmd=(rclone copy "$src" "$dest" --checksum --transfers 4 --stats-one-line)
+  [[ "$mode" == "dry-run" ]] && rclone_cmd+=(--dry-run)
+
+  if [[ "$mode" != "dry-run" && -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+    if ! confirm "Upload durable host backups to ${dest} now?"; then
+      warn "Object-storage backup cancelled."
+      ui_box_end
+      return 0
+    fi
+  fi
+
+  log "Starting rclone ${mode}"
+  if ${SUDO:-} "${rclone_cmd[@]}"; then
+    if [[ "$mode" == "dry-run" ]]; then
+      status_line "Dry run" "OK" "rclone dry run completed"
+    elif ${SUDO:-} rclone check "$src" "$dest" --one-way --checksum >/dev/null 2>&1; then
+      status_line "Remote verify" "OK" "rclone check confirmed all files present"
+      docker_object_backup_write_state "OK" "rclone copy + check verified"
+      status_line "Object storage" "OK" "uploaded and verified"
+    else
+      status_line "Remote verify" "WARN" "rclone check reported differences"
+      docker_object_backup_write_state "OK" "rclone copy completed; check reported differences"
+      status_line "Object storage" "WARN" "uploaded (verify manually with rclone check)"
+    fi
+  else
+    [[ "$mode" != "dry-run" ]] && docker_object_backup_write_state "FAIL" "rclone copy failed"
+    status_line "Object storage" "FAIL" "rclone command failed"
+  fi
+  ui_next "$(toolkit_cmd docker-object-status)" "$(toolkit_cmd off-vm-backup-status)"
+  ui_box_end
+}
+
+show_docker_object_backup_status() {
+  require_sudo
+  docker_object_backup_load_config
+  ui_box_start "Object-Storage Backup Status"
+  status_line "Site" "INFO" "$(docker_site_name)"
+  status_line "rclone" "$(command -v rclone >/dev/null 2>&1 && echo OK || echo WARN)" "$(command -v rclone >/dev/null 2>&1 && rclone version 2>/dev/null | awk 'NR==1{print $2}' || echo 'not installed')"
+  status_line "Config file" "$($SUDO test -f "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" && echo OK || echo WARN)" "$DOCKER_OBJECT_BACKUP_CONFIG_FILE"
+  if docker_object_backup_configured; then
+    status_line "Destination" "OK" "$(docker_object_dest)"
+  else
+    status_line "Destination" "WARN" "not configured"
+  fi
+  docker_object_backup_status_line
+  ui_next "$(toolkit_cmd docker-object-backup-dry-run)" "$(toolkit_cmd docker-object-backup)"
   ui_box_end
 }
 

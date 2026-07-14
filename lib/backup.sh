@@ -2276,6 +2276,12 @@ EOF_OFF_VM_GUIDED_CONFIG
 run_off_vm_backup_rsync() {
   local mode="$1" backup_dir latest_lines completeness ssh_cmd_str rsync_cmd=()
   require_sudo
+
+  if deployment_engine_is_docker; then
+    docker_offvm_rsync "$mode"
+    return
+  fi
+
   require_site_environment >/dev/null || return 1
   off_vm_backup_load_config
   validate_off_vm_backup_target "${OFF_VM_BACKUP_TARGET:-}" || fail "Off-VM backup target is not configured or invalid. Run configure-rsync-backup-target first."
@@ -2339,6 +2345,12 @@ run_off_vm_backup_rsync() {
 
 show_off_vm_backup_plan() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    docker_offvm_plan
+    return
+  fi
+
   require_site_environment >/dev/null || return 1
   off_vm_backup_load_config
   ui_box_start "Off-VM Backup Plan"
@@ -2427,6 +2439,12 @@ EOF_OFF_VM_CONFIG
 
 show_off_vm_backup_status() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    docker_offvm_status
+    return
+  fi
+
   local target_status target_detail last_status last_run last_detail latest_lines completeness
   off_vm_backup_load_config
   if off_vm_backup_configured; then

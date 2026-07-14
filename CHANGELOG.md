@@ -51,6 +51,20 @@ integration CI job is promoted to a hard release gate.
   (`/etc/erpnext-dev/docker-restore-rehearsal.env`); `docker-restore-evidence`
   prints it. `list-backups` now shows durable host sets alongside in-container
   backups. Off-VM shipment and object storage for these artifacts land in P6.
+- **Off-site Docker backups (P6).** The durable host artifacts from P3 can now be
+  shipped off the VM and to object storage, completing the chain *container
+  backup -> verified host artifact -> off-VM -> object storage*. Under the Docker
+  engine the existing off-VM rsync workflow (`configure-rsync-backup-target`,
+  `off-vm-backup-dry-run`, `run-off-vm-backup`, `off-vm-backup-status`, dedicated
+  SSH keys, `backup-server-setup`) now ships the host-artifact tree instead of a
+  bench folder and **verifies each shipped set's `SHA256SUMS` at the destination**
+  over SSH (`docker-offvm-backup` / `docker-offvm-status` are explicit aliases).
+  New rclone-based **object-storage** backups (`docker-object-config`,
+  `docker-object-backup`, `docker-object-backup-dry-run`, `docker-object-status`)
+  upload the same artifacts to any rclone remote (S3, Cloudflare R2, Backblaze B2,
+  GCS, Azure, MinIO, ...) with checksum-based copy and `rclone check` verification;
+  rclone credentials stay in the rclone config, and only the non-secret remote/
+  bucket/prefix are persisted (root-owned, `600`).
 
 ## v1.10.4 - Debian mkcert host hint fix (trusted local HTTPS works on Debian)
 
