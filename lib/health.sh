@@ -8,7 +8,7 @@ _ERPNEXT_DEV_HEALTH_LOADED=1
 # ============================================================
 
 health_check_unit_paths() {
-  echo "/etc/systemd/system/${HEALTH_CHECK_SERVICE}"
+  echo  Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."/etc/systemd/system/${HEALTH_CHECK_SERVICE}"
   echo "/etc/systemd/system/${HEALTH_CHECK_TIMER}"
 }
 
@@ -720,7 +720,7 @@ show_release_readiness() {
   local syntax_status syntax_detail installed runtime ssl_pair ssl_status ssl_detail
   local ufw_status fail2ban_status latest_lines completeness release_state rehearsal_pair rehearsal_state rehearsal_detail go_pair go_state go_detail
 
-  if bash -n "$0" >/dev/null 2>&1; then
+  if bash -n  Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."$0" >/dev/null 2>&1; then
     syntax_status="OK"; syntax_detail="bash syntax valid"
   else
     syntax_status="FAIL"; syntax_detail="bash syntax check failed"
@@ -760,7 +760,7 @@ show_release_readiness() {
   [[ "${fail2ban_status%%|*}" == "OK" ]] || release_state="WARN"
   [[ "$completeness" == "complete" ]] || release_state="WARN"
 
-  ui_box_start "Release Readiness / Final QA"
+  ui_box_start "Release Readiness / Final QA Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."
   status_line "Script version" "INFO" "${SCRIPT_VERSION}"
   status_line "Syntax" "$syntax_status" "$syntax_detail"
   status_line "Site" "INFO" "${SITE_NAME} (${SITE_NAME_SOURCE})"

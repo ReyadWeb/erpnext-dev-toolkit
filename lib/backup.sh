@@ -1544,7 +1544,7 @@ validate_off_vm_backup_target() {
 off_vm_backup_ssh_command_string() {
   local ssh_cmd=() identity="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
   ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
-  if [[ -n "$identity" ]]; then
+  if [[ -n  Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."$identity" ]]; then
     [[ "$identity" != *[[:space:]]* ]] || fail "SSH identity file path must not contain spaces: $identity"
     [[ -r "$identity" ]] || fail "SSH identity file is not readable: $identity"
     ssh_cmd+=(-i "$identity")

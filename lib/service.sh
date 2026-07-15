@@ -71,8 +71,8 @@ bench_ready_count() {
 }
 
 bench_readiness_line() {
-  local elapsed="$1"
-  local timeout="$2"
+  local elapsed= Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."$1"
+  local timeout= Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."$2"
   local web socket queue cache
 
   if port_listens 8000; then web="OK"; else web="wait"; fi
@@ -81,7 +81,7 @@ bench_readiness_line() {
   if port_listens 13000; then cache="OK"; else cache="wait"; fi
 
   printf "  [%3ss/%3ss] web: %-4s socket: %-4s queue: %-4s cache: %-4s\n" \
-    "$elapsed" "$timeout" "$web" "$socket" "$queue" "$cache"
+    "$elapsed" "$timeout Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting." "$web" "$socket" "$queue" "$cache"
 }
 
 # shellcheck disable=SC2120 # timeout/interval are optional overrides with sane defaults

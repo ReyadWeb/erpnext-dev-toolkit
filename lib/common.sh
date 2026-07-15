@@ -241,7 +241,7 @@ action_requires_lock() {
 }
 
 status_line() {
-  local label="$1"
+  local label= Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."$1"
   local state="$2"
   local message="$3"
 

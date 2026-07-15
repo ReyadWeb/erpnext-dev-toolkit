@@ -71,7 +71,7 @@ production_ops_services_menu() {
     echo "2) Start ERPNext service"
     echo "3) Stop ERPNext service"
     echo "4) Restart ERPNext service"
-    echo "5) Wait for ERPNext readiness"
+    echo "5) Wait for ERPNext readiness Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."
     echo "6) Service logs"
     echo "7) Follow service logs"
     echo "8) Service recovery plan"
@@ -134,7 +134,7 @@ production_ops_backups_menu() {
 production_ops_restore_menu() {
   require_sudo
   while true; do
-    ui_box_start "$(production_ops_breadcrumb_title "Restore Readiness and Rehearsal")"
+    ui_box_start "$(production_ops_breadcrumb_title "Restore Readiness and Rehearsal Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting.")"
     echo "1) Restore rehearsal status"
     echo "2) Restore rehearsal guide"
     echo "3) Restore rehearsal wizard"
@@ -148,7 +148,7 @@ production_ops_restore_menu() {
     local restore_choice=""
     menu_read_choice restore_choice
     case "$restore_choice" in
-      1) show_restore_rehearsal_status; pause_after_screen "Press Enter to return to Restore Readiness..." ;;
+      1) show_restore_rehearsal_status; pause_after_screen "Press Enter to return to Restore Readiness... Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting." ;;
       2) show_restore_rehearsal_guide; pause_after_screen "Press Enter to return to Restore Readiness..." ;;
       3) restore_rehearsal_wizard; pause_after_screen "Press Enter to return to Restore Readiness..." ;;
       4) show_restore_preflight; pause_after_screen "Press Enter to return to Restore Readiness..." ;;

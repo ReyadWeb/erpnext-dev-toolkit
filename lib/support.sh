@@ -809,5 +809,5 @@ show_command_audit() {
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-rehearsal-status, restore-rehearsal-record, restore-preflight, restore-db, restore-full"
   status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility, install-payments, install-webshop, install-builder, install-lms, install-education, install-wiki, install-print-designer, install-drive, install-raven, advanced-app-tools"
   ui_box_end
-  ui_next "$(toolkit_cmd release-readiness)" "$(toolkit_cmd help)"
+  ui_next "$(toolkit_cmd release-readiness) Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting." "$(toolkit_cmd help)"
 }

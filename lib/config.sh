@@ -793,7 +793,7 @@ show_config_summary() {
   status_line "VM IP" "INFO" "$vm_ip"
   status_line "Config file" "INFO" "$CONFIG_FILE"
   ui_box_end
-  ui_next "$(toolkit_cmd setup-wizard)" "$(toolkit_cmd production-readiness)"
+  ui_next "$(toolkit_cmd setup-wizard)" "$(toolkit_cmd production-readiness) Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."
 }
 show_domain_config() {
   local prod_domain="${PRODUCTION_DOMAIN:-not set}"
@@ -905,7 +905,7 @@ show_production_domain_plan() {
   echo "  - The ERPNext site/domain mapping is planned before go-live."
   echo
   echo "Useful commands:"
-  echo "  $(toolkit_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-readiness)"
+  echo "  $(toolkit_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-readiness) Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."
   echo "  $(toolkit_cmd_env "PRODUCTION_DOMAIN=${record_name}" production-domain-plan)"
   echo "  $(toolkit_cmd production-ssl-guide)"
   echo "============================================================"

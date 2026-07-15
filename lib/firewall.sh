@@ -46,7 +46,7 @@ show_production_firewall_plan() {
   echo
   echo "Safe check commands:"
   echo "  ss -lntp"
-  echo "  $(toolkit_cmd public-vm-readiness)"
+  echo "  $(toolkit_cmd public-vm-readiness) Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."
   echo "  $(toolkit_cmd production-ssl-plan)"
   echo "============================================================"
 }
@@ -142,8 +142,8 @@ show_firewall_hardening_status() {
   echo
   echo "External validation from your workstation, not from inside the VM:"
   echo "  curl -I https://${domain}"
-  echo "  curl -I --connect-timeout 10 http://${vm_ip}:8000"
-  echo "  curl -I --connect-timeout 10 http://${vm_ip}:9000"
+  echo "  curl -I --connect-timeout 10 http://${vm_ip}:8000 Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."
+  echo "  curl -I --connect-timeout 10 http://${vm_ip}:9000 Next steps: check `docker compose ps`, then `docker compose logs --tail=100`, and increase readiness timeout if the DB is still booting."
   echo "Expected: HTTPS returns 200/redirect through Cloudflare/Nginx; 8000/9000 time out or are blocked."
   echo
   echo "Internal validation from this VM:"
