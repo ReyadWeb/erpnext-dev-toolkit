@@ -916,17 +916,43 @@ monitoring expectations, and an update process. Use the checklist in
 
 ## Additional resources
 
-Learn more about ERPNext and the Frappe Framework that power this stack:
+This toolkit installs and operates the stack; the resources below teach the
+products and communities around it. Prefer official sources when you can.
+
+### Learn (docs)
 
 - ERPNext Documentation: https://docs.erpnext.com
 - Frappe Framework Documentation: https://frappeframework.com/docs
-- Awesome Frappe (curated apps and tools): https://github.com/gavindsouza/awesome-frappe
+- Frappe Framework User Guide: https://docs.frappe.io/framework
+- ERPNext User Manual: https://docs.frappe.io/erpnext
+
+### Train (courses)
+
+- Frappe School (courses catalog): https://school.frappe.io
+- Frappe School course list: https://school.frappe.io/lms/courses
+- Frappe School overview: https://frappe.io/school
+- Featured: [Full-stack App Development with Frappe Framework](https://school.frappe.io/lms/courses/frappe-developer-certification)
+
+### Build (source & deployment)
+
 - ERPNext on GitHub: https://github.com/frappe/erpnext
 - Frappe Framework on GitHub: https://github.com/frappe/frappe
+- Official Frappe Docker: https://github.com/frappe/frappe_docker
+- Official Frappe Helm chart: https://github.com/frappe/helm
+- Bench (CLI): https://github.com/frappe/bench
+
+### Community & discovery
+
+- Awesome Frappe (curated apps and tools): https://github.com/gavindsouza/awesome-frappe
+- Frappe Forum: https://discuss.frappe.io
+- Frappe Cloud (hosted option): https://frappecloud.com
+- This toolkit — Discussions: https://github.com/ReyadWeb/erpnext-dev-toolkit/discussions
+- This toolkit — Contributing: https://github.com/ReyadWeb/erpnext-dev-toolkit/blob/main/CONTRIBUTING.md
 
 This toolkit wraps and complements those upstream projects; it does not replace
-them. For application-level questions (accounting, HR, manufacturing, custom apps,
-the Frappe ORM and APIs), the official docs above are the source of truth.
+them. For accounting, HR, manufacturing, custom apps, the Frappe ORM/APIs, or
+certification paths, use the official docs and Frappe School above as the source
+of truth.
 
 ---
 
