@@ -3,26 +3,16 @@
 Track starter and community-facing work for
 [`ReyadWeb/erpnext-dev-toolkit`](https://github.com/ReyadWeb/erpnext-dev-toolkit).
 
-## Create the board (one-time, maintainer)
+**Live board (public):** https://github.com/users/ReyadWeb/projects/2  
+**Title:** ERPNext Dev Toolkit — Community  
+Linked to this repository; seeded with the starter `good first issue` tickets below.
 
-GitHub Projects requires the `project` / `read:project` token scopes. From a
-machine where `gh` can refresh auth:
+Suggested columns / views: **Backlog → Ready → In progress → Done**, with filters for
+`label:good first issue`, `label:help wanted`, and `label:status: accepted`.
 
-```bash
-gh auth refresh -s project,read:project
-gh project create --owner ReyadWeb --title "ERPNext Dev Toolkit — Community"
-```
+---
 
-Then link the repository under the project’s **Settings → Linked repositories**,
-and add a view filtered to:
-
-- `label:good first issue`
-- `label:help wanted`
-- `label:status: accepted`
-
-Suggested columns: **Backlog → Ready → In progress → Done**.
-
-## Seed issues (already opened)
+## Seed issues
 
 | # | Title |
 | --- | --- |
@@ -32,8 +22,17 @@ Suggested columns: **Backlog → Ready → In progress → Done**.
 | [#22](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/22) | docs: improve object-backup help descriptions |
 | [#23](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/23) | docs: link SUPPORT/CONTRIBUTING from next-steps surfaces |
 
-After the board exists, add these items (and new `good first issue` tickets) to
-**Ready**.
+Add new `good first issue` / `help wanted` tickets to **Ready** as they are opened.
+
+## Maintainer notes (recreate / re-link)
+
+GitHub Projects requires the `project` / `read:project` token scopes:
+
+```bash
+gh auth refresh -s project,read:project
+gh project create --owner ReyadWeb --title "ERPNext Dev Toolkit — Community"
+# link repo + add items — see gh project item-add
+```
 
 ## Contributor entry points
 
