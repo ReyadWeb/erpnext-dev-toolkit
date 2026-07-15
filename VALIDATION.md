@@ -233,3 +233,32 @@ are proven recoverable (restore or rehearsal must pass). Record the outcome with
 See [`TESTING.md`](TESTING.md) for the broader per-feature test matrix and
 hermetic checks, and [`DEPLOYMENT-ARCHITECTURE.md`](DEPLOYMENT-ARCHITECTURE.md)
 §5 for the engine contract these commands implement.
+
+---
+
+## 5. Example provider sign-off (fictional / redacted)
+
+Use this as a template when filing a [compatibility report](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/new?template=compatibility-report.yml)
+or a Discussions → Show and tell installation report. **Never include secrets.**
+
+- **Provider:** DigitalOcean
+- **Plan:** Basic Droplet (2 vCPU / 4 GB RAM)
+- **OS:** Debian 13
+- **Engine:** Native
+- **Off-site:** Object storage via rclone (provider Spaces / S3-compatible)
+- **Toolkit:** v1.14.0+
+- **Outcome:** PASS (example only)
+
+| # | Check | Result |
+|---|-------|:------:|
+| 1 | Integrity: `verify-signature` GOODSIG + `verify-toolkit` OK | PASS |
+| 2 | Install + runtime healthy | PASS |
+| 3 | Site reachable on hostname | PASS |
+| 4 | HTTPS valid + styled login | PASS |
+| 5 | `engine-diagnostics` clean | PASS |
+| 6 | Backup created + verified | PASS |
+| 7 | Restore / restore rehearsal succeeded | PASS |
+| 8 | Off-site (rsync and/or object storage) verified | PASS |
+| 9 | Exposure guardrail / firewall correct | PASS |
+| 10 | Upgrade/rollback contract verbs behave as documented | PASS |
+| 11 | Evidence bundle collected | PASS |

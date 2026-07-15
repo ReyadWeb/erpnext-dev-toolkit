@@ -1,3 +1,15 @@
+## Unreleased
+
+### Fixed / improved (community issues #19–#23)
+
+- Debian 13 troubleshooting notes in README; preflight OS table corrected to include Debian 13.
+- Example fictional provider sign-off appendix in VALIDATION.md (compatibility-report template).
+- Docker readiness timeout now prints actionable next steps (`engine-status`, `logs`,
+  `doctor`, `DOCKER_READY_TIMEOUT` tip) — inspired by community PR #24 (@Krshs90);
+  rejected broken global-inject approach in PR #25.
+- Clearer engine-agnostic object-backup help strings; SUPPORT/CONTRIBUTING pointers
+  in `help` and Docker next-steps.
+
 ## v1.14.0 - Community polish (contributor architecture)
 
 Lands the contributor-facing foundation for a public-friendly repository: community

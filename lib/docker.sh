@@ -752,7 +752,11 @@ docker_ready() {
     now="$(date +%s)"
     if [[ "$now" -ge "$deadline" ]]; then
       warn "ERPNext did not respond within ${DOCKER_READY_TIMEOUT}s."
-      echo "Check container logs with: $(toolkit_cmd logs)"
+      echo "Next steps:"
+      echo "  Status:       $(toolkit_cmd engine-status)"
+      echo "  Logs:         $(toolkit_cmd logs)"
+      echo "  Diagnostics:  $(toolkit_cmd doctor)"
+      echo "  Cold start?   Increase DOCKER_READY_TIMEOUT (current ${DOCKER_READY_TIMEOUT}s) and retry."
       return 1
     fi
     sleep 5
@@ -2523,6 +2527,9 @@ docker_show_next_steps() {
   echo "  Guided setup:   $(toolkit_cmd docker-https-wizard)"
   echo "  Status:         $(toolkit_cmd docker-https-status)"
   echo "  Exposure check: $(toolkit_cmd docker-production-exposure)"
+  echo
+  echo "Help & contributing: SUPPORT.md / CONTRIBUTING.md"
+  echo "  https://github.com/ReyadWeb/erpnext-dev-toolkit/blob/main/SUPPORT.md"
   echo "============================================================"
 }
 

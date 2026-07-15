@@ -234,7 +234,7 @@ sudo erpnext-dev install-preflight
 
 | Check | Behavior |
 |---|---|
-| Unsupported OS (only Ubuntu 24.04 / 26.04) | blocks |
+| Unsupported OS (not Ubuntu 24.04 / 26.04 or Debian 13) | blocks |
 | No sudo/root permission | blocks |
 | No internet / GitHub access | blocks |
 | CPU below 2 cores | blocks |
@@ -247,6 +247,15 @@ Recommended: 4 vCPU, 8 GB RAM, 60–80 GB SSD. If a VM is unsafe, the toolkit
 prints a red `INSTALL BLOCKED` summary explaining what to fix. An expert-only
 override (`ERPNEXT_ALLOW_UNSAFE_INSTALL=true`) exists for disposable test VMs and
 should not be used otherwise.
+
+### Debian 13 notes (native)
+
+Debian 13 (trixie) uses the same Debian-family apt/systemd install path as Ubuntu.
+Most steps are identical; the usual friction points are:
+
+- **Local HTTPS / mkcert:** install `mkcert` **and** `libnss3-tools` (`apt install -y mkcert libnss3-tools`) before `local-ssl-wizard` / `mkcert -install`, so browsers that use the NSS trust store can trust the certificate.
+- **Field validation:** use [`VALIDATION.md`](VALIDATION.md) for go-live checks (firewall, HTTPS, backups) on a real Debian VPS.
+- **Docker on Debian:** the toolkit’s Docker engine install prefers Docker’s official apt repository; OS differences are largely abstracted once the daemon is up.
 
 ---
 
