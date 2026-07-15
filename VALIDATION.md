@@ -1,6 +1,6 @@
 # Combined go-live validation runbook
 
-**Applies to:** v1.11.0+ · **Scope:** one end-to-end go-live test that validates
+**Applies to:** v1.14.0+ · **Scope:** one end-to-end go-live test that validates
 **both** deployment engines on real infrastructure:
 
 - **Native engine** — ERPNext/Frappe installed directly on a fresh Ubuntu/Debian VPS.
@@ -37,7 +37,7 @@ its evidence, then tear it down before Phase B, since both bind `:80/:443`.
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.12.0"
+VERSION="v1.14.0"
 BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz" && cd "erpnext-dev-${VERSION}"

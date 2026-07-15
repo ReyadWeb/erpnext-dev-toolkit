@@ -1,19 +1,34 @@
-## Unreleased - Phase 1 contributor architecture
+## v1.14.0 - Community polish (contributor architecture)
+
+Lands the contributor-facing foundation for a public-friendly repository: community
+health docs, structured Issue/PR templates, Discussions and private vulnerability
+reporting, starter `good first issue`s, and maintainer development/release guides.
+No runtime engine behavior changes. (v1.13.0 remains planned for Debian native CI
+coverage.)
+
+Also includes post-v1.12.0 banner/diagram refreshes already on `main`.
 
 ### Added
 
 - **Community health docs:** `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor
   Covenant 2.1), and `SUPPORT.md` (bugs vs questions vs private security).
-- **GitHub contributor infrastructure:** bug + feature Issue Forms, issue-template
-  contact links, pull-request template, and `.github/CODEOWNERS` (maintainer defaults
-  + security/release paths).
-- **SECURITY.md** now prefers GitHub private vulnerability reporting and points
+- **GitHub contributor infrastructure:** bug, feature, compatibility-report, and
+  documentation-improvement Issue Forms; issue-template contact links; pull-request
+  template; and `.github/CODEOWNERS` (maintainer defaults + security/release paths).
+- **Contributor guides:** `docs/DEVELOPMENT.md` (canonical
+  `./scripts/validate-release.sh` gate + layout), `docs/RELEASE-PROCESS.md`
+  (tag → validate → integrate → sign/publish), and `docs/COMMUNITY-BOARD.md`
+  (how to create/link the community project board; seed `good first issue` list
+  #19–#23).
+- **SECURITY.md** prefers GitHub private vulnerability reporting and points
   reporters away from public Issues for vulns.
-- **Phase 2 contributor docs + forms:** compatibility-report and documentation-
-  improvement Issue Forms; `docs/DEVELOPMENT.md` (local gate and layout);
-  `docs/RELEASE-PROCESS.md` (tag → validate → integrate → sign/publish);
-  `docs/COMMUNITY-BOARD.md` (how to create/link the community project board;
-  seed `good first issue` list).
+- Repository settings enabled for Discussions and private vulnerability reporting;
+  contributor label taxonomy; five real `good first issue` tickets.
+
+### Changed
+
+- README / ROADMAP link the new community docs; SUPPORT routes compatibility and
+  documentation reports to the new forms.
 
 ## v1.12.0 - Rebrand to erpnext-dev-toolkit + multi-engine parity, UX, docs, and security polish
 
