@@ -1,3 +1,17 @@
+## Unreleased
+
+### Improved (Firefox Snap/Flatpak trust — LocalWP-inspired)
+
+- **`browser-trust-guide` now includes a host-side NSS import one-liner** that
+  discovers Firefox profiles under `~/.mozilla/firefox`,
+  `~/snap/firefox/common/.mozilla/firefox`, and
+  `~/.var/app/org.mozilla.firefox/.mozilla/firefox`, then imports the mkcert
+  `rootCA.pem` with `certutil` into each. This covers the common case where
+  `mkcert -install` reports success but Snap/Flatpak Firefox still warns
+  "Not Secure" (pattern adapted from LocalWP Linux Repair).
+- Local HTTPS success screen points operators at that guide instead of only
+  re-running `mkcert -install`.
+
 ## v1.15.1 - Local HTTPS verification reliability + Firefox trust guidance
 
 A patch release that hardens local HTTPS verification so false greens no longer
