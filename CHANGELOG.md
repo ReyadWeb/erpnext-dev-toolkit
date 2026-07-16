@@ -1,3 +1,24 @@
+## Unreleased
+
+### Improved (Firefox Snap/Flatpak trust — LocalWP-inspired)
+
+- **`browser-trust-guide` now includes a host-side NSS import one-liner** that
+  discovers Firefox profiles under `~/.mozilla/firefox`,
+  `~/snap/firefox/common/.mozilla/firefox`, and
+  `~/.var/app/org.mozilla.firefox/.mozilla/firefox`, then imports the mkcert
+  `rootCA.pem` with `certutil` into each. This covers the common case where
+  `mkcert -install` reports success but Snap/Flatpak Firefox still warns
+  "Not Secure" (pattern adapted from LocalWP Linux Repair).
+- Profile discovery finds **any** directory with `cert9.db` (not only
+  `*.default*` / `*.release*`), so custom profiles such as "Original profile"
+  are covered; also documents `security.enterprise_roots.enabled=true` as the
+  fastest Snap/Mint fallback.
+- New HOST helper `scripts/host-firefox-trust-mkcert.sh` imports the mkcert
+  root CA into every discovered Firefox NSS profile and verifies with
+  `certutil -L` (avoids mangled multi-line pastes).
+- Local HTTPS success screen points operators at that guide instead of only
+  re-running `mkcert -install`.
+
 ## v1.15.2 - Debian 13 native install parity
 
 Patch release so guided native install on Debian 13 works like Ubuntu: fix the

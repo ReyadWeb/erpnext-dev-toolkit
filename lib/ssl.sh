@@ -1794,6 +1794,34 @@ print_host_mkcert_trust_copy_commands() {
   fi
 }
 
+# Host-side Firefox NSS import. mkcert -install often updates only the default
+# NSS DB; Snap/Flatpak Firefox keep separate profiles that still warn. Pattern
+# adapted from LocalWP Linux Repair: discover all Firefox profile roots, then
+# certutil -A the mkcert root CA with CA trust flags into each.
+print_host_firefox_nss_import_commands() {
+  cat <<'EOF_FF_NSS'
+  # Fully quit Firefox first, then run on the HOST (not the VM).
+  # Discover ANY profile that has an NSS DB (cert9.db) — including custom
+  # names like "Original profile", not only *.default* / *.release*.
+  sudo apt install -y libnss3-tools
+  CA="$(mkcert -CAROOT)/rootCA.pem"
+  test -f "$CA" || { echo "mkcert rootCA.pem not found; run mkcert -install first"; exit 1; }
+  for root in \
+      "$HOME/.mozilla/firefox" \
+      "$HOME/snap/firefox/common/.mozilla/firefox" \
+      "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox"; do
+    [ -d "$root" ] || continue
+    find "$root" -type f -name cert9.db -printf '%h\n' 2>/dev/null
+  done | sort -u | while read -r profile; do
+    echo "Importing mkcert CA into: $profile"
+    certutil -d "sql:$profile" -D -n "mkcert development CA" >/dev/null 2>&1 || true
+    certutil -d "sql:$profile" -A -t "CT,C,C" -n "mkcert development CA" -i "$CA" \
+      && certutil -d "sql:$profile" -L | grep -i mkcert || echo "  WARN: import/list failed for $profile"
+  done
+  echo "Done. Fully quit and reopen Firefox, then open your https:// site"
+EOF_FF_NSS
+}
+
 show_mkcert_local_ssl_guide() {
   local vm_ip cert_path key_path vm_ssh_user cmd_install cmd_configure cmd_verify cmd_disable cmd_env
   local host_label mkcert_deps host_dns_cmds host_dns_tests
@@ -2193,10 +2221,13 @@ print_local_https_success_next_steps() {
   print_local_https_cache_hint
   echo
   echo "Firefox shows \"Not Secure\" but Chrome/Brave are fine? Firefox uses its own"
-  echo "trust store. On the HOST: sudo apt install -y libnss3-tools && mkcert -install,"
-  echo "then fully restart Firefox. Full steps (incl. Snap/Flatpak Firefox):"
-  echo "  $(toolkit_cmd browser-trust-guide)"
+  echo "trust store (Snap/Flatpak profiles often miss mkcert -install)."
+  echo "On the HOST: fully quit Firefox, then import the mkcert CA into all"
+  echo "Firefox profiles (commands in: $(toolkit_cmd browser-trust-guide))."
   echo
+  echo "Quick HOST fallback: about:config -> security.enterprise_roots.enabled=true"
+  echo
+
   echo "Important: for local/dev VMs, use the Local VM firewall profile, not the Production profile."
 }
 
@@ -2621,24 +2652,45 @@ Local HTTPS has two possible trust modes:
 Firefox note (important):
    Firefox does NOT use the system trust store by default -- it keeps its own.
    So Firefox can still warn "Not Secure" / "Security Risk" even when Chrome,
-   Brave, or Edge already trust ${SITE_NAME}. Fix it on the HOST:
+   Brave, or Edge already trust ${SITE_NAME}. Fix it on the HOST.
 
-   a) Install certutil, re-run the CA install, then FULLY restart Firefox:
-        Linux:  sudo apt install -y libnss3-tools && mkcert -install
-        macOS:  brew install nss && mkcert -install
-      mkcert then registers its CA into each Firefox profile. A reload is not
-      enough -- quit every Firefox window and reopen.
+   Why mkcert -install can still leave Firefox broken:
+     mkcert often updates only the default NSS DB. Snap Firefox
+     (~/snap/firefox/...) and Flatpak Firefox
+     (~/.var/app/org.mozilla.firefox/...) use separate profiles that
+     mkcert may not reach -- even when it prints "already installed in
+     the Firefox trust store".
 
-   b) Snap/Flatpak Firefox (common on Ubuntu/Mint) uses a sandboxed profile that
-      mkcert cannot reach, so (a) may not stick. Use either:
-        - about:config -> set security.enterprise_roots.enabled = true -> restart
-          Firefox (it then trusts the OS trust store where mkcert put the CA), or
-        - Import manually: run 'mkcert -CAROOT' on the HOST to locate rootCA.pem,
-          then Firefox Settings -> Privacy & Security -> Certificates ->
-          View Certificates -> Authorities -> Import -> pick rootCA.pem ->
-          check "Trust this CA to identify websites".
+   Fastest fix (often enough on Mint/Ubuntu Snap Firefox):
+     1. In Firefox open: about:config
+     2. Set security.enterprise_roots.enabled = true
+     3. Fully quit Firefox (every window) and reopen https://${SITE_NAME}
+     Firefox then trusts the OS store where mkcert already installed the CA.
 
-   Not sure if Firefox is a Snap? Run:  snap list 2>/dev/null | grep -i firefox
+   Stronger fix (LocalWP-style: import the mkcert CA into EVERY Firefox
+   NSS profile, including Snap/Flatpak and custom names like "Original
+   profile"). Fully quit Firefox first, then run the HOST helper script
+   (safer than pasting a multi-line loop into the terminal):
+
+     # From a toolkit checkout on the HOST:
+     bash scripts/host-firefox-trust-mkcert.sh
+
+   Or the equivalent one-liner loop:
+
+$(print_host_firefox_nss_import_commands)
+
+   You must see at least one "Importing mkcert CA into: ..." line. If you see
+   none, Firefox's profile is elsewhere — check about:profiles in Firefox.
+
+   GUI import fallback:
+     mkcert -CAROOT -> open rootCA.pem in Firefox Settings ->
+     Privacy & Security -> Certificates -> Authorities -> Import ->
+     "Trust this CA to identify websites".
+
+   Check packaging:  snap list 2>/dev/null | grep -i firefox
+                     flatpak list 2>/dev/null | grep -i firefox
+                     ls -d ~/.mozilla/firefox/*/cert9.db \
+                           ~/snap/firefox/common/.mozilla/firefox/*/cert9.db 2>/dev/null
 
 Host checklist (${host_label}):
 ${host_dns_tests}

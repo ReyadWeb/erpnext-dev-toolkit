@@ -29,6 +29,7 @@ checksum_files=(
   scripts/run-shellcheck.sh
   scripts/check-module-consistency.sh
   scripts/build-release-bundle.sh
+  scripts/host-firefox-trust-mkcert.sh
   RELEASE-MANIFEST.txt
 )
 

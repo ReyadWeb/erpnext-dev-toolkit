@@ -20,6 +20,7 @@ scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
 scripts/build-release-bundle.sh
+scripts/host-firefox-trust-mkcert.sh
 lib/common.sh
 lib/config.sh
 lib/access.sh
