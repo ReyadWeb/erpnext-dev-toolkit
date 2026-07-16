@@ -131,6 +131,21 @@ curl_head_status() {
   curl "${curl_args[@]}" "$url" 2>/dev/null | awk 'NR==1 {print; exit}' || true
 }
 
+# Extract the numeric status code from an HTTP status line such as "HTTP/2 200"
+# or "HTTP/1.1 502 Bad Gateway".
+http_status_code() {
+  printf '%s' "${1:-}" | awk '{print $2}'
+}
+
+# True when a status line represents a successful or redirect response (2xx/3xx).
+# Used so health checks do not treat an error page (e.g. nginx 502 when the bench
+# backend is down) as a passing result just because *some* HTTP reply came back.
+http_status_ok() {
+  local code
+  code="$(http_status_code "${1:-}")"
+  [[ "$code" =~ ^[23][0-9][0-9]$ ]]
+}
+
 escape_hosts_regex() {
   printf '%s' "$1" | sed 's/[.[\*^$()+?{}|]/\\&/g'
 }

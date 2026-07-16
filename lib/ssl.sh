@@ -2521,17 +2521,57 @@ verify_local_ssl() {
   fi
 
   direct_head="$(curl_head_status "http://127.0.0.1:8000/" "" "" "" || true)"
-  [[ "$direct_head" == HTTP/* ]] && status_line "Bench backend" "OK" "$direct_head" || status_line "Bench backend" "WARN" "no response on 127.0.0.1:8000"
+  if http_status_ok "$direct_head"; then
+    status_line "Bench backend" "OK" "$direct_head"
+  elif [[ "$direct_head" == HTTP/* ]]; then
+    status_line "Bench backend" "WARN" "unexpected status: $direct_head"
+  else
+    status_line "Bench backend" "WARN" "no response on 127.0.0.1:8000"
+  fi
 
   http_head="$(curl_head_status "http://${SITE_NAME}/" "$SITE_NAME" 80 "127.0.0.1" || true)"
   https_head="$(curl_head_status "https://${SITE_NAME}/" "$SITE_NAME" 443 "127.0.0.1" || true)"
 
-  [[ "$http_head" == HTTP/* ]] && status_line "Local HTTP entry" "OK" "$http_head" || status_line "Local HTTP entry" "WARN" "no HTTP response through Nginx"
-  if [[ "$https_head" == HTTP/* ]]; then
+  if http_status_ok "$http_head"; then
+    status_line "Local HTTP entry" "OK" "$http_head"
+  elif [[ "$http_head" == HTTP/* ]]; then
+    status_line "Local HTTP entry" "WARN" "unexpected status: $http_head"
+  else
+    status_line "Local HTTP entry" "WARN" "no HTTP response through Nginx"
+  fi
+
+  if http_status_ok "$https_head"; then
     status_line "Local HTTPS entry" "OK" "$https_head"
+  elif [[ "$https_head" == HTTP/* ]]; then
+    # A reply came back but it is an error (e.g. 502 when the bench backend is
+    # down). Previously any HTTP/* line counted as OK, which masked outages.
+    status_line "Local HTTPS entry" "FAIL" "error status through Nginx: $https_head"
+    failed=1
   else
     status_line "Local HTTPS entry" "FAIL" "no HTTPS response through Nginx"
     failed=1
+  fi
+
+  # Active asset probe: the login HTML can return 200 while its CSS/JS bundles do
+  # not load, which is exactly what an "unstyled login" looks like. Pull a real
+  # preloaded asset URL from the page's Link header and fetch it. A 2xx here means
+  # assets ARE served (so a broken-looking page is browser cache -> hard refresh);
+  # anything else is a genuine asset problem with a concrete remediation.
+  if http_status_ok "$https_head"; then
+    local asset_path asset_head
+    asset_path="$(curl -k -sS -I --max-time 10 --resolve "${SITE_NAME}:443:127.0.0.1" "https://${SITE_NAME}/login" 2>/dev/null \
+      | tr -d '\r' | awk 'tolower($1)=="link:"{print}' | grep -oE '/assets/[^>,]+\.(css|js)' | head -n 1 || true)"
+    if [[ -n "$asset_path" ]]; then
+      asset_head="$(curl_head_status "https://${SITE_NAME}${asset_path}" "$SITE_NAME" 443 "127.0.0.1" || true)"
+      if http_status_ok "$asset_head"; then
+        status_line "Static assets" "OK" "${asset_head} (${asset_path##*/})"
+      else
+        status_line "Static assets" "WARN" "asset did not load: ${asset_head:-no response}"
+        echo "    Assets are not serving. Rebuild and clear cache, then re-verify:"
+        echo "      $(toolkit_cmd clear-cache)"
+        echo "      (or: sudo -iu ${FRAPPE_USER} bash -lc 'cd $(active_bench_dir) && bench build')"
+      fi
+    fi
   fi
 
   echo

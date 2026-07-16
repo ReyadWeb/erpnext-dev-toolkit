@@ -1,3 +1,18 @@
+## Unreleased
+
+### Fixed / improved (local HTTPS verification reliability)
+
+- **`verify-local-ssl` is now status-code aware.** The Bench-backend, local HTTP
+  entry, and local HTTPS entry checks previously treated *any* HTTP reply as a
+  pass, so an nginx `502` (bench backend down) was reported as "OK". They now
+  require a 2xx/3xx status; an error status through nginx is a hard FAIL.
+- **Active static-asset probe.** After the login page returns 2xx, the verifier
+  pulls a real preloaded CSS/JS bundle from the page's `Link` header and fetches
+  it. A 2xx confirms assets are served (so an unstyled page is browser cache →
+  hard refresh); otherwise it reports the failure with a concrete remediation
+  (`clear-cache` / `bench build`). This turns the previous vague hint into a
+  decisive diagnosis.
+
 ## v1.15.0 - Guided setup UX fixes + stateless GitHub token detection
 
 A focused reliability/UX release. The native local guided setup now flows
