@@ -1,6 +1,11 @@
-## Unreleased
+## v1.17.0 - Monitoring & incident engine
 
-### Added (v1.17.0 — Monitoring & incident engine)
+Minor release that persists health history and incidents, adds threshold /
+would-heal dry-run bookkeeping, and optional alert + OpenMetrics hooks. Still
+**monitor-only** — no service restarts (guarded healing is v1.18). See
+[`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).
+
+### Added
 
 - **Persistent metrics history** at `/var/lib/erpnext-dev/metrics/history.jsonl`
   (rolling) plus `current.json` on every snapshot.
