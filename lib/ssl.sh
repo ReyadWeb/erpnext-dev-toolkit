@@ -2669,7 +2669,13 @@ Firefox note (important):
 
    Stronger fix (LocalWP-style: import the mkcert CA into EVERY Firefox
    NSS profile, including Snap/Flatpak and custom names like "Original
-   profile"). Fully quit Firefox first, then run on the HOST:
+   profile"). Fully quit Firefox first, then run the HOST helper script
+   (safer than pasting a multi-line loop into the terminal):
+
+     # From a toolkit checkout on the HOST:
+     bash scripts/host-firefox-trust-mkcert.sh
+
+   Or the equivalent one-liner loop:
 
 $(print_host_firefox_nss_import_commands)
 

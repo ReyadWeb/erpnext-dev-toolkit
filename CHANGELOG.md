@@ -13,6 +13,9 @@
   `*.default*` / `*.release*`), so custom profiles such as "Original profile"
   are covered; also documents `security.enterprise_roots.enabled=true` as the
   fastest Snap/Mint fallback.
+- New HOST helper `scripts/host-firefox-trust-mkcert.sh` imports the mkcert
+  root CA into every discovered Firefox NSS profile and verifies with
+  `certutil -L` (avoids mangled multi-line pastes).
 - Local HTTPS success screen points operators at that guide instead of only
   re-running `mkcert -install`.
 
