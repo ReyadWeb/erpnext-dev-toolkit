@@ -18,7 +18,7 @@ It supports two setup paths:
 > the path to **9.8+** are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.15.3 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.16.0 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -116,7 +116,7 @@ over HTTP on the published port.
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.15.3" && \
+VERSION="v1.16.0" && \
 BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
@@ -139,7 +139,7 @@ Or install step by step ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.15.3"
+VERSION="v1.16.0"
 BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -276,7 +276,7 @@ list `sudo`).
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.15.3" && \
+VERSION="v1.16.0" && \
 BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
