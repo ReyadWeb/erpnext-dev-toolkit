@@ -175,7 +175,8 @@ After install, everything else uses the stable `erpnext-dev` command:
 
 | Task | Command |
 |---|---|
-| Daily operations dashboard | `sudo erpnext-dev production-ops-wizard` |
+| Operations health dashboard | `sudo erpnext-dev dashboard` |
+| Daily operations menus | `sudo erpnext-dev production-ops-wizard` |
 | Install optional Frappe apps | `sudo erpnext-dev app-install-wizard` |
 | Create / verify a backup | `sudo erpnext-dev backup-files && sudo erpnext-dev backup-verify` |
 | Set up an off-VM backup server | `sudo erpnext-dev backup-server-setup` (on the backup server) |
@@ -653,25 +654,33 @@ Repeat a rehearsal after major upgrades, migrations, or backup-policy changes.
 
 ## Production operations dashboard
 
-The dashboard is the day-to-day operator entry point for an installed VM. It
-shows a state summary, then groups tested commands into sections so you don't
-have to memorize command names:
+The **operations health dashboard** is the day-to-day status view for an
+installed VM (canonical HEALTHY / DEGRADED / CRITICAL / UNKNOWN model):
+
+```bash
+sudo erpnext-dev dashboard              # human snapshot
+sudo erpnext-dev dashboard --watch 5    # refresh every 5s
+sudo erpnext-dev dashboard --json       # CloudPanel / automation contract
+sudo erpnext-dev health-snapshot        # alias for dashboard --json
+sudo erpnext-dev dashboard --details    # extra resource cards
+sudo erpnext-dev dashboard --no-color   # or NO_COLOR=1
+```
+
+For menus that group tested maintenance commands:
 
 ```bash
 sudo erpnext-dev production-ops-wizard
 ```
 
-Sections cover system health, services and recovery, local and off-VM backups,
-restore readiness, health monitoring, security and firewall, HTTPS and
-certificates, go-live validation, support/diagnostics, and Final QA. Use the
-dashboard for interactive operations; use direct commands for automation.
+Architecture and future healing phases:
+[`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).
 
 ---
 
 ## Health monitoring
 
-A lightweight, read-only systemd health timer reports status and writes a local
-state file (it never restarts services or changes the site):
+A lightweight, **read-only** systemd health timer runs the same canonical
+snapshot used by `dashboard` (it never restarts services or changes the site):
 
 ```bash
 sudo erpnext-dev health-monitoring-wizard
@@ -680,10 +689,11 @@ sudo erpnext-dev configure-health-check-timer
 sudo erpnext-dev health-check-status
 ```
 
-It checks the ERPNext runtime, Nginx/MariaDB/Redis, web/socket ports, HTTPS,
-disk usage, latest backup completeness/age, the scheduled backup timer, UFW,
-Fail2Ban, and off-VM backup state. Results are recorded at
-`/etc/erpnext-dev/health-check.state`.
+It covers host resources (including MemAvailable), HTTP reachability/latency,
+engine-aware runtime (native or Docker), HTTPS, firewall, Fail2Ban, backups,
+and restore rehearsal. Results are recorded at
+`/etc/erpnext-dev/health-check.state` (compat) and optionally
+`/var/lib/erpnext-dev/metrics/current.json`.
 
 ---
 

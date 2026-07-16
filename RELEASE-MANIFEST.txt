@@ -15,7 +15,9 @@ SECURITY.md
 TESTING.md
 VALIDATION.md
 ROADMAP.md
+docs/HEALTH-ARCHITECTURE.md
 scripts/validate-release.sh
+scripts/test-health-snapshot.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
@@ -38,6 +40,7 @@ lib/docker.sh
 lib/engine.sh
 lib/install.sh
 lib/ops.sh
+lib/dashboard.sh
 lib/security.sh
 lib/update.sh
 .github/workflows/ci.yml

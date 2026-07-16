@@ -1,10 +1,26 @@
 ## Unreleased
 
+### Added (v1.16.0 — Operations Dashboard + canonical health snapshot)
+
+- **Canonical health snapshot** with states `HEALTHY` / `DEGRADED` /
+  `CRITICAL` / `UNKNOWN`, shared by `dashboard`, `health-snapshot --json`, and
+  `health-check`. Architecture: [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).
+- **`erpnext-dev dashboard`** — operations view (resources, application,
+  protection/DR, auto-healing placeholder). Supports `--watch [N]`, `--details`,
+  `--json`, and `--no-color` / `NO_COLOR=1`.
+- **Layered probes** — MemAvailable/load/swap/disk/inodes; HTTP ping + latency;
+  engine-aware native/Docker runtime; HTTPS, firewall, Fail2Ban, backups,
+  restore rehearsal, toolkit integrity.
+- Auto-healing remains **monitor / not armed** (no restarts). Healing modes
+  planned for v1.18.
+
 ### Docs
 
 - **ROADMAP Community / packaging polish score corrected** from a stale
   8.0 ("No CONTRIBUTING/templates yet") to **9.0 / 10**, matching the
   v1.14.0 community polish that already shipped.
+- ROADMAP phases **v1.16–v1.19** for dashboard → incidents → guarded healing →
+  external watchdog.
 
 ## v1.15.3 - Credentials menu + Firefox NSS host trust
 

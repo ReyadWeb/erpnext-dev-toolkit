@@ -60,7 +60,7 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/release-signing-policy.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/release-signing-policy.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -252,6 +252,14 @@ scripts/test-engine-select.sh >/tmp/erpnext-dev-engine-select.$$ 2>&1 || {
 }
 rm -f /tmp/erpnext-dev-engine-select.$$
 pass "deployment-engine selection passed"
+
+scripts/test-health-snapshot.sh >/tmp/erpnext-dev-health-snapshot.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-health-snapshot.$$
+  rm -f /tmp/erpnext-dev-health-snapshot.$$
+  fail "test-health-snapshot.sh failed"
+}
+rm -f /tmp/erpnext-dev-health-snapshot.$$
+pass "health snapshot status model passed"
 
 if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
   # shellcheck disable=SC2024 # redirect is intentionally to the invoking user's /tmp file, not root's

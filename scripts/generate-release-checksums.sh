@@ -23,6 +23,7 @@ checksum_files=(
   lib/engine.sh
   lib/install.sh
   lib/ops.sh
+  lib/dashboard.sh
   lib/security.sh
   lib/update.sh
   scripts/validate-release.sh

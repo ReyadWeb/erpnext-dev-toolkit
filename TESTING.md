@@ -886,13 +886,15 @@ Package checks:
 ```bash
 bash -n erpnext-dev.sh
 ./erpnext-dev.sh version
-./erpnext-dev.sh --help | grep -n "health-monitoring-wizard"
+./erpnext-dev.sh --help | grep -nE "dashboard|health-snapshot|health-monitoring-wizard"
 ./erpnext-dev.sh --help | grep -n "health-check-run-now"
 ./erpnext-dev.sh --help | grep -n "health-check-journal"
+scripts/test-health-snapshot.sh
 printf 'q
 ' | sudo ./erpnext-dev.sh health-monitoring-wizard
 printf 'q
 ' | sudo ./erpnext-dev.sh final-qa
+sudo ./erpnext-dev.sh dashboard --json | grep -E '"overall_status"|"schema_version"'
 unzip -l erpnext-dev-toolkit-v1.1.63.zip | grep "GITHUB-UPDATE" && echo "BAD" || echo "OK"
 ```
 

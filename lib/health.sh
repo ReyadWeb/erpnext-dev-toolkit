@@ -91,130 +91,45 @@ health_check_summary_pair() {
 run_health_check() {
   require_sudo
 
-  local overall="OK" installed runtime ssl_pair ssl_status ssl_detail disk_percent disk_state
-  local latest_lines completeness backup_age backup_state backup_msg redis_pair mariadb_pair nginx_pair
-  local off_last_status off_last_run
-
-  installed="$(install_state 2>/dev/null || echo "Unknown")"
-  runtime="$(runtime_state 2>/dev/null || echo "Unknown")"
-
-  if is_public_vm_workflow; then
-    ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo "WARN|not confirmed")"
-  else
-    ssl_pair="INFO|production HTTPS not required for local mode"
-  fi
-  ssl_status="${ssl_pair%%|*}"
-  ssl_detail="${ssl_pair#*|}"
-
-  disk_percent="$(df -P / 2>/dev/null | awk 'NR==2 {gsub("%", "", $5); print $5+0}' || echo 0)"
-  if [[ "$disk_percent" =~ ^[0-9]+$ && "$disk_percent" -ge "${HEALTH_CHECK_DISK_WARN_PERCENT}" ]]; then
-    disk_state="WARN"; overall="WARN"
-  else
-    disk_state="OK"
+  # Compact view of the canonical snapshot (single source of truth with dashboard).
+  if ! declare -F health_snapshot_collect >/dev/null 2>&1; then
+    fail "health snapshot unavailable; lib/dashboard.sh not loaded"
   fi
 
-  latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
-  if [[ -n "$latest_lines" ]]; then
-    completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
-  else
-    completeness="none"
-  fi
-  backup_age="$(health_backup_age_hours)"
-  backup_state="WARN"
-  backup_msg="${completeness}"
-  if [[ "$completeness" == "complete" ]]; then
-    backup_state="OK"
-    backup_msg="complete"
-    if [[ "$backup_age" =~ ^[0-9]+$ ]]; then
-      backup_msg="complete; ${backup_age}h old"
-      if [[ "$backup_age" -gt "${HEALTH_CHECK_BACKUP_MAX_AGE_HOURS}" ]]; then
-        backup_state="WARN"; overall="WARN"
-      fi
-    fi
-  else
-    overall="WARN"
-  fi
+  health_snapshot_collect
+  health_snapshot_write_compat_state
 
-  [[ "$installed" == "Installed" ]] || overall="WARN"
-  [[ "$runtime" == Running* ]] || overall="WARN"
-  [[ "$ssl_status" == "OK" || "$ssl_status" == "INFO" ]] || overall="WARN"
+  local overall_legacy
+  overall_legacy="$(health_legacy_ok_warn "${SNAPSHOT_OVERALL:-UNKNOWN}")"
 
   ui_box_start "Health Check"
-  status_line "Site" "INFO" "$SITE_NAME"
-  status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
-  status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
-
-  if service_exists; then
-    if systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; then
-      status_line "ERPNext service" "OK" "running"
-    else
-      status_line "ERPNext service" "WARN" "not running"
-      overall="WARN"
-    fi
+  status_line "Site" "INFO" "${SNAPSHOT_SITE:-$SITE_NAME}"
+  status_line "Engine" "INFO" "${SNAPSHOT_ENGINE_LABEL:-native}"
+  if [[ "${SNAPSHOT_INSTALL:-}" == "Installed" ]]; then
+    status_line "Install" "OK" "${SNAPSHOT_INSTALL}"
   else
-    status_line "ERPNext service" "WARN" "not configured"
-    overall="WARN"
+    status_line "Install" "WARN" "${SNAPSHOT_INSTALL:-Unknown}"
   fi
-
-  nginx_pair="$(systemd_service_active_detail nginx.service)"
-  mariadb_pair="$(systemd_service_active_detail mariadb.service)"
-  redis_pair="$(systemd_service_active_detail redis-server.service)"
-  status_line "Nginx" "${nginx_pair%%|*}" "${nginx_pair#*|}"
-  status_line "MariaDB" "${mariadb_pair%%|*}" "${mariadb_pair#*|}"
-  status_line "Redis" "${redis_pair%%|*}" "${redis_pair#*|}"
-  [[ "${nginx_pair%%|*}" == "OK" ]] || ! is_public_vm_workflow || overall="WARN"
-  [[ "${mariadb_pair%%|*}" == "OK" ]] || overall="WARN"
-  [[ "${redis_pair%%|*}" == "OK" ]] || overall="WARN"
-
-  if port_listens 8000; then
-    status_line "Bench web" "OK" "port 8000 listening"
+  if [[ "${SNAPSHOT_RUNTIME:-}" == Running* ]]; then
+    status_line "Runtime" "OK" "${SNAPSHOT_RUNTIME}"
   else
-    status_line "Bench web" "WARN" "port 8000 not listening"
-    overall="WARN"
+    status_line "Runtime" "WARN" "${SNAPSHOT_RUNTIME:-Unknown}"
   fi
-  if port_listens 9000; then
-    status_line "Socket.io" "OK" "port 9000 listening"
-  else
-    status_line "Socket.io" "WARN" "port 9000 not listening"
-    overall="WARN"
-  fi
-  status_line "HTTPS" "$ssl_status" "$ssl_detail"
-  status_line "Disk usage" "$disk_state" "${disk_percent}% used; warn at ${HEALTH_CHECK_DISK_WARN_PERCENT}%"
-  status_line "Latest backup" "$backup_state" "$backup_msg"
-
-  if backup_schedule_timer_active; then
-    status_line "Backup timer" "OK" "active"
-  else
-    status_line "Backup timer" "INFO" "not active"
-  fi
-
-  if ufw_is_active; then
-    status_line "UFW" "OK" "active"
-  else
-    status_line "UFW" "WARN" "not active"
-    overall="WARN"
-  fi
-  if command -v fail2ban-client >/dev/null 2>&1 && $SUDO fail2ban-client status sshd >/dev/null 2>&1; then
-    status_line "Fail2Ban" "OK" "sshd jail enabled"
-  else
-    status_line "Fail2Ban" "WARN" "sshd jail not confirmed"
-    overall="WARN"
-  fi
-
-  if off_vm_backup_configured; then
-    off_last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
-    off_last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
-    status_line "Off-VM backup" "$([[ "$off_last_status" == OK ]] && echo OK || echo INFO)" "configured; last run ${off_last_status} at ${off_last_run}"
-  else
-    off_last_status="not_configured"
-    status_line "Off-VM backup" "INFO" "not configured"
-  fi
-
-  health_check_write_state "$overall" "$installed" "$runtime" "$ssl_status" "$disk_percent" "$backup_state" "$backup_age" "$off_last_status"
-  status_line "State file" "OK" "$HEALTH_CHECK_STATE_FILE"
-  status_line "Overall" "$overall" "$([[ "$overall" == OK ]] && echo "healthy" || echo "review WARN rows")"
+  status_line "HTTP" "$(health_legacy_ok_warn "${SNAPSHOT_HTTP_STATUS:-UNKNOWN}")" "${SNAPSHOT_HTTP_DETAIL:-}"
+  status_line "Database" "$(health_legacy_ok_warn "${SNAPSHOT_DB_STATUS:-UNKNOWN}")" "${SNAPSHOT_DB_DETAIL:-}"
+  status_line "Redis" "$(health_legacy_ok_warn "${SNAPSHOT_REDIS_STATUS:-UNKNOWN}")" "${SNAPSHOT_REDIS_DETAIL:-}"
+  status_line "Engine runtime" "$(health_legacy_ok_warn "${SNAPSHOT_RUNTIME_LAYER_STATUS:-UNKNOWN}")" "${SNAPSHOT_RUNTIME_LAYER_DETAIL:-}"
+  status_line "HTTPS" "$(health_legacy_ok_warn "${SNAPSHOT_HTTPS_STATUS:-UNKNOWN}")" "${SNAPSHOT_HTTPS_DETAIL:-}"
+  status_line "Disk usage" "$(health_legacy_ok_warn "${SNAPSHOT_DISK_STATUS:-UNKNOWN}")" "${SNAPSHOT_DISK_DETAIL:-}"
+  status_line "Memory" "$(health_legacy_ok_warn "${SNAPSHOT_MEM_STATUS:-UNKNOWN}")" "${SNAPSHOT_MEM_DETAIL:-}"
+  status_line "Latest backup" "$(health_legacy_ok_warn "${SNAPSHOT_BACKUP_STATUS:-UNKNOWN}")" "${SNAPSHOT_BACKUP_DETAIL:-}"
+  status_line "Off-VM backup" "$(health_legacy_ok_warn "${SNAPSHOT_OFFVM_STATUS:-UNKNOWN}")" "${SNAPSHOT_OFFVM_DETAIL:-}"
+  status_line "UFW" "$(health_legacy_ok_warn "${SNAPSHOT_FIREWALL_STATUS:-UNKNOWN}")" "${SNAPSHOT_FIREWALL_DETAIL:-}"
+  status_line "Fail2Ban" "$(health_legacy_ok_warn "${SNAPSHOT_FAIL2BAN_STATUS:-UNKNOWN}")" "${SNAPSHOT_FAIL2BAN_DETAIL:-}"
+  status_line "State file" "OK" "${HEALTH_CHECK_STATE_FILE}"
+  status_line "Overall" "$overall_legacy" "$(health_status_normalize "${SNAPSHOT_OVERALL:-UNKNOWN}") — full view: $(toolkit_cmd dashboard)"
   ui_box_end
-  ui_next "$(toolkit_cmd health-check-status)" "$(toolkit_cmd health-monitoring-wizard)" "$(toolkit_cmd production-checklist)"
+  ui_next "$(toolkit_cmd dashboard)" "$(toolkit_cmd health-check-status)" "$(toolkit_cmd health-monitoring-wizard)"
 }
 
 configure_health_check_timer() {

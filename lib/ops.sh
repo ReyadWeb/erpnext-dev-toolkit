@@ -270,32 +270,34 @@ production_ops_wizard() {
     echo "Current state"
     production_ops_summary
     echo
-    echo "1) System health and readiness"
-    echo "2) Services and recovery"
-    echo "3) Local backups"
-    echo "4) Off-VM backups"
-    echo "5) Restore readiness and rehearsal"
-    echo "6) Health monitoring"
-    echo "7) Security and firewall"
-    echo "8) HTTPS and certificates"
-    echo "9) Go-live validation"
-    echo "10) Support and diagnostics"
-    echo "11) Final QA"
+    echo "1) Operations dashboard (canonical health)"
+    echo "2) System health and readiness"
+    echo "3) Services and recovery"
+    echo "4) Local backups"
+    echo "5) Off-VM backups"
+    echo "6) Restore readiness and rehearsal"
+    echo "7) Health monitoring timer"
+    echo "8) Security and firewall"
+    echo "9) HTTPS and certificates"
+    echo "10) Go-live validation"
+    echo "11) Support and diagnostics"
+    echo "12) Final QA"
     menu_footer quit-only
     local ops_choice=""
     menu_read_choice ops_choice
     case "$ops_choice" in
-      1) show_release_readiness; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      2) production_ops_services_menu ;;
-      3) production_ops_backups_menu ;;
-      4) off_vm_backup_wizard; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      5) production_ops_restore_menu ;;
-      6) PRODUCTION_OPS_CONTEXT=1 health_monitoring_wizard; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      7) production_ops_security_menu ;;
-      8) production_ops_https_menu ;;
-      9) show_go_live_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
-      10) production_ops_support_menu ;;
-      11) final_qa_wizard; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      1) run_operations_dashboard; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      2) show_release_readiness; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      3) production_ops_services_menu ;;
+      4) production_ops_backups_menu ;;
+      5) off_vm_backup_wizard; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      6) production_ops_restore_menu ;;
+      7) PRODUCTION_OPS_CONTEXT=1 health_monitoring_wizard; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      8) production_ops_security_menu ;;
+      9) production_ops_https_menu ;;
+      10) show_go_live_status; pause_after_screen "Press Enter to return to Production Operations..." ;;
+      11) production_ops_support_menu ;;
+      12) final_qa_wizard; pause_after_screen "Press Enter to return to Production Operations..." ;;
       "") continue ;;
       b|B) return 0 ;;
       q|Q) exit 0 ;;

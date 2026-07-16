@@ -804,7 +804,7 @@ show_command_audit() {
   status_line "Scheduled backups" "OK" "backup-schedule-plan, configure-backup-schedule, backup-schedule-status, scheduled-backup-status"
   status_line "Backup retention" "OK" "backup-retention-plan, backup-retention-status, cleanup-old-backups"
   status_line "Off-VM backup" "OK" "off-vm-backup-plan, configure-rsync-backup-target, run-off-vm-backup"
-  status_line "Health monitoring" "OK" "health-monitoring-wizard, health-check, configure-health-check-timer, health-check-status, health-check-journal"
+  status_line "Health monitoring" "OK" "dashboard, health-snapshot, health-monitoring-wizard, health-check, configure-health-check-timer, health-check-status, health-check-journal"
   status_line "Go-live validation" "OK" "go-live-record, go-live-status, cloud-firewall-checklist, cloudflare-checklist"
   status_line "Restore safety" "OK" "restore-rehearsal-guide, restore-rehearsal-status, restore-rehearsal-record, restore-preflight, restore-db, restore-full"
   status_line "Optional apps" "OK" "app-install-wizard, app-status, app-compatibility, install-payments, install-webshop, install-builder, install-lms, install-education, install-wiki, install-print-designer, install-drive, install-raven, advanced-app-tools"
