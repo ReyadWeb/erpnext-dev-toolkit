@@ -1,4 +1,8 @@
-## Unreleased
+## v1.15.3 - Credentials menu + Firefox NSS host trust
+
+Patch release that makes the existing credentials lifecycle discoverable from
+the menu, and hardens Firefox Snap/Flatpak local-HTTPS trust with a host-side
+NSS import helper. No engine or install-path changes.
 
 ### Added
 

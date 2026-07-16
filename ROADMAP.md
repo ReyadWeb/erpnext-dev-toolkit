@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.15.2 (July 2026) — **Debian 13 native install parity**: portable apt package list (no Ubuntu-only `software-properties-common`), `libfontconfig1`, and documented Debian `sudo` bootstrap for fresh installs. Builds on v1.15.1 local HTTPS reliability (v1.13.0 Debian native CI remains planned)  
+**Current release:** v1.15.3 (July 2026) — **Credentials menu + Firefox NSS host trust**: Advanced → Credentials / Login (`credentials-menu`); host-side `scripts/host-firefox-trust-mkcert.sh` for Snap/Flatpak Firefox mkcert trust. Builds on v1.15.2 Debian 13 native install parity (v1.13.0 Debian native CI remains planned)  
 **External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
 
@@ -45,6 +45,7 @@ record for this dimension.
 | **v1.15.0** | Guided-setup UX fixes: deployment engine prompted once per run; native local guided chain flows end-to-end (mkcert HTTPS → credentials checkpoint → security profile → optional apps) without dead-ends; unstyled-login hard-refresh guidance; support-bundle secret scanner detects GitHub's new stateless `ghs_` token format. | **implemented** |
 | **v1.15.1** | Local HTTPS reliability: status-aware `verify-local-ssl` (2xx/3xx required; nginx 502 is FAIL); active static-asset probe from login `Link` header; Firefox-specific mkcert trust guidance (certutil / Snap Flatpak / enterprise_roots / manual rootCA import). | **implemented** |
 | **v1.15.2** | Debian 13 native install parity: drop hard dependency on Ubuntu-only `software-properties-common`; portable `libfontconfig1`; README Debian sudo bootstrap + install block. | **implemented** |
+| **v1.15.3** | Credentials / Login submenu (`credentials-menu`) + Firefox Snap/Flatpak NSS host-trust helper (`host-firefox-trust-mkcert.sh`). | **implemented** |
 
 Native engine matrix: Ubuntu 24.04 / 26.04, Debian 13. Docker engine host matrix:
 Ubuntu 24.04 / 26.04, Debian 11 / 12 / 13.
