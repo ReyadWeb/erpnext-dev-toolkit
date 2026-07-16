@@ -2006,8 +2006,9 @@ run_trusted_mkcert_setup() {
   echo "  https://${SITE_NAME}"
   echo "  https://${SITE_NAME}/app"
   echo "  https://${SITE_NAME}/login"
-  echo
-  print_local_https_cache_hint
+  # Note: verify_local_ssl (called just above) already prints the hard-refresh
+  # cache hint via print_local_https_success_next_steps, so it is not repeated
+  # here.
   echo "============================================================"
 }
 

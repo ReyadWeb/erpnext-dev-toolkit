@@ -16,10 +16,14 @@
   per invocation; a single guided run (`local-dev-quickstart` →
   `run_guided_setup` → `run_install`, or the public-VM guided flow) previously
   asked "Choose Deployment Engine" a second time. `set-engine` still re-prompts.
-- **Local guided follow-up chain no longer drops to the main menu after HTTPS.**
-  The SSL step in the guided chain now uses a dedicated "Continue guided setup"
-  back target, so leaving the Local SSL Wizard continues to credentials →
-  security profile → optional apps instead of jumping to the main menu.
+- **Local guided follow-up chain continues automatically after HTTPS.**
+  The guided SSL step now runs the trusted mkcert setup directly instead of
+  opening the full Local SSL Wizard sub-menu, so when it finishes the flow
+  advances straight to credentials → security profile → optional apps — the
+  operator no longer has to find "Back" to continue. (The full SSL menu with
+  self-signed / status / disable remains available via `local-ssl-wizard`.)
+- **Removed a duplicated hard-refresh hint** on the mkcert success screen; it is
+  printed once via the verify/next-steps output.
 - **Credentials checkpoint added to the local guided chain.** After local HTTPS
   and before security hardening, the guided flow now surfaces the login
   credentials and offers to reveal the generated Administrator password once on
