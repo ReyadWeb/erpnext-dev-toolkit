@@ -1,3 +1,11 @@
+## Unreleased
+
+### Docs
+
+- **ROADMAP Community / packaging polish score corrected** from a stale
+  8.0 ("No CONTRIBUTING/templates yet") to **9.0 / 10**, matching the
+  v1.14.0 community polish that already shipped.
+
 ## v1.15.3 - Credentials menu + Firefox NSS host trust
 
 Patch release that makes the existing credentials lifecycle discoverable from

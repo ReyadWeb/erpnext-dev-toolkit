@@ -15,7 +15,7 @@
 | Supply chain / release trust | **9.6 / 10** | Self-update fingerprint gate (v1.8.2); signing separated to `release-signing` env (v1.9.0); Actions pinned to commit SHAs + Dependabot (v1.9.1) |
 | Reproducibility | **9.3 / 10** | Pinned toolchain (`versions`); Actions pinned to SHAs; Ubuntu 26.04 now in integration CI (non-blocking preview leg) |
 | Enterprise / multi-user host | **8.5 / 10** | Lock hardened; not a shared-shell product |
-| Community / packaging polish | **8.0 / 10** | No CONTRIBUTING/templates yet |
+| Community / packaging polish | **9.0 / 10** | v1.14.0: CONTRIBUTING, CoC, SUPPORT, Issue/PR templates, CODEOWNERS, Discussions, private vuln reporting, DEVELOPMENT/RELEASE-PROCESS/community board docs. Remaining: governance ladder, module owner teams |
 
 **Overall (single-admin dedicated VM): 9.5 / 10** — enterprise-candidate; **9.6–9.7** after VPS validation pass (v1.8.2 + v1.9.0 shipped).
 
