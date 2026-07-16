@@ -1979,7 +1979,8 @@ sudo erpnext-dev credentials-info
 sudo erpnext-dev credentials-file-status
 printf 'NO\n' | sudo erpnext-dev credentials-show || true
 printf 'NO\n' | sudo erpnext-dev credentials-delete || true
-sudo erpnext-dev --help | grep -E "credentials-show|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password"
+sudo erpnext-dev --help | grep -E "credentials-menu|credentials-show|credentials-file-status|credentials-secure|credentials-delete|reset-admin-password"
+printf 'b\n' | sudo erpnext-dev credentials-menu
 ```
 
 Expected:

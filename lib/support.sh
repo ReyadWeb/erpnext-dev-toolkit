@@ -795,7 +795,7 @@ show_command_audit() {
   status_line "Toolkit CLI" "OK" "where-installed, versions, install-cli, repair-cli, update-toolkit"
   status_line "Config" "OK" "set-domain, show-config, setup-effort-guide"
   status_line "Install/status" "OK" "guided-setup, status, doctor, support-bundle"
-  status_line "Credentials" "OK" "credentials-info, credentials-show, credentials-file-status, credentials-secure, credentials-delete, reset-admin-password"
+  status_line "Credentials" "OK" "credentials-menu, credentials-info, credentials-show, credentials-file-status, credentials-secure, credentials-delete, reset-admin-password"
   status_line "Production SSL" "OK" "production-ssl-wizard, production-ssl-status, ssl-mode-status"
   status_line "Cloudflare" "OK" "cloudflare-origin-guide, configure-cloudflare-origin-ssl"
   status_line "Security" "OK" "security-audit, security-hardening-wizard, vm-firewall-status, fail2ban-status"

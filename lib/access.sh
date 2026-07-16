@@ -1242,6 +1242,37 @@ show_access_menu() {
     esac
   done
 }
+
+show_credentials_menu() {
+  while true; do
+    echo
+    echo "============================================================"
+    echo "Credentials / Login"
+    echo "============================================================"
+    echo "1) Safe credential overview (no passwords)"
+    echo "2) Show passwords (private console; type SHOW)"
+    echo "3) Credentials file status"
+    echo "4) Secure credentials file permissions"
+    echo "5) Delete plaintext credentials file (type DELETE)"
+    echo "6) Reset Administrator password"
+    menu_footer
+    local credentials_choice=""
+    menu_read_choice credentials_choice
+
+    case "$credentials_choice" in
+      1) show_credentials_info; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
+      2) credentials_show; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
+      3) show_credentials_file_status; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
+      4) credentials_secure; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
+      5) credentials_delete; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
+      6) reset_admin_password; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
+    esac
+  done
+}
+
 show_credentials_info() {
   require_sudo
 
@@ -1266,6 +1297,7 @@ show_credentials_info() {
   status_line "Bench" "INFO" "$bench_dir"
   echo
   echo "Recommended commands:"
+  echo "  Credentials / Login menu:        $(toolkit_cmd credentials-menu)"
   echo "  View safe credential info:       $(toolkit_cmd credentials-info)"
   echo "  Show generated password:         $(toolkit_cmd credentials-show)"
   echo "  Check credential file security:  $(toolkit_cmd credentials-file-status)"

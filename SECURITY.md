@@ -235,6 +235,7 @@ Recommended operator workflow:
 Relevant commands include:
 
 ```bash
+sudo erpnext-dev credentials-menu          # Advanced → Credentials / Login
 sudo erpnext-dev credentials-info
 sudo erpnext-dev credentials-file-status
 sudo erpnext-dev credentials-secure

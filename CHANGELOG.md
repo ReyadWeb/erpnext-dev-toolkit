@@ -1,3 +1,13 @@
+## Unreleased
+
+### Added
+
+- **Credentials / Login submenu** under Advanced (item 50) and via
+  `erpnext-dev credentials-menu` / `login-menu`. Wires the existing
+  credentials-info, credentials-show, file-status, secure, delete, and
+  reset-admin-password helpers so operators can view or remove the plaintext
+  credentials file without memorizing CLI names.
+
 ## v1.15.2 - Debian 13 native install parity
 
 Patch release so guided native install on Debian 13 works like Ubuntu: fix the

@@ -488,9 +488,13 @@ sudo erpnext-dev install-cli    # or: repair-cli
 ## Credentials
 
 The toolkit saves the generated ERPNext Administrator password and database
-credentials on the VM. The safe overview does **not** print passwords:
+credentials on the VM. The safe overview does **not** print passwords.
+
+From the interactive menu: **Advanced → 50) Credentials / Login**, or open that
+submenu directly:
 
 ```bash
+sudo erpnext-dev credentials-menu        # Credentials / Login submenu
 sudo erpnext-dev credentials-info        # where credentials are stored
 sudo erpnext-dev credentials-show        # prints the password (private console only)
 sudo erpnext-dev credentials-file-status # owner/permissions
