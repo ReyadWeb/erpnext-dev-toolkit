@@ -1037,6 +1037,7 @@ health_snapshot_emit_json() {
   printf '    "socketio": ' ; json_escape "${SNAPSHOT_SOCKET_STATUS:-UNKNOWN}" ; printf ',\n'
   printf '    "workers": ' ; json_escape "${SNAPSHOT_WORKERS_STATUS:-UNKNOWN}" ; printf ',\n'
   printf '    "workers_detail": ' ; json_escape "${SNAPSHOT_WORKERS_DETAIL:-}" ; printf ',\n'
+  printf '    "workers_count": %s,\n' "${SNAPSHOT_WORKERS_COUNT:-0}"
   printf '    "scheduler": ' ; json_escape "${SNAPSHOT_SCHEDULER_STATUS:-UNKNOWN}" ; printf ',\n'
   printf '    "scheduler_detail": ' ; json_escape "${SNAPSHOT_SCHEDULER_DETAIL:-}" ; printf ',\n'
   printf '    "queue": ' ; json_escape "${SNAPSHOT_QUEUE_STATUS:-UNKNOWN}" ; printf ',\n'
