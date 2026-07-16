@@ -985,11 +985,14 @@ local_guided_followups() {
   ui_box_end
 
   echo
-  if confirm "Set up trusted local HTTPS now (local-ssl-wizard)?"; then
-    # Use the "guided" back target so leaving the SSL wizard returns here and the
-    # chain continues (credentials -> security -> apps) instead of jumping to the
-    # main menu.
-    run_local_ssl_wizard guided || true
+  echo "Trusted local HTTPS uses mkcert so ${SITE_NAME} opens without browser warnings."
+  echo "For other options (self-signed, status, disable), use: $(toolkit_cmd local-ssl-wizard)"
+  if confirm "Set up trusted local HTTPS (mkcert) now?"; then
+    # Run the recommended trusted-HTTPS path directly rather than opening the full
+    # SSL sub-menu. In a guided flow the operator should not have to find "Back"
+    # to continue: when mkcert finishes, control returns here and the chain moves
+    # on to credentials -> security -> apps automatically.
+    run_trusted_mkcert_setup || true
   else
     echo "Skipped. Run later with: $(toolkit_cmd local-ssl-wizard)"
   fi
