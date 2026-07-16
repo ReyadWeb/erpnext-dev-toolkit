@@ -1,5 +1,15 @@
 ## Unreleased
 
+### Added (Firefox local-HTTPS trust guidance)
+
+- **Firefox-specific trust steps** in `browser-trust-guide` and the local HTTPS
+  success screen. Firefox does not use the system trust store, so it can warn
+  "Not Secure" even when Chrome/Brave/Edge already trust a mkcert site. The guide
+  now covers: installing `certutil` (`libnss3-tools`) and re-running
+  `mkcert -install`, the Snap/Flatpak-Firefox sandboxed-profile case
+  (`security.enterprise_roots.enabled=true` or manual `rootCA.pem` import), and
+  the reminder to fully restart Firefox.
+
 ### Fixed / improved (local HTTPS verification reliability)
 
 - **`verify-local-ssl` is now status-code aware.** The Bench-backend, local HTTP

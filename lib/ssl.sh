@@ -2192,6 +2192,11 @@ print_local_https_success_next_steps() {
   echo
   print_local_https_cache_hint
   echo
+  echo "Firefox shows \"Not Secure\" but Chrome/Brave are fine? Firefox uses its own"
+  echo "trust store. On the HOST: sudo apt install -y libnss3-tools && mkcert -install,"
+  echo "then fully restart Firefox. Full steps (incl. Snap/Flatpak Firefox):"
+  echo "  $(toolkit_cmd browser-trust-guide)"
+  echo
   echo "Important: for local/dev VMs, use the Local VM firewall profile, not the Production profile."
 }
 
@@ -2612,6 +2617,28 @@ Local HTTPS has two possible trust modes:
    - Best local developer experience.
    - The certificate is trusted by the HOST browser because mkcert installs a local CA on the HOST.
    - curl/browser should work without a certificate warning after the host trusts the CA.
+
+Firefox note (important):
+   Firefox does NOT use the system trust store by default -- it keeps its own.
+   So Firefox can still warn "Not Secure" / "Security Risk" even when Chrome,
+   Brave, or Edge already trust ${SITE_NAME}. Fix it on the HOST:
+
+   a) Install certutil, re-run the CA install, then FULLY restart Firefox:
+        Linux:  sudo apt install -y libnss3-tools && mkcert -install
+        macOS:  brew install nss && mkcert -install
+      mkcert then registers its CA into each Firefox profile. A reload is not
+      enough -- quit every Firefox window and reopen.
+
+   b) Snap/Flatpak Firefox (common on Ubuntu/Mint) uses a sandboxed profile that
+      mkcert cannot reach, so (a) may not stick. Use either:
+        - about:config -> set security.enterprise_roots.enabled = true -> restart
+          Firefox (it then trusts the OS trust store where mkcert put the CA), or
+        - Import manually: run 'mkcert -CAROOT' on the HOST to locate rootCA.pem,
+          then Firefox Settings -> Privacy & Security -> Certificates ->
+          View Certificates -> Authorities -> Import -> pick rootCA.pem ->
+          check "Trust this CA to identify websites".
+
+   Not sure if Firefox is a Snap? Run:  snap list 2>/dev/null | grep -i firefox
 
 Host checklist (${host_label}):
 ${host_dns_tests}
