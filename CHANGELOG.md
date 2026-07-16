@@ -1,4 +1,10 @@
-## Unreleased
+## v1.15.0 - Guided setup UX fixes + stateless GitHub token detection
+
+A focused reliability/UX release. The native local guided setup now flows
+end-to-end without repeated prompts or dead-ends, credentials are surfaced at the
+right moment, and the support-bundle secret scanner recognizes GitHub's new
+stateless token format. No engine/runtime behavior changes; native and Docker
+install paths are unchanged apart from the guided-flow ordering fixes below.
 
 ### Security
 

@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.14.0 (July 2026) — **community polish**: CONTRIBUTING / CoC / SUPPORT, Issue Forms, PR template, CODEOWNERS, Discussions + private vulnerability reporting, starter `good first issue`s, DEVELOPMENT + RELEASE-PROCESS guides. Builds on v1.12.0 rebrand + multi-engine parity (v1.13.0 Debian native CI remains planned)  
+**Current release:** v1.15.0 (July 2026) — **guided-setup UX fixes**: single deployment-engine prompt, native local guided chain that flows end-to-end (mkcert HTTPS → credentials → security profile → optional apps) without dead-ends, and support-bundle secret scanning for GitHub's new stateless `ghs_` token format. Builds on v1.14.0 community polish (v1.13.0 Debian native CI remains planned)  
 **External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
 
@@ -42,6 +42,7 @@ record for this dimension.
 | **v1.12.0** | **Rebrand to erpnext-dev-toolkit** (runtime identifiers unchanged); single-node engine contract closed (`engine-restore`/`upgrade`/`rollback`/`diagnostics`); native object-storage backup parity with Docker; Docker **production** compose CI leg promoted to a **hard release gate**; combined native + Docker-production go-live runbook (`VALIDATION.md`); documentation redesign with new illustrations; security hardening. | **implemented** |
 | **v1.13.0** | Debian **native CI coverage** (GitHub provides no Debian runner today, so v1.10.0 native Debian is field-validated) + broader distro/runtime testing. | planned |
 | **v1.14.0** | Community polish: Phase 1 (`CONTRIBUTING` / CoC / `SUPPORT`, bug+feature forms, PR template, CODEOWNERS, Discussions, private vuln reporting, starter `good first issue`s) + Phase 2 (compatibility + docs Issue Forms, `docs/DEVELOPMENT.md`, `docs/RELEASE-PROCESS.md`, community board guide). Remaining later: governance ladder, module owner teams as the community grows. | **implemented** |
+| **v1.15.0** | Guided-setup UX fixes: deployment engine prompted once per run; native local guided chain flows end-to-end (mkcert HTTPS → credentials checkpoint → security profile → optional apps) without dead-ends; unstyled-login hard-refresh guidance; support-bundle secret scanner detects GitHub's new stateless `ghs_` token format. | **implemented** |
 
 Native engine matrix: Ubuntu 24.04 / 26.04, Debian 13. Docker engine host matrix:
 Ubuntu 24.04 / 26.04, Debian 11 / 12 / 13.
