@@ -18,7 +18,7 @@ assert_eq() {
 
 # Minimal stubs so we can source security.sh helpers.
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.17.4"
+SCRIPT_VERSION="1.17.5"
 ASSUME_YES=1
 _ERPNEXT_DEV_ROOT="$ROOT_DIR"
 
@@ -37,12 +37,12 @@ assert_eq "main channel custom slot" "field-test" "$(resolve_toolkit_update_vers
 unset TOOLKIT_UPDATE_SLOT
 
 # Accidental tag-shaped VERSION must not become the install slot on main.
-TOOLKIT_UPDATE_VERSION=v1.17.4
+TOOLKIT_UPDATE_VERSION=v1.17.5
 assert_eq "main channel ignores v* VERSION" "main" "$(resolve_toolkit_update_version)"
 unset TOOLKIT_UPDATE_VERSION TOOLKIT_UPDATE_CHANNEL
 
-TOOLKIT_UPDATE_VERSION=v1.17.4
-assert_eq "tag channel keeps VERSION" "v1.17.4" "$(resolve_toolkit_update_version)"
+TOOLKIT_UPDATE_VERSION=v1.17.5
+assert_eq "tag channel keeps VERSION" "v1.17.5" "$(resolve_toolkit_update_version)"
 
 if (( fail > 0 )); then
   echo "test-update-channel: ${fail} failure(s)" >&2

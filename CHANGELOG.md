@@ -1,4 +1,8 @@
-## Unreleased
+## v1.17.5 - Operations Dashboard UI + main-channel update fix
+
+Patch release that gives the Operations Dashboard the same Bash UI section
+boxes as the main menu, and fixes field-test updates from `main` so they do
+not overwrite signed `releases/vX.Y.Z` slots.
 
 ### Fixed
 
@@ -6,7 +10,7 @@
   (which could overwrite a signed tag slot). Mutable updates install to
   `releases/main` (override with `TOOLKIT_UPDATE_SLOT`).
 
-### Changed (v1.17.5 — Operations Dashboard UI)
+### Changed
 
 - **`show_operations_dashboard`** uses `lib/ui.sh` section boxes (titled borders,
   status-colored rows) instead of legacy `====` / `status_line` report layout.
