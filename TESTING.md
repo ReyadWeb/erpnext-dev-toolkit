@@ -1,6 +1,30 @@
 # Testing guide
 
-**Current release:** v1.17.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.17.2 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+
+---
+
+## v1.17.2 release publish alignment
+
+After a stable tag’s release workflow finishes (and `release-signing` is approved):
+
+```bash
+scripts/assert-github-release-assets.sh v1.17.2 --require-latest
+# expect: assert-github-release-assets: v1.17.2 OK
+
+VERSION=v1.17.2
+BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
+cd "$(mktemp -d)"
+curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
+tar -xzf "erpnext-dev-${VERSION}.tar.gz"
+cd "erpnext-dev-${VERSION}"
+sha256sum -c SHA256SUMS
+./erpnext-dev.sh verify-signature
+./erpnext-dev.sh version   # ERPNext Developer Toolkit v1.17.2
+```
+
+`/releases/latest` must redirect to `v1.17.2`. Do **not** install from the automatic
+“Source code” archives on the tag page.
 
 ---
 

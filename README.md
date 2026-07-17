@@ -18,7 +18,7 @@ It supports two setup paths:
 > the path to **9.8+** are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.17.1 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.17.2 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -115,7 +115,7 @@ is already in use, the toolkit prompts for a free one (or auto-picks under
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.17.1" && \
+VERSION="v1.17.2" && \
 BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
@@ -138,7 +138,7 @@ Or install step by step ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.17.1"
+VERSION="v1.17.2"
 BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
@@ -146,6 +146,14 @@ cd "erpnext-dev-${VERSION}"
 sha256sum -c SHA256SUMS
 ```
 
+> **Use the release Assets, not “Source code”.** Install from
+> `erpnext-dev-vX.Y.Z.tar.gz` on the GitHub Release (plus `SHA256SUMS` /
+> `SHA256SUMS.asc`). The automatic “Source code (zip/tar.gz)” archives are not
+> the supported install path. A brand-new tag may exist for several minutes
+> before the signed bundle is attached — wait until the Release shows those
+> Assets (and `/releases/latest` points at the version) before running the
+> README install block.
+>
 > **Retrying after a failed download?** If an earlier attempt returned 404, left a
 > partial tarball, or you switched versions (for example from `v1.9.5` to `v1.10.0`),
 > remove leftovers from your home directory first so you do not mix old and new
@@ -275,7 +283,7 @@ list `sudo`).
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.17.1" && \
+VERSION="v1.17.2" && \
 BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
@@ -656,6 +664,8 @@ Repeat a rehearsal after major upgrades, migrations, or backup-policy changes.
 The **operations health dashboard** is the day-to-day status view for an
 installed VM (canonical HEALTHY / DEGRADED / CRITICAL / UNKNOWN model):
 
+![Operations health dashboard](docs/assets/dashboard-health.png)
+
 ```bash
 sudo erpnext-dev dashboard              # human snapshot
 sudo erpnext-dev dashboard --watch 5    # refresh every 5s
@@ -665,6 +675,8 @@ sudo erpnext-dev dashboard --details    # extra resource cards
 sudo erpnext-dev dashboard --no-color   # or NO_COLOR=1
 ```
 
+![Health incidents](docs/assets/incident-history.png)
+
 For menus that group tested maintenance commands:
 
 ```bash
@@ -673,6 +685,11 @@ sudo erpnext-dev production-ops-wizard
 
 Architecture and future healing phases:
 [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).
+
+Example contracts:
+
+- JSON snapshot shape: [`docs/assets/health-json-example.md`](docs/assets/health-json-example.md)
+- OpenMetrics export: [`docs/assets/health-metrics-example.txt`](docs/assets/health-metrics-example.txt)
 
 Monitoring (v1.17+):
 

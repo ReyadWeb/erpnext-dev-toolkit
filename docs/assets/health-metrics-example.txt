@@ -1,0 +1,29 @@
+# Example output: erpnext-dev health-metrics (OpenMetrics)
+# HELP erpnext_dev_health_overall Overall health rank (0=HEALTHY 1=UNKNOWN 2=DEGRADED 3=CRITICAL)
+# TYPE erpnext_dev_health_overall gauge
+erpnext_dev_health_overall{site="erp.example.com",status="HEALTHY"} 0
+# HELP erpnext_dev_disk_used_percent Root filesystem used percent
+# TYPE erpnext_dev_disk_used_percent gauge
+erpnext_dev_disk_used_percent 42
+# HELP erpnext_dev_memory_available_percent MemAvailable as percent of MemTotal
+# TYPE erpnext_dev_memory_available_percent gauge
+erpnext_dev_memory_available_percent 55
+# HELP erpnext_dev_cpu_busy_percent Sampled busy CPU percent
+# TYPE erpnext_dev_cpu_busy_percent gauge
+erpnext_dev_cpu_busy_percent 12
+# HELP erpnext_dev_iowait_percent Sampled iowait percent
+# TYPE erpnext_dev_iowait_percent gauge
+erpnext_dev_iowait_percent 1
+# HELP erpnext_dev_queue_depth Best-effort Frappe/RQ queue depth sum
+# TYPE erpnext_dev_queue_depth gauge
+erpnext_dev_queue_depth 0
+# HELP erpnext_dev_http_latency_ms HTTP /api/method/ping latency
+# TYPE erpnext_dev_http_latency_ms gauge
+erpnext_dev_http_latency_ms 48
+# HELP erpnext_dev_http_up 1 if HTTP probe HEALTHY
+# TYPE erpnext_dev_http_up gauge
+erpnext_dev_http_up 1
+# HELP erpnext_dev_http_fail_streak Consecutive CRITICAL HTTP probes
+# TYPE erpnext_dev_http_fail_streak gauge
+erpnext_dev_http_fail_streak 0
+# EOF

@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.17.1 (July 2026) — **Observe hardening** on top of the v1.17 monitoring engine: CPU/iowait, cert-expiry days, Docker restart loops, workers/scheduler/queue; audited `frappe_docker` SHA default; accurate Docker docs. Still no auto-healing (v1.18). See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).  
+**Current release:** v1.17.2 (July 2026) — **Release publish alignment** (assert Assets + `/releases/latest`) on top of the v1.17 monitoring engine and v1.17.1 observe hardening. Still no auto-healing (v1.18). See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).  
 
 **External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
@@ -50,8 +50,16 @@ record for this dimension.
 | **v1.16.0** | **Operations Dashboard + canonical health snapshot**: unified HEALTHY/DEGRADED/CRITICAL/UNKNOWN model; host + ERPNext + engine-aware + protection/DR probes; `dashboard` / `--watch` / `--json`; `health-check` consumes the same snapshot. No auto-healing. See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md). | **implemented** |
 | **v1.17.0** | **Monitoring & incident engine**: `/var/lib/erpnext-dev` metrics history + incidents; threshold transitions; cooldown / would-heal dry-run; CLI + webhook alert hooks; OpenMetrics export. | **implemented** |
 | **v1.17.1** | **Observe hardening**: CPU/iowait samples, cert-expiry days, Docker restart loops, workers/scheduler/queue best-effort; README Docker accuracy; audited `FRAPPE_DOCKER_REF` SHA default. | **implemented** |
-| **v1.18.0** | **Guarded auto-healing**: monitor / safe / advanced modes; recovery ladder; rate limits + AUTO-HEALING LOCKED; recovery verification. Safe = default; host reboot opt-in only. | planned |
-| **v1.19.0** | **External watchdog foundation**: guest heartbeat contract; Case B (VM-down) external/provider recovery; optional `RuntimeWatchdogSec=` guidance; CloudPanel stub. | planned |
+| **v1.17.2** | **Release publish alignment**: assert required GitHub Release Assets + `/releases/latest`; dashboard/incident docs assets; README install race guidance. | **implemented** |
+| **v1.18.0** | **Guarded auto-healing** (do not rush): modes `monitor` / `safe` / `advanced`; first actions = restart worker, scheduler/runtime, Docker service group, native app stack; cooldowns + locks + recovery verification; **host reboot opt-in last resort only**. | planned |
+| **v1.19.0** | **External watchdog contract**: heartbeat endpoint/file + last-seen; external monitor + provider API abstraction; safe power-cycle policy; incident record after external recovery (frozen guest cannot self-heal). | planned |
+
+**CI matrix notes (intentional gaps, not blockers for v1.17.x):**
+
+| Gap | Current stance | Next step when ready |
+|-----|----------------|----------------------|
+| Ubuntu 26.04 | Non-blocking preview runner | Flip to hard gate after GitHub runner GA |
+| Debian 13 native | Field-validated (no GitHub Debian runner) | Scheduled disposable VPS validation and/or self-hosted Debian runner |
 
 Native engine matrix: Ubuntu 24.04 / 26.04, Debian 13. Docker engine host matrix:
 Ubuntu 24.04 / 26.04, Debian 11 / 12 / 13.

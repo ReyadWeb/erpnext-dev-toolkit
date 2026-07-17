@@ -1,3 +1,22 @@
+## v1.17.2 - Release publish alignment + dashboard docs
+
+Patch release focused on public release polish (not new healing behaviour).
+
+### Fixed / hardened
+
+- **Release publish gate:** after uploading Assets, stable releases are marked
+  `--latest` and `scripts/assert-github-release-assets.sh` fails the workflow if
+  `erpnext-dev-vX.Y.Z.tar.gz`, `SHA256SUMS`, `SHA256SUMS.asc`, and
+  `/releases/latest` are not correct. Prevents “tag exists but only Source code
+  archives” from looking like a finished release.
+- **README / RELEASE-PROCESS:** document the tag→signed-Assets race and that
+  install must use release Assets (not automatic Source code archives).
+
+### Docs
+
+- Dashboard / incidents screenshots and example JSON / OpenMetrics samples under
+  `docs/assets/`.
+
 ## v1.17.1 - Observe hardening + Docker pin / docs accuracy
 
 Patch release that closes remaining review gaps after v1.17.0 without enabling

@@ -60,9 +60,20 @@ git push origin vX.Y.Z
 6. **Approve** the `release-signing` environment deployment when prompted (signing
    authority separation — see SECURITY.md). Stable tags **require** a successful
    signature.
-7. **Spot-check** the published GitHub Release assets (`erpnext-dev-vX.Y.Z.tar.gz`,
-   `SHA256SUMS`, `SHA256SUMS.asc`) and that `verify-signature` works from the
-   extracted bundle.
+7. **Do not announce the version until publish finishes.** Pushing the tag creates
+   a tag page immediately, but until `publish` completes the page may only show
+   GitHub’s automatic Source code archives (no `erpnext-dev-vX.Y.Z.tar.gz`). The
+   README install block needs the signed bundle Assets.
+8. **Spot-check** the published GitHub Release assets (`erpnext-dev-vX.Y.Z.tar.gz`,
+   `SHA256SUMS`, `SHA256SUMS.asc`), that `/releases/latest` redirects to this tag,
+   and that `verify-signature` works from the extracted bundle:
+
+```bash
+scripts/assert-github-release-assets.sh vX.Y.Z --require-latest
+```
+
+The release workflow runs that assertion automatically after upload and marks
+the stable release with `gh release edit --latest`.
 
 ---
 

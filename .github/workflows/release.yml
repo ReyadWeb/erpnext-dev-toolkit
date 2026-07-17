@@ -165,8 +165,35 @@ jobs:
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber
+            gh release edit "${GITHUB_REF_NAME}" --notes "$notes" $prerelease_flag
           else
             # shellcheck disable=SC2086
             gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
               --title "${GITHUB_REF_NAME}" --notes "$notes" $prerelease_flag
           fi
+
+          # Stable tags must become /releases/latest. Without this, a stuck older
+          # "latest" marker (or a publish race) can leave README install pins
+          # pointing at a version that is not what GitHub calls Latest.
+          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            gh release edit "$tag" --latest
+          fi
+
+      - name: Assert published release assets
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          extra=()
+          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            extra+=(--require-latest)
+          fi
+          # Retry briefly — GitHub's release API can lag a second behind upload.
+          for attempt in 1 2 3 4 5; do
+            if scripts/assert-github-release-assets.sh "$tag" "${extra[@]+"${extra[@]}"}"; then
+              exit 0
+            fi
+            echo "Attempt ${attempt}/5: release API not ready yet; sleeping..."
+            sleep 3
+          done
+          echo "::error::Published release ${tag} is missing required assets or is not /releases/latest."
+          exit 1

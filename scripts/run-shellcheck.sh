@@ -42,6 +42,7 @@ targets=(
   scripts/test-install-self-path.sh
   scripts/test-engine-select.sh
   scripts/release-signing-policy.sh
+  scripts/assert-github-release-assets.sh
 )
 
 for target in "${targets[@]}"; do
