@@ -60,7 +60,7 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-update-channel.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -276,6 +276,14 @@ scripts/test-dashboard-render.sh >/tmp/erpnext-dev-dashboard-render.$$ 2>&1 || {
 }
 rm -f /tmp/erpnext-dev-dashboard-render.$$
 pass "operations dashboard UI render (NO_COLOR) passed"
+
+scripts/test-update-channel.sh >/tmp/erpnext-dev-update-channel.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-update-channel.$$
+  rm -f /tmp/erpnext-dev-update-channel.$$
+  fail "test-update-channel.sh failed"
+}
+rm -f /tmp/erpnext-dev-update-channel.$$
+pass "update-toolkit channel/slot resolution passed"
 
 if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
   # shellcheck disable=SC2024 # redirect is intentionally to the invoking user's /tmp file, not root's

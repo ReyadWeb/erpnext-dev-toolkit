@@ -883,6 +883,29 @@ signature, extracts it to `/opt/erpnext-dev/releases/<ver>/`, then flips the
 `/opt/erpnext-dev/current` symlink in a single atomic step. The previous release
 is kept on disk, so `toolkit-rollback` restores it instantly.
 
+**Field-test from `main` (no new tag):** unsigned raw-file channel for trying
+unreleased fixes on a non-production / local VM. Installs into
+`/opt/erpnext-dev/releases/main` (does **not** overwrite a signed `vX.Y.Z` slot).
+
+If your installed toolkit is still **v1.17.4** (before the slot fix), set an
+explicit non-`v*` version so the first pull does not replace `releases/v1.17.4`:
+
+```bash
+# Safe first pull from an older install (lands in releases/vmain or releases/main)
+TOOLKIT_UPDATE_CHANNEL=main TOOLKIT_UPDATE_VERSION=main sudo -E erpnext-dev update-toolkit
+
+# After the slot fix is on main, this is enough on local/non-public VMs:
+TOOLKIT_UPDATE_CHANNEL=main sudo -E erpnext-dev update-toolkit
+
+# Public/production workflow (explicit override required)
+TOOLKIT_UPDATE_CHANNEL=main TOOLKIT_UPDATE_ALLOW_MAIN=1 sudo -E erpnext-dev update-toolkit
+
+sudo erpnext-dev version
+sudo erpnext-dev dashboard-render-test
+sudo erpnext-dev dashboard
+sudo erpnext-dev toolkit-rollback   # return to previous signed slot if needed
+```
+
 `verify-toolkit` looks for `SHA256SUMS` in the current directory, beside the
 active/stable script, or in `/opt/erpnext-dev`; override with
 `CHECKSUM_FILE=/path/to/SHA256SUMS`.

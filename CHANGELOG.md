@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Fixed
+
+- **`update-toolkit` main channel** no longer stages into `releases/vX.Y.Z`
+  (which could overwrite a signed tag slot). Mutable updates install to
+  `releases/main` (override with `TOOLKIT_UPDATE_SLOT`).
+
 ### Changed (v1.17.5 — Operations Dashboard UI)
 
 - **`show_operations_dashboard`** uses `lib/ui.sh` section boxes (titled borders,

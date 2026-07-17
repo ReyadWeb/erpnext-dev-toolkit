@@ -68,6 +68,19 @@ verify_release_file_checksum() {
 resolve_toolkit_update_version() {
   local version="${TOOLKIT_UPDATE_VERSION:-}"
 
+  # Mutable main channel installs into releases/<slot> (default: main), never into
+  # releases/vX.Y.Z — that would overwrite a signed tagged release directory.
+  if toolkit_update_uses_main_branch; then
+    version="${TOOLKIT_UPDATE_SLOT:-${TOOLKIT_UPDATE_VERSION:-main}}"
+    # Ignore accidental v* tags on the main channel; slot names stay unversioned.
+    if [[ "$version" == v* ]]; then
+      version="${TOOLKIT_UPDATE_SLOT:-main}"
+    fi
+    [[ -n "$version" ]] || version="main"
+    printf '%s\n' "$version"
+    return 0
+  fi
+
   if [[ -n "$version" ]]; then
     [[ "$version" == v* ]] || version="v${version}"
     printf '%s\n' "$version"
@@ -417,7 +430,11 @@ update_toolkit() {
   workdir="$(mktemp -d "${stable_root}/.staging.XXXXXX")" || fail "Could not create staging directory under ${stable_root}."
 
   ui_box_start "Update ERPNext Toolkit (atomic)"
-  status_line "Release tag" "INFO" "$version"
+  if toolkit_update_uses_main_branch; then
+    status_line "Install slot" "INFO" "$version"
+  else
+    status_line "Release tag" "INFO" "$version"
+  fi
   status_line "Stable root" "INFO" "$stable_root"
   status_line "Model" "INFO" "releases/<ver> + current symlink (rollback-capable)"
   status_line "Checksum gate" "OK" "whole-tree sha256sum -c required"
@@ -427,7 +444,7 @@ update_toolkit() {
     release_base="${TOOLKIT_RELEASE_REPO}/main"
     tree="${workdir}/tree"
     mkdir -p "${tree}/lib"
-    status_line "Channel" "INFO" "main (raw files, unsigned)"
+    status_line "Channel" "INFO" "main (raw files, unsigned) → releases/${version}"
 
     log "Downloading SHA256SUMS"
     curl -fsSL "${release_base}/SHA256SUMS" -o "${tree}/SHA256SUMS" || fail "Failed to download SHA256SUMS from main."

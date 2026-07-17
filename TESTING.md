@@ -4,6 +4,24 @@
 
 ---
 
+## Field-test update from main (no tag)
+
+On an already-installed VM, pull unsigned `main` into `releases/main` without
+publishing a release:
+
+```bash
+# From v1.17.4 installs: pin VERSION=main so the first pull does not clobber releases/v1.17.4
+TOOLKIT_UPDATE_CHANNEL=main TOOLKIT_UPDATE_VERSION=main sudo -E erpnext-dev update-toolkit
+# public-vm workflows also need: TOOLKIT_UPDATE_ALLOW_MAIN=1
+sudo erpnext-dev version
+sudo erpnext-dev dashboard-render-test
+sudo erpnext-dev dashboard
+sudo erpnext-dev toolkit-rollback   # return to previous signed slot if needed
+```
+
+Expected: install slot is `main` or `vmain` (not overwriting signed `v1.17.4`);
+rollback restores the prior tag. Hermetic: `scripts/test-update-channel.sh`.
+
 ## v1.17.3–v1.17.5 CLI / dashboard UI
 
 Hermetic (no sudo):

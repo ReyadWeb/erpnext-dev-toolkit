@@ -47,6 +47,7 @@ lib/security.sh
 lib/update.sh
 scripts/test-ui-render.sh
 scripts/test-dashboard-render.sh
+scripts/test-update-channel.sh
 .github/workflows/ci.yml
 .github/workflows/integration.yml
 .github/workflows/release.yml
