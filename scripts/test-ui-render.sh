@@ -86,13 +86,17 @@ export ERPNEXT_DEV_TTY_COLS=100
 # Bypass live stty by pointing MENU override through a function-local path:
 # call detector with MENU_TERMINAL_COLS cleared and a fake empty tty read — if
 # /dev/tty exists on the runner, prefer asserting the snapshot export path.
-detected="$(MENU_TERMINAL_COLS= ERPNEXT_DEV_TTY_COLS=100 COLUMNS= ui_detect_terminal_cols)"
-# Accept either live stty width or the snapshot/default (>=80 for two-col intent).
-if ! [[ "$detected" =~ ^[0-9]+$ ]] || (( detected < 80 )); then
-  note_fail "ui_detect_terminal_cols returned unusable width: ${detected}"
-else
-  pass "ui_detect_terminal_cols width ${detected}"
-fi
+(
+  unset MENU_TERMINAL_COLS COLUMNS
+  export ERPNEXT_DEV_TTY_COLS=100
+  detected="$(ui_detect_terminal_cols)"
+  # Accept either live stty width or the snapshot/default (>=80 for two-col intent).
+  if ! [[ "$detected" =~ ^[0-9]+$ ]] || (( detected < 80 )); then
+    note_fail "ui_detect_terminal_cols returned unusable width: ${detected}"
+  else
+    pass "ui_detect_terminal_cols width ${detected}"
+  fi
+)
 unset ERPNEXT_DEV_TTY_COLS
 
 # Color must survive the post-tee re-init path (interactive menus log via tee,
