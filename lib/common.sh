@@ -6,7 +6,20 @@
 _ERPNEXT_DEV_COMMON_LOADED=1
 
 erpnext_dev_init_terminal_colors() {
-  if [[ -n "${NO_COLOR:-}" || "${FORCE_NO_COLOR:-0}" -eq 1 ]] || [[ ! -t 1 ]]; then
+  # Snapshot whether the operator's original stdout was a TTY *before*
+  # `exec > >(tee -a "$LOG_FILE")` turns fd 1 into a pipe. Re-checking `-t 1`
+  # after that redirect would permanently disable GREEN/OK colors in menus.
+  if [[ -z "${ERPNEXT_DEV_STDOUT_TTY:-}" ]]; then
+    if [[ -t 1 ]]; then
+      ERPNEXT_DEV_STDOUT_TTY=1
+    else
+      ERPNEXT_DEV_STDOUT_TTY=0
+    fi
+    export ERPNEXT_DEV_STDOUT_TTY
+  fi
+
+  if [[ -n "${NO_COLOR:-}" || "${FORCE_NO_COLOR:-0}" -eq 1 ]] \
+     || [[ "${ERPNEXT_DEV_STDOUT_TTY}" != "1" ]]; then
     BOLD=""
     GREEN=""
     YELLOW=""
@@ -289,14 +302,34 @@ menu_footer() {
   local mode="${1:-back}"
   local back_label="${2:-}"
   echo
-  echo "-----------------------------"
-  if [[ "$mode" == "quit-only" ]]; then
-    printf 'q) Quit\n'
-  elif [[ -n "$back_label" ]]; then
-    printf 'b) Back to %s\n' "$back_label"
-    printf 'q) Quit\n'
+  if declare -F ui_init >/dev/null 2>&1; then
+    ui_init
+    ui_text muted "$(ui_repeat "${UI_H:--}" 29)"
+    printf '\n'
+    if [[ "$mode" == "quit-only" ]]; then
+      ui_text cyan "q)"
+      printf ' Quit\n'
+    elif [[ -n "$back_label" ]]; then
+      ui_text cyan "b)"
+      printf ' Back to %s\n' "$back_label"
+      ui_text cyan "q)"
+      printf ' Quit\n'
+    else
+      ui_text cyan "b)"
+      printf ' Back                        '
+      ui_text cyan "q)"
+      printf ' Quit\n'
+    fi
   else
-    printf 'b) Back                        q) Quit\n'
+    echo "-----------------------------"
+    if [[ "$mode" == "quit-only" ]]; then
+      printf 'q) Quit\n'
+    elif [[ -n "$back_label" ]]; then
+      printf 'b) Back to %s\n' "$back_label"
+      printf 'q) Quit\n'
+    else
+      printf 'b) Back                        q) Quit\n'
+    fi
   fi
   echo
 }
@@ -312,7 +345,9 @@ menu_read_choice() {
   local __target="$1"
   local __choice=""
 
-  if ! read -r -p "Choose an option: " __choice; then
+  if declare -F ui_prompt >/dev/null 2>&1; then
+    ui_prompt "Choose an option: " __choice
+  elif ! read -r -p "Choose an option: " __choice; then
     __choice="q"
   fi
 
@@ -325,13 +360,32 @@ menu_read_choice() {
   printf -v "$__target" '%s' "$__choice"
 }
 
+# Print a menu item like "3) CRM [official]" with a cyan number prefix when
+# color UI is available (same look as the polished main menu).
+print_menu_item_text() {
+  local item="$1"
+  local num rest
+  if declare -F ui_text >/dev/null 2>&1 && [[ "$item" =~ ^([0-9]+)\)[[:space:]]*(.*)$ ]]; then
+    num="${BASH_REMATCH[1]}"
+    rest="${BASH_REMATCH[2]}"
+    ui_text cyan "${num})"
+    printf ' %s' "$rest"
+  else
+    printf '%s' "$item"
+  fi
+}
+
 print_two_column_menu() {
   local items=("$@")
   local total="${#items[@]}"
   local cols half i left right left_len right_len
-  local max_left=0 max_right=0 gap=4 width required
+  local max_left=0 max_right=0 gap=4 width required pad
 
-  cols="${MENU_TERMINAL_COLS:-}"
+  if declare -F ui_init >/dev/null 2>&1; then
+    ui_init
+  fi
+
+  cols="${MENU_TERMINAL_COLS:-${UI_COLS:-}}"
   if [[ -z "$cols" ]]; then
     cols="$(tput cols 2>/dev/null || true)"
   fi
@@ -361,14 +415,16 @@ print_two_column_menu() {
 
   if [[ "${MENU_FORCE_ONE_COLUMN:-false}" == "true" ]]; then
     for left in "${items[@]}"; do
-      printf '%s\n' "$left"
+      print_menu_item_text "$left"
+      printf '\n'
     done
     return 0
   fi
 
   if ((required > cols)) && [[ "${MENU_FORCE_TWO_COLUMNS:-false}" != "true" ]]; then
     for left in "${items[@]}"; do
-      printf '%s\n' "$left"
+      print_menu_item_text "$left"
+      printf '\n'
     done
     return 0
   fi
@@ -381,9 +437,12 @@ print_two_column_menu() {
   for ((i = 0; i < half; i++)); do
     left="${items[$i]}"
     right="${items[$((i + half))]:-}"
-    printf '%-*s' "$width" "$left"
+    print_menu_item_text "$left"
+    pad=$((width - ${#left}))
+    (( pad < 1 )) && pad=1
+    printf '%*s' "$pad" ""
     if [[ -n "$right" ]]; then
-      printf '%s' "$right"
+      print_menu_item_text "$right"
     fi
     printf '\n'
   done

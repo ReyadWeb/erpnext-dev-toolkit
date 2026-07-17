@@ -18,6 +18,8 @@ Expected:
 
 - Title, all 17 main options, and “Choose an option” appear.
 - With `NO_COLOR=1` / `TERM=dumb`, output contains **no** ANSI escapes.
+- `scripts/test-ui-render.sh` also asserts OK/status `GREEN` survives the
+  post-`tee` color re-init path (regression from v1.16–v1.17.3).
 - Menu stays fast (cached metrics only; no live health probes).
 
 Interactive smoke:

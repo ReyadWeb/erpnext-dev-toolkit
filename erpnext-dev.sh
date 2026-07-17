@@ -1043,7 +1043,10 @@ parse_args() {
 main() {
   parse_args "$@"
   # Re-apply color policy after flags such as --no-color / NO_COLOR.
+  # Uses ERPNEXT_DEV_STDOUT_TTY (snapshotted before tee) so OK/WARN/FAIL
+  # colors survive the log redirect on interactive terminals.
   erpnext_dev_init_terminal_colors
+  ui_init
 
   if action_requires_lock "${ACTION:-menu}"; then
     acquire_toolkit_lock

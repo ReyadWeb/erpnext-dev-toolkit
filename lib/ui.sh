@@ -175,3 +175,32 @@ ui_prompt() {
     printf '%s' "$__choice"
   fi
 }
+
+# Compact submenu title used by App Wizard / Library and other nested menus.
+ui_submenu_header() {
+  local title="$1"
+  local subtitle="${2:-}"
+  local width inner pad
+
+  ui_init
+  width="$(ui_panel_width)"
+  inner=$((width - 2))
+  (( inner < 10 )) && inner=10
+
+  echo
+  ui_box_line top "$width"
+  printf '%s ' "$UI_V"
+  ui_text cyan "$title"
+  pad=$((inner - 1 - ${#title}))
+  (( pad < 0 )) && pad=0
+  printf '%*s%s\n' "$pad" "" "$UI_V"
+  if [[ -n "$subtitle" ]]; then
+    printf '%s ' "$UI_V"
+    ui_text muted "$subtitle"
+    pad=$((inner - 1 - ${#subtitle}))
+    (( pad < 0 )) && pad=0
+    printf '%*s%s\n' "$pad" "" "$UI_V"
+  fi
+  ui_box_line bot "$width"
+  echo
+}

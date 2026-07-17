@@ -57,6 +57,30 @@ if grep -q $'\033' "$tmp2"; then
 fi
 rm -f "$tmp2"
 
+# Color must survive the post-tee re-init path (interactive menus log via tee,
+# which makes `[[ -t 1 ]]` false). Snapshot ERPNEXT_DEV_STDOUT_TTY once.
+unset NO_COLOR FORCE_NO_COLOR ERPNEXT_DEV_STDOUT_TTY GREEN YELLOW RED BLUE BOLD RESET
+export TERM="${TERM:-xterm-256color}"
+# shellcheck source=lib/common.sh disable=SC1091
+source "$ROOT_DIR/lib/common.sh"
+ERPNEXT_DEV_STDOUT_TTY=1
+FORCE_NO_COLOR=0
+erpnext_dev_init_terminal_colors
+if [[ -z "${GREEN:-}" ]]; then
+  note_fail "GREEN empty after TTY snapshot re-init (OK status would be uncolored)"
+else
+  pass "status colors preserved after simulated tee re-init"
+fi
+FORCE_NO_COLOR=1
+NO_COLOR=1
+export NO_COLOR
+erpnext_dev_init_terminal_colors
+if [[ -n "${GREEN:-}" ]]; then
+  note_fail "--no-color / FORCE_NO_COLOR did not clear GREEN"
+else
+  pass "--no-color clears status colors"
+fi
+
 if (( fail > 0 )); then
   echo "test-ui-render: ${fail} failure(s)" >&2
   echo "----- render output (compact) -----" >&2
