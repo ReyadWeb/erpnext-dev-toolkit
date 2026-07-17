@@ -1081,90 +1081,202 @@ health_snapshot_emit_json() {
   printf '}\n'
 }
 
-dashboard_status_line() {
-  local label="$1" status="$2" detail="$3"
-  local glyph legacy
-  glyph="$(health_status_glyph "$status")"
-  legacy="$(health_legacy_ok_warn "$status")"
-  # Reuse status_line colors via legacy OK/WARN/FAIL mapping; CRITICAL→FAIL
-  case "$(health_status_normalize "$status")" in
-    CRITICAL) legacy="FAIL" ;;
-  esac
-  status_line "[${glyph}] ${label}" "$legacy" "${detail} ($(health_status_normalize "$status"))"
+# Polished dashboard row: label | STATUS | detail (color from health status).
+# Label column is 18 chars so "Restore rehearsal" / "Toolkit integrity" fit.
+dashboard_kv_row() {
+  local label="$1" status="$2" detail="${3:-}"
+  local norm color width inner used remain max_detail
+  local label_w=18 status_w=10
+  norm="$(health_status_normalize "$status")"
+  color="$(ui_status_color "$norm")"
+  width="$(ui_panel_width)"
+  inner=$((width - 2))
+  if (( ${#label} > label_w )); then
+    label="${label:0:$((label_w - 2))}.."
+  fi
+
+  ui_row_begin
+  ui_row_add "$(printf '%-*s' "$label_w" "$label")"
+  ui_row_add_colored "$color" "$(printf '%-*s' "$status_w" "$norm")"
+  used=${UI_ROW_USED:-0}
+  remain=$((inner - used))
+  (( remain < 4 )) && remain=4
+  max_detail=$((remain - 1))
+  if (( ${#detail} > max_detail )); then
+    detail="${detail:0:$((max_detail - 3))}..."
+  fi
+  if [[ -n "$detail" ]]; then
+    ui_row_add " ${detail}"
+  fi
+  ui_row_end
+}
+
+dashboard_info_row() {
+  local label="$1" value="${2:-}"
+  local width inner used remain max_detail
+  local label_w=18 status_w=10
+  width="$(ui_panel_width)"
+  inner=$((width - 2))
+  if (( ${#label} > label_w )); then
+    label="${label:0:$((label_w - 2))}.."
+  fi
+  ui_row_begin
+  ui_row_add "$(printf '%-*s' "$label_w" "$label")"
+  ui_row_add_colored muted "$(printf '%-*s' "$status_w" "INFO")"
+  used=${UI_ROW_USED:-0}
+  remain=$((inner - used))
+  max_detail=$((remain - 1))
+  (( max_detail < 4 )) && max_detail=4
+  if (( ${#value} > max_detail )); then
+    value="${value:0:$((max_detail - 3))}..."
+  fi
+  [[ -n "$value" ]] && ui_row_add " ${value}"
+  ui_row_end
+}
+
+render_operations_dashboard_screen() {
+  local details="${1:-0}"
+  local overall color healing_label
+
+  ui_init
+
+  overall="$(health_status_normalize "${SNAPSHOT_OVERALL:-UNKNOWN}")"
+  color="$(ui_status_color "$overall")"
+  healing_label="${SNAPSHOT_HEALING_MODE:-monitor}"
+  [[ -n "${SNAPSHOT_HEALING_STATE:-}" ]] && healing_label="${healing_label} (${SNAPSHOT_HEALING_STATE})"
+
+  ui_section_open "${APP_NAME:-ERPNext Developer Toolkit} v${SCRIPT_VERSION}"
+  ui_row_begin
+  ui_row_add_colored "$color" "${UI_DOT} ${overall}"
+  ui_row_add "   ${SNAPSHOT_SITE:-unknown}   ${SNAPSHOT_ENGINE_LABEL:-unknown}   ${SNAPSHOT_OS:-unknown}"
+  ui_row_end
+  ui_row_begin
+  ui_row_add_colored muted "Last check: ${SNAPSHOT_GENERATED_AT:-unknown}   Auto-healing: ${healing_label}"
+  ui_row_end
+  ui_section_close
+
+  ui_section_open "Resources"
+  dashboard_kv_row "Disk" "${SNAPSHOT_DISK_STATUS:-UNKNOWN}" "${SNAPSHOT_DISK_DETAIL:-}"
+  dashboard_kv_row "Memory" "${SNAPSHOT_MEM_STATUS:-UNKNOWN}" "${SNAPSHOT_MEM_DETAIL:-}"
+  dashboard_kv_row "Load" "${SNAPSHOT_LOAD_STATUS:-UNKNOWN}" "${SNAPSHOT_LOAD_DETAIL:-}"
+  dashboard_kv_row "CPU / I/O" "${SNAPSHOT_CPU_STATUS:-UNKNOWN}" "${SNAPSHOT_CPU_DETAIL:-}"
+  if [[ "$details" == "1" ]]; then
+    dashboard_kv_row "Inodes" "${SNAPSHOT_INODE_STATUS:-UNKNOWN}" "${SNAPSHOT_INODE_DETAIL:-}"
+    dashboard_kv_row "Swap" "${SNAPSHOT_SWAP_STATUS:-UNKNOWN}" "${SNAPSHOT_SWAP_DETAIL:-}"
+    dashboard_kv_row "Uptime" "${SNAPSHOT_UPTIME_STATUS:-UNKNOWN}" "${SNAPSHOT_UPTIME_DETAIL:-}"
+    dashboard_kv_row "Reboot" "${SNAPSHOT_REBOOT_STATUS:-UNKNOWN}" "${SNAPSHOT_REBOOT_DETAIL:-}"
+  fi
+  ui_section_close
+
+  ui_section_open "Application health"
+  dashboard_kv_row "Web / HTTP" "${SNAPSHOT_HTTP_STATUS:-UNKNOWN}" "${SNAPSHOT_HTTP_DETAIL:-}"
+  dashboard_kv_row "Database" "${SNAPSHOT_DB_STATUS:-UNKNOWN}" "${SNAPSHOT_DB_DETAIL:-}"
+  dashboard_kv_row "Redis" "${SNAPSHOT_REDIS_STATUS:-UNKNOWN}" "${SNAPSHOT_REDIS_DETAIL:-}"
+  dashboard_kv_row "Workers" "${SNAPSHOT_WORKERS_STATUS:-UNKNOWN}" "${SNAPSHOT_WORKERS_DETAIL:-}"
+  dashboard_kv_row "Scheduler" "${SNAPSHOT_SCHEDULER_STATUS:-UNKNOWN}" "${SNAPSHOT_SCHEDULER_DETAIL:-}"
+  dashboard_kv_row "Queue" "${SNAPSHOT_QUEUE_STATUS:-UNKNOWN}" "${SNAPSHOT_QUEUE_DETAIL:-}"
+  dashboard_kv_row "Bench web" "${SNAPSHOT_WEB_PORT_STATUS:-UNKNOWN}" "${SNAPSHOT_WEB_PORT_DETAIL:-}"
+  dashboard_kv_row "Socket.IO" "${SNAPSHOT_SOCKET_STATUS:-UNKNOWN}" "${SNAPSHOT_SOCKET_DETAIL:-}"
+  dashboard_kv_row "Engine runtime" "${SNAPSHOT_RUNTIME_LAYER_STATUS:-UNKNOWN}" "${SNAPSHOT_RUNTIME_LAYER_DETAIL:-}"
+  ui_section_close
+
+  ui_section_open "Protection & recovery"
+  dashboard_kv_row "HTTPS" "${SNAPSHOT_HTTPS_STATUS:-UNKNOWN}" "${SNAPSHOT_HTTPS_DETAIL:-}"
+  dashboard_kv_row "Firewall" "${SNAPSHOT_FIREWALL_STATUS:-UNKNOWN}" "${SNAPSHOT_FIREWALL_DETAIL:-}"
+  dashboard_kv_row "Fail2Ban" "${SNAPSHOT_FAIL2BAN_STATUS:-UNKNOWN}" "${SNAPSHOT_FAIL2BAN_DETAIL:-}"
+  dashboard_kv_row "Local backup" "${SNAPSHOT_BACKUP_STATUS:-UNKNOWN}" "${SNAPSHOT_BACKUP_DETAIL:-}"
+  dashboard_kv_row "Off-VM" "${SNAPSHOT_OFFVM_STATUS:-UNKNOWN}" "${SNAPSHOT_OFFVM_DETAIL:-}"
+  dashboard_kv_row "Object storage" "${SNAPSHOT_OBJECT_STATUS:-UNKNOWN}" "${SNAPSHOT_OBJECT_DETAIL:-}"
+  dashboard_kv_row "Restore rehearsal" "${SNAPSHOT_REHEARSAL_STATUS:-UNKNOWN}" "${SNAPSHOT_REHEARSAL_DETAIL:-}"
+  dashboard_kv_row "Toolkit integrity" "${SNAPSHOT_INTEGRITY_STATUS:-UNKNOWN}" "${SNAPSHOT_INTEGRITY_DETAIL:-}"
+  ui_section_close
+
+  ui_section_open "Monitoring & auto-healing"
+  dashboard_info_row "Mode" "${SNAPSHOT_HEALING_MODE:-monitor}"
+  dashboard_info_row "State" "${SNAPSHOT_HEALING_STATE:-observing}"
+  dashboard_info_row "Would heal" "${SNAPSHOT_WOULD_HEAL:-none} (dry-run)"
+  dashboard_info_row "HTTP streak" "${SNAPSHOT_HTTP_FAIL_STREAK:-0} / ${HEALTH_CONSECUTIVE_FAIL_THRESHOLD:-3}"
+  dashboard_info_row "Overall streak" "${SNAPSHOT_OVERALL_FAIL_STREAK:-0} / ${HEALTH_CONSECUTIVE_FAIL_THRESHOLD:-3}"
+  dashboard_info_row "Note" "${SNAPSHOT_HEALING_DETAIL:-}"
+  if [[ -n "${SNAPSHOT_LAST_INCIDENT_ID:-}" ]]; then
+    dashboard_kv_row "New incident" "DEGRADED" "$SNAPSHOT_LAST_INCIDENT_ID"
+  elif [[ -f "${HEALTH_LIB_DIR:-/var/lib/erpnext-dev}/incidents/latest.json" ]]; then
+    dashboard_info_row "Latest incident" "$(basename "$(readlink -f "${HEALTH_LIB_DIR}/incidents/latest.json" 2>/dev/null || echo latest.json)")"
+  fi
+  ui_row_plain "History: ${HEALTH_LIB_DIR:-/var/lib/erpnext-dev}/metrics/history.jsonl"
+  ui_row_plain "Incidents: $(toolkit_cmd incidents 2>/dev/null || echo erpnext-dev incidents)"
+  ui_row_plain "OpenMetrics: $(toolkit_cmd health-metrics 2>/dev/null || echo erpnext-dev health-metrics)"
+  ui_row_plain "Actions execute in v1.18 — observe/detect/record/alert only."
+  ui_section_close
+
+  printf '\n'
+  ui_next "$(toolkit_cmd dashboard --json 2>/dev/null || echo 'erpnext-dev dashboard --json')" \
+    "$(toolkit_cmd incidents 2>/dev/null || echo 'erpnext-dev incidents')" \
+    "$(toolkit_cmd health-history 2>/dev/null || echo 'erpnext-dev health-history')"
 }
 
 show_operations_dashboard() {
   local details="${1:-0}"
 
-  health_snapshot_collect
-  health_snapshot_write_compat_state
-
-  ui_box_start "${APP_NAME:-ERPNext Developer Toolkit}  v${SCRIPT_VERSION}"
-  printf '  %s  %-10s  %s  %s  %s\n' \
-    "$(health_status_glyph "$SNAPSHOT_OVERALL")" \
-    "$(health_status_normalize "$SNAPSHOT_OVERALL")" \
-    "$SNAPSHOT_SITE" \
-    "$SNAPSHOT_ENGINE_LABEL" \
-    "$SNAPSHOT_OS"
-  echo "  Last check: ${SNAPSHOT_GENERATED_AT}    Auto-healing: ${SNAPSHOT_HEALING_MODE} (${SNAPSHOT_HEALING_STATE})"
-  ui_box_end
-
-  ui_box_start "RESOURCES"
-  dashboard_status_line "Disk" "$SNAPSHOT_DISK_STATUS" "$SNAPSHOT_DISK_DETAIL"
-  dashboard_status_line "Memory" "$SNAPSHOT_MEM_STATUS" "$SNAPSHOT_MEM_DETAIL"
-  dashboard_status_line "Load" "$SNAPSHOT_LOAD_STATUS" "$SNAPSHOT_LOAD_DETAIL"
-  dashboard_status_line "CPU / I/O" "$SNAPSHOT_CPU_STATUS" "$SNAPSHOT_CPU_DETAIL"
-  if [[ "$details" == "1" ]]; then
-    dashboard_status_line "Inodes" "$SNAPSHOT_INODE_STATUS" "$SNAPSHOT_INODE_DETAIL"
-    dashboard_status_line "Swap" "$SNAPSHOT_SWAP_STATUS" "$SNAPSHOT_SWAP_DETAIL"
-    dashboard_status_line "Uptime" "$SNAPSHOT_UPTIME_STATUS" "$SNAPSHOT_UPTIME_DETAIL"
-    dashboard_status_line "Reboot" "$SNAPSHOT_REBOOT_STATUS" "$SNAPSHOT_REBOOT_DETAIL"
+  if [[ "${DASHBOARD_RENDER_FIXTURE:-0}" != "1" ]]; then
+    health_snapshot_collect
+    health_snapshot_write_compat_state
   fi
-  ui_box_end
+  render_operations_dashboard_screen "$details"
+}
 
-  ui_box_start "APPLICATION HEALTH"
-  dashboard_status_line "Web / HTTP" "$SNAPSHOT_HTTP_STATUS" "$SNAPSHOT_HTTP_DETAIL"
-  dashboard_status_line "Database" "$SNAPSHOT_DB_STATUS" "$SNAPSHOT_DB_DETAIL"
-  dashboard_status_line "Redis" "$SNAPSHOT_REDIS_STATUS" "$SNAPSHOT_REDIS_DETAIL"
-  dashboard_status_line "Workers" "$SNAPSHOT_WORKERS_STATUS" "$SNAPSHOT_WORKERS_DETAIL"
-  dashboard_status_line "Scheduler" "$SNAPSHOT_SCHEDULER_STATUS" "$SNAPSHOT_SCHEDULER_DETAIL"
-  dashboard_status_line "Queue" "$SNAPSHOT_QUEUE_STATUS" "$SNAPSHOT_QUEUE_DETAIL"
-  dashboard_status_line "Bench web" "$SNAPSHOT_WEB_PORT_STATUS" "$SNAPSHOT_WEB_PORT_DETAIL"
-  dashboard_status_line "Socket.IO" "$SNAPSHOT_SOCKET_STATUS" "$SNAPSHOT_SOCKET_DETAIL"
-  dashboard_status_line "Engine runtime" "$SNAPSHOT_RUNTIME_LAYER_STATUS" "$SNAPSHOT_RUNTIME_LAYER_DETAIL"
-  ui_box_end
+# Non-interactive fixture render for CI (no sudo, no live probes).
+dashboard_render_test() {
+  FORCE_NO_COLOR=1
+  NO_COLOR=1
+  UI_FORCE_ASCII=1
+  DASHBOARD_RENDER_FIXTURE=1
+  export FORCE_NO_COLOR NO_COLOR UI_FORCE_ASCII DASHBOARD_RENDER_FIXTURE
+  HEALTH_LIB_DIR="${HEALTH_LIB_DIR:-/var/lib/erpnext-dev}"
+  HEALTH_CONSECUTIVE_FAIL_THRESHOLD="${HEALTH_CONSECUTIVE_FAIL_THRESHOLD:-3}"
 
-  ui_box_start "PROTECTION & RECOVERY"
-  dashboard_status_line "HTTPS" "$SNAPSHOT_HTTPS_STATUS" "$SNAPSHOT_HTTPS_DETAIL"
-  dashboard_status_line "Firewall" "$SNAPSHOT_FIREWALL_STATUS" "$SNAPSHOT_FIREWALL_DETAIL"
-  dashboard_status_line "Fail2Ban" "$SNAPSHOT_FAIL2BAN_STATUS" "$SNAPSHOT_FAIL2BAN_DETAIL"
-  dashboard_status_line "Local backup" "$SNAPSHOT_BACKUP_STATUS" "$SNAPSHOT_BACKUP_DETAIL"
-  dashboard_status_line "Off-VM" "$SNAPSHOT_OFFVM_STATUS" "$SNAPSHOT_OFFVM_DETAIL"
-  dashboard_status_line "Object storage" "$SNAPSHOT_OBJECT_STATUS" "$SNAPSHOT_OBJECT_DETAIL"
-  dashboard_status_line "Restore rehearsal" "$SNAPSHOT_REHEARSAL_STATUS" "$SNAPSHOT_REHEARSAL_DETAIL"
-  dashboard_status_line "Toolkit integrity" "$SNAPSHOT_INTEGRITY_STATUS" "$SNAPSHOT_INTEGRITY_DETAIL"
-  ui_box_end
+  SNAPSHOT_OVERALL="CRITICAL"
+  SNAPSHOT_SITE="erp.test"
+  SNAPSHOT_ENGINE_LABEL="Native VM"
+  SNAPSHOT_OS="Debian 13"
+  SNAPSHOT_GENERATED_AT="2026-07-17T18:06:26Z"
+  SNAPSHOT_HEALING_MODE="monitor"
+  SNAPSHOT_HEALING_STATE="observing"
+  SNAPSHOT_HEALING_DETAIL="Observe only until v1.18"
+  SNAPSHOT_WOULD_HEAL="none"
+  SNAPSHOT_HTTP_FAIL_STREAK="2"
+  SNAPSHOT_OVERALL_FAIL_STREAK="1"
+  SNAPSHOT_LAST_INCIDENT_ID=""
 
-  ui_box_start "MONITORING & AUTO-HEALING"
-  status_line "Mode" "INFO" "$SNAPSHOT_HEALING_MODE"
-  status_line "State" "INFO" "$SNAPSHOT_HEALING_STATE"
-  status_line "Would heal" "INFO" "${SNAPSHOT_WOULD_HEAL:-none} (dry-run)"
-  status_line "HTTP streak" "INFO" "${SNAPSHOT_HTTP_FAIL_STREAK:-0} / ${HEALTH_CONSECUTIVE_FAIL_THRESHOLD}"
-  status_line "Overall streak" "INFO" "${SNAPSHOT_OVERALL_FAIL_STREAK:-0} / ${HEALTH_CONSECUTIVE_FAIL_THRESHOLD}"
-  status_line "Note" "INFO" "$SNAPSHOT_HEALING_DETAIL"
-  if [[ -n "${SNAPSHOT_LAST_INCIDENT_ID:-}" ]]; then
-    status_line "New incident" "WARN" "$SNAPSHOT_LAST_INCIDENT_ID"
-  elif [[ -f "${HEALTH_LIB_DIR}/incidents/latest.json" ]]; then
-    status_line "Latest incident" "INFO" "$(basename "$(readlink -f "${HEALTH_LIB_DIR}/incidents/latest.json" 2>/dev/null || echo latest.json)")"
-  fi
-  echo
-  echo "  History: ${HEALTH_LIB_DIR}/metrics/history.jsonl"
-  echo "  Incidents: $(toolkit_cmd incidents)"
-  echo "  OpenMetrics: $(toolkit_cmd health-metrics)"
-  echo "  Actions execute in v1.18 — observe/detect/record/alert only."
-  ui_box_end
+  SNAPSHOT_DISK_STATUS="HEALTHY"; SNAPSHOT_DISK_DETAIL="1% used"
+  SNAPSHOT_MEM_STATUS="HEALTHY"; SNAPSHOT_MEM_DETAIL="available 81%"
+  SNAPSHOT_LOAD_STATUS="HEALTHY"; SNAPSHOT_LOAD_DETAIL="0.00/core"
+  SNAPSHOT_CPU_STATUS="UNKNOWN"; SNAPSHOT_CPU_DETAIL="cpu stats unavailable"
+  SNAPSHOT_INODE_STATUS="HEALTHY"; SNAPSHOT_INODE_DETAIL="ok"
+  SNAPSHOT_SWAP_STATUS="HEALTHY"; SNAPSHOT_SWAP_DETAIL="0% used"
+  SNAPSHOT_UPTIME_STATUS="HEALTHY"; SNAPSHOT_UPTIME_DETAIL="up 3d"
+  SNAPSHOT_REBOOT_STATUS="HEALTHY"; SNAPSHOT_REBOOT_DETAIL="not required"
 
-  ui_next "$(toolkit_cmd dashboard --json)" "$(toolkit_cmd incidents)" "$(toolkit_cmd health-history)"
+  SNAPSHOT_HTTP_STATUS="CRITICAL"; SNAPSHOT_HTTP_DETAIL="HTTP unreachable"
+  SNAPSHOT_DB_STATUS="DEGRADED"; SNAPSHOT_DB_DETAIL="MariaDB not found"
+  SNAPSHOT_REDIS_STATUS="DEGRADED"; SNAPSHOT_REDIS_DETAIL="Redis not found"
+  SNAPSHOT_WORKERS_STATUS="UNKNOWN"; SNAPSHOT_WORKERS_DETAIL="not probed"
+  SNAPSHOT_SCHEDULER_STATUS="UNKNOWN"; SNAPSHOT_SCHEDULER_DETAIL="not probed"
+  SNAPSHOT_QUEUE_STATUS="UNKNOWN"; SNAPSHOT_QUEUE_DETAIL="not probed"
+  SNAPSHOT_WEB_PORT_STATUS="CRITICAL"; SNAPSHOT_WEB_PORT_DETAIL="port 8000 closed"
+  SNAPSHOT_SOCKET_STATUS="UNKNOWN"; SNAPSHOT_SOCKET_DETAIL="not probed"
+  SNAPSHOT_RUNTIME_LAYER_STATUS="CRITICAL"; SNAPSHOT_RUNTIME_LAYER_DETAIL="ERPNext service not running"
+
+  SNAPSHOT_HTTPS_STATUS="UNKNOWN"; SNAPSHOT_HTTPS_DETAIL="not configured"
+  SNAPSHOT_FIREWALL_STATUS="UNKNOWN"; SNAPSHOT_FIREWALL_DETAIL="not checked"
+  SNAPSHOT_FAIL2BAN_STATUS="UNKNOWN"; SNAPSHOT_FAIL2BAN_DETAIL="not checked"
+  SNAPSHOT_BACKUP_STATUS="DEGRADED"; SNAPSHOT_BACKUP_DETAIL="no recent backup"
+  SNAPSHOT_OFFVM_STATUS="UNKNOWN"; SNAPSHOT_OFFVM_DETAIL="not configured"
+  SNAPSHOT_OBJECT_STATUS="UNKNOWN"; SNAPSHOT_OBJECT_DETAIL="not configured"
+  SNAPSHOT_REHEARSAL_STATUS="CRITICAL"; SNAPSHOT_REHEARSAL_DETAIL="missing"
+  SNAPSHOT_INTEGRITY_STATUS="HEALTHY"; SNAPSHOT_INTEGRITY_DETAIL="checksums match"
+
+  render_operations_dashboard_screen "${DASHBOARD_DETAILS:-0}"
 }
 
 show_health_incidents() {

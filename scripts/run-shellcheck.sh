@@ -44,6 +44,7 @@ targets=(
   scripts/test-install-self-path.sh
   scripts/test-engine-select.sh
   scripts/test-ui-render.sh
+  scripts/test-dashboard-render.sh
   scripts/release-signing-policy.sh
   scripts/assert-github-release-assets.sh
 )

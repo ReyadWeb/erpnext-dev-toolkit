@@ -4,14 +4,17 @@
 
 ---
 
-## v1.17.3 CLI menu UI foundation
+## v1.17.3–v1.17.5 CLI / dashboard UI
 
 Hermetic (no sudo):
 
 ```bash
 scripts/test-ui-render.sh
+scripts/test-dashboard-render.sh
 ./erpnext-dev.sh menu-render-test
+./erpnext-dev.sh dashboard-render-test
 NO_COLOR=1 TERM=dumb COLUMNS=80 ./erpnext-dev.sh menu-render-test | od -c | head
+NO_COLOR=1 TERM=dumb COLUMNS=100 ./erpnext-dev.sh dashboard-render-test | od -c | head
 ```
 
 Expected:
@@ -21,6 +24,9 @@ Expected:
 - `scripts/test-ui-render.sh` also asserts OK/status `GREEN` survives the
   post-`tee` color re-init path (regression from v1.16–v1.17.3).
 - Menu stays fast (cached metrics only; no live health probes).
+- Dashboard fixture render includes Resources / Application health /
+  Protection / Monitoring sections, shows CRITICAL from the fixture, and
+  must **not** emit legacy `====` section headers.
 
 Interactive smoke:
 
@@ -28,6 +34,9 @@ Interactive smoke:
 sudo erpnext-dev menu
 # wide terminal: two-column boxed menu + status strip
 # narrow / COLUMNS=80: single-column list
+sudo erpnext-dev dashboard
+sudo erpnext-dev dashboard --details
+sudo erpnext-dev dashboard --no-color
 ```
 
 ---

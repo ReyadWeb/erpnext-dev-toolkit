@@ -1,3 +1,15 @@
+## Unreleased
+
+### Changed (v1.17.5 — Operations Dashboard UI)
+
+- **`show_operations_dashboard`** uses `lib/ui.sh` section boxes (titled borders,
+  status-colored rows) instead of legacy `====` / `status_line` report layout.
+  Sections: Overview, Resources, Application health, Protection & recovery,
+  Monitoring & auto-healing. Compact/wide via terminal width.
+- **`dashboard-render-test`** + `scripts/test-dashboard-render.sh` (fixture
+  snapshot, no sudo / no live probes; asserts no ANSI under `NO_COLOR=1` and
+  no legacy `====` headers).
+
 ## v1.17.4 - Menu colors + App Wizard polish
 
 Patch release that restores green OK/WARN/FAIL status colors and applies the

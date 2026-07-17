@@ -206,3 +206,75 @@ ui_submenu_header() {
   ui_box_line bot "$width"
   echo
 }
+
+# --- Dashboard / section boxes (title in top border) -------------------------
+
+ui_box_titled_top() {
+  # ╭─ Title ────────────────────────────╮
+  local title="$1"
+  local width="${2:-$(ui_panel_width)}"
+  local inner=$((width - 2))
+  local fill
+  (( inner < 10 )) && inner=10
+  # "─ " + title + " " + fill  == inner
+  fill=$((inner - 3 - ${#title}))
+  (( fill < 1 )) && fill=1
+  printf '%s%s %s %s%s\n' "$UI_TL" "$UI_H" "$title" "$(ui_repeat "$UI_H" "$fill")" "$UI_TR"
+}
+
+ui_section_open() {
+  local title="$1"
+  ui_init
+  echo
+  ui_box_titled_top "$title" "$(ui_panel_width)"
+}
+
+ui_section_close() {
+  ui_box_line bot "$(ui_panel_width)"
+}
+
+# Row builder: track visible (non-ANSI) width so padding stays inside the box.
+ui_row_begin() {
+  printf '%s ' "$UI_V"
+  UI_ROW_USED=1
+}
+
+ui_row_add() {
+  local text="${1:-}"
+  printf '%s' "$text"
+  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + ${#text} ))
+}
+
+ui_row_add_colored() {
+  local color="$1"
+  shift
+  local text="$*"
+  ui_text "$color" "$text"
+  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + ${#text} ))
+}
+
+ui_row_end() {
+  local width inner pad
+  width="$(ui_panel_width)"
+  inner=$((width - 2))
+  pad=$((inner - ${UI_ROW_USED:-0}))
+  (( pad < 0 )) && pad=0
+  printf '%*s%s\n' "$pad" "" "$UI_V"
+  UI_ROW_USED=0
+}
+
+ui_row_plain() {
+  # Single plain-text row truncated to panel width.
+  local text="${1:-}"
+  local width inner max
+  width="$(ui_panel_width)"
+  inner=$((width - 2))
+  max=$((inner - 1))
+  (( max < 8 )) && max=8
+  if (( ${#text} > max )); then
+    text="${text:0:$((max - 3))}..."
+  fi
+  ui_row_begin
+  ui_row_add "$text"
+  ui_row_end
+}

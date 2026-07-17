@@ -672,9 +672,14 @@ Repeat a rehearsal after major upgrades, migrations, or backup-policy changes.
 ## Production operations dashboard
 
 The **operations health dashboard** is the day-to-day status view for an
-installed VM (canonical HEALTHY / DEGRADED / CRITICAL / UNKNOWN model):
+installed VM (canonical HEALTHY / DEGRADED / CRITICAL / UNKNOWN model). From
+v1.17.5 the human view uses the same Bash UI section boxes as the main menu
+(Overview / Resources / Application health / Protection / Monitoring).
 
 ![Operations health dashboard](docs/assets/dashboard-health.png)
+
+> Screenshot may lag a patch behind the live renderer; trust
+> `sudo erpnext-dev dashboard` / `dashboard-render-test` for current layout.
 
 ```bash
 sudo erpnext-dev dashboard              # human snapshot
@@ -683,6 +688,7 @@ sudo erpnext-dev dashboard --json       # CloudPanel / automation contract
 sudo erpnext-dev health-snapshot        # alias for dashboard --json
 sudo erpnext-dev dashboard --details    # extra resource cards
 sudo erpnext-dev dashboard --no-color   # or NO_COLOR=1
+./erpnext-dev.sh dashboard-render-test  # fixture layout (CI / no sudo)
 ```
 
 ![Health incidents](docs/assets/incident-history.png)

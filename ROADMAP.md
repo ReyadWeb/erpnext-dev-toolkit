@@ -53,7 +53,9 @@ record for this dimension.
 | **v1.17.2** | **Release publish alignment**: assert required GitHub Release Assets + `/releases/latest`; dashboard/incident docs assets; README install race guidance. | **implemented** |
 | **v1.17.3** | **CLI menu UI foundation**: `lib/ui.sh` + polished main menu (responsive two-column, `NO_COLOR`/ASCII-safe) with cached status strip; hermetic `test-ui-render.sh`. | **implemented** |
 | **v1.17.4** | **Menu color + App Wizard polish**: restore OK/WARN/FAIL green after tee redirect; App Installation Wizard/Library use `lib/ui.sh`; shared two-column menus get cyan numbers. | **implemented** |
-| **v1.18.0** | **Guarded auto-healing** + Dashboard 2.0 polish (do not rush): modes `monitor` / `safe` / `advanced`; resource/runtime/protection cards; first actions = restart worker, scheduler/runtime, Docker service group, native app stack; **host reboot opt-in last resort only**. | planned |
+| **v1.17.5** | **Operations Dashboard UI**: titled section boxes + status-colored rows (replace `====` report); `dashboard-render-test` + hermetic CI. | **in progress** |
+| **v1.17.6** | **Menu polish cleanup**: status-strip overflow, boxed compact main menu, real terminal screenshots replacing mockups. | planned |
+| **v1.18.0** | **Guarded auto-healing** (do not rush): modes `monitor` / `safe` / `advanced`; first actions = restart worker, scheduler/runtime, Docker service group, native app stack; **host reboot opt-in last resort only**. | planned |
 | **v1.19.0** | **External watchdog contract**: heartbeat endpoint/file + last-seen; external monitor + provider API abstraction; safe power-cycle policy; incident record after external recovery (frozen guest cannot self-heal). | planned |
 
 **CI matrix notes (intentional gaps, not blockers for v1.17.x):**
