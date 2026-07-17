@@ -1261,16 +1261,14 @@ run_app_install_wizard() {
 
   while true; do
     app_wizard_preflight "$bench_dir"
-    echo
-    echo "============================================================"
-    echo "App Installation Wizard"
-    echo "============================================================"
-    echo "Choose one app to install. Status and guide tools are listed first."
-    echo
+    ui_submenu_header "App Installation Wizard" \
+      "Choose one app. Status and guide tools are listed first."
     print_two_column_menu       "1) Installed apps / status"       "2) Compatibility"       "3) CRM [official]"       "4) HR / HRMS [official]"       "5) Education [official]"       "6) Payments [official]"       "7) Webshop / E-Commerce [official]"       "8) Builder [official]"       "9) Learning / LMS [official]"       "10) Wiki [official]"       "11) Print Designer [official]"       "12) Drive [official]"       "13) Gameplan [official]"       "14) Lending [official]"       "15) Raven Chat [community]"       "16) Insights [official]"       "17) Telephony [official]"       "18) Helpdesk [official]"       "19) India Compliance [community]"       "20) Advanced tools"       "21) Rollback guide"
     echo
-    echo "Install one app at a time. [official]=Frappe Technologies; [community]=third-party."
-    echo "The wizard will offer a backup checkpoint first."
+    ui_text muted "Install one app at a time. [official]=Frappe; [community]=third-party."
+    printf '\n'
+    ui_text muted "The wizard will offer a backup checkpoint first."
+    printf '\n'
     menu_footer
     menu_read_choice choice
 
@@ -1463,12 +1461,8 @@ install_custom_app_interactive() {
 
 show_advanced_app_tools_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "Advanced App Tools"
-    echo "============================================================"
-    echo "Use these only for troubleshooting or trusted custom apps."
-    echo
+    ui_submenu_header "Advanced App Tools" \
+      "Troubleshooting and trusted custom apps only."
     print_two_column_menu       "1) Custom Git app"       "2) Repair app registry"       "3) Rollback guide"       "4) Installed apps"
     echo
     warn "Custom Git apps are not curated by this toolkit and may break the site if incompatible."
@@ -1490,16 +1484,14 @@ show_advanced_app_tools_menu() {
 
 show_app_library_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "App Installation Library"
-    echo "============================================================"
-    echo "Choose an app to install, or use the status/guide tools."
-    echo
+    ui_submenu_header "App Installation Library" \
+      "Install an app, or use status / guide tools."
     print_two_column_menu       "1) Wizard"       "2) Installed apps / status"       "3) Compatibility"       "4) Installed apps"       "5) Guide"       "6) Rollback guide"       "7) CRM [official]"       "8) HR / HRMS [official]"       "9) Education [official]"       "10) Payments [official]"       "11) Webshop / E-Commerce [official]"       "12) Builder [official]"       "13) Learning / LMS [official]"       "14) Wiki [official]"       "15) Print Designer [official]"       "16) Drive [official]"       "17) Gameplan [official]"       "18) Lending [official]"       "19) Raven Chat [community]"       "20) Helpdesk [official]"       "21) Telephony [official]"       "22) Insights [official]"       "23) India Compliance [community]"       "24) Advanced tools"
     echo
-    echo "Notes: one app at a time; keep a backup checkpoint."
-    echo "[official]=Frappe Technologies; [community]=third-party open source."
+    ui_text muted "Notes: one app at a time; keep a backup checkpoint."
+    printf '\n'
+    ui_text muted "[official]=Frappe Technologies; [community]=third-party open source."
+    printf '\n'
     menu_footer
     local app_choice=""
     menu_read_choice app_choice

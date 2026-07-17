@@ -638,8 +638,11 @@ menu_navigation_self_test() {
   for action in "${quit_actions[@]}"; do
     for input in q Q; do
       tested=$((tested + 1))
+      # set +e: a non-zero child must not abort this loop under set -e.
+      set +e
       out="$(printf '%s\n' "$input" | timeout 5 "${invoke[@]}" "$script" "$action" 2>&1)"
       rc=$?
+      set -e
       if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
         failures=$((failures + 1))
         status_line "${action} ${input}" "FAIL" "q/Q did not exit cleanly"
@@ -672,8 +675,10 @@ menu_navigation_self_test() {
   for action in "${back_actions[@]}"; do
     for input in b B; do
       tested=$((tested + 1))
+      set +e
       out="$(printf '%s\nq\n' "$input" | timeout 5 "${invoke[@]}" "$script" "$action" 2>&1)"
       rc=$?
+      set -e
       if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
         failures=$((failures + 1))
         status_line "${action} ${input}" "FAIL" "b/B did not return cleanly"
@@ -700,8 +705,10 @@ menu_navigation_self_test() {
   for row in "${nested_tests[@]}"; do
     IFS='|' read -r root select quit <<< "$row"
     tested=$((tested + 1))
+    set +e
     out="$(printf '%s\n%s\n' "$select" "$quit" | timeout 5 "${invoke[@]}" "$script" "$root" 2>&1)"
     rc=$?
+    set -e
     if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'command not found|unbound variable|syntax error'; then
       failures=$((failures + 1))
       status_line "${root}->${select}->${quit}" "FAIL" "nested menu quit failed"
@@ -1043,7 +1050,10 @@ parse_args() {
 main() {
   parse_args "$@"
   # Re-apply color policy after flags such as --no-color / NO_COLOR.
+  # Uses ERPNEXT_DEV_STDOUT_TTY (snapshotted before tee) so OK/WARN/FAIL
+  # colors survive the log redirect on interactive terminals.
   erpnext_dev_init_terminal_colors
+  ui_init
 
   if action_requires_lock "${ACTION:-menu}"; then
     acquire_toolkit_lock

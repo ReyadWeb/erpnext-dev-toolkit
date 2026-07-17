@@ -52,7 +52,7 @@ record for this dimension.
 | **v1.17.1** | **Observe hardening**: CPU/iowait samples, cert-expiry days, Docker restart loops, workers/scheduler/queue best-effort; README Docker accuracy; audited `FRAPPE_DOCKER_REF` SHA default. | **implemented** |
 | **v1.17.2** | **Release publish alignment**: assert required GitHub Release Assets + `/releases/latest`; dashboard/incident docs assets; README install race guidance. | **implemented** |
 | **v1.17.3** | **CLI menu UI foundation**: `lib/ui.sh` + polished main menu (responsive two-column, `NO_COLOR`/ASCII-safe) with cached status strip; hermetic `test-ui-render.sh`. | **implemented** |
-| **v1.17.4** | **Status-aware menu polish** (optional follow-up): richer cached badges, submenu visual consistency. | planned |
+| **v1.17.4** | **Menu color + App Wizard polish**: restore OK/WARN/FAIL green after tee redirect; App Installation Wizard/Library use `lib/ui.sh`; shared two-column menus get cyan numbers. | **in progress** |
 | **v1.18.0** | **Guarded auto-healing** + Dashboard 2.0 polish (do not rush): modes `monitor` / `safe` / `advanced`; resource/runtime/protection cards; first actions = restart worker, scheduler/runtime, Docker service group, native app stack; **host reboot opt-in last resort only**. | planned |
 | **v1.19.0** | **External watchdog contract**: heartbeat endpoint/file + last-seen; external monitor + provider API abstraction; safe power-cycle policy; incident record after external recovery (frozen guest cannot self-heal). | planned |
 

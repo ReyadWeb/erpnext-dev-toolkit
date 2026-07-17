@@ -1,3 +1,23 @@
+## Unreleased
+
+### Fixed (v1.17.4)
+
+- **OK / WARN / FAIL colors restored in menus.** Since v1.16, `main()` re-ran
+  color init after `exec > >(tee …)` turned stdout into a pipe, so
+  `[[ ! -t 1 ]]` cleared `GREEN`/`YELLOW`/`RED` and CRM “OK” (and every other
+  `status_line`) looked like plain text. Colors now use a one-time
+  `ERPNEXT_DEV_STDOUT_TTY` snapshot taken before the log redirect.
+- **`menu_read_choice` / `ui_prompt` variable shadowing.** Both used a local
+  `__choice`, so `printf -v` never updated the caller — menus saw an empty
+  selection (Production Ops looped on `""` until timeout).
+
+### Changed (v1.17.4)
+
+- **App Installation Wizard / Library / Advanced tools** use the same Bash UI
+  helpers as the main menu (boxed title, cyan option numbers, cyan prompt).
+- Shared `print_two_column_menu` / `menu_footer` / `menu_read_choice` pick up
+  color styling so other submenus improve without a full rewrite.
+
 ## v1.17.3 - CLI menu UI foundation
 
 Patch release that upgrades the interactive main menu to a Bash-native polished

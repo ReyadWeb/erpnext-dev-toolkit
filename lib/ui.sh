@@ -159,19 +159,50 @@ ui_status_badge() {
 ui_prompt() {
   local prompt="${1:-Choose an option: }"
   local __target="${2:-}"
-  local __choice=""
+  # Must not be named __choice: callers (menu_read_choice) often pass __choice as
+  # the destination, and printf -v would only update this function's local.
+  local __ui_prompt_choice=""
   ui_text cyan "$prompt"
-  if ! read -r __choice; then
-    __choice="q"
+  if ! read -r __ui_prompt_choice; then
+    __ui_prompt_choice="q"
   fi
-  __choice="$(trim_menu_choice "$__choice" 2>/dev/null || printf '%s' "$__choice")"
-  case "${__choice,,}" in
-    quit|exit) __choice="q" ;;
-    back) __choice="b" ;;
+  __ui_prompt_choice="$(trim_menu_choice "$__ui_prompt_choice" 2>/dev/null || printf '%s' "$__ui_prompt_choice")"
+  case "${__ui_prompt_choice,,}" in
+    quit|exit) __ui_prompt_choice="q" ;;
+    back) __ui_prompt_choice="b" ;;
   esac
   if [[ -n "$__target" ]]; then
-    printf -v "$__target" '%s' "$__choice"
+    printf -v "$__target" '%s' "$__ui_prompt_choice"
   else
-    printf '%s' "$__choice"
+    printf '%s' "$__ui_prompt_choice"
   fi
+}
+
+# Compact submenu title used by App Wizard / Library and other nested menus.
+ui_submenu_header() {
+  local title="$1"
+  local subtitle="${2:-}"
+  local width inner pad
+
+  ui_init
+  width="$(ui_panel_width)"
+  inner=$((width - 2))
+  (( inner < 10 )) && inner=10
+
+  echo
+  ui_box_line top "$width"
+  printf '%s ' "$UI_V"
+  ui_text cyan "$title"
+  pad=$((inner - 1 - ${#title}))
+  (( pad < 0 )) && pad=0
+  printf '%*s%s\n' "$pad" "" "$UI_V"
+  if [[ -n "$subtitle" ]]; then
+    printf '%s ' "$UI_V"
+    ui_text muted "$subtitle"
+    pad=$((inner - 1 - ${#subtitle}))
+    (( pad < 0 )) && pad=0
+    printf '%*s%s\n' "$pad" "" "$UI_V"
+  fi
+  ui_box_line bot "$width"
+  echo
 }
