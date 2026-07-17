@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.17.3 (July 2026) — **CLI menu UI foundation**: Bash-native polished main menu (cached status strip, responsive two-column layout, `NO_COLOR`/ASCII-safe). Still no auto-healing (v1.18). See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).  
+**Current release:** v1.17.4 (July 2026) — **Menu colors + App Wizard polish**: restore OK/WARN/FAIL green after tee redirect; App Installation Wizard/Library use `lib/ui.sh`. Still no auto-healing (v1.18). See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).  
 
 **External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
@@ -52,7 +52,7 @@ record for this dimension.
 | **v1.17.1** | **Observe hardening**: CPU/iowait samples, cert-expiry days, Docker restart loops, workers/scheduler/queue best-effort; README Docker accuracy; audited `FRAPPE_DOCKER_REF` SHA default. | **implemented** |
 | **v1.17.2** | **Release publish alignment**: assert required GitHub Release Assets + `/releases/latest`; dashboard/incident docs assets; README install race guidance. | **implemented** |
 | **v1.17.3** | **CLI menu UI foundation**: `lib/ui.sh` + polished main menu (responsive two-column, `NO_COLOR`/ASCII-safe) with cached status strip; hermetic `test-ui-render.sh`. | **implemented** |
-| **v1.17.4** | **Menu color + App Wizard polish**: restore OK/WARN/FAIL green after tee redirect; App Installation Wizard/Library use `lib/ui.sh`; shared two-column menus get cyan numbers. | **in progress** |
+| **v1.17.4** | **Menu color + App Wizard polish**: restore OK/WARN/FAIL green after tee redirect; App Installation Wizard/Library use `lib/ui.sh`; shared two-column menus get cyan numbers. | **implemented** |
 | **v1.18.0** | **Guarded auto-healing** + Dashboard 2.0 polish (do not rush): modes `monitor` / `safe` / `advanced`; resource/runtime/protection cards; first actions = restart worker, scheduler/runtime, Docker service group, native app stack; **host reboot opt-in last resort only**. | planned |
 | **v1.19.0** | **External watchdog contract**: heartbeat endpoint/file + last-seen; external monitor + provider API abstraction; safe power-cycle policy; incident record after external recovery (frozen guest cannot self-heal). | planned |
 

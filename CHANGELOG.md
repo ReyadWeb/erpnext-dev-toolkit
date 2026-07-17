@@ -1,6 +1,9 @@
-## Unreleased
+## v1.17.4 - Menu colors + App Wizard polish
 
-### Fixed (v1.17.4)
+Patch release that restores green OK/WARN/FAIL status colors and applies the
+Bash UI helpers to the App Installation Wizard (the screen v1.17.3 left plain).
+
+### Fixed
 
 - **OK / WARN / FAIL colors restored in menus.** Since v1.16, `main()` re-ran
   color init after `exec > >(tee …)` turned stdout into a pipe, so
@@ -11,7 +14,7 @@
   `__choice`, so `printf -v` never updated the caller — menus saw an empty
   selection (Production Ops looped on `""` until timeout).
 
-### Changed (v1.17.4)
+### Changed
 
 - **App Installation Wizard / Library / Advanced tools** use the same Bash UI
   helpers as the main menu (boxed title, cyan option numbers, cyan prompt).
