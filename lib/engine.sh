@@ -97,12 +97,12 @@ choose_deployment_engine_for_setup() {
     echo "============================================================"
     echo
     echo "1) Native Ubuntu/Debian VM"
-    echo "   Direct ERPNext/Frappe installation on the host (Ubuntu 24.04/26.04, Debian 13)."
-    echo "   Best for maximum host-level control and simplicity."
+    echo "   Direct ERPNext/Frappe install on this VM."
+    echo "   Best for host-level control and simplicity."
     echo
     echo "2) Docker"
-    echo "   Containerized deployment using the official Frappe Docker architecture."
-    echo "   Best for isolation, portability, and upstream production alignment."
+    echo "   Containerized deploy via official Frappe Docker."
+    echo "   Best for isolation and upstream alignment."
     echo
     while true; do
       read -r -p "Deployment engine [1-2, default: Native]: " reply

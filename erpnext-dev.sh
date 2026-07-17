@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.17.5"
+SCRIPT_VERSION="1.17.6"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -77,7 +77,8 @@ APP_BACKUP_BEFORE_INSTALL="${APP_BACKUP_BEFORE_INSTALL:-prompt}"
 APP_BACKUP_AFTER_INSTALL="${APP_BACKUP_AFTER_INSTALL:-prompt}"
 FIREWALL_BACKUP_DIR="${FIREWALL_BACKUP_DIR:-/var/backups/erpnext-dev/firewall}"
 ERPNEXT_SERVICE_NAME="${ERPNEXT_SERVICE_NAME:-erpnext-dev.service}"
-READY_TIMEOUT="${READY_TIMEOUT:-90}"
+# Stricter wait-ready (ports + HTTP + login CSS/JS) can need more than 90s on cold start.
+READY_TIMEOUT="${READY_TIMEOUT:-180}"
 READY_INTERVAL="${READY_INTERVAL:-5}"
 CONFIG_FILE="${CONFIG_FILE:-/etc/erpnext-dev/config.env}"
 LEGACY_CONFIG_FILE="${LEGACY_CONFIG_FILE:-${FRAPPE_HOME}/erpnext-dev-config.env}"
@@ -343,6 +344,9 @@ fi
 # shellcheck source=lib/update.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
 erpnext_dev_init_terminal_colors
+# Capture width/TTY before tee turns stdout into a pipe (otherwise the main menu
+# often falls back to 80-col single-column layout).
+erpnext_dev_snapshot_terminal_cols
 ui_init
 
 prepare_log_file

@@ -13,7 +13,7 @@ show_ready_summary() {
   echo "============================================================"
   echo "ERPNext Ready"
   echo "============================================================"
-  echo "ERPNext is running and the required development ports are listening."
+  echo "ERPNext is running: ports, HTTP ping, and login static assets are OK."
   echo
   if is_public_vm_workflow; then
     if ssl_is_configured 2>/dev/null && port_listens 443; then
@@ -128,7 +128,9 @@ curl_head_status() {
     curl_args+=(--resolve "${host_name}:${port}:${resolve_ip}")
   fi
 
-  curl "${curl_args[@]}" "$url" 2>/dev/null | awk 'NR==1 {print; exit}' || true
+  # Strip CR so CRLF HEAD responses do not leave a trailing \r on the status
+  # token (which would break http_status_ok's numeric match).
+  curl "${curl_args[@]}" "$url" 2>/dev/null | tr -d '\r' | awk 'NR==1 {print; exit}' || true
 }
 
 # Extract the numeric status code from an HTTP status line such as "HTTP/2 200"
@@ -144,6 +146,66 @@ http_status_ok() {
   local code
   code="$(http_status_code "${1:-}")"
   [[ "$code" =~ ^[23][0-9][0-9]$ ]]
+}
+
+# Full HEAD response headers (not just the status line). Same resolve args as
+# curl_head_status so callers can pin Host:port to 127.0.0.1 inside the VM.
+curl_response_headers() {
+  local url="${1:-}"
+  local host_name="${2:-}"
+  local port="${3:-}"
+  local resolve_ip="${4:-}"
+  local curl_args=()
+
+  [[ -n "$url" ]] || return 1
+
+  curl_args=(-k -sS -I --max-time 10)
+
+  if [[ -n "$host_name" && -n "$port" && -n "$resolve_ip" ]]; then
+    curl_args+=(--resolve "${host_name}:${port}:${resolve_ip}")
+  fi
+
+  curl "${curl_args[@]}" "$url" 2>/dev/null | tr -d '\r' || true
+}
+
+# First /assets/*.css|js path from Link: preload headers (Frappe login).
+extract_link_asset_path() {
+  printf '%s\n' "${1:-}" \
+    | awk 'tolower($1)=="link:"{print}' \
+    | grep -oE '/assets/[^>,]+\.(css|js)' \
+    | head -n 1 || true
+}
+
+# Probe that the login page's preloaded CSS/JS asset returns 2xx/3xx.
+# Prints "asset_path|status_line" when a Link asset path was found.
+# Return codes: 0 = asset OK, 1 = path found but not OK, 2 = no Link asset path.
+probe_login_static_asset() {
+  local url="${1:-}"
+  local host_name="${2:-}"
+  local port="${3:-}"
+  local resolve_ip="${4:-}"
+  local headers asset_path asset_url asset_head
+
+  [[ -n "$url" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 2
+
+  headers="$(curl_response_headers "$url" "$host_name" "$port" "$resolve_ip")"
+  asset_path="$(extract_link_asset_path "$headers")"
+  if [[ -z "$asset_path" ]]; then
+    return 2
+  fi
+
+  if [[ "$url" == https://* ]]; then
+    asset_url="https://${host_name}${asset_path}"
+  else
+    asset_url="http://${host_name}:${port}${asset_path}"
+  fi
+
+  asset_head="$(curl_head_status "$asset_url" "$host_name" "$port" "$resolve_ip" || true)"
+  printf '%s|%s\n' "$asset_path" "${asset_head:-}"
+  if http_status_ok "$asset_head"; then
+    return 0
+  fi
+  return 1
 }
 
 escape_hosts_regex() {

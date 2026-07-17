@@ -73,15 +73,42 @@ bench_ready_count() {
 bench_readiness_line() {
   local elapsed="$1"
   local timeout="$2"
+  local http_state="${3:-}"
+  local assets_state="${4:-}"
   local web socket queue cache
 
   if port_listens 8000; then web="OK"; else web="wait"; fi
   if port_listens 9000; then socket="OK"; else socket="wait"; fi
   if port_listens 11000; then queue="OK"; else queue="wait"; fi
   if port_listens 13000; then cache="OK"; else cache="wait"; fi
+  if [[ -z "$http_state" ]]; then
+    if bench_http_ready; then http_state="OK"; else http_state="wait"; fi
+  fi
+  if [[ -z "$assets_state" ]]; then
+    if bench_static_assets_ready; then assets_state="OK"; else assets_state="wait"; fi
+  fi
 
-  printf "  [%3ss/%3ss] web: %-4s socket: %-4s queue: %-4s cache: %-4s\n" \
-    "$elapsed" "$timeout" "$web" "$socket" "$queue" "$cache"
+  printf "  [%3ss/%3ss] web: %-4s http: %-4s assets: %-4s socket: %-4s queue: %-4s cache: %-4s\n" \
+    "$elapsed" "$timeout" "$web" "$http_state" "$assets_state" "$socket" "$queue" "$cache"
+}
+
+# Login CSS/JS must answer 2xx/3xx. Prefers HTTPS (nginx) when :443 listens so the
+# same path the browser uses is checked; otherwise probes bench :8000 directly.
+# Prevents "ready" while the unstyled HTML shell is still all that loads.
+bench_static_assets_ready() {
+  local probe_out=""
+
+  if port_listens 443; then
+    probe_out="$(probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" || true)"
+  elif port_listens 8000; then
+    probe_out="$(probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" || true)"
+  else
+    return 1
+  fi
+
+  [[ -n "$probe_out" ]] || return 1
+  local asset_head="${probe_out#*|}"
+  http_status_ok "$asset_head"
 }
 
 # shellcheck disable=SC2120 # timeout/interval are optional overrides with sane defaults
@@ -89,23 +116,35 @@ wait_for_erpnext_ready() {
   local timeout="${1:-$READY_TIMEOUT}"
   local interval="${2:-$READY_INTERVAL}"
   local elapsed=0
+  local http_state assets_state
 
   echo
   echo "Waiting for ERPNext services to become ready..."
-  echo "This can take 15-90 seconds after start/restart."
+  echo "Requires ports, HTTP ping, and login static assets (CSS/JS)."
+  echo "This can take up to ${timeout}s after start/restart (READY_TIMEOUT)."
   echo
 
   while (( elapsed <= timeout )); do
-    bench_readiness_line "$elapsed" "$timeout"
+    http_state="wait"
+    assets_state="wait"
+    if bench_http_ready; then
+      http_state="OK"
+    fi
+    # Assets depend on a working login response; skip the extra curls until ping works.
+    if [[ "$http_state" == "OK" ]] && bench_static_assets_ready; then
+      assets_state="OK"
+    fi
 
-    # In production the ports belong to gunicorn/socketio/redis under supervisor;
-    # additionally require an HTTP 200 from the app before declaring readiness so
-    # we do not report "ready" while gunicorn is still booting workers.
-    if bench_ports_ready && { ! runtime_is_production || bench_http_ready; }; then
+    bench_readiness_line "$elapsed" "$timeout" "$http_state" "$assets_state"
+
+    # Ports alone are not enough: the login HTML can return before CSS/JS bundles
+    # are served (unstyled page). Require HTTP ping + static-asset probe in both
+    # development and production runtimes.
+    if bench_ports_ready && [[ "$http_state" == "OK" && "$assets_state" == "OK" ]]; then
       if runtime_is_production; then
-        ok "ERPNext is ready. Production runtime is serving (gunicorn + socket.io)."
+        ok "ERPNext is ready. Production runtime is serving (HTTP + static assets)."
       else
-        ok "ERPNext is ready. Required development ports are listening."
+        ok "ERPNext is ready. Development ports, HTTP, and static assets are OK."
       fi
       return 0
     fi
@@ -118,8 +157,14 @@ wait_for_erpnext_ready() {
   echo
   echo "Useful checks:"
   echo "  $(toolkit_cmd runtime-status)"
+  echo "  $(toolkit_cmd verify-local-ssl)   # look at Static assets"
   echo "  $(toolkit_cmd logs)"
   echo "  sudo systemctl status ${ERPNEXT_SERVICE_NAME} --no-pager -l"
+  echo
+  echo "If only assets stay on wait, rebuild and clear cache, then retry:"
+  echo "  $(toolkit_cmd clear-cache)"
+  echo "  READY_TIMEOUT=${timeout} $(toolkit_cmd wait-ready)"
+  echo "  (or increase READY_TIMEOUT and rerun wait-ready)"
   return 1
 }
 
@@ -587,6 +632,7 @@ show_production_runtime_status() {
   status_line "Web (gunicorn) :8000" "$(port_listens 8000 && echo OK || echo WARN)" "backend web workers"
   status_line "Socket.IO :9000" "$(port_listens 9000 && echo OK || echo WARN)" "realtime"
   status_line "HTTP ping" "$(bench_http_ready && echo OK || echo WARN)" "http://127.0.0.1:8000/api/method/ping"
+  status_line "Static assets" "$(bench_static_assets_ready && echo OK || echo WARN)" "login CSS/JS Link probe"
   echo
   echo "Supervisor programs:"
   production_supervisor_status

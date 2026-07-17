@@ -22,6 +22,27 @@ sudo erpnext-dev toolkit-rollback   # return to previous signed slot if needed
 Expected: install slot is `main` or `vmain` (not overwriting signed `v1.17.4`);
 rollback restores the prior tag. Hermetic: `scripts/test-update-channel.sh`.
 
+## v1.17.6 wait-ready static-asset gate + two-column menu
+
+Hermetic (no sudo / no install):
+
+```bash
+scripts/test-static-asset-probe.sh
+scripts/test-ui-render.sh
+```
+
+`test-ui-render.sh` expects a two-column main menu at `COLUMNS=100` (row with
+`[1]` and `[10]`), including when only `ERPNEXT_DEV_TTY_COLS` is set.
+
+On a VM after install or restart, `wait-ready` must show `http: OK` and
+`assets: OK` (not only ports) before printing ERPNext Ready. Confirm with:
+
+```bash
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-local-ssl   # Static assets row
+sudo erpnext-dev menu               # two-column options on normal terminals
+```
+
 ## v1.17.3–v1.17.5 CLI / dashboard UI
 
 Hermetic (no sudo):

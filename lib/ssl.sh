@@ -2046,12 +2046,16 @@ run_trusted_mkcert_setup() {
 # problem — a hard refresh clears it. Surface that so operators do not think the
 # install is broken.
 print_local_https_cache_hint() {
-  echo "If the page looks unstyled or broken on first load, do a hard refresh:"
+  echo "If the page looks unstyled right after install or restart, wait until:"
+  echo "  $(toolkit_cmd wait-ready)"
+  echo "reports HTTP + static assets OK (not only open ports)."
+  echo
+  echo "If Static assets already show OK above but the browser still looks broken,"
+  echo "do a hard refresh (cached HTML/CSS from before HTTPS was enabled):"
   echo "  - Linux / Windows: Ctrl + Shift + R"
   echo "  - macOS:           Cmd + Shift + R"
-  echo "The assets are served correctly; the browser is showing a cached copy from"
-  echo "before HTTPS was enabled. If a hard refresh is not enough, clear this site's"
-  echo "cached data / unregister its service worker in the browser dev tools, then reload."
+  echo "If a hard refresh is not enough, clear this site's cached data / unregister"
+  echo "its service worker in the browser dev tools, then reload."
 }
 
 create_self_signed_local_cert() {
@@ -2588,25 +2592,22 @@ verify_local_ssl() {
     failed=1
   fi
 
-  # Active asset probe: the login HTML can return 200 while its CSS/JS bundles do
-  # not load, which is exactly what an "unstyled login" looks like. Pull a real
-  # preloaded asset URL from the page's Link header and fetch it. A 2xx here means
-  # assets ARE served (so a broken-looking page is browser cache -> hard refresh);
-  # anything else is a genuine asset problem with a concrete remediation.
+  # Active asset probe (shared with wait_for_erpnext_ready): login HTML can return
+  # 200 while CSS/JS bundles do not. A 2xx here means assets ARE served (so a
+  # broken-looking page is usually browser cache -> hard refresh); anything else
+  # is a genuine asset problem with a concrete remediation.
   if http_status_ok "$https_head"; then
-    local asset_path asset_head
-    asset_path="$(curl -k -sS -I --max-time 10 --resolve "${SITE_NAME}:443:127.0.0.1" "https://${SITE_NAME}/login" 2>/dev/null \
-      | tr -d '\r' | awk 'tolower($1)=="link:"{print}' | grep -oE '/assets/[^>,]+\.(css|js)' | head -n 1 || true)"
-    if [[ -n "$asset_path" ]]; then
-      asset_head="$(curl_head_status "https://${SITE_NAME}${asset_path}" "$SITE_NAME" 443 "127.0.0.1" || true)"
-      if http_status_ok "$asset_head"; then
-        status_line "Static assets" "OK" "${asset_head} (${asset_path##*/})"
-      else
-        status_line "Static assets" "WARN" "asset did not load: ${asset_head:-no response}"
-        echo "    Assets are not serving. Rebuild and clear cache, then re-verify:"
-        echo "      $(toolkit_cmd clear-cache)"
-        echo "      (or: sudo -iu ${FRAPPE_USER} bash -lc 'cd $(active_bench_dir) && bench build')"
-      fi
+    local probe_out asset_path asset_head probe_rc=0
+    probe_out="$(probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+    if [[ "$probe_rc" -eq 0 ]]; then
+      IFS='|' read -r asset_path asset_head <<<"$probe_out"
+      status_line "Static assets" "OK" "${asset_head} (${asset_path##*/})"
+    elif [[ "$probe_rc" -eq 1 ]]; then
+      IFS='|' read -r asset_path asset_head <<<"$probe_out"
+      status_line "Static assets" "WARN" "asset did not load: ${asset_head:-no response}"
+      echo "    Assets are not serving. Rebuild and clear cache, then re-verify:"
+      echo "      $(toolkit_cmd clear-cache)"
+      echo "      (or: sudo -iu ${FRAPPE_USER} bash -lc 'cd $(active_bench_dir) && bench build')"
     fi
   fi
 

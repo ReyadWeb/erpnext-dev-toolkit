@@ -189,7 +189,8 @@ render_main_status_panel() {
 
 render_main_menu_wide() {
   local width left_width right_width i left right ln lt rn rt
-  local half=9
+  local total="${#MAIN_MENU_ITEMS[@]}"
+  local half=$(( (total + 1) / 2 ))
   width="$(ui_panel_width)"
   left_width=$(( width / 2 - 4 ))
   right_width=$(( width - left_width - 7 ))
@@ -202,6 +203,10 @@ render_main_menu_wide() {
     right="${MAIN_MENU_ITEMS[$((i + half))]:-}"
     ln="${left%%|*}"
     lt="${left#*|}"
+    # Truncate labels that would overflow the column on ~80-col terminals.
+    if (( ${#lt} > left_width - 5 )); then
+      lt="${lt:0:$((left_width - 8))}..."
+    fi
     printf '%s ' "$UI_V"
     ui_text cyan "[${ln}]"
     printf ' %-*s ' "$((left_width - 5))" "$lt"
@@ -209,6 +214,9 @@ render_main_menu_wide() {
     if [[ -n "$right" ]]; then
       rn="${right%%|*}"
       rt="${right#*|}"
+      if (( ${#rt} > right_width - 5 )); then
+        rt="${rt:0:$((right_width - 8))}..."
+      fi
       ui_text cyan "[${rn}]"
       printf ' %-*s' "$((right_width - 5))" "$rt"
     else

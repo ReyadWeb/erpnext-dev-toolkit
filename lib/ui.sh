@@ -5,17 +5,72 @@
 [[ -n "${_ERPNEXT_DEV_UI_LOADED:-}" ]] && return 0
 _ERPNEXT_DEV_UI_LOADED=1
 
+# Resolve terminal width in a way that still works after
+# `exec > >(tee …)` turns stdout/stderr into pipes (tput/COLUMNS alone often
+# collapse to the 80-col default and force a single-column menu).
+ui_detect_terminal_cols() {
+  local cols=""
+
+  cols="${MENU_TERMINAL_COLS:-}"
+  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+    printf '%s' "$cols"
+    return 0
+  fi
+
+  # Live size from the controlling terminal (works after tee redirect).
+  # Prefer stty -F/-f so a failed /dev/tty open does not spam bash redirection errors.
+  cols=""
+  if cols="$(stty -F /dev/tty size 2>/dev/null)"; then
+    :
+  elif cols="$(stty -f /dev/tty size 2>/dev/null)"; then
+    :
+  else
+    cols=""
+  fi
+  cols="$(printf '%s\n' "$cols" | awk '{print $2}')"
+  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+    printf '%s' "$cols"
+    return 0
+  fi
+
+  cols="${ERPNEXT_DEV_TTY_COLS:-${COLUMNS:-}}"
+  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+    printf '%s' "$cols"
+    return 0
+  fi
+
+  cols="$(tput cols 2>/dev/null || true)"
+  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+    printf '%s' "$cols"
+    return 0
+  fi
+
+  # Prefer two-column layout when width is unknown (legacy default of 80 forced
+  # single-column menus in SSH / sudo / tee sessions).
+  printf '100'
+}
+
+# Snapshot width once before the log tee redirect. Safe to call repeatedly.
+erpnext_dev_snapshot_terminal_cols() {
+  local cols
+  if [[ -n "${ERPNEXT_DEV_TTY_COLS:-}" ]] && [[ "${ERPNEXT_DEV_TTY_COLS}" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  cols="$(ui_detect_terminal_cols)"
+  ERPNEXT_DEV_TTY_COLS="$cols"
+  export ERPNEXT_DEV_TTY_COLS
+}
+
 ui_init() {
   local cols colors
 
-  cols="${MENU_TERMINAL_COLS:-${COLUMNS:-}}"
-  if [[ -z "$cols" ]]; then
-    cols="$(tput cols 2>/dev/null || true)"
-  fi
-  if ! [[ "$cols" =~ ^[0-9]+$ ]] || (( cols <= 0 )); then
-    cols=80
-  fi
+  cols="$(ui_detect_terminal_cols)"
   UI_COLS="$cols"
+  # Keep the snapshot fresh for subprocesses / later ui_init calls.
+  if [[ -z "${ERPNEXT_DEV_TTY_COLS:-}" ]]; then
+    ERPNEXT_DEV_TTY_COLS="$cols"
+    export ERPNEXT_DEV_TTY_COLS
+  fi
 
   colors="$(tput colors 2>/dev/null || echo 0)"
   if ! [[ "$colors" =~ ^[0-9]+$ ]]; then
@@ -25,7 +80,13 @@ ui_init() {
 
   if [[ -n "${NO_COLOR:-}" || "${FORCE_NO_COLOR:-0}" == "1" || "${TERM:-}" == "dumb" ]] \
      || (( UI_COLORS < 8 )); then
-    UI_COLOR=0
+    # Still allow color when the operator's original stdout was a TTY (same
+    # snapshot used for GREEN/OK status lines after tee).
+    if [[ "${ERPNEXT_DEV_STDOUT_TTY:-}" == "1" && -z "${NO_COLOR:-}" && "${FORCE_NO_COLOR:-0}" != "1" && "${TERM:-}" != "dumb" ]]; then
+      UI_COLOR=1
+    else
+      UI_COLOR=0
+    fi
   else
     UI_COLOR=1
   fi
@@ -62,9 +123,11 @@ ui_layout_mode() {
     printf 'wide'
     return 0
   fi
-  if (( ${UI_COLS:-80} < 90 )); then
+  # Two-column from 80 cols upward (typical SSH / laptop terminals). Only very
+  # narrow panels stay single-column.
+  if (( ${UI_COLS:-100} < 80 )); then
     printf 'compact'
-  elif (( ${UI_COLS:-80} < 115 )); then
+  elif (( ${UI_COLS:-100} < 115 )); then
     printf 'medium'
   else
     printf 'wide'

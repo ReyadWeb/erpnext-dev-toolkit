@@ -1,3 +1,33 @@
+## v1.17.6 - Wait-ready asset gate + two-column menu fix
+
+Patch release that stops declaring ERPNext “ready” on an unstyled login shell,
+and restores the main menu’s two-column layout in normal SSH/sudo sessions.
+
+### Fixed
+
+- **`wait_for_erpnext_ready` / `wait-ready`** now require ports **and** an HTTP
+  ping **and** a login `Link`-header static-asset probe (same check as
+  `verify-local-ssl`). Development mode no longer treats “ports listening”
+  alone as ready — which matched the fresh-install unstyled `erp.test` page
+  that only fixed itself after waiting.
+- Default **`READY_TIMEOUT`** raised from 90s to **180s** so the stricter gate
+  has room on cold start (override with `READY_TIMEOUT=…`).
+- **Main menu stayed single-column** after `exec > >(tee …)` because width
+  re-detection fell back to 80 cols (`tput`/`COLUMNS` unreliable on the pipe).
+  Width is snapshotted before tee, refreshed via `/dev/tty` `stty size`, and
+  two-column layout is used from **80** columns up (unknown width defaults to
+  100). Submenus using `print_two_column_menu` pick up the same detector.
+
+### Changed
+
+- Shared helpers in `lib/access.sh`: `curl_response_headers`,
+  `extract_link_asset_path`, `probe_login_static_asset`.
+- `verify-local-ssl` uses the shared probe; local HTTPS success hint distinguishes
+  “wait for wait-ready” vs browser cache after assets are OK.
+- Hermetic `scripts/test-static-asset-probe.sh` (mocked `curl`).
+- `test-ui-render.sh` asserts `[1]` / `[10]` share a row at 100 cols and with
+  `ERPNEXT_DEV_TTY_COLS` alone.
+
 ## v1.17.5 - Operations Dashboard UI + main-channel update fix
 
 Patch release that gives the Operations Dashboard the same Bash UI section

@@ -385,15 +385,16 @@ print_two_column_menu() {
     ui_init
   fi
 
-  cols="${MENU_TERMINAL_COLS:-${UI_COLS:-}}"
-  if [[ -z "$cols" ]]; then
-    cols="$(tput cols 2>/dev/null || true)"
-  fi
-  if ! [[ "$cols" =~ ^[0-9]+$ ]] || ((cols <= 0)); then
-    cols="${COLUMNS:-100}"
-  fi
-  if ! [[ "$cols" =~ ^[0-9]+$ ]] || ((cols <= 0)); then
-    cols=100
+  if declare -F ui_detect_terminal_cols >/dev/null 2>&1; then
+    cols="$(ui_detect_terminal_cols)"
+  else
+    cols="${MENU_TERMINAL_COLS:-${ERPNEXT_DEV_TTY_COLS:-${UI_COLS:-${COLUMNS:-}}}}"
+    if [[ -z "$cols" ]]; then
+      cols="$(tput cols 2>/dev/null || true)"
+    fi
+    if ! [[ "$cols" =~ ^[0-9]+$ ]] || ((cols <= 0)); then
+      cols=100
+    fi
   fi
 
   half=$(((total + 1) / 2))
