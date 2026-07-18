@@ -514,16 +514,14 @@ maintenance_restart() {
 
 run_maintenance_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "Maintenance"
-    echo "============================================================"
-    echo "1) Run migrate"
-    echo "2) Build assets"
-    echo "3) Clear cache"
-    echo "4) Restart ERPNext service"
-    echo "5) Run safe repair"
-    echo "6) Show recent service logs"
+    ui_submenu_header "Maintenance" "Migrate, build, cache, restart, repair"
+    print_two_column_menu \
+      "1) Run migrate" \
+      "2) Build assets" \
+      "3) Clear cache" \
+      "4) Restart ERPNext service" \
+      "5) Run safe repair" \
+      "6) Show recent service logs"
     menu_footer
     local maintenance_choice=""
     menu_read_choice maintenance_choice
@@ -1980,17 +1978,16 @@ EOF_RESTORE_PULL
 restore_rehearsal_wizard() {
   require_sudo
   while true; do
-    ui_box_start "Restore Rehearsal Wizard"
-    echo "Use this on a disposable local/cloud restore VM."
-    echo "Do not use it for the first restore test on production."
-    echo
-    echo "1) Restore VM preflight"
-    echo "2) Generate restore SSH key"
-    echo "3) Pull off-VM backup"
-    echo "4) Verify pulled backup"
-    echo "5) Restore latest complete backup set"
-    echo "6) Post-restore status/access checks"
-    echo "7) Print backup-server cleanup reminder"
+    ui_submenu_header "Restore Rehearsal Wizard" \
+      "Disposable restore VM only — not for first production restore"
+    print_two_column_menu \
+      "1) Restore VM preflight" \
+      "2) Generate restore SSH key" \
+      "3) Pull off-VM backup" \
+      "4) Verify pulled backup" \
+      "5) Restore latest complete backup set" \
+      "6) Post-restore status/access checks" \
+      "7) Print backup-server cleanup reminder"
     menu_footer
     local restore_choice=""
     menu_read_choice restore_choice
@@ -2740,20 +2737,21 @@ disable_off_vm_backup() {
 off_vm_backup_wizard() {
   require_sudo
   while true; do
-    ui_box_start "Off-VM Backup"
-    echo "1) Off-VM backup plan"
-    echo "2) Guided off-VM backup setup"
-    echo "3) Generate backup SSH key"
-    echo "4) Configure rsync target"
-    echo "5) Off-VM backup dry run"
-    echo "6) Run off-VM backup"
-    echo "7) Off-VM backup status"
-    echo "8) Disable off-VM backup config"
-    echo "9) Prepare this server as backup target"
-    echo "10) Restore rehearsal wizard"
-    echo "11) Generate restore VM key"
-    echo "12) Add restore key on backup server"
-    echo "13) Remove restore key on backup server"
+    ui_submenu_header "Off-VM Backup" "Rsync target, keys, and restore rehearsal"
+    print_two_column_menu \
+      "1) Off-VM backup plan" \
+      "2) Guided off-VM backup setup" \
+      "3) Generate backup SSH key" \
+      "4) Configure rsync target" \
+      "5) Off-VM backup dry run" \
+      "6) Run off-VM backup" \
+      "7) Off-VM backup status" \
+      "8) Disable off-VM backup config" \
+      "9) Prepare this server as backup target" \
+      "10) Restore rehearsal wizard" \
+      "11) Generate restore VM key" \
+      "12) Add restore key on backup server" \
+      "13) Remove restore key on backup server"
     menu_footer
     local off_choice=""
     menu_read_choice off_choice
@@ -2780,20 +2778,21 @@ off_vm_backup_wizard() {
 
 backup_hardening_wizard() {
   while true; do
-    ui_box_start "Backup / Restore Hardening"
-    echo "1) Create database + files backup"
-    echo "2) Backup status"
-    echo "3) Verify latest backup"
-    echo "4) Off-VM backup guide"
-    echo "5) Restore rehearsal guide"
-    echo "6) Production checklist"
-    echo "7) List backups"
-    echo "8) Scheduled backup plan"
-    echo "9) Configure scheduled backups"
-    echo "10) Scheduled backup status"
-    echo "11) Backup retention plan"
-    echo "12) Retention status"
-    echo "13) Cleanup dry run"
+    ui_submenu_header "Backup / Restore Hardening" "Local backup, schedule, retention, off-VM"
+    print_two_column_menu \
+      "1) Create database + files backup" \
+      "2) Backup status" \
+      "3) Verify latest backup" \
+      "4) Off-VM backup guide" \
+      "5) Restore rehearsal guide" \
+      "6) Production checklist" \
+      "7) List backups" \
+      "8) Scheduled backup plan" \
+      "9) Configure scheduled backups" \
+      "10) Scheduled backup status" \
+      "11) Backup retention plan" \
+      "12) Retention status" \
+      "13) Cleanup dry run"
     menu_footer
     local backup_harden_choice=""
     menu_read_choice backup_harden_choice

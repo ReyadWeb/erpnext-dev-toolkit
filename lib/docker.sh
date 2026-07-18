@@ -2571,21 +2571,21 @@ docker_app_install_wizard() {
   require_sudo
   local choice
   while true; do
-    echo
-    echo "============================================================"
-    echo "Docker App Installation"
-    echo "============================================================"
-    echo "Apps install into the running container (ideal for evaluation)."
-    echo "For durable deployments, build a custom image: $(toolkit_cmd docker-build-custom-image)."
-    echo
-    echo "  1) CRM               6) Webshop / E-Commerce"
-    echo "  2) HR / HRMS         7) Builder"
-    echo "  3) Helpdesk          8) Insights"
-    echo "  4) Payments          9) Print Designer"
-    echo "  5) Learning / LMS   10) Wiki"
-    echo "  b) Back"
-    echo "============================================================"
-    read -r -p "Choose an app to install [b]: " choice
+    ui_submenu_header "Docker App Installation" \
+      "Into the running container · durable: $(toolkit_cmd docker-build-custom-image)"
+    print_two_column_menu \
+      "1) CRM" \
+      "2) HR / HRMS" \
+      "3) Helpdesk" \
+      "4) Payments" \
+      "5) Learning / LMS" \
+      "6) Webshop / E-Commerce" \
+      "7) Builder" \
+      "8) Insights" \
+      "9) Print Designer" \
+      "10) Wiki"
+    menu_footer
+    menu_read_choice choice
     case "$choice" in
       1) install_app_profile crm ;;
       2) install_app_profile hrms ;;

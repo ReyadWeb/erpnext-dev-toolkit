@@ -793,11 +793,11 @@ SQL
 run_uninstall_menu() {
   require_sudo
 
-  echo
-  echo "Uninstall Options"
-  echo "1) Soft uninstall: stop Bench and archive ${BENCH_PARENT}"
-  echo "2) Remove bench files only"
-  echo "3) Full purge: remove bench, frappe user, MariaDB/Redis packages"
+  ui_submenu_header "Uninstall Options" "Soft archive, remove files, or full purge"
+  print_two_column_menu \
+    "1) Soft uninstall: stop Bench and archive ${BENCH_PARENT}" \
+    "2) Remove bench files only" \
+    "3) Full purge: remove bench, frappe user, MariaDB/Redis packages"
   menu_footer
   menu_read_choice choice
 
@@ -1662,9 +1662,8 @@ run_public_vm_quickstart() {
   install_self_for_reuse
 
   while true; do
-    ui_box_start "Public VM Quickstart"
-    echo "Production order: requirements -> domain -> install -> backup -> HTTPS -> security profile -> apps -> final QA."
-    echo
+    ui_submenu_header "Public VM Quickstart" \
+      "Requirements → domain → install → backup → HTTPS → security → apps → QA"
     public_quickstart_status_summary
     echo
     print_two_column_menu \
@@ -1707,18 +1706,18 @@ run_first_run_wizard() {
   require_sudo
 
   while true; do
-    ui_box_start "First Run / Setup Wizard"
-    echo "Choose the setup type. The script will save non-secret settings."
-    echo
+    ui_submenu_header "First Run / Setup Wizard" \
+      "Choose setup type · non-secret settings are saved"
     status_line "Current site" "INFO" "${SITE_NAME} (${SITE_NAME_SOURCE})"
     status_line "Production domain" "$([[ -n "${PRODUCTION_DOMAIN:-}" ]] && echo OK || echo INFO)" "${PRODUCTION_DOMAIN:-not set}"
     status_line "Config" "INFO" "$CONFIG_FILE"
     echo
-    echo "1) Local development VM"
-    echo "2) Public VM / production-candidate"
-    echo "3) Existing install / maintenance menu"
-    echo "4) Show saved config"
-    echo "5) Setup lifecycle / SSL mode guide"
+    print_two_column_menu \
+      "1) Local development VM" \
+      "2) Public VM / production-candidate" \
+      "3) Existing install / maintenance menu" \
+      "4) Show saved config" \
+      "5) Setup lifecycle / SSL mode guide"
     menu_footer
     menu_read_choice choice
 

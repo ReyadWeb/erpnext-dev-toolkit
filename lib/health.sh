@@ -257,14 +257,15 @@ health_monitoring_wizard() {
     health_title="$(production_ops_breadcrumb_title "Health Monitoring")"
   fi
   while true; do
-    ui_box_start "$health_title"
-    echo "1) Run health check now"
-    echo "2) Configure health timer"
-    echo "3) Health timer/status"
-    echo "4) Health check journal"
-    echo "5) Disable health timer"
-    echo "6) Service recovery plan"
-    echo "7) Production checklist"
+    ui_submenu_header "$health_title" "Timer, journal, and recovery checks"
+    print_two_column_menu \
+      "1) Run health check now" \
+      "2) Configure health timer" \
+      "3) Health timer/status" \
+      "4) Health check journal" \
+      "5) Disable health timer" \
+      "6) Service recovery plan" \
+      "7) Production checklist"
     menu_footer
     local health_choice=""
     menu_read_choice health_choice
@@ -746,18 +747,18 @@ final_qa_wizard() {
   require_sudo
 
   while true; do
-    ui_box_start "Final QA / Release Readiness"
-    echo "Compact checks before production handoff or release validation."
-    echo
-    echo "1) Release readiness summary"
-    echo "2) Command audit"
-    echo "3) Production checklist"
-    echo "4) Backup verify"
-    echo "5) Release notes draft"
-    echo "6) Create support bundle"
-    echo "7) Restore rehearsal status"
-    echo "8) Health monitoring status"
-    echo "9) Go-live validation status"
+    ui_submenu_header "Final QA / Release Readiness" \
+      "Compact checks before production handoff or release validation"
+    print_two_column_menu \
+      "1) Release readiness summary" \
+      "2) Command audit" \
+      "3) Production checklist" \
+      "4) Backup verify" \
+      "5) Release notes draft" \
+      "6) Create support bundle" \
+      "7) Restore rehearsal status" \
+      "8) Health monitoring status" \
+      "9) Go-live validation status"
     menu_footer
     local choice=""
     menu_read_choice choice
