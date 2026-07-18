@@ -1,8 +1,25 @@
 # Testing guide
 
-**Current release:** v1.17.5 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.18.0 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.18.0 security hardening closure
+
+Hermetic (no sudo / no install):
+
+```bash
+scripts/test-health-env-parser.sh
+scripts/test-offvm-host-key.sh
+scripts/test-risky-shell-patterns.sh
+scripts/check-pinned-actions.sh
+# optional if shfmt is installed:
+scripts/check-shfmt.sh
+```
+
+Expects allowlisted `health.env` parsing (malicious fixtures ignored), off-VM
+host-key helpers, no new `eval` / sourced `health.env` in `lib/`, and pinned
+GitHub Actions. CI also runs Gitleaks + OpenSSF Scorecard on `main`.
 
 ## Field-test update from main (no tag)
 
