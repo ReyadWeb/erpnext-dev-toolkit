@@ -1,297 +1,282 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.17.9 (July 2026) — **shorter menu labels** + **smarter single/two-column layout**. Still no auto-healing (v1.18). See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).  
+**Current release:** v1.17.9 (July 2026)  
+**Theme for v1.18–v1.23:** Security, local reliability, guarded auto-healing, and control-panel readiness.
 
-**External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
-**Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
+**Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
+**Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
 
----
-
-## Where we are
-
-| Use case | Rating | Status |
-|----------|--------|--------|
-| Local dev VM (single admin) | **9.5 / 10** | Field-tested; guided HTTPS, apps, backups |
-| Public VPS production (single admin) | **9.4 / 10** | CI-proven install + restore + production runtime; **VPS validation in progress** |
-| Supply chain / release trust | **9.6 / 10** | Self-update fingerprint gate (v1.8.2); signing separated to `release-signing` env (v1.9.0); Actions pinned to commit SHAs + Dependabot (v1.9.1) |
-| Reproducibility | **9.3 / 10** | Pinned toolchain (`versions`); Actions pinned to SHAs; Ubuntu 26.04 now in integration CI (non-blocking preview leg) |
-| Enterprise / multi-user host | **8.5 / 10** | Lock hardened; not a shared-shell product |
-| Community / packaging polish | **9.0 / 10** | v1.14.0: CONTRIBUTING, CoC, SUPPORT, Issue/PR templates, CODEOWNERS, Discussions, private vuln reporting, DEVELOPMENT/RELEASE-PROCESS/community board docs. Remaining: governance ladder, module owner teams |
-
-**Overall (single-admin dedicated VM): 9.5 / 10** — enterprise-candidate; **9.6–9.7** after VPS validation pass (v1.8.2 + v1.9.0 shipped).
-
-**Positioning:** A multi-engine lifecycle and operations platform for ERPNext/Frappe. The **native** engine targets non-containerized dedicated Ubuntu VMs (Supervisor + Nginx model); the **Docker** engine (v1.10.0) wraps Frappe's own `frappe_docker` for containerized, upstream-aligned deployments. Both run behind the same `erpnext-dev` CLI.
+**Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Health model:** [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md) · **Testing:** [`TESTING.md`](TESTING.md)
 
 ---
 
-## Multi-engine deployment (v1.10.0+)
+## Current baseline
 
-The toolkit exposes two first-class deployment engines behind one CLI via a
-`DeploymentEngine` contract (`lib/engine.sh`). Native remains the default and is
-byte-for-byte unchanged; Docker only runs when explicitly selected.
+The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe lifecycle and operations platform** with:
 
-The broader deployment model — engines, platforms, deployment topologies
-(single-node → split-app-db → horizontally-scaled → clustered), and the
-app/bench/site/runtime-role vocabulary — is defined in
-[`DEPLOYMENT-ARCHITECTURE.md`](DEPLOYMENT-ARCHITECTURE.md), the architecture of
-record for this dimension.
+| Area | Status |
+|------|--------|
+| Native + Docker engines | Shipped (same CLI) |
+| Local + production HTTPS | Shipped (separate menus) |
+| Backup / off-VM / restore rehearsal | Shipped |
+| Release signing + gated publish | Shipped |
+| Operations dashboard + monitoring | Shipped (v1.16–v1.17; **monitor-only**) |
+| CLI boxed menus / status strip | Shipped (through v1.17.9) |
+| Browser wait-ready asset probe | Shipped (v1.15.1 / v1.17.6 core gate) |
+| Guarded auto-healing | **Not shipped** (next after security + local reliability) |
 
-| Phase | Scope | Status |
-|-------|-------|--------|
-| **v1.10.0** | Engine contract + Docker **local-dev MVP**: install/start/stop/status/logs/health/backup/apps via `docker compose`, wrapping upstream `frappe_docker` `pwd.yml`. Hermetic engine-selection test + non-blocking `docker-install-smoke` CI leg. **Native Debian 13 (trixie)** accepted via the shared Debian-family apt/systemd install path; Debian 11/12/13 accepted as Docker hosts. | **implemented** |
-| **v1.11.0** | Docker **production runtime**: production mode wrapping upstream `compose.yaml` + mariadb/redis/image-pin overrides; immutable pins (`frappe_docker` SHA + ERPNext image digest); durable off-volume host-artifact backups + verify + automated restore rehearsal; off-site shipment (checksum-verified rsync off-VM + rclone object storage); durable custom-app images (immutable layered build + recreate deploy); Traefik production HTTPS (Let's Encrypt / Cloudflare Origin CA) + exposure guardrail; containerized Docker integration CI leg promoted to a **hard release gate** (production compose leg runs non-blocking pending promotion). | **implemented** |
-| **v1.12.0** | **Rebrand to erpnext-dev-toolkit** (runtime identifiers unchanged); single-node engine contract closed (`engine-restore`/`upgrade`/`rollback`/`diagnostics`); native object-storage backup parity with Docker; Docker **production** compose CI leg promoted to a **hard release gate**; combined native + Docker-production go-live runbook (`VALIDATION.md`); documentation redesign with new illustrations; security hardening. | **implemented** |
-| **v1.13.0** | Debian **native CI coverage** (GitHub provides no Debian runner today, so v1.10.0 native Debian is field-validated) + broader distro/runtime testing. | planned |
-| **v1.14.0** | Community polish: Phase 1 (`CONTRIBUTING` / CoC / `SUPPORT`, bug+feature forms, PR template, CODEOWNERS, Discussions, private vuln reporting, starter `good first issue`s) + Phase 2 (compatibility + docs Issue Forms, `docs/DEVELOPMENT.md`, `docs/RELEASE-PROCESS.md`, community board guide). Remaining later: governance ladder, module owner teams as the community grows. | **implemented** |
-| **v1.15.0** | Guided-setup UX fixes: deployment engine prompted once per run; native local guided chain flows end-to-end (mkcert HTTPS → credentials checkpoint → security profile → optional apps) without dead-ends; unstyled-login hard-refresh guidance; support-bundle secret scanner detects GitHub's new stateless `ghs_` token format. | **implemented** |
-| **v1.15.1** | Local HTTPS reliability: status-aware `verify-local-ssl` (2xx/3xx required; nginx 502 is FAIL); active static-asset probe from login `Link` header; Firefox-specific mkcert trust guidance (certutil / Snap Flatpak / enterprise_roots / manual rootCA import). | **implemented** |
-| **v1.15.2** | Debian 13 native install parity: drop hard dependency on Ubuntu-only `software-properties-common`; portable `libfontconfig1`; README Debian sudo bootstrap + install block. | **implemented** |
-| **v1.15.3** | Credentials / Login submenu (`credentials-menu`) + Firefox Snap/Flatpak NSS host-trust helper (`host-firefox-trust-mkcert.sh`). | **implemented** |
-| **v1.16.0** | **Operations Dashboard + canonical health snapshot**: unified HEALTHY/DEGRADED/CRITICAL/UNKNOWN model; host + ERPNext + engine-aware + protection/DR probes; `dashboard` / `--watch` / `--json`; `health-check` consumes the same snapshot. No auto-healing. See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md). | **implemented** |
-| **v1.17.0** | **Monitoring & incident engine**: `/var/lib/erpnext-dev` metrics history + incidents; threshold transitions; cooldown / would-heal dry-run; CLI + webhook alert hooks; OpenMetrics export. | **implemented** |
-| **v1.17.1** | **Observe hardening**: CPU/iowait samples, cert-expiry days, Docker restart loops, workers/scheduler/queue best-effort; README Docker accuracy; audited `FRAPPE_DOCKER_REF` SHA default. | **implemented** |
-| **v1.17.2** | **Release publish alignment**: assert required GitHub Release Assets + `/releases/latest`; dashboard/incident docs assets; README install race guidance. | **implemented** |
-| **v1.17.3** | **CLI menu UI foundation**: `lib/ui.sh` + polished main menu (responsive two-column, `NO_COLOR`/ASCII-safe) with cached status strip; hermetic `test-ui-render.sh`. | **implemented** |
-| **v1.17.4** | **Menu color + App Wizard polish**: restore OK/WARN/FAIL green after tee redirect; App Installation Wizard/Library use `lib/ui.sh`; shared two-column menus get cyan numbers. | **implemented** |
-| **v1.17.5** | **Operations Dashboard UI**: titled section boxes + status-colored rows (replace `====` report); `dashboard-render-test` + hermetic CI; main-channel update slot fix. | **implemented** |
-| **v1.17.6** | **Wait-ready static-asset gate** + **two-column menu fix** (pre-tee / `/dev/tty` width; two-col from 80 cols). | **implemented** |
-| **v1.17.7** | **Status-strip wrap** + **boxed submenus** (`ui_render_boxed_menu`; SSL/Apps/Ops/Status/Access/… match main menu). | **implemented** |
-| **v1.17.8** | **Finish boxed submenu coverage**: Final QA, Security, Backup/Off-VM/Restore, First Run, Public Quickstart, Docker apps, Uninstall. | **implemented** |
-| **v1.17.9** | **Menu space polish**: two-column ≥100 cols; fit-based single-column; shorter App Library / SSL / Backup / main labels. | **implemented** |
-| **v1.18.0** | **Guarded auto-healing** (do not rush): modes `monitor` / `safe` / `advanced`; first actions = restart worker, scheduler/runtime, Docker service group, native app stack; **host reboot opt-in last resort only**. Menu screenshots when ready. | planned |
-| **v1.19.0** | **External watchdog contract**: heartbeat endpoint/file + last-seen; external monitor + provider API abstraction; safe power-cycle policy; incident record after external recovery (frozen guest cannot self-heal). | planned |
+### Maturity (single-admin dedicated VM)
 
-**CI matrix notes (intentional gaps, not blockers for v1.17.x):**
+| Use case | Rating | Notes |
+|----------|--------|-------|
+| Local dev VM | **9.5 / 10** | Field-tested; IP drift after reboot remains a common footgun |
+| Public VPS production | **9.4 / 10** | CI-proven; broader provider evidence still in progress |
+| Supply chain / release trust | **9.6 / 10** | Signed releases, `release-signing` env, Actions SHA pins |
+| Root-run config safety | **gap** | `health.env` must not be sourced as shell (v1.18.0) |
+| Overall | **~9.5 / 10** | Enterprise-candidate; raise trust with security closure + real VPS evidence |
 
-| Gap | Current stance | Next step when ready |
-|-----|----------------|----------------------|
-| Ubuntu 26.04 | Non-blocking preview runner | Flip to hard gate after GitHub runner GA |
-| Debian 13 native | Field-validated (no GitHub Debian runner) | Scheduled disposable VPS validation and/or self-hosted Debian runner |
-
-Native engine matrix: Ubuntu 24.04 / 26.04, Debian 13. Docker engine host matrix:
-Ubuntu 24.04 / 26.04, Debian 11 / 12 / 13.
+**Positioning:** Native engine = Supervisor/Nginx on Debian-family hosts. Docker engine = upstream `frappe_docker` behind the same `erpnext-dev` CLI. Architecture: [`DEPLOYMENT-ARCHITECTURE.md`](DEPLOYMENT-ARCHITECTURE.md).
 
 ---
 
-## External security review — resolved blockers (v1.8.1)
+## Roadmap principles
 
-Independent review (July 2026) confirms prior architectural objections are **resolved**:
-
-| # | Area | Verdict |
-|---|------|---------|
-| 1 | **Production runtime** — Supervisor/Gunicorn/workers/scheduler/Socket.IO; dev `systemd` disabled; integration fails if `bench start` remains | ✅ Resolved |
-| 2 | **`install-cli` / `repair-cli`** — real `install_toolkit_cli()` / `repair_toolkit_cli()` implementations | ✅ Resolved |
-| 3 | **Module integrity** — all 17 runtime modules in manifest + `SHA256SUMS`; `check-module-consistency.sh` prevents drift | ✅ Resolved |
-| 4 | **Lock-file hardening** — private dirs (`/run/lock/erpnext-dev/` or `$XDG_RUNTIME_DIR`); `0700`/`0600`; symlink rejection | ✅ Resolved |
-| 5 | **`verify-toolkit`** — full runtime + tamper negatives in CI and integration (installed `/opt` tree) | ✅ Resolved |
-| 6 | **Gated publication** — validate → integration (real install, backup, destructive restore, production conversion) → sign → publish | ✅ Resolved |
-| 7 | **Stable signing** — stable `vX.Y.Z` tags fail without GPG key; pre-release escape hatch only | ✅ Resolved (publication layer) |
-| 8 | **Atomic self-update** — `releases/<ver>` + `current` symlink; CI atomic update/rollback smoke | ✅ Resolved (integrity layer) |
-| 9 | **Support-bundle negatives** — clean bundle passes; unsafe fixture (secrets, forbidden names) must fail | ✅ Resolved |
-| 10 | **Toolchain pins** — `NVM_VERSION`, `UV_VERSION`, `BENCH_VERSION` (default 5.31.0); `versions` command | ✅ Substantially resolved |
-
-**Classification:** v1.8.1 is an **enterprise-candidate** ERPNext/Frappe VM operations toolkit for dedicated single-admin Ubuntu deployments.
+1. **Secure by default** — root-run config is data, never executable shell.
+2. **No false readiness** — do not claim browser-ready until HTML + CSS/JS assets pass.
+3. **No destructive automation without guardrails** — healing stays off until modes, cooldowns, and lockouts exist.
+4. **Native + Docker parity** for lifecycle operations that operators rely on.
+5. **Human CLI + machine JSON** — panel/agent consumers must not scrape terminal text.
+6. **Docs match shipped behavior** — no screenshots or promises for unreleased features.
 
 ---
 
-## Open findings from external review
+## Shipped foundation (through v1.17.9)
 
-### P0 — v1.8.2: Self-update authenticity hardening — **implemented**
+Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
-Stable tag-channel `update-toolkit` now requires signature, gpg, bundled pubkey, valid
-detached signature, and pinned maintainer fingerprint (same bar as `verify-signature`).
-See [`SECURITY.md`](SECURITY.md) and `scripts/test-staged-signature.sh`.
+| Phase | Focus | Status |
+|-------|--------|--------|
+| **v1.10–v1.12** | Multi-engine contract; Docker prod; rebrand; object-storage parity; hard Docker CI gates | **implemented** |
+| **v1.13.0** | Debian native CI coverage (no GitHub Debian runner today) | planned (field-validated) |
+| **v1.14.0** | Community polish (CONTRIBUTING, CoC, templates, DEVELOPMENT/RELEASE-PROCESS) | **implemented** |
+| **v1.15.x** | Guided UX; local HTTPS + asset probe; Debian parity; credentials menu; Firefox NSS helper | **implemented** |
+| **v1.16.0** | Canonical health snapshot + Operations Dashboard | **implemented** |
+| **v1.17.0–.2** | Incidents, would-heal dry-run, alerts, OpenMetrics; observe + release publish hardening | **implemented** |
+| **v1.17.3–.9** | CLI menu UI, dashboard boxes, wait-ready asset gate, boxed submenus, shorter labels | **implemented** |
 
-### P1 — v1.9.0: Signing authority separation — **implemented**
+**CI matrix (intentional gaps):**
 
-The `publish` job runs in the protected `release-signing` GitHub Environment; the GPG
-key is an environment secret gated by required-reviewer approval, so a signed release
-cannot be produced by repository write access alone. Setup + key-rotation runbook in
-[`SECURITY.md`](SECURITY.md#signing-authority-separation-v190).
-
-### P1 — v1.9.1: CI supply-chain hardening — **implemented**
-
-- GitHub Actions pinned to immutable commit SHAs (`actions/checkout@…v4.2.2`,
-  `actions/upload-artifact@…v4.6.2`) across `ci.yml`, `integration.yml`, `release.yml`
-- `.github/dependabot.yml` (weekly, grouped) bumps the SHA pins deliberately
-- Ubuntu 26.04 integration leg enabled as a **non-blocking preview** leg (24.04 stays
-  the release-gating leg); it becomes a hard gate when the 26.04 runner reaches GA
-- Support wording: *"Supports Ubuntu 24.04 and 26.04; integration runs on 24.04 (gating) + 26.04 (preview, non-blocking)."*
-
-### v1.9.5 — App library: Gameplan, Lending, India Compliance — **implemented**
-
-- Official: `install-gameplan`, `install-lending`
-- Community: `install-india-compliance` (GST); Raven remains labeled community
-- Publisher labels on menus, install prompts, and `app-status`
-
-### v1.9.4 — Ubuntu 26.04 integration: stable /opt install fix — **implemented**
-
-- `install_self_for_reuse` falls back to `ERPNEXT_DEV_ENTRY_SCRIPT` when `readlink -f` fails (sudo-rs / relative invoke)
-- Install/quickstart fail fast if `/opt/erpnext-dev` cannot be populated
-- Integration: assert stable toolkit at `/opt` before verify-toolkit; `TESTING.md` documents the 26.04 gotcha
-
-### v1.9.3 — Local host setup friction reduction — **implemented**
-
-- README one-command download → verify → `local-dev-quickstart`
-- Host mapping and mkcert/scp emitted as single copy-paste one-liners
-- `/etc/hosts` trailing-newline guard before append (LocalWP glue bug)
-
-### v1.9.2 — Cross-platform local host support — **implemented**
-
-- Persisted `HOST_OS` (Linux/macOS/Windows/WSL2); `set-host-os` command; asked once in local quickstart
-- OS-aware host emitters for hosts-file mapping, connectivity tests, mkcert HTTPS, and stable VM-IP guidance
-- Fixes latent macOS bug (`sed -i` → BSD `sed -i ''`); WSL2 maps to `127.0.0.1`
-- New hermetic `scripts/test-host-os-output.sh` wired into `validate-release.sh` + `run-shellcheck.sh`
-
-### P2 — Object-storage backups — **shipped for both engines**
-
-rclone-based object storage (S3 / Cloudflare R2 / B2 / GCS / Azure / MinIO) with
-remote checksum verification shipped for the **Docker** engine in v1.11.0 (P6),
-and for the **native** engine post-v1.11.0 via the engine-agnostic
-`configure-object-backup` / `object-backup` / `object-status` commands
-([`lib/backup.sh`](lib/backup.sh)). Both engines now upload local/durable backup
-artifacts to an rclone remote and verify with `rclone check`.
-
-### P2 — v1.14.0: Community polish
-
-CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, docs consolidation. (Renumbered
-after v1.12.0 shipped the rebrand + multi-engine parity + docs/security polish.)
+| Gap | Stance | Next step |
+|-----|--------|-----------|
+| Ubuntu 26.04 | Non-blocking preview runner | Hard gate after runner GA |
+| Debian 13 native | Field-validated | Disposable VPS validation and/or self-hosted runner |
 
 ---
 
-## Completed (v1.4.0 → v1.9.5)
+## Active roadmap (v1.18–v1.23)
 
-| Area | Version | What shipped |
-|------|---------|--------------|
-| Guarded ERPNext upgrades | v1.4.x | `update-preflight`, `safe-update-wizard`, `update-rollback` |
-| Release bundle + quickstart | v1.4.3+ | Full-tree tarball, `verify-signature`, bundle CI |
-| Production runtime | v1.5.0 | Supervisor (gunicorn + workers); no `bench start` in production |
-| Gated signed releases | v1.6.0 | validate → integration → sign → publish; mandatory stable signing |
-| Atomic self-update | v1.6.0 | `releases/<ver>` + `current` symlink; `toolkit-rollback` |
-| Full-tree integrity | v1.4.6+ | `verify-toolkit` checks all 17 modules |
-| Hardening | v1.7.0 | Private lock path, negative secret-scan fixtures, `BENCH_VERSION` pin |
-| Reliability proof | v1.8.0–1.8.1 | Atomic update CI smoke; signing policy tests; tamper negatives |
-| Self-update authenticity | v1.8.2 | Staged signature + pinned-fingerprint gate; staged-signature CI matrix |
-| Signing authority separation | v1.9.0 | `publish` gated by `release-signing` environment (reviewer approval) |
-| CI supply-chain hardening | v1.9.1 | Actions pinned to commit SHAs + Dependabot; Ubuntu 26.04 non-blocking integration leg |
-| Cross-platform local host support | v1.9.2 | Persisted `HOST_OS`; OS-aware hosts-file/test/mkcert/fixed-IP emitters for Linux/macOS/Windows/WSL2 |
-| Local host setup friction reduction | v1.9.3 | One-command install README path; copy-paste host mapping/mkcert one-liners; hosts newline guard |
-| Ubuntu 26.04 /opt install fix | v1.9.4 | `install_self_for_reuse` path fallback; integration assert before verify-toolkit |
-| App library expansion + publisher labels | v1.9.5 | Gameplan, Lending, India Compliance; official vs community labels |
+Sequence is intentional: **close root security → stabilize local identity → finish readiness gaps → then heal**.
 
-**CI today:** lint/shellcheck → validate-release → atomic-update-smoke → (on tag) integration install + backup/restore + production runtime + tamper negative → **environment-approved** sign → publish.
+```text
+v1.18.0  Security hardening closure
+v1.18.1  Local VM stable IP foundation
+v1.18.2  Frontend asset readiness gaps
+v1.19.0  Guarded auto-healing MVP
+v1.19.1  Auto-healing hardening
+v1.20.0  External watchdog foundation
+v1.21.0  CloudPanel / agent API foundation
+v1.22.0  Real VPS validation matrix (bounded)
+v1.23.0  Documentation and launch polish
+```
 
----
+### v1.18.0 — Security Hardening Closure
 
-## Path to 9.8+
+**Goal:** Close remaining root-toolkit security gaps **before** enabling real auto-healing.
 
-Target: **9.8+ overall** for single-admin production VPS within **4–6 weeks** of focused work.
+**Scope**
+- Replace unsafe config sourcing with a **strict allowlist parser** for `/etc/erpnext-dev/health.env` (and the same pattern for future healing policy files).
+- Enforce **root ownership** and safe modes (`600`/`640`) on health/config files.
+- Validate webhook URLs (HTTPS unless explicitly allowed for local test) and alert policy values.
+- Replace remaining `eval` nameref array patterns with safer Bash, or justify with scoped comments + tests.
+- Hermetic **risky-shell-pattern** tests (malicious `health.env` fixture must be ignored).
+- CI: secret scanning (Gitleaks or TruffleHog), OpenSSF Scorecard, pinned-Actions check, `shfmt` check — land in this release when CI time stays reasonable; otherwise ship parser + host-keys first and scanners immediately after.
+- **Strict off-VM SSH host-key mode** (production path):
+  - `off-vm-trust-host-key` / `off-vm-verify-host-key` / `off-vm-strict-host-key-enable`
+  - `StrictHostKeyChecking=yes` + `UserKnownHostsFile=/etc/erpnext-dev/off-vm-known_hosts`
+  - First-setup may stay convenient; production docs push strict mode.
 
-### Phase 0 — v1.8.2: Self-update authenticity hardening — **shipped**
+**Allowlisted `health.env` keys (initial set)**  
+`HEALTH_ALERT_ON`, `HEALTH_ALERT_WEBHOOK_URL`, `HEALTH_ALERT_WEBHOOK_TIMEOUT_SEC`, `HEALTH_CONSECUTIVE_FAIL_THRESHOLD`, `HEALTH_COOLDOWN_SEC`, `HEALTH_HISTORY_RETENTION_DAYS`, `HEALTH_INCIDENT_RETENTION_DAYS` (extend only via explicit parser updates).
 
-**Goal:** Close the gap between bootstrap `verify-signature` and `update-toolkit` staged verification. Supply chain **9.0 → 9.3**.
-
-**Shipped:** `toolkit_gpg_verify_signature_files()`, hardened `toolkit_verify_staged_signature()`, `scripts/test-staged-signature.sh`, signed-bundle atomic update smoke.
-
-**Rating after VPS pass + v1.8.2:** **9.5**
-
-### Phase 1 — v1.9.0: Signing authority separation — **shipped**
-
-**Goal:** Signing key compromise ≠ repository compromise. Supply chain **9.3 → 9.5**.
-
-**Shipped:** [`release.yml`](.github/workflows/release.yml) `publish` job runs in the
-`release-signing` environment; GPG secrets move to environment scope behind a
-required-reviewer + `v*` deployment-tag gate. Threat model + key-rotation runbook in
-[`SECURITY.md`](SECURITY.md#signing-authority-separation-v190). `release-signing-policy.sh`
-unit tests retained.
-
-**Follow-up option (stronger, future):** OIDC + keyless (Sigstore/cosign) or offline/HSM signing.
-
-**Rating after v1.9.0:** **9.6–9.7** (pending VPS validation).
-
-### Phase 1b — v1.9.1: CI supply-chain hardening — **shipped**
-
-**Goal:** CI trust matches release trust story. Supply chain **9.5 → 9.6**.
-
-**Shipped:**
-- GitHub Actions pinned to immutable commit SHAs (`actions/checkout@11bd719…` v4.2.2,
-  `actions/upload-artifact@ea165f8…` v4.6.2) across all three workflows
-- [`.github/dependabot.yml`](.github/dependabot.yml): weekly grouped `github-actions`
-  updates that bump the SHA pin + version comment (deliberate, reviewable)
-- Ubuntu 26.04 integration leg enabled as a **non-blocking preview** leg
-  (`continue-on-error` via `matrix.experimental`); 24.04 remains the release gate
-- README support wording updated to reflect 24.04-gating + 26.04-preview coverage
-
-**Follow-up:** flip the 26.04 leg to a hard gate (`experimental: false`) once the
-GitHub-hosted `ubuntu-26.04` image reaches general availability.
-
-**Rating after v1.9.1:** **9.6–9.7** (pending VPS validation).
-
-### Phase 2 — Object-storage off-site backups (~1–2 weeks) **P2** — Docker shipped (v1.11.0)
-
-**Goal:** Backups not tied to rsync/SSH alone. Ops **~8.5 → 9.2**.
-
-**Scope:** S3-compatible target (AWS S3, Cloudflare R2, Backblaze B2, GCS, Azure, MinIO) alongside rsync; wizard wiring; restore docs.
-
-**Shipped (Docker, v1.11.0 / P6):** rclone object storage with remote verification for the Docker engine, chained after the durable host artifact and off-VM rsync.
-
-**Shipped (native, post-v1.11.0):** the equivalent native rclone target in [`lib/backup.sh`](lib/backup.sh) via engine-agnostic `configure-object-backup` / `object-backup` / `object-status` commands, uploading the local backup set and verifying with `rclone check`.
-
-**Remaining:** README + SECURITY credential guidance; MinIO CI smoke.
-
-**Rating after native object storage:** **9.8**
-
-### Phase 3 — v1.14.0: Community polish + docs consolidation (~3–5 days) **P2**
-
-**Goal:** Market/readiness **8.0 → 9.0**. Can overlap with Phase 2.
-
-**Scope:** `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue/PR templates; trim stale TESTING.md blocks.
-
-**Rating after v1.14.0:** **9.8+** (renumbered after v1.12.0 shipped the rebrand + multi-engine parity + docs/security polish).
-
-### Phase 4 (optional) — v1.11.x: Extended CI confidence (~3–5 days)
-
-Post-install `update-toolkit` smoke against real GitHub release assets; document weekly integration alerts. Defer 24h soak unless required.
+**Acceptance**
+- [ ] No root-run config file is sourced as shell code.
+- [ ] Malicious `health.env` fixture is ignored safely.
+- [ ] `eval` usage removed or explicitly justified + tested.
+- [ ] Off-VM strict host-key mode documented and hermetically tested.
+- [ ] Secret scanner + Scorecard workflows present (or tracked follow-up PR in the same minor window).
 
 ---
 
-## Near-term priority order
+### v1.18.1 — Local VM Stable IP Foundation
 
-1. **VPS production validation** — confirms enterprise-candidate rating is real-world, not CI-only
-2. **v1.13.0** — Debian native CI coverage **(P1)** (Docker production compose CI leg is now a hard release gate)
-3. **v1.14.0** — community + docs polish → **9.8+ (P2)**
+**Goal:** Keep `erp.test` / local HTTPS / host mappings reliable when the guest IP changes after reboot.
+
+**Lean CLI** (avoid one binary per hypervisor):
+
+| Command | Purpose |
+|---------|---------|
+| `local-ip-status` | Current IP, DHCP vs static signals, saved mapping |
+| `local-ip-plan` | Explain stable-IP options for this host |
+| `local-ip-drift-check` | Saved IP vs current IP mismatch |
+| `local-static-ip-wizard` | Guest Netplan static IP with backup |
+| `local-static-ip-rollback` | Restore prior Netplan |
+| (existing) hosts helper | Print correct host `/etc/hosts` repair command |
+
+**Menu:** Local VM Network / Stable IP — status, plan, drift, hosts command, wizard, rollback, plus **doc-backed** guide entries for KVM, VirtualBox, Hyper-V, VMware/Proxmox (open `docs/LOCAL-VM-STABLE-IP.md` sections; no separate CLI per platform).
+
+**Docs:** `docs/LOCAL-VM-STABLE-IP.md` — why `erp.test` breaks, platform recommendations, Netplan static IP, hosts repair, troubleshooting, rollback. Wire a checkpoint into local quickstart / guided setup.
+
+**Acceptance**
+- [ ] Operator can see whether the guest IP looks stable or dynamic.
+- [ ] Drift between saved and current IP is detected.
+- [ ] Correct host `/etc/hosts` repair command is printed.
+- [ ] Local quickstart warns about dynamic IP risk.
+- [ ] Docs cover KVM, VirtualBox, Hyper-V, VMware/Proxmox.
+- [ ] Static IP wizard creates a backup and rollback path.
 
 ---
 
-## Definition of “9.8+ ready”
+### v1.18.2 — Frontend Asset Readiness Gaps
 
-- Signed, gated release bundle install
-- Supervisor production runtime (not dev server)
-- HTTPS + firewall + hardening guided flows
-- Backup, verify, restore-rehearse (rsync today; object storage after v1.10.0)
-- Atomic self-update + rollback with **same authenticity bar as bootstrap** (v1.8.2)
-- Guarded ERPNext upgrades (`safe-update-wizard`)
-- Integrity proof (`verify-toolkit`, `verify-signature`) + support-bundle audit
-- Signing separated from repo write access (v1.9.0)
-- CI supply chain pinned and multi-OS integration (v1.9.1)
+**Goal:** Close remaining “unstyled login after ready” holes. **Core gate already shipped** in v1.15.1 / v1.17.6 (`probe_login_static_asset`, `wait_for_erpnext_ready`).
+
+**Scope (gaps only — not a greenfield rewrite)**
+- Explicit commands: `verify-frontend-assets`, `wait-frontend-assets`, `repair-frontend-assets`.
+- Ensure the same probe runs on optional-app install, upgrade, and restore paths that still skip it.
+- Tighten checks where needed (non-empty CSS/JS body, clear wait messaging).
+- Repair path: rebuild assets, clear cache, reload services, re-verify.
+
+**Acceptance**
+- [ ] Fresh local install does not print final ready until assets pass (already true for wait-ready; reconfirm).
+- [ ] Paths that previously skipped the probe now wait or fail clearly.
+- [ ] Repair command rebuilds/verifies and explains failures.
 
 ---
 
-## Suggested timeline
+### v1.19.0 — Guarded Auto-Healing MVP
 
-| Week | Focus | Release |
-|------|--------|---------|
-| 1 | VPS production test; **v1.8.2 self-update hardening** | **v1.8.2** ✅ |
-| 1 | **Signing authority separation (Phase 1)** | **v1.9.0** ✅ |
-| 2 | Actions SHA pinning; Ubuntu 26.04 integration | **v1.9.1** ✅ |
-| 3–4 | S3-compatible backups + MinIO CI (Phase 2) | **v1.10.0** |
-| 5 | CONTRIBUTING, templates, docs trim (Phase 3) | **v1.14.0** → **9.8+** |
+**Goal:** Safe, controlled recovery **after** security + local identity + readiness gaps are solid. Default remains **monitor-only**.
+
+**Modes:** `monitor` (default) · `safe` (component/stack restart, never host reboot) · `advanced` (stack recovery; host reboot only if explicitly enabled).
+
+**First safe actions:** restart failed worker; restart scheduler/runtime; restart native app stack; restart Docker service/container group; reload Nginx after config/cert issue.
+
+**Never by default:** reboot for high CPU/RAM alone; delete unknown files; unbounded restart loops; act on a single failed check.
+
+**Controls:** action registry, cooldowns, max-actions window, lockout after repeated failure, before/after incident records, recovery verification. See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).
+
+**Acceptance**
+- [ ] Healing disabled unless explicitly enabled.
+- [ ] Every action creates an incident + cooldown bookkeeping.
+- [ ] Repeated failure locks healing until manual review.
+- [ ] Recovery verification records whether the action worked.
+
+---
+
+### v1.19.1 — Auto-Healing Hardening
+
+**Goal:** Make the first healing implementation production-safe.
+
+**Scope:** simulation mode; healing policy file with the **same safe parser pattern** as v1.18.0; per-action enable/disable; healing audit log; dashboard healing section; alert on lockout.
+
+**Commands (illustrative):** `healing-status`, `healing-policy`, `healing-enable-safe`, `healing-disable`, `healing-unlock`, `healing-history`.
+
+**Acceptance**
+- [ ] Operator can inspect policy and disable healing instantly.
+- [ ] Dashboard shows last action + lockout state.
+- [ ] Alerts include healing action and result.
+
+---
+
+### v1.20.0 — External Watchdog Foundation
+
+**Goal:** Contract for Case B — frozen, powered-off, or unreachable VM (cannot self-heal from inside).
+
+**Scope:** local heartbeat file; optional HTTP/status export; external monitor contract; provider API abstraction design; CloudPanel-ready heartbeat format; docs for external watchdog deployment.
+
+**Commands (illustrative):** `heartbeat-status`, `heartbeat-export`, `watchdog-contract`.
+
+**Acceptance**
+- [ ] External system can read last healthy heartbeat.
+- [ ] Heartbeat includes deployment id, site, engine, status, timestamp.
+- [ ] Docs explain provider-side recovery clearly.
+
+---
+
+### v1.21.0 — CloudPanel / Agent API Foundation
+
+**Goal:** Stable machine interface so a future web panel does not scrape human CLI output.
+
+**Scope:** JSON contracts for status, health, backup, restore, incidents; non-interactive flags; job-style operation output; capabilities + stable exit codes; local privileged agent design (predefined ops only, not arbitrary shell).
+
+**Stabilize / add:** `api-version --json`, `capabilities --json`, `deployment-info --json`, `dashboard --json`, `incidents --json`, backup/restore status `--json`.
+
+**Acceptance**
+- [ ] Every machine command has stable JSON + documented schema.
+- [ ] Privileged operations are allowlisted, not free-form shell.
+
+---
+
+### v1.22.0 — Real VPS Validation Matrix
+
+**Goal:** Public trust via evidence, not claims. **Bounded gate:** at least **three** providers with appendices; expand the living matrix over time.
+
+**In scope for the release gate:** native Ubuntu 24.04 (+ 26.04 and/or Debian 13 as available); Docker production path; Let's Encrypt and/or Cloudflare Origin; off-VM backup; restore rehearsal; dashboard/monitoring smoke.
+
+**Living matrix (fill as evidence lands):** Hetzner, DigitalOcean, Vultr, Linode/Akamai, AWS Lightsail/EC2, Azure, GCP, local KVM, VirtualBox, Hyper-V, Proxmox.
+
+**Acceptance**
+- [ ] `VALIDATION.md` has provider-specific evidence for ≥3 providers.
+- [ ] Native and Docker production paths both represented.
+- [ ] HTTPS, backup/restore, and monitoring checked in those appendices.
+
+---
+
+### v1.23.0 — Documentation and Launch Polish
+
+**Goal:** Adoption clarity without overselling.
+
+**Scope:** real terminal screenshots (replace concept art); menu/dashboard captures; Quick Start by persona (local developer, production VPS, Docker, contributor); troubleshooting trees; security hardening checklist; local stable-IP visual guide.
+
+**Acceptance**
+- [ ] README matches current version and shipped features only.
+- [ ] Screenshots from real command output.
+- [ ] New users can choose a path in under ~60 seconds.
+
+---
+
+## Backlog (after v1.23.0)
+
+| Theme | Notes |
+|-------|--------|
+| Multi-site / multi-bench | Define single-node scope; do not overcomplicate the CLI early |
+| Advanced Docker ops | Safer image upgrades, digest refresh, custom-app rebuild UX, rollback evidence |
+| Restore laboratory | Disposable restore VM automation, rehearsal reminders, evidence reports |
+| Enterprise support | Redacted support-bundle improvements; health export; upgrade risk report; readiness score |
+| Stronger signing options | Sigstore/cosign or offline/HSM (optional, post supply-chain baseline) |
+
+---
+
+## Earlier security / supply-chain milestones (shipped)
+
+Independent review blockers from v1.8.1 and follow-ons are **closed**: production runtime gates, module integrity, lock hardening, `verify-toolkit`, gated publish, stable signing, atomic self-update, support-bundle negatives, toolchain pins, self-update fingerprint gate (**v1.8.2**), `release-signing` environment (**v1.9.0**), Actions SHA pins + Dependabot (**v1.9.1**). Details: [`SECURITY.md`](SECURITY.md) and the historical archive below.
 
 ---
 
 ## Historical archive
 
-Milestone notes from v1.1.x through v1.4.0 are kept below for traceability. For current planning, use the sections above.
+Milestone notes from v1.1.x through earlier planning cycles are kept below for
+traceability. **For current planning, use the Active roadmap (v1.18–v1.23) above.**
 
 ---
 

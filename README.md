@@ -15,7 +15,7 @@ It supports two setup paths:
 
 > Version history lives in [`CHANGELOG.md`](CHANGELOG.md). Security posture and
 > release-signing details live in [`SECURITY.md`](SECURITY.md). Planned work and
-> the path to **9.8+** are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
+> the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
 **Current release:** v1.17.9 · **Readiness:** ~9.5/10 for single-admin local/public VM
@@ -716,7 +716,10 @@ sudo erpnext-dev health-history         # recent history samples
 sudo erpnext-dev health-metrics         # OpenMetrics text export
 ```
 
-Optional policy file `/etc/erpnext-dev/health.env` (example):
+Optional policy file `/etc/erpnext-dev/health.env` (example). The toolkit
+**parses allowlisted keys only** (it never `source`s this file as shell). Prefer
+root-owned mode `600` or `640`; webhook URLs must be `https://` (or localhost
+`http://` for local tests):
 
 ```bash
 HEALTH_ALERT_ON=CRITICAL
@@ -1023,7 +1026,8 @@ whether you deploy natively or with Docker.
 | [`SECURITY.md`](SECURITY.md) | Threat model, credential handling, release signing |
 | [`TESTING.md`](TESTING.md) | Validation scenarios and QA commands |
 | [`VALIDATION.md`](VALIDATION.md) | Combined go-live runbook (native + Docker production) for a real VPS + domain |
-| [`ROADMAP.md`](ROADMAP.md) | Current plan (9.5 → 9.8+) and historical milestones |
+| [`ROADMAP.md`](ROADMAP.md) | v1.18–v1.23 plan + historical milestones |
+| [Roadmap board](https://github.com/users/ReyadWeb/projects/3) | Public Todo / In Progress / Done tracking ([docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)) |
 | [`RELEASE-MANIFEST.txt`](RELEASE-MANIFEST.txt) | Files expected in each release (validated in CI) |
 
 ---

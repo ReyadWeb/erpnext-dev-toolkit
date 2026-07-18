@@ -7,6 +7,8 @@ Track starter and community-facing work for
 **Title:** ERPNext Dev Toolkit — Community  
 Linked to this repository; seeded with the starter `good first issue` tickets below.
 
+**Product roadmap board** (milestones v1.18–v1.23): https://github.com/users/ReyadWeb/projects/3 — see [`ROADMAP-BOARD.md`](ROADMAP-BOARD.md).
+
 Suggested columns / views: **Backlog → Ready → In progress → Done**, with filters for
 `label:good first issue`, `label:help wanted`, and `label:status: accepted`.
 

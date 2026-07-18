@@ -26,8 +26,9 @@ Related: [`ROADMAP.md`](../ROADMAP.md) · [`lib/dashboard.sh`](../lib/dashboard.
 | **A** | VM is alive; ERPNext/resources unhealthy | In-guest toolkit health agent |
 | **B** | VM frozen, kernel hung, or powered off | **External** monitor / CloudPanel / provider API (and optionally hardware watchdog) |
 
-Software inside a dead VM cannot reboot itself. v1.16–v1.18 cover Case A only.
-v1.19 defines the external heartbeat / watchdog **contract** for Case B.
+Software inside a dead VM cannot reboot itself. v1.16–v1.19 cover Case A
+(observe → guarded heal). v1.20 defines the external heartbeat / watchdog
+**contract** for Case B.
 
 ---
 
@@ -62,11 +63,11 @@ Legacy health-check rows that used `OK` / `WARN` map to `HEALTHY` / `DEGRADED`
    (running/total, unhealthy, restarting, max RestartCount loop detection).
 4. **Protection / DR** — HTTPS + certificate days remaining (thresholded),
    firewall, Fail2Ban, backup ages/verify, restore rehearsal, toolkit
-   integrity, healing mode / would-heal dry-run (actions in v1.18).
+   integrity, healing mode / would-heal dry-run (actions in v1.19).
 
 ---
 
-## Recovery ladder (design; executed from v1.18)
+## Recovery ladder (design; executed from v1.19)
 
 ```text
 Level 0  Observe only
@@ -88,7 +89,7 @@ Level 6  External watchdog / provider recovery (outside guest)
 
 v1.16 always reports mode `monitor` and state `not_armed` (no automation).
 
-### Five safety controls (non-negotiable for v1.18+)
+### Five safety controls (non-negotiable for v1.19+)
 
 1. **Sustained duration** — threshold exceeded continuously for N minutes.
 2. **Consecutive failures** — e.g. 3 failed HTTP checks before action.
@@ -96,17 +97,20 @@ v1.16 always reports mode `monitor` and state `not_armed` (no automation).
 4. **Max actions per window** — then `AUTO-HEALING LOCKED` (manual review).
 5. **Recovery verification** — every action records before/after and success/failure.
 
+Root-run policy files (`health.env`, future healing policy) must use a **strict
+allowlist parser** (v1.18.0) — never `source` as shell — before healing is armed.
+
 ---
 
 ## Storage
 
 | Path | Purpose |
 |------|---------|
-| `/etc/erpnext-dev/health.env` | Optional policy overrides (thresholds, `HEALTH_ALERT_WEBHOOK_URL`, `HEALTH_ALERT_ON`) |
+| `/etc/erpnext-dev/health.env` | Optional policy overrides (thresholds, `HEALTH_ALERT_WEBHOOK_URL`, `HEALTH_ALERT_ON`). **Strict allowlist parser** (never `source`d); root-owned `600`/`640`; HTTPS webhooks (localhost HTTP allowed). |
 | `/etc/erpnext-dev/health-check.state` | Compat summary for existing readers (dual-written from snapshot) |
 | `/var/lib/erpnext-dev/metrics/` | `current.json`, rolling `history.jsonl` |
 | `/var/lib/erpnext-dev/incidents/` | Incident JSON records + `latest.json` |
-| `/var/lib/erpnext-dev/healing/` | Cooldown / would-heal dry-run state (actions execute in v1.18) |
+| `/var/lib/erpnext-dev/healing/` | Cooldown / would-heal dry-run state (actions execute in v1.19) |
 
 Core toolkit has **no Prometheus dependency**. `erpnext-dev health-metrics`
 emits OpenMetrics text for optional scrapers.
@@ -134,8 +138,11 @@ CLI: `incidents`, `incident-show`, `health-history`, `health-metrics`.
 |---------|--------|
 | **v1.16.0** | Canonical snapshot + Operations Dashboard (`dashboard`, `--watch`, `--json`) |
 | **v1.17.0** | Persistent history, incidents, threshold engine, alert hooks, OpenMetrics |
-| **v1.18.0** | Guarded auto-healing (modes + ladder + locks) |
-| **v1.19.0** | External watchdog / heartbeat contract for CloudPanel |
+| **v1.18.0** | Security hardening for root policy files (safe `health.env` parser) before healing |
+| **v1.18.1–.2** | Local IP stability + frontend asset readiness gaps (see ROADMAP) |
+| **v1.19.0** | Guarded auto-healing MVP (modes + ladder + locks) |
+| **v1.19.1** | Auto-healing hardening (policy, audit, dashboard, unlock) |
+| **v1.20.0** | External watchdog / heartbeat contract for CloudPanel |
 
-Do not ship monitoring and automatic reboot in one release. Make the health
-model trustworthy first; then let that model drive automation.
+Do not ship monitoring and automatic reboot in one release. Close root config
+safety and readiness gaps first; then let the health model drive automation.

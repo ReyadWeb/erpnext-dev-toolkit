@@ -1,3 +1,14 @@
+## Unreleased (v1.18.0 in progress)
+
+Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#57](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/57).
+
+### Security
+
+- **Strict `health.env` parser** ([#66](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/66)): never `source`s
+  `/etc/erpnext-dev/health.env`; allowlisted keys only; ownership/mode gate;
+  HTTPS webhook URLs (localhost HTTP allowed); hermetic
+  `scripts/test-health-env-parser.sh`.
+
 ## v1.17.9 - Menu space: shorter labels + smarter columns
 
 Patch release that keeps boxed menus readable on typical SSH widths by raising

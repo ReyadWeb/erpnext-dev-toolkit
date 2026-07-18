@@ -37,14 +37,197 @@ _ERPNEXT_DEV_DASHBOARD_LOADED=1
 : "${HEALTH_ALERT_ON:=CRITICAL}"
 : "${HEALTH_ALERT_WEBHOOK_URL:=}"
 : "${HEALTH_ALERT_WEBHOOK_TIMEOUT_SEC:=5}"
+# Set to 1 only for hermetic tests (skip root ownership checks).
+: "${HEALTH_ENV_SKIP_OWNER_CHECK:=0}"
+# Allow http:// webhooks only when explicitly enabled (local test hooks).
+: "${HEALTH_ALERT_WEBHOOK_ALLOW_HTTP:=0}"
 
-health_load_policy() {
-  if [[ -f "${HEALTH_ENV_FILE}" ]]; then
-    set -a
-    # shellcheck disable=SC1090,SC1091
-    source "${HEALTH_ENV_FILE}"
-    set +a
+# True when KEY is an allowlisted health.env override (never arbitrary shell).
+health_env_is_known_key() {
+  case "${1:-}" in
+    HEALTH_ALERT_ON|HEALTH_ALERT_WEBHOOK_URL|HEALTH_ALERT_WEBHOOK_TIMEOUT_SEC|\
+    HEALTH_ALERT_WEBHOOK_ALLOW_HTTP|\
+    HEALTH_CONSECUTIVE_FAIL_THRESHOLD|HEALTH_COOLDOWN_SEC|\
+    HEALTH_HISTORY_MAX_LINES|HEALTH_INCIDENT_KEEP|\
+    HEALTH_HISTORY_RETENTION_DAYS|HEALTH_INCIDENT_RETENTION_DAYS|\
+    HEALTH_DISK_DEGRADED_PERCENT|HEALTH_DISK_CRITICAL_PERCENT|\
+    HEALTH_INODE_DEGRADED_PERCENT|HEALTH_INODE_CRITICAL_PERCENT|\
+    HEALTH_MEM_AVAILABLE_DEGRADED_PERCENT|HEALTH_MEM_AVAILABLE_CRITICAL_PERCENT|\
+    HEALTH_BACKUP_DEGRADED_HOURS|HEALTH_BACKUP_CRITICAL_HOURS|\
+    HEALTH_REHEARSAL_DEGRADED_DAYS|HEALTH_HTTPS_DEGRADED_DAYS|HEALTH_HTTPS_CRITICAL_DAYS|\
+    HEALTH_CPU_DEGRADED_PERCENT|HEALTH_CPU_CRITICAL_PERCENT|\
+    HEALTH_IOWAIT_DEGRADED_PERCENT|HEALTH_IOWAIT_CRITICAL_PERCENT|\
+    HEALTH_DOCKER_RESTART_DEGRADED|HEALTH_DOCKER_RESTART_CRITICAL|\
+    HEALTH_QUEUE_DEGRADED|HEALTH_QUEUE_CRITICAL|\
+    HEALTH_SCHEDULER_STALE_HOURS|HEALTH_HTTP_TIMEOUT_SEC|HEALTH_CPU_SAMPLE_SEC)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Reject shell metacharacters / expansion in policy values.
+health_env_value_is_safe() {
+  local value="${1:-}"
+  [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || return 1
+  # Disallow characters that enable shell evaluation if a file were ever sourced.
+  if [[ "$value" =~ [\$\`\;\|\&\>\<\(\)\{\}\*\!] ]]; then
+    return 1
   fi
+  return 0
+}
+
+health_env_validate_value() {
+  local key="$1" value="$2"
+  health_env_value_is_safe "$value" || return 1
+  case "$key" in
+    HEALTH_ALERT_ON)
+      case "${value^^}" in
+        CRITICAL|DEGRADED|HEALTHY|OFF|NONE|ALL) return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    HEALTH_ALERT_WEBHOOK_URL)
+      [[ -z "$value" ]] && return 0
+      if [[ "$value" == https://* ]]; then
+        return 0
+      fi
+      if [[ "${HEALTH_ALERT_WEBHOOK_ALLOW_HTTP}" == "1" ]] && [[ "$value" == http://* ]]; then
+        return 0
+      fi
+      if [[ "$value" == http://127.0.0.1/* || "$value" == http://localhost/* || \
+            "$value" == http://127.0.0.1:* || "$value" == http://localhost:* ]]; then
+        return 0
+      fi
+      return 1
+      ;;
+    HEALTH_ALERT_WEBHOOK_ALLOW_HTTP)
+      [[ "$value" == "0" || "$value" == "1" ]] || return 1
+      ;;
+    HEALTH_CPU_SAMPLE_SEC)
+      [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
+      ;;
+    HEALTH_*_PERCENT|HEALTH_*_HOURS|HEALTH_*_DAYS|HEALTH_*_SEC|HEALTH_*_THRESHOLD|\
+    HEALTH_HISTORY_MAX_LINES|HEALTH_INCIDENT_KEEP|HEALTH_DOCKER_RESTART_*|HEALTH_QUEUE_*)
+      [[ "$value" =~ ^[0-9]+$ ]] || return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+# Ownership/mode gate for root-run policy files.
+# Hermetic tests: HEALTH_ENV_SKIP_OWNER_CHECK=1, or non-root + owner uid match + not world-writable.
+health_env_file_perms_ok() {
+  local file="$1"
+  local mode owner_uid world
+  [[ -f "$file" && -r "$file" ]] || return 1
+  if [[ "${HEALTH_ENV_SKIP_OWNER_CHECK}" == "1" ]]; then
+    return 0
+  fi
+  mode="$(stat -c '%a' "$file" 2>/dev/null || stat -f '%OLp' "$file" 2>/dev/null || true)"
+  owner_uid="$(stat -c '%u' "$file" 2>/dev/null || stat -f '%u' "$file" 2>/dev/null || true)"
+  [[ -n "$mode" && -n "$owner_uid" ]] || return 1
+  world="${mode: -1}"
+  if [[ "$world" =~ ^[2367]$ ]]; then
+    return 1
+  fi
+  case "$mode" in
+    600|640|400|440) ;;
+    *)
+      # Also accept classic 0600/0640 from %a on some systems (already 3-digit).
+      [[ "$mode" == "600" || "$mode" == "640" || "$mode" == "400" || "$mode" == "440" ]] || return 1
+      ;;
+  esac
+  if (( EUID == 0 )); then
+    (( owner_uid == 0 )) || return 1
+  else
+    (( owner_uid == EUID )) || return 1
+  fi
+  return 0
+}
+
+# Apply one allowlisted KEY=VALUE into the current shell (no source / no eval).
+health_env_apply_assignment() {
+  local key="$1" value="$2"
+  health_env_is_known_key "$key" || return 1
+  health_env_validate_value "$key" "$value" || return 1
+  case "$key" in
+    HEALTH_ALERT_ON) HEALTH_ALERT_ON="$value" ;;
+    HEALTH_ALERT_WEBHOOK_URL) HEALTH_ALERT_WEBHOOK_URL="$value" ;;
+    HEALTH_ALERT_WEBHOOK_TIMEOUT_SEC) HEALTH_ALERT_WEBHOOK_TIMEOUT_SEC="$value" ;;
+    HEALTH_ALERT_WEBHOOK_ALLOW_HTTP) HEALTH_ALERT_WEBHOOK_ALLOW_HTTP="$value" ;;
+    HEALTH_CONSECUTIVE_FAIL_THRESHOLD) HEALTH_CONSECUTIVE_FAIL_THRESHOLD="$value" ;;
+    HEALTH_COOLDOWN_SEC) HEALTH_COOLDOWN_SEC="$value" ;;
+    HEALTH_HISTORY_MAX_LINES) HEALTH_HISTORY_MAX_LINES="$value" ;;
+    HEALTH_INCIDENT_KEEP) HEALTH_INCIDENT_KEEP="$value" ;;
+    # Retention-day aliases map onto the line/count knobs used today.
+    HEALTH_HISTORY_RETENTION_DAYS) HEALTH_HISTORY_MAX_LINES="$value" ;;
+    HEALTH_INCIDENT_RETENTION_DAYS) HEALTH_INCIDENT_KEEP="$value" ;;
+    HEALTH_DISK_DEGRADED_PERCENT) HEALTH_DISK_DEGRADED_PERCENT="$value" ;;
+    HEALTH_DISK_CRITICAL_PERCENT) HEALTH_DISK_CRITICAL_PERCENT="$value" ;;
+    HEALTH_INODE_DEGRADED_PERCENT) HEALTH_INODE_DEGRADED_PERCENT="$value" ;;
+    HEALTH_INODE_CRITICAL_PERCENT) HEALTH_INODE_CRITICAL_PERCENT="$value" ;;
+    HEALTH_MEM_AVAILABLE_DEGRADED_PERCENT) HEALTH_MEM_AVAILABLE_DEGRADED_PERCENT="$value" ;;
+    HEALTH_MEM_AVAILABLE_CRITICAL_PERCENT) HEALTH_MEM_AVAILABLE_CRITICAL_PERCENT="$value" ;;
+    HEALTH_BACKUP_DEGRADED_HOURS) HEALTH_BACKUP_DEGRADED_HOURS="$value" ;;
+    HEALTH_BACKUP_CRITICAL_HOURS) HEALTH_BACKUP_CRITICAL_HOURS="$value" ;;
+    HEALTH_REHEARSAL_DEGRADED_DAYS) HEALTH_REHEARSAL_DEGRADED_DAYS="$value" ;;
+    HEALTH_HTTPS_DEGRADED_DAYS) HEALTH_HTTPS_DEGRADED_DAYS="$value" ;;
+    HEALTH_HTTPS_CRITICAL_DAYS) HEALTH_HTTPS_CRITICAL_DAYS="$value" ;;
+    HEALTH_CPU_DEGRADED_PERCENT) HEALTH_CPU_DEGRADED_PERCENT="$value" ;;
+    HEALTH_CPU_CRITICAL_PERCENT) HEALTH_CPU_CRITICAL_PERCENT="$value" ;;
+    HEALTH_IOWAIT_DEGRADED_PERCENT) HEALTH_IOWAIT_DEGRADED_PERCENT="$value" ;;
+    HEALTH_IOWAIT_CRITICAL_PERCENT) HEALTH_IOWAIT_CRITICAL_PERCENT="$value" ;;
+    HEALTH_DOCKER_RESTART_DEGRADED) HEALTH_DOCKER_RESTART_DEGRADED="$value" ;;
+    HEALTH_DOCKER_RESTART_CRITICAL) HEALTH_DOCKER_RESTART_CRITICAL="$value" ;;
+    HEALTH_QUEUE_DEGRADED) HEALTH_QUEUE_DEGRADED="$value" ;;
+    HEALTH_QUEUE_CRITICAL) HEALTH_QUEUE_CRITICAL="$value" ;;
+    HEALTH_SCHEDULER_STALE_HOURS) HEALTH_SCHEDULER_STALE_HOURS="$value" ;;
+    HEALTH_HTTP_TIMEOUT_SEC) HEALTH_HTTP_TIMEOUT_SEC="$value" ;;
+    HEALTH_CPU_SAMPLE_SEC) HEALTH_CPU_SAMPLE_SEC="$value" ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+
+# Strict allowlist parser for /etc/erpnext-dev/health.env (never source as shell).
+health_load_policy() {
+  local file="${HEALTH_ENV_FILE}"
+  local line key value stripped
+  [[ -f "$file" ]] || return 0
+  if ! health_env_file_perms_ok "$file"; then
+    warn "Ignoring health policy ${file}: unsafe ownership or permissions (want root-owned 600/640)."
+    return 0
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    stripped="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$stripped" || "$stripped" == \#* ]] && continue
+    [[ "$stripped" == export[[:space:]]* ]] && stripped="${stripped#export}"
+    stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+    [[ "$stripped" == *=* ]] || continue
+    key="${stripped%%=*}"
+    value="${stripped#*=}"
+    key="${key%"${key##*[![:space:]]}"}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    # Strip matching single/double quotes only (no nested expansion).
+    if (( ${#value} >= 2 )); then
+      local q_first="${value:0:1}" q_last="${value: -1}"
+      if [[ "$q_first" == '"' && "$q_last" == '"' ]]; then
+        value="${value:1:${#value}-2}"
+      elif [[ "$q_first" == "'" && "$q_last" == "'" ]]; then
+        value="${value:1:${#value}-2}"
+      fi
+    fi
+    health_env_is_known_key "$key" || continue
+    health_env_apply_assignment "$key" "$value" || continue
+  done <"$file"
 }
 
 health_ensure_lib_dirs() {
