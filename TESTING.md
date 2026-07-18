@@ -1,8 +1,23 @@
 # Testing guide
 
-**Current release:** v1.18.0 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.18.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.18.1 Local VM Stable IP foundation
+
+Hermetic (no sudo / no real Netplan apply):
+
+```bash
+scripts/test-local-ip.sh
+scripts/test-ui-render.sh
+scripts/check-release-doc-alignment.sh
+```
+
+Expects status/drift/save, wizard dry-run + rollback against a temp Netplan dir,
+and main-menu **Local network** layout. Field: after reboot with DHCP, run
+`erpnext-dev local-ip-drift-check` and follow `local-ip-plan` /
+`docs/LOCAL-VM-STABLE-IP.md`.
 
 ## v1.18.0 security hardening closure
 

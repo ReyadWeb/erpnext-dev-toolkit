@@ -1,5 +1,13 @@
 ## Unreleased
 
+## v1.18.1 - Local VM Stable IP foundation
+
+Patch release that keeps `erp.test` / local HTTPS reliable when the guest IP
+changes after reboot, plus status-strip fixes for local Go-live/HTTPS and the
+install `/releases/latest` resolution path.
+
+Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58).
+
 ### Added
 
 - **Local VM Stable IP foundation** ([#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58)):

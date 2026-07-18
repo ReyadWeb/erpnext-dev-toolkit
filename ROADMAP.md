@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.18.0 (July 2026)  
+**Current release:** v1.18.1 (July 2026)  
 **Theme for v1.18–v1.23:** security closure → local IP stability → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.18.1 — Local VM stable IP foundation.
+**Next up:** v1.18.2 — Frontend asset readiness gaps.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -27,17 +27,18 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 | Root-run `health.env` safety | Shipped (v1.18.0 allowlist parser + ownership gate) |
 | Off-VM strict SSH host keys | Shipped (v1.18.0; opt-in strict mode) |
 | CI secret / Scorecard / shfmt gates | Shipped (v1.18.0) |
-| Guarded auto-healing | **Not shipped** (after local IP + asset readiness gaps) |
+| Local VM Stable IP CLI + docs | Shipped (v1.18.1) |
+| Guarded auto-healing | **Not shipped** (after asset readiness gaps) |
 
 ### Maturity (single-admin dedicated VM)
 
 | Use case | Rating | Notes |
 |----------|--------|-------|
-| Local dev VM | **9.5 / 10** | Field-tested; IP drift after reboot remains a common footgun |
+| Local dev VM | **9.5 / 10** | Field-tested; Stable IP CLI + docs in v1.18.1 |
 | Public VPS production | **9.4 / 10** | CI-proven; broader provider evidence still in progress |
 | Supply chain / release trust | **9.6 / 10** | Signed releases, `release-signing` env, Actions SHA pins |
 | Root-run config safety | **9.5 / 10** | Allowlist parser; no sourced `health.env` (v1.18.0) |
-| Overall | **~9.5 / 10** | Enterprise-candidate; next gains from local IP stability + real VPS evidence |
+| Overall | **~9.5 / 10** | Enterprise-candidate; next gains from asset readiness + real VPS evidence |
 
 **Positioning:** Native engine = Supervisor/Nginx on Debian-family hosts. Docker engine = upstream `frappe_docker` behind the same `erpnext-dev` CLI. Architecture: [`DEPLOYMENT-ARCHITECTURE.md`](DEPLOYMENT-ARCHITECTURE.md).
 
@@ -54,7 +55,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.18.0)
+## Shipped foundation (through v1.18.1)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -124,6 +125,8 @@ v1.23.0  Documentation and launch polish
 ---
 
 ### v1.18.1 — Local VM Stable IP Foundation
+
+**Status:** Shipped as **v1.18.1**.
 
 **Goal:** Keep `erp.test` / local HTTPS / host mappings reliable when the guest IP changes after reboot.
 
