@@ -37,7 +37,7 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 | v1.22.0 | [#64](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/64) Real VPS Validation Matrix |
 | v1.23.0 | [#65](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/65) Documentation and Launch Polish |
 
-### v1.18.0 child work (current focus)
+### v1.18.0 child work (**shipped** in v1.18.0)
 
 | Issue | Focus |
 |-------|--------|
@@ -45,6 +45,8 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 | [#67](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/67) | Strict off-VM SSH host-key mode (**Done**) |
 | [#68](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/68) | Remove or justify remaining `eval` patterns (**Done**) |
 | [#69](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/69) | CI: secret scanning, Scorecard, shfmt, risky-shell tests (**Done**) |
+
+**Current focus:** [#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58) — v1.18.1 Local VM Stable IP Foundation.
 
 ---
 

@@ -1,4 +1,8 @@
-## Unreleased (v1.18.0 in progress)
+## v1.18.0 - Security hardening closure
+
+Minor release that closes remaining root-toolkit security gaps before guarded
+auto-healing: strict `health.env` parsing, off-VM SSH host-key locking, removal
+of remaining `eval` namerefs, and CI secret/supply-chain scanners.
 
 Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#57](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/57).
 
