@@ -1332,15 +1332,23 @@ docker_show_restore_evidence() {
 # shipment can be verified at the destination rather than trusted blindly.
 docker_offvm_source_dir() { docker_backup_site_root; }
 
-# Build the ssh command array used for remote verification (mirrors the options
-# in the native off_vm_backup_ssh_command_string, but as an array we can exec).
+# Build the ssh command array used for remote verification (mirrors native
+# off_vm_append_ssh_security_opts; nameref — no eval).
 docker_offvm_ssh_cmd() {
-  local __out="${1:-DOCKER_OFFVM_SSH_CMD}"
+  local __out_name="${1:-DOCKER_OFFVM_SSH_CMD}"
+  local -n __out="$__out_name"
   local identity="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
-  if [[ -n "$identity" ]]; then
-    eval "${__out}=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -i \"\$identity\")"
+  if declare -F off_vm_backup_load_config >/dev/null 2>&1; then
+    off_vm_backup_load_config
+  fi
+  __out=(ssh)
+  if declare -F off_vm_append_ssh_security_opts >/dev/null 2>&1; then
+    off_vm_append_ssh_security_opts __out
   else
-    eval "${__out}=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)"
+    __out+=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
+  fi
+  if [[ -n "$identity" ]]; then
+    __out+=(-i "$identity")
   fi
 }
 

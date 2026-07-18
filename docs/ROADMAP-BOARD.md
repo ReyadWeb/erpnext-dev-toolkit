@@ -41,8 +41,8 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 
 | Issue | Focus |
 |-------|--------|
-| [#66](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/66) | Strict allowlist parser for `health.env` (**In Progress**) |
-| [#67](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/67) | Strict off-VM SSH host-key mode |
+| [#66](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/66) | Strict allowlist parser for `health.env` (**Done**) |
+| [#67](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/67) | Strict off-VM SSH host-key mode (**In Progress**) |
 | [#68](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/68) | Remove or justify remaining `eval` patterns |
 | [#69](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/69) | CI: secret scanning, Scorecard, shfmt, risky-shell tests |
 

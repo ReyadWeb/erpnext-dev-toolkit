@@ -1521,6 +1521,67 @@ off_vm_backup_load_config() {
   if value="$(read_config_key_from_file "$OFF_VM_BACKUP_CONFIG_FILE" OFF_VM_BACKUP_RSYNC_DELETE 2>/dev/null)" && [[ -n "$value" && "${OFF_VM_BACKUP_RSYNC_DELETE}" == "false" ]]; then
     OFF_VM_BACKUP_RSYNC_DELETE="$value"
   fi
+  if value="$(read_config_key_from_file "$OFF_VM_BACKUP_CONFIG_FILE" OFF_VM_STRICT_HOST_KEY 2>/dev/null)" && [[ -n "$value" ]]; then
+    OFF_VM_STRICT_HOST_KEY="$value"
+  fi
+  if value="$(read_config_key_from_file "$OFF_VM_BACKUP_CONFIG_FILE" OFF_VM_KNOWN_HOSTS_FILE 2>/dev/null)" && [[ -n "$value" ]]; then
+    OFF_VM_KNOWN_HOSTS_FILE="$value"
+  fi
+  : "${OFF_VM_KNOWN_HOSTS_FILE:=/etc/erpnext-dev/off-vm-known_hosts}"
+  : "${OFF_VM_STRICT_HOST_KEY:=false}"
+}
+
+off_vm_strict_host_key_enabled() {
+  off_vm_backup_load_config
+  case "${OFF_VM_STRICT_HOST_KEY,,}" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Host portion of user@host:/path (default SSH port).
+# Usage: off_vm_backup_target_host "user@host:/path"
+off_vm_backup_target_host() {
+  local target="$1" host
+  validate_off_vm_backup_target "$target" || return 1
+  host="${target%%:*}"
+  host="${host##*@}"
+  [[ -n "$host" && "$host" != *[[:space:]]* ]] || return 1
+  printf '%s\n' "$host"
+}
+
+# Append BatchMode / ConnectTimeout / known_hosts / StrictHostKeyChecking to a nameref array.
+off_vm_append_ssh_security_opts() {
+  local -n __ssh_opts="$1"
+  local known="${OFF_VM_KNOWN_HOSTS_FILE:-/etc/erpnext-dev/off-vm-known_hosts}"
+  __ssh_opts+=(-o BatchMode=yes -o ConnectTimeout=15)
+  __ssh_opts+=(-o "UserKnownHostsFile=${known}")
+  __ssh_opts+=(-o GlobalKnownHostsFile=/dev/null)
+  if off_vm_strict_host_key_enabled; then
+    __ssh_opts+=(-o StrictHostKeyChecking=yes)
+  else
+    __ssh_opts+=(-o StrictHostKeyChecking=accept-new)
+  fi
+}
+
+off_vm_backup_write_config_file() {
+  local config_dir
+  require_sudo
+  off_vm_backup_load_config
+  config_dir="$(dirname "$OFF_VM_BACKUP_CONFIG_FILE")"
+  $SUDO mkdir -p "$config_dir"
+  $SUDO tee "$OFF_VM_BACKUP_CONFIG_FILE" >/dev/null <<EOF_OFF_VM_CONFIG
+# ERPNext Developer Toolkit off-VM backup configuration
+# Non-secret settings only. Use SSH keys/agent for authentication.
+OFF_VM_BACKUP_TARGET=${OFF_VM_BACKUP_TARGET:-}
+OFF_VM_BACKUP_SSH_IDENTITY=${OFF_VM_BACKUP_SSH_IDENTITY:-}
+OFF_VM_BACKUP_RSYNC_DELETE=${OFF_VM_BACKUP_RSYNC_DELETE:-false}
+OFF_VM_STRICT_HOST_KEY=${OFF_VM_STRICT_HOST_KEY:-false}
+OFF_VM_KNOWN_HOSTS_FILE=${OFF_VM_KNOWN_HOSTS_FILE:-/etc/erpnext-dev/off-vm-known_hosts}
+SITE_NAME=${SITE_NAME}
+EOF_OFF_VM_CONFIG
+  $SUDO chown root:root "$OFF_VM_BACKUP_CONFIG_FILE" || true
+  $SUDO chmod 600 "$OFF_VM_BACKUP_CONFIG_FILE" || true
 }
 
 validate_off_vm_backup_target() {
@@ -1541,7 +1602,9 @@ validate_off_vm_backup_target() {
 
 off_vm_backup_ssh_command_string() {
   local ssh_cmd=() identity="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
-  ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
+  off_vm_backup_load_config
+  ssh_cmd=(ssh)
+  off_vm_append_ssh_security_opts ssh_cmd
   if [[ -n "$identity" ]]; then
     [[ "$identity" != *[[:space:]]* ]] || fail "SSH identity file path must not contain spaces: $identity"
     [[ -r "$identity" ]] || fail "SSH identity file is not readable: $identity"
@@ -1549,6 +1612,100 @@ off_vm_backup_ssh_command_string() {
   fi
   local IFS=' '
   printf '%s' "${ssh_cmd[*]}"
+}
+
+# Capture the configured off-VM host key into /etc/erpnext-dev/off-vm-known_hosts.
+off_vm_trust_host_key() {
+  require_sudo
+  local host known tmp scan
+  off_vm_backup_load_config
+  host="$(off_vm_backup_target_host "${OFF_VM_BACKUP_TARGET:-}")" || fail "Configure an off-VM target first: $(toolkit_cmd configure-rsync-backup-target)"
+  known="${OFF_VM_KNOWN_HOSTS_FILE}"
+  command -v ssh-keyscan >/dev/null 2>&1 || fail "ssh-keyscan is required (install openssh-client)."
+  ui_box_start "Trust Off-VM Host Key"
+  status_line "Host" "INFO" "$host"
+  status_line "Known hosts file" "INFO" "$known"
+  tmp="$(mktemp /tmp/erpnext-dev-offvm-keyscan.XXXXXX)"
+  if ! scan="$(ssh-keyscan -T 5 -H "$host" 2>/dev/null)" || [[ -z "$scan" ]]; then
+    rm -f "$tmp"
+    fail "Could not fetch host keys for ${host}. Check network/DNS/firewall, then retry."
+  fi
+  printf '%s\n' "$scan" >"$tmp"
+  $SUDO mkdir -p "$(dirname "$known")"
+  if [[ -f "$known" ]]; then
+    $SUDO cat "$known" "$tmp" | $SUDO tee "${known}.new" >/dev/null
+    $SUDO mv "${known}.new" "$known"
+  else
+    $SUDO cp "$tmp" "$known"
+  fi
+  rm -f "$tmp"
+  $SUDO chown root:root "$known" || true
+  $SUDO chmod 600 "$known" || true
+  status_line "Host key" "OK" "stored for ${host}"
+  ui_next "$(toolkit_cmd off-vm-verify-host-key)" "$(toolkit_cmd off-vm-strict-host-key-enable)"
+  ui_box_end
+}
+
+# Verify SSH can authenticate to the off-VM host under current host-key policy.
+off_vm_verify_host_key() {
+  require_sudo
+  local host ssh_cmd_str rc
+  off_vm_backup_load_config
+  host="$(off_vm_backup_target_host "${OFF_VM_BACKUP_TARGET:-}")" || fail "Configure an off-VM target first: $(toolkit_cmd configure-rsync-backup-target)"
+  ui_box_start "Verify Off-VM Host Key"
+  status_line "Host" "INFO" "$host"
+  status_line "Strict mode" "INFO" "$(off_vm_strict_host_key_enabled && echo enabled || echo accept-new)"
+  status_line "Known hosts" "INFO" "${OFF_VM_KNOWN_HOSTS_FILE}"
+  ssh_cmd_str="$(off_vm_backup_ssh_command_string)"
+  # Probe with a no-op remote command; auth failures still prove host-key handling.
+  set +e
+  # shellcheck disable=SC2086
+  $SUDO $ssh_cmd_str "$host" true >/tmp/erpnext-dev-offvm-verify.out 2>&1
+  rc=$?
+  set -e
+  if (( rc == 0 )); then
+    status_line "SSH probe" "OK" "host key and auth accepted"
+  else
+    status_line "SSH probe" "WARN" "exit ${rc} (host key mismatch, missing trust, or auth). See /tmp/erpnext-dev-offvm-verify.out"
+    if off_vm_strict_host_key_enabled; then
+      warn "Strict mode is on. Re-run $(toolkit_cmd off-vm-trust-host-key) after confirming the server was rebuilt intentionally."
+    else
+      warn "Try $(toolkit_cmd off-vm-trust-host-key) then re-verify."
+    fi
+  fi
+  ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd off-vm-strict-host-key-enable)"
+  ui_box_end
+  return 0
+}
+
+off_vm_strict_host_key_enable() {
+  require_sudo
+  local known host
+  off_vm_backup_load_config
+  host="$(off_vm_backup_target_host "${OFF_VM_BACKUP_TARGET:-}")" || fail "Configure an off-VM target first: $(toolkit_cmd configure-rsync-backup-target)"
+  known="${OFF_VM_KNOWN_HOSTS_FILE}"
+  [[ -s "$known" ]] || fail "Known hosts file is empty. Run $(toolkit_cmd off-vm-trust-host-key) first (${known})."
+  ui_box_start "Enable Strict Off-VM Host Key Checking"
+  status_line "Host" "INFO" "$host"
+  status_line "Known hosts" "INFO" "$known"
+  OFF_VM_STRICT_HOST_KEY=true
+  off_vm_backup_write_config_file
+  status_line "Strict mode" "OK" "enabled (StrictHostKeyChecking=yes)"
+  echo
+  echo "SSH/rsync will use UserKnownHostsFile=${known} and reject unknown hosts."
+  ui_next "$(toolkit_cmd off-vm-verify-host-key)" "$(toolkit_cmd off-vm-backup-dry-run)"
+  ui_box_end
+}
+
+off_vm_strict_host_key_disable() {
+  require_sudo
+  off_vm_backup_load_config
+  ui_box_start "Disable Strict Off-VM Host Key Checking"
+  OFF_VM_STRICT_HOST_KEY=false
+  off_vm_backup_write_config_file
+  status_line "Strict mode" "OK" "disabled (accept-new for first setup convenience)"
+  echo "Production VMs should re-enable with $(toolkit_cmd off-vm-strict-host-key-enable)."
+  ui_box_end
 }
 
 off_vm_backup_target_display() {
@@ -1952,8 +2109,14 @@ pull_off_vm_backup_to_restore_vm() {
   off_vm_backup_ensure_rsync
   $SUDO mkdir -p "$backup_dir"
   log "Pulling off-VM backups to restore VM"
+  local pull_ssh=() pull_ssh_str
+  off_vm_backup_load_config
+  pull_ssh=(ssh -i "$identity" -o IdentitiesOnly=yes)
+  off_vm_append_ssh_security_opts pull_ssh
+  local IFS=' '
+  pull_ssh_str="${pull_ssh[*]}"
   $SUDO rsync -avz \
-    -e "ssh -i ${identity} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+    -e "$pull_ssh_str" \
     "${target%/}/" \
     "${backup_dir}/"
   $SUDO chown -R "${FRAPPE_USER}:${FRAPPE_USER}" "$backup_dir" || true
@@ -2244,29 +2407,19 @@ off_vm_backup_guided_setup() {
   fi
 
   [[ -r "$identity" ]] || fail "SSH identity file is not readable: $identity"
-  config_dir="$(dirname "$OFF_VM_BACKUP_CONFIG_FILE")"
-  $SUDO mkdir -p "$config_dir"
-  $SUDO tee "$OFF_VM_BACKUP_CONFIG_FILE" >/dev/null <<EOF_OFF_VM_GUIDED_CONFIG
-# ERPNext Developer Toolkit off-VM backup configuration
-# Non-secret settings only. Use SSH keys/agent for authentication.
-OFF_VM_BACKUP_TARGET=${target}
-OFF_VM_BACKUP_SSH_IDENTITY=${identity}
-OFF_VM_BACKUP_RSYNC_DELETE=${delete_mode}
-SITE_NAME=${SITE_NAME}
-EOF_OFF_VM_GUIDED_CONFIG
-  $SUDO chown root:root "$OFF_VM_BACKUP_CONFIG_FILE" || true
-  $SUDO chmod 600 "$OFF_VM_BACKUP_CONFIG_FILE" || true
   OFF_VM_BACKUP_TARGET="$target"
   OFF_VM_BACKUP_SSH_IDENTITY="$identity"
   OFF_VM_BACKUP_RSYNC_DELETE="$delete_mode"
+  off_vm_backup_write_config_file
 
   ui_box_start "Off-VM Backup Configured"
   status_line "Target" "OK" "$OFF_VM_BACKUP_TARGET"
   status_line "SSH key" "OK" "$OFF_VM_BACKUP_SSH_IDENTITY"
   status_line "Delete mode" "INFO" "$OFF_VM_BACKUP_RSYNC_DELETE"
+  status_line "Host key mode" "INFO" "$(off_vm_strict_host_key_enabled && echo strict || echo accept-new)"
   echo
-  echo "Next run the dry run. If it passes, run the real off-VM backup."
-  ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd run-off-vm-backup)" "$(toolkit_cmd off-vm-backup-status)"
+  echo "For production: trust the host key, enable strict mode, then dry-run."
+  ui_next "$(toolkit_cmd off-vm-trust-host-key)" "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd off-vm-backup-status)"
   ui_box_end
 }
 
@@ -2649,29 +2802,18 @@ configure_rsync_backup_target() {
     delete_mode="${OFF_VM_BACKUP_RSYNC_DELETE:-false}"
   fi
 
-  config_dir="$(dirname "$OFF_VM_BACKUP_CONFIG_FILE")"
-  $SUDO mkdir -p "$config_dir"
-  $SUDO tee "$OFF_VM_BACKUP_CONFIG_FILE" >/dev/null <<EOF_OFF_VM_CONFIG
-# ERPNext Developer Toolkit off-VM backup configuration
-# Non-secret settings only. Use SSH keys/agent for authentication.
-OFF_VM_BACKUP_TARGET=${target}
-OFF_VM_BACKUP_SSH_IDENTITY=${identity}
-OFF_VM_BACKUP_RSYNC_DELETE=${delete_mode}
-SITE_NAME=${SITE_NAME}
-EOF_OFF_VM_CONFIG
-  $SUDO chown root:root "$OFF_VM_BACKUP_CONFIG_FILE" || true
-  $SUDO chmod 600 "$OFF_VM_BACKUP_CONFIG_FILE" || true
-
   OFF_VM_BACKUP_TARGET="$target"
   OFF_VM_BACKUP_SSH_IDENTITY="$identity"
   OFF_VM_BACKUP_RSYNC_DELETE="$delete_mode"
+  off_vm_backup_write_config_file
 
   ui_box_start "Result Summary"
   status_line "Off-VM target" "OK" "$OFF_VM_BACKUP_TARGET"
   status_line "Config file" "OK" "$OFF_VM_BACKUP_CONFIG_FILE"
   status_line "Delete mode" "INFO" "$OFF_VM_BACKUP_RSYNC_DELETE"
-  status_line "Next test" "INFO" "run dry-run before real sync"
-  ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd off-vm-backup-status)"
+  status_line "Host key mode" "INFO" "$(off_vm_strict_host_key_enabled && echo strict || echo accept-new)"
+  status_line "Next test" "INFO" "trust host key (prod) then dry-run"
+  ui_next "$(toolkit_cmd off-vm-trust-host-key)" "$(toolkit_cmd off-vm-backup-dry-run)"
   ui_box_end
 }
 
@@ -2706,8 +2848,11 @@ show_off_vm_backup_status() {
     *) status_line "Last off-VM run" "INFO" "${last_run}; ${last_detail}" ;;
   esac
   status_line "Delete mode" "INFO" "${OFF_VM_BACKUP_RSYNC_DELETE}"
+  status_line "Host key mode" "INFO" "$(off_vm_strict_host_key_enabled && echo strict || echo accept-new)"
+  status_line "Known hosts" "INFO" "${OFF_VM_KNOWN_HOSTS_FILE}"
   echo
   echo "Off-VM backup protects against VM/disk loss only if the target is outside this VM/account."
+  echo "Production: $(toolkit_cmd off-vm-trust-host-key) → $(toolkit_cmd off-vm-strict-host-key-enable)."
   ui_next "$(toolkit_cmd off-vm-backup-dry-run)" "$(toolkit_cmd run-off-vm-backup)"
   ui_box_end
 }
@@ -2729,7 +2874,9 @@ disable_off_vm_backup() {
   OFF_VM_BACKUP_TARGET=""
   OFF_VM_BACKUP_SSH_IDENTITY=""
   OFF_VM_BACKUP_RSYNC_DELETE="false"
+  OFF_VM_STRICT_HOST_KEY="false"
   status_line "Off-VM backup" "OK" "configuration removed"
+  echo "Note: ${OFF_VM_KNOWN_HOSTS_FILE} was left in place (remove manually if desired)."
   ui_next "$(toolkit_cmd off-vm-backup-status)"
   ui_box_end
 }
@@ -2743,15 +2890,18 @@ off_vm_backup_wizard() {
       "2) Guided setup" \
       "3) Generate backup SSH key" \
       "4) Configure rsync target" \
-      "5) Off-VM dry run" \
-      "6) Run off-VM backup" \
-      "7) Off-VM status" \
-      "8) Disable config" \
-      "9) Prepare backup server" \
-      "10) Restore rehearsal" \
-      "11) Generate restore key" \
-      "12) Add restore key" \
-      "13) Remove restore key"
+      "5) Trust host key" \
+      "6) Verify host key" \
+      "7) Enable strict host key" \
+      "8) Off-VM dry run" \
+      "9) Run off-VM backup" \
+      "10) Off-VM status" \
+      "11) Disable config" \
+      "12) Prepare backup server" \
+      "13) Restore rehearsal" \
+      "14) Generate restore key" \
+      "15) Add restore key" \
+      "16) Remove restore key"
     menu_footer
     local off_choice=""
     menu_read_choice off_choice
@@ -2760,15 +2910,18 @@ off_vm_backup_wizard() {
       2) off_vm_backup_guided_setup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
       3) generate_off_vm_backup_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
       4) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      5) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      6) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      7) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      8) disable_off_vm_backup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      9) backup_server_setup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      10) restore_rehearsal_wizard; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      11) generate_restore_backup_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      12) backup_server_add_restore_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      13) backup_server_remove_restore_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      5) off_vm_trust_host_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      6) off_vm_verify_host_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      7) off_vm_strict_host_key_enable; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      8) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      9) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      10) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      11) disable_off_vm_backup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      12) backup_server_setup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      13) restore_rehearsal_wizard; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      14) generate_restore_backup_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      15) backup_server_add_restore_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
+      16) backup_server_remove_restore_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;

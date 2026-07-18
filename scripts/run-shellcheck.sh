@@ -57,6 +57,7 @@ targets=(
   scripts/test-dashboard-render.sh
   scripts/test-static-asset-probe.sh
   scripts/test-health-env-parser.sh
+  scripts/test-offvm-host-key.sh
   scripts/test-update-channel.sh
   scripts/release-signing-policy.sh
   scripts/assert-github-release-assets.sh

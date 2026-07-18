@@ -595,10 +595,17 @@ Restrict SSH key to ERPNext VM source IP: <VPS_PUBLIC_IP>
 
 ```bash
 sudo erpnext-dev off-vm-backup-guided-setup
+# Production host-key hardening (recommended after first successful connect):
+sudo erpnext-dev off-vm-trust-host-key
+sudo erpnext-dev off-vm-verify-host-key
+sudo erpnext-dev off-vm-strict-host-key-enable
 sudo erpnext-dev off-vm-backup-dry-run
 sudo erpnext-dev run-off-vm-backup
 sudo erpnext-dev off-vm-backup-status
 ```
+
+Default SSH policy is `accept-new` for first setup. Strict mode uses
+`StrictHostKeyChecking=yes` with `/etc/erpnext-dev/off-vm-known_hosts`.
 
 Off-VM backup does not replace a restore rehearsal.
 

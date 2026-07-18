@@ -8,6 +8,11 @@ Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#57](https
   `/etc/erpnext-dev/health.env`; allowlisted keys only; ownership/mode gate;
   HTTPS webhook URLs (localhost HTTP allowed); hermetic
   `scripts/test-health-env-parser.sh`.
+- **Strict off-VM SSH host-key mode** ([#67](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/67)):
+  `off-vm-trust-host-key`, `off-vm-verify-host-key`,
+  `off-vm-strict-host-key-enable` / `disable`; dedicated
+  `/etc/erpnext-dev/off-vm-known_hosts`; default remains `accept-new` for first
+  setup. Docker off-VM SSH uses the same options via nameref (no `eval`).
 
 ## v1.17.9 - Menu space: shorter labels + smarter columns
 
