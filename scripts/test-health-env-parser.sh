@@ -133,7 +133,7 @@ else
   pass "no source of HEALTH_ENV_FILE"
 fi
 
-if (( fail > 0 )); then
+if ((fail > 0)); then
   echo "test-health-env-parser: ${fail} failure(s)" >&2
   exit 1
 fi

@@ -134,7 +134,7 @@ export ERPNEXT_DEV_TTY_COLS=100
   export ERPNEXT_DEV_TTY_COLS=100
   detected="$(ui_detect_terminal_cols)"
   # Accept either live stty width or the snapshot/default (>=80 for usable menus).
-  if ! [[ "$detected" =~ ^[0-9]+$ ]] || (( detected < 80 )); then
+  if ! [[ "$detected" =~ ^[0-9]+$ ]] || ((detected < 80)); then
     note_fail "ui_detect_terminal_cols returned unusable width: ${detected}"
   else
     pass "ui_detect_terminal_cols width ${detected}"
@@ -186,7 +186,7 @@ else
   pass "menu_read_choice returns typed selection"
 fi
 
-if (( fail > 0 )); then
+if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2
   echo "----- render output (compact) -----" >&2
   cat "$tmp" >&2 || true

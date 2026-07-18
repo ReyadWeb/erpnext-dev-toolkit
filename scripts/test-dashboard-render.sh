@@ -59,7 +59,7 @@ if grep -q $'\033' "$tmp2"; then
 fi
 rm -f "$tmp2"
 
-if (( fail > 0 )); then
+if ((fail > 0)); then
   echo "test-dashboard-render: ${fail} failure(s)" >&2
   echo "----- render output -----" >&2
   cat "$tmp" >&2 || true

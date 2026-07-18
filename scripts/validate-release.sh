@@ -60,7 +60,7 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-update-channel.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-update-channel.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -308,6 +308,26 @@ scripts/test-risky-shell-patterns.sh >/tmp/erpnext-dev-risky-shell.$$ 2>&1 || {
 }
 rm -f /tmp/erpnext-dev-risky-shell.$$
 pass "risky shell pattern audit passed"
+
+scripts/check-pinned-actions.sh >/tmp/erpnext-dev-pinned-actions.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-pinned-actions.$$
+  rm -f /tmp/erpnext-dev-pinned-actions.$$
+  fail "check-pinned-actions.sh failed"
+}
+rm -f /tmp/erpnext-dev-pinned-actions.$$
+pass "GitHub Actions pin check passed"
+
+if command -v shfmt >/dev/null 2>&1; then
+  scripts/check-shfmt.sh >/tmp/erpnext-dev-shfmt.$$ 2>&1 || {
+    cat /tmp/erpnext-dev-shfmt.$$
+    rm -f /tmp/erpnext-dev-shfmt.$$
+    fail "check-shfmt.sh failed"
+  }
+  rm -f /tmp/erpnext-dev-shfmt.$$
+  pass "shfmt hermetic-test check passed"
+else
+  pass "skipped shfmt (not installed)"
+fi
 
 scripts/test-update-channel.sh >/tmp/erpnext-dev-update-channel.$$ 2>&1 || {
   cat /tmp/erpnext-dev-update-channel.$$

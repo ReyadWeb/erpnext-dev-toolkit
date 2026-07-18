@@ -7,7 +7,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 failures=0
-note_fail() { echo "FAIL: $*" >&2; failures=$((failures + 1)); }
+note_fail() {
+  echo "FAIL: $*" >&2
+  failures=$((failures + 1))
+}
 pass() { echo "OK: $*"; }
 
 tmpdir="$(mktemp -d)"
@@ -58,7 +61,7 @@ fi
 [[ -f "${INSTALLER_CANONICAL_PATH}" ]] || note_fail "missing ${INSTALLER_CANONICAL_PATH}"
 [[ -f "${TOOLKIT_INSTALL_DIR}/lib/common.sh" ]] || note_fail "missing lib/common.sh under /opt"
 
-if (( failures > 0 )); then
+if ((failures > 0)); then
   echo "install-self path tests: ${failures} failure(s)" >&2
   exit 1
 fi

@@ -6,7 +6,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 fail=0
-note_fail() { echo "FAIL: $*" >&2; fail=$((fail + 1)); }
+note_fail() {
+  echo "FAIL: $*" >&2
+  fail=$((fail + 1))
+}
 pass() { echo "OK: $*"; }
 
 bash -n lib/backup.sh || note_fail "bash -n lib/backup.sh"
@@ -91,7 +94,7 @@ pass "trust host key writes known_hosts via ssh-keyscan"
 
 rm -rf "$mockbin"
 
-if (( fail > 0 )); then
+if ((fail > 0)); then
   echo "test-offvm-host-key: ${fail} failure(s)" >&2
   exit 1
 fi

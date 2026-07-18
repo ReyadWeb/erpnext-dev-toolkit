@@ -17,6 +17,10 @@ Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#57](https
   `docker_compose_resolve` uses a Bash nameref; hermetic
   `scripts/test-risky-shell-patterns.sh` guards against new `eval` / sourced
   `health.env` in `lib/`.
+- **CI security workflows** ([#69](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/69)):
+  Gitleaks (pinned binary, current-tree scan + `.gitleaks.toml` allowlist),
+  OpenSSF Scorecard, pinned-Actions check, scoped `shfmt` on
+  `scripts/test-*.sh`; risky-shell already gated by #68.
 
 ## v1.17.9 - Menu space: shorter labels + smarter columns
 

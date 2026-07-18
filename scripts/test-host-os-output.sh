@@ -93,7 +93,7 @@ run_case() {
       assert_contains "$label dns" "$dns" 'sudo sed -i "/'
       assert_contains "$label dns" "$dns" "Copy and run this entire command"
       assert_contains "$label dns" "$dns" " && "
-      assert_absent   "$label dns" "$dns" "sed -i ''"
+      assert_absent "$label dns" "$dns" "sed -i ''"
       assert_contains "$label tests" "$tests" "getent hosts"
       assert_contains "$label mkcert" "$hint" "apt install -y mkcert"
       assert_contains "$label mkcert" "$hint" "libnss3-tools"
@@ -106,7 +106,7 @@ run_case() {
       assert_contains "$label dns" "$dns" "sudo sed -i ''"
       assert_contains "$label dns" "$dns" "Copy and run this entire command"
       assert_contains "$label tests" "$tests" "dscacheutil"
-      assert_absent   "$label tests" "$tests" "getent hosts"
+      assert_absent "$label tests" "$tests" "getent hosts"
       assert_contains "$label mkcert" "$hint" "brew install mkcert"
       mkcert_line="$(print_host_mkcert_trust_copy_one_liner "$SITE_NAME" "$VM_IP" "testuser")"
       assert_contains "$label mkcert one-liner" "$mkcert_line" "mkcert -install && mkcert -cert-file"
@@ -141,7 +141,7 @@ echo "== unset host OS falls back to linux =="
 export HOST_OS=""
 fallback_dns="$(print_host_dns_commands_for_site "$SITE_NAME" "$VM_IP")"
 assert_contains "unset dns" "$fallback_dns" "/etc/hosts"
-assert_absent   "unset dns" "$fallback_dns" 'drivers\etc\hosts'
+assert_absent "unset dns" "$fallback_dns" 'drivers\etc\hosts'
 
 # Label + normalization helpers.
 echo "== label + normalization =="

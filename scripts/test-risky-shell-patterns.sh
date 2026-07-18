@@ -7,7 +7,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 fail=0
-note_fail() { echo "FAIL: $*" >&2; fail=$((fail + 1)); }
+note_fail() {
+  echo "FAIL: $*" >&2
+  fail=$((fail + 1))
+}
 pass() { echo "OK: $*"; }
 
 # Strip comments/strings loosely: flag executable-looking eval usages.
@@ -54,7 +57,7 @@ else
   pass "docker_compose_resolve correctly unavailable on this host"
 fi
 
-if (( fail > 0 )); then
+if ((fail > 0)); then
   echo "test-risky-shell-patterns: ${fail} failure(s)" >&2
   exit 1
 fi

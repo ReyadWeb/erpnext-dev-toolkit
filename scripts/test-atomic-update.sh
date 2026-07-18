@@ -40,7 +40,7 @@ regenerate_checksums_in_tree() {
   tmp_file="$(mktemp "${tree}/SHA256SUMS.XXXXXX")"
   for file in "${checksum_targets[@]}"; do
     [[ -f "${tree}/${file}" ]] || fail "missing checksum target in synthetic tree: ${file}"
-    ( cd "$tree" && sha256sum "$file" ) >>"$tmp_file"
+    (cd "$tree" && sha256sum "$file") >>"$tmp_file"
   done
   mv "$tmp_file" "${tree}/SHA256SUMS"
 }
@@ -53,8 +53,8 @@ sign_checksums_in_tree() {
 }
 
 build_synthetic_bundle() {
-  local tag="$1"          # v9.9.8
-  local srv_root="$2"     # file server root
+  local tag="$1"      # v9.9.8
+  local srv_root="$2" # file server root
   local ver_num="${tag#v}"
   local stage bundle_dir bundle_path entry line
 
@@ -69,7 +69,7 @@ build_synthetic_bundle() {
     [[ -e "${ROOT_DIR}/${entry}" ]] || fail "manifest entry missing for bundle build: ${entry}"
     mkdir -p "${bundle_dir}/$(dirname "$entry")"
     cp -a "${ROOT_DIR}/${entry}" "${bundle_dir}/${entry}"
-  done < "${ROOT_DIR}/RELEASE-MANIFEST.txt"
+  done <"${ROOT_DIR}/RELEASE-MANIFEST.txt"
 
   cp -a "$TEST_PUBKEY" "${bundle_dir}/docs/erpnext-dev-signing-key.asc"
 
@@ -112,7 +112,7 @@ run_toolkit() {
 verify_at_current() {
   local stable_root="$1"
   export CHECKSUM_FILE="${stable_root}/current/SHA256SUMS"
-  ( cd "${stable_root}/current" && ./erpnext-dev.sh verify-toolkit )
+  (cd "${stable_root}/current" && ./erpnext-dev.sh verify-toolkit)
 }
 
 setup_test_signing_key() {
@@ -224,7 +224,7 @@ bundle_v999="${srv}/releases/download/v9.9.9/erpnext-dev-v9.9.9.tar.gz"
 work_extract="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-dev-corrupt.XXXXXX")"
 tar -C "$work_extract" -xzf "$bundle_v999"
 # Tamper a file but leave SHA256SUMS + signature unchanged — checksum gate must fail.
-printf '\n# tamper-fixture\n' >> "${work_extract}/erpnext-dev-v9.9.9/lib/common.sh"
+printf '\n# tamper-fixture\n' >>"${work_extract}/erpnext-dev-v9.9.9/lib/common.sh"
 tar -C "$work_extract" -czf "$bundle_v999" "erpnext-dev-v9.9.9"
 rm -rf "$work_extract"
 

@@ -97,7 +97,7 @@ probe_rc=0
 probe_out="$(probe_login_static_asset "https://erp.test/login" "erp.test" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
 assert_eq "probe rc no link" "2" "$probe_rc"
 
-if (( fail > 0 )); then
+if ((fail > 0)); then
   echo "test-static-asset-probe: ${fail} failure(s)" >&2
   exit 1
 fi

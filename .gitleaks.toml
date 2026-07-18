@@ -1,0 +1,16 @@
+# Extend the default rule set; allow only intentional fixtures / docs.
+title = "erpnext-dev-toolkit"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local mkcert material (gitignored) and intentional PEM/fixture text"
+paths = [
+  '''(^|/)erp\.test\.key$''',
+  '''(^|/)scripts/validate-release\.sh$''',
+]
+regexes = [
+  # Operator-facing help that names PEM markers without embedding a key body.
+  '''BEGIN PRIVATE KEY----- through -----END PRIVATE KEY-----''',
+]

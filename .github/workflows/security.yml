@@ -1,0 +1,76 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          ver="8.30.1"
+          archive="gitleaks_${ver}_linux_x64.tar.gz"
+          expected_sha="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          curl -fsSL -o "/tmp/${archive}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/${archive}"
+          echo "${expected_sha}  /tmp/${archive}" | sha256sum -c -
+          sudo tar -xzf "/tmp/${archive}" -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan working tree
+        # Current tree only (not full git history). Historical false positives
+        # from docs/fixtures stay out of the gate; .gitleaks.toml allowlists
+        # intentional PEM markers and the validate-release negative fixture.
+        run: gitleaks detect --source . --no-git --redact --verbose
+
+  shfmt:
+    name: shfmt (hermetic tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install shfmt
+        run: |
+          set -euo pipefail
+          ver="v3.13.1"
+          expected_sha="fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1"
+          curl -fsSL -o /tmp/shfmt \
+            "https://github.com/mvdan/sh/releases/download/${ver}/shfmt_${ver}_linux_amd64"
+          echo "${expected_sha}  /tmp/shfmt" | sha256sum -c -
+          sudo install -m 0755 /tmp/shfmt /usr/local/bin/shfmt
+          shfmt -version
+
+      - name: Check hermetic test formatting
+        run: scripts/check-shfmt.sh
+
+  pinned-actions:
+    name: Pinned Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Verify Action pins
+        run: scripts/check-pinned-actions.sh

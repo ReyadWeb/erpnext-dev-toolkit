@@ -72,7 +72,7 @@ expect_staged_pass() {
 expect_staged_fail() {
   local label="$1" tree="$2"
   if TOOLKIT_SIGNING_KEY_FINGERPRINT="$TEST_FINGERPRINT" \
-       toolkit_verify_staged_signature "$tree" >/dev/null 2>&1; then
+    toolkit_verify_staged_signature "$tree" >/dev/null 2>&1; then
     fail "${label}: expected FAIL"
   fi
   pass "${label}: FAIL (expected)"
@@ -99,8 +99,10 @@ expect_staged_fail "tampered SHA256SUMS" "$tampered_tree"
 
 wrong_fp_tree="${work}/wrong-fp"
 build_signed_tree "$wrong_fp_tree"
-if ( unset TOOLKIT_SIGNING_KEY_FINGERPRINT
-     toolkit_verify_staged_signature "$wrong_fp_tree" >/dev/null 2>&1 ); then
+if (
+  unset TOOLKIT_SIGNING_KEY_FINGERPRINT
+  toolkit_verify_staged_signature "$wrong_fp_tree" >/dev/null 2>&1
+); then
   fail "valid signature with wrong pinned fingerprint: expected FAIL"
 fi
 pass "valid signature, wrong pinned fingerprint: FAIL (expected)"
@@ -118,7 +120,7 @@ for cmd in awk grep printf mktemp rm tr; do
   ln -sf "$(command -v "$cmd")" "${fakebin}/${cmd}"
 done
 if PATH="$fakebin" TOOLKIT_SIGNING_KEY_FINGERPRINT="$TEST_FINGERPRINT" \
-     toolkit_verify_staged_signature "$no_gpg_tree" >/dev/null 2>&1; then
+  toolkit_verify_staged_signature "$no_gpg_tree" >/dev/null 2>&1; then
   fail "missing gpg in PATH: expected FAIL"
 fi
 pass "missing gpg: FAIL (expected)"

@@ -425,6 +425,19 @@ is published. Denying the approval blocks signing and publishing.
   preview leg (`continue-on-error` via `matrix.experimental`); Ubuntu 24.04 stays the
   mandatory release gate. Flip the 26.04 leg to blocking once the runner image is GA.
 
+### Implemented — v1.18.0 (CI security scanners)
+
+- **Gitleaks** in [`.github/workflows/security.yml`](.github/workflows/security.yml):
+  checksum-pinned binary, current-tree scan, allowlist in [`.gitleaks.toml`](.gitleaks.toml)
+  for intentional PEM docs / validate-release negative fixtures.
+- **OpenSSF Scorecard** in [`.github/workflows/scorecard.yml`](.github/workflows/scorecard.yml)
+  (SARIF upload + public results on `main` / weekly schedule).
+- **Pinned-Actions check** (`scripts/check-pinned-actions.sh`) fails floating `@v*` tags.
+- **Scoped `shfmt`** (`scripts/check-shfmt.sh`) on hermetic `scripts/test-*.sh` only
+  (full `lib/` reformat deferred to avoid a huge churn PR).
+- **Risky-shell hermetic test** (`scripts/test-risky-shell-patterns.sh`) already gates
+  new `eval` / sourced `health.env` patterns in `lib/`.
+
 ### Planned — v1.10.0 (object-storage backups)
 
 S3-compatible off-site backup target alongside rsync — after v1.9.1.

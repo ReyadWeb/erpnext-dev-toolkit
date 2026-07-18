@@ -44,7 +44,7 @@ unset TOOLKIT_UPDATE_VERSION TOOLKIT_UPDATE_CHANNEL
 TOOLKIT_UPDATE_VERSION=v1.17.5
 assert_eq "tag channel keeps VERSION" "v1.17.5" "$(resolve_toolkit_update_version)"
 
-if (( fail > 0 )); then
+if ((fail > 0)); then
   echo "test-update-channel: ${fail} failure(s)" >&2
   exit 1
 fi

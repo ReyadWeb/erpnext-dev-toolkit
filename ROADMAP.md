@@ -109,11 +109,11 @@ v1.23.0  Documentation and launch polish
 `HEALTH_ALERT_ON`, `HEALTH_ALERT_WEBHOOK_URL`, `HEALTH_ALERT_WEBHOOK_TIMEOUT_SEC`, `HEALTH_CONSECUTIVE_FAIL_THRESHOLD`, `HEALTH_COOLDOWN_SEC`, `HEALTH_HISTORY_RETENTION_DAYS`, `HEALTH_INCIDENT_RETENTION_DAYS` (extend only via explicit parser updates).
 
 **Acceptance**
-- [ ] No root-run config file is sourced as shell code.
-- [ ] Malicious `health.env` fixture is ignored safely.
-- [ ] `eval` usage removed or explicitly justified + tested.
-- [ ] Off-VM strict host-key mode documented and hermetically tested.
-- [ ] Secret scanner + Scorecard workflows present (or tracked follow-up PR in the same minor window).
+- [x] No root-run config file is sourced as shell code.
+- [x] Malicious `health.env` fixture is ignored safely.
+- [x] `eval` usage removed or explicitly justified + tested.
+- [x] Off-VM strict host-key mode documented and hermetically tested.
+- [x] Secret scanner + Scorecard workflows present (or tracked follow-up PR in the same minor window).
 
 ---
 

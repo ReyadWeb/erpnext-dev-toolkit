@@ -21,6 +21,9 @@ scripts/test-health-snapshot.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
+scripts/check-pinned-actions.sh
+scripts/check-shfmt.sh
+.gitleaks.toml
 scripts/build-release-bundle.sh
 scripts/host-firefox-trust-mkcert.sh
 lib/common.sh
@@ -52,6 +55,8 @@ scripts/test-update-channel.sh
 .github/workflows/ci.yml
 .github/workflows/integration.yml
 .github/workflows/release.yml
+.github/workflows/security.yml
+.github/workflows/scorecard.yml
 .github/dependabot.yml
 .github/CODEOWNERS
 .github/PULL_REQUEST_TEMPLATE.md
