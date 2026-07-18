@@ -1,8 +1,23 @@
 # Testing guide
 
-**Current release:** v1.18.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.18.2 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.18.2 repository security & governance
+
+Hermetic:
+
+```bash
+scripts/test-adversarial-inputs.sh
+scripts/check-pinned-actions.sh
+scripts/check-release-doc-alignment.sh
+```
+
+Expects least-privilege `release.yml` (`contents: read` at workflow scope),
+CODEOWNERS coverage for security/release paths, and adversarial rejection of
+shell metacharacters in health.env / IP / tag helpers. CI also runs
+`.github/workflows/security-analysis.yml` (CodeQL Actions + adversarial suite).
 
 ## v1.18.1 Local VM Stable IP foundation
 

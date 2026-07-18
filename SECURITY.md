@@ -438,7 +438,7 @@ is published. Denying the approval blocks signing and publishing.
 - **Risky-shell hermetic test** (`scripts/test-risky-shell-patterns.sh`) already gates
   new `eval` / sourced `health.env` patterns in `lib/`.
 
-### Implemented / in progress — v1.18.2 (repository security & governance)
+### Implemented — v1.18.2 (repository security & governance)
 
 OpenSSF Scorecard findings are triaged in epic
 [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82). Stance:

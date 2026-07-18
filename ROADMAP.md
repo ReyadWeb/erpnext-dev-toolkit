@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.18.1 (July 2026)  
+**Current release:** v1.18.2 (July 2026)  
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.18.2 — Repository security & governance hardening.
+**Next up:** v1.18.3 — Frontend asset readiness gaps.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -28,6 +28,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 | Off-VM strict SSH host keys | Shipped (v1.18.0; opt-in strict mode) |
 | CI secret / Scorecard / shfmt gates | Shipped (v1.18.0) |
 | Local VM Stable IP CLI + docs | Shipped (v1.18.1) |
+| Repo governance / Scorecard P0 | Shipped (v1.18.2) |
 | Guarded auto-healing | **Not shipped** (after asset readiness gaps) |
 
 ### Maturity (single-admin dedicated VM)
@@ -55,7 +56,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.18.1)
+## Shipped foundation (through v1.18.2)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -158,7 +159,7 @@ v1.23.0  Documentation and launch polish
 
 ### v1.18.2 — Repository Security & Governance Hardening
 
-**Status:** In progress (epic [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82)).
+**Status:** Shipped as **v1.18.2** (epic [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82)).
 
 **Goal:** Close OpenSSF Scorecard P0/P1 gaps in repository governance and CI token scope before more feature work. Does **not** weaken the signed-release / `release-signing` path.
 
@@ -170,12 +171,12 @@ v1.23.0  Documentation and launch polish
 - Document accepted Scorecard findings in [`SECURITY.md`](SECURITY.md).
 
 **Acceptance**
-- [ ] Workflow-level `release.yml` is `contents: read`; only `publish` is `write`.
-- [ ] `main` requires PR + expanded CI checks; force-push/delete blocked.
-- [ ] CODEOWNERS covers security/release-sensitive paths.
-- [ ] `security-analysis.yml` runs on PR/`main`; adversarial suite green in validate-release.
-- [ ] Frontend Asset Readiness epic tracked as **v1.18.3**.
-- [ ] Signed v1.18.2 published; Scorecard findings reclassified.
+- [x] Workflow-level `release.yml` is `contents: read`; only `publish` is `write`.
+- [x] `main` requires PR + expanded CI checks; force-push/delete blocked.
+- [x] CODEOWNERS covers security/release-sensitive paths.
+- [x] `security-analysis.yml` runs on PR/`main`; adversarial suite green in validate-release.
+- [x] Frontend Asset Readiness epic tracked as **v1.18.3**.
+- [x] Signed v1.18.2 published; Scorecard findings reclassified.
 
 ---
 

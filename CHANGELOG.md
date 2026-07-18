@@ -1,4 +1,10 @@
-## Unreleased
+## v1.18.2 - Repository security & governance hardening
+
+Patch release that hardens GitHub Actions token scope, branch-protection
+required checks, CODEOWNERS, and Scorecard-oriented SAST/adversarial testing
+without weakening the signed-release pipeline.
+
+Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82).
 
 ### Security
 
