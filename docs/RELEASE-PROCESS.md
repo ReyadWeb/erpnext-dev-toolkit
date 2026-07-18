@@ -46,8 +46,13 @@ bash scripts/generate-release-checksums.sh
 
 1. **Land the work on `main`** (CI green on the commit you intend to tag).
 2. **Changelog** complete for the version; ROADMAP status updated if needed.
+   Keep README / ROADMAP / TESTING **Current release** banners and
+   `SCRIPT_VERSION` in sync (`scripts/check-release-doc-alignment.sh`).
 3. **Local gate:** `./scripts/validate-release.sh` passes on a clean tree.
-4. **Tag and push** (lightweight tags match project history):
+4. **Tag and push immediately after merge** (lightweight tags match project history).
+   Do not leave `main` advertising a new `SCRIPT_VERSION` for a long time without
+   a tag — the README install path follows `/releases/latest` (last *published*
+   Assets), but banners still show the in-tree version:
 
 ```bash
 git checkout main
@@ -62,14 +67,16 @@ git push origin vX.Y.Z
    signature.
 7. **Do not announce the version until publish finishes.** Pushing the tag creates
    a tag page immediately, but until `publish` completes the page may only show
-   GitHub’s automatic Source code archives (no `erpnext-dev-vX.Y.Z.tar.gz`). The
-   README install block needs the signed bundle Assets.
+   GitHub’s automatic Source code archives (no `erpnext-dev-vX.Y.Z.tar.gz`).
+   `/releases/latest` is flipped only after Assets upload, so the README
+   “Start here” block keeps serving the previous good release until then.
 8. **Spot-check** the published GitHub Release assets (`erpnext-dev-vX.Y.Z.tar.gz`,
    `SHA256SUMS`, `SHA256SUMS.asc`), that `/releases/latest` redirects to this tag,
    and that `verify-signature` works from the extracted bundle:
 
 ```bash
 scripts/assert-github-release-assets.sh vX.Y.Z --require-latest
+scripts/resolve-latest-release-tag.sh   # should print vX.Y.Z
 ```
 
 The release workflow runs that assertion automatically after upload and marks

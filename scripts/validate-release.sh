@@ -60,7 +60,7 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-update-channel.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -100,8 +100,13 @@ if [[ "${RELEASE_STRICT:-0}" == "1" ]]; then
   pass "RELEASE_STRICT: newest CHANGELOG entry is ${tag_version}"
 fi
 
-grep -q "VERSION=\"${tag_version}\"" README.md || fail "README.md missing VERSION=\"${tag_version}\""
-pass "README VERSION pin matches SCRIPT_VERSION (${tag_version})"
+scripts/check-release-doc-alignment.sh >/tmp/erpnext-dev-doc-align.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-doc-align.$$
+  rm -f /tmp/erpnext-dev-doc-align.$$
+  fail "check-release-doc-alignment.sh failed"
+}
+rm -f /tmp/erpnext-dev-doc-align.$$
+pass "release doc banners + README latest-install path aligned (${tag_version})"
 
 grep -q "Release Manifest ${tag_version}" RELEASE-MANIFEST.txt || fail "RELEASE-MANIFEST.txt version header does not match ${tag_version}"
 pass "RELEASE-MANIFEST version matches SCRIPT_VERSION (${tag_version})"
@@ -308,6 +313,14 @@ scripts/test-risky-shell-patterns.sh >/tmp/erpnext-dev-risky-shell.$$ 2>&1 || {
 }
 rm -f /tmp/erpnext-dev-risky-shell.$$
 pass "risky shell pattern audit passed"
+
+scripts/test-resolve-latest-release-tag.sh >/tmp/erpnext-dev-resolve-latest.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-resolve-latest.$$
+  rm -f /tmp/erpnext-dev-resolve-latest.$$
+  fail "test-resolve-latest-release-tag.sh failed"
+}
+rm -f /tmp/erpnext-dev-resolve-latest.$$
+pass "latest-release tag resolver tests passed"
 
 scripts/check-pinned-actions.sh >/tmp/erpnext-dev-pinned-actions.$$ 2>&1 || {
   cat /tmp/erpnext-dev-pinned-actions.$$

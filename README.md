@@ -115,8 +115,12 @@ is already in use, the toolkit prompts for a free one (or auto-picks under
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.18.0" && \
-BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}" && \
+REPO="ReyadWeb/erpnext-dev-toolkit" && \
+VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+  "https://github.com/${REPO}/releases/latest" \
+  | sed -n 's|.*/tag/\([^/]*\)$|\1|p')" && \
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve latest release" >&2; exit 1; } && \
+BASE="https://github.com/${REPO}/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
 tar -xzf "erpnext-dev-${VERSION}.tar.gz" && \
@@ -138,21 +142,38 @@ Or install step by step ([details below](#install-and-verify)):
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.18.0"
-BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
+REPO="ReyadWeb/erpnext-dev-toolkit"
+VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+  "https://github.com/${REPO}/releases/latest" \
+  | sed -n 's|.*/tag/\([^/]*\)$|\1|p')"
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve latest release" >&2; exit 1; }
+BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 tar -xzf "erpnext-dev-${VERSION}.tar.gz"
 cd "erpnext-dev-${VERSION}"
 sha256sum -c SHA256SUMS
 ```
 
+Pin a **specific published** release (only after its Assets exist):
+
+```bash
+VERSION="v1.18.0"
+REPO="ReyadWeb/erpnext-dev-toolkit"
+BASE="https://github.com/${REPO}/releases/download/${VERSION}"
+curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
+```
+
 > **Use the release Assets, not “Source code”.** Install from
 > `erpnext-dev-vX.Y.Z.tar.gz` on the GitHub Release (plus `SHA256SUMS` /
 > `SHA256SUMS.asc`). The automatic “Source code (zip/tar.gz)” archives are not
-> the supported install path. A brand-new tag may exist for several minutes
-> before the signed bundle is attached — wait until the Release shows those
-> Assets (and `/releases/latest` points at the version) before running the
-> README install block.
+> the supported install path.
+>
+> **Why the install block resolves `/releases/latest`:** during a release, `main`
+> may advertise a new `SCRIPT_VERSION` before the signed bundle is uploaded.
+> Resolving `/releases/latest` always downloads the last **published** release
+> (GitHub only marks latest after Assets exist), so the copy-paste path does not
+> 404 mid-pipeline. The banner **Current release** may briefly lead the install
+> path until publish finishes.
 >
 > **Retrying after a failed download?** If an earlier attempt returned 404, left a
 > partial tarball, or you switched versions (for example from `v1.9.5` to `v1.10.0`),
@@ -161,7 +182,7 @@ sha256sum -c SHA256SUMS
 >
 > ```bash
 > cd ~
-> rm -rf erpnext-dev-v1.9.5 erpnext-dev-v1.10.0
+> rm -rf erpnext-dev-v1.9.5 erpnext-dev-v1.10.0 erpnext-dev-v1.18.0
 > rm -f erpnext-dev-v*.tar.gz SHA256SUMS SHA256SUMS.asc
 > ```
 >
@@ -283,8 +304,12 @@ list `sudo`).
 
 ```bash
 sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-VERSION="v1.18.0" && \
-BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}" && \
+REPO="ReyadWeb/erpnext-dev-toolkit" && \
+VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+  "https://github.com/${REPO}/releases/latest" \
+  | sed -n 's|.*/tag/\([^/]*\)$|\1|p')" && \
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve latest release" >&2; exit 1; } && \
+BASE="https://github.com/${REPO}/releases/download/${VERSION}" && \
 cd ~ && \
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
 tar -xzf "erpnext-dev-${VERSION}.tar.gz" && \

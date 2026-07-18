@@ -1,3 +1,14 @@
+## Unreleased
+
+### Fixed
+
+- **Install 404 race:** README “Start here” blocks resolve GitHub
+  `/releases/latest` (via `url_effective`) instead of a hardcoded
+  `VERSION=vX.Y.Z`, so a version bump on `main` cannot 404 while signed Assets
+  are still publishing. Exact pin example remains for reproducible installs.
+  Hermetic: `scripts/test-resolve-latest-release-tag.sh`;
+  `scripts/check-release-doc-alignment.sh` keeps banners aligned.
+
 ## v1.18.0 - Security hardening closure
 
 Minor release that closes remaining root-toolkit security gaps before guarded

@@ -23,6 +23,9 @@ scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
 scripts/check-pinned-actions.sh
 scripts/check-shfmt.sh
+scripts/check-release-doc-alignment.sh
+scripts/resolve-latest-release-tag.sh
+scripts/test-resolve-latest-release-tag.sh
 .gitleaks.toml
 scripts/build-release-bundle.sh
 scripts/host-firefox-trust-mkcert.sh

@@ -1,7 +1,7 @@
 # ERPNext Developer Toolkit — Roadmap
 
 **Current release:** v1.18.0 (July 2026)  
-**Theme for v1.18–v1.23:** Security, local reliability, guarded auto-healing, and control-panel readiness.
+**Theme for v1.18–v1.23:** security closure → local IP stability → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
 **Next up:** v1.18.1 — Local VM stable IP foundation.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
