@@ -126,12 +126,16 @@ docker_daemon_ready() {
 # string. The toolkit runs with IFS=$'\n\t' (no space), so an unquoted string
 # containing a space would NOT word-split and bash would try to exec a single
 # command literally named "docker compose".
+# Uses a nameref (no eval) so the destination array name cannot execute code.
 docker_compose_resolve() {
   local __out_name="${1:-DOCKER_COMPOSE_CMD}"
+  # Nameref destination is an array in callers; SC2178 is a false positive here.
+  # shellcheck disable=SC2178
+  local -n __out="$__out_name"
   if docker compose version >/dev/null 2>&1; then
-    eval "${__out_name}=(docker compose)"
+    __out=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
-    eval "${__out_name}=(docker-compose)"
+    __out=(docker-compose)
   else
     return 1
   fi
@@ -1336,6 +1340,7 @@ docker_offvm_source_dir() { docker_backup_site_root; }
 # off_vm_append_ssh_security_opts; nameref — no eval).
 docker_offvm_ssh_cmd() {
   local __out_name="${1:-DOCKER_OFFVM_SSH_CMD}"
+  # shellcheck disable=SC2178
   local -n __out="$__out_name"
   local identity="${OFF_VM_BACKUP_SSH_IDENTITY:-}"
   if declare -F off_vm_backup_load_config >/dev/null 2>&1; then

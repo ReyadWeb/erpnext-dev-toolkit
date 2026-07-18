@@ -60,7 +60,7 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-update-channel.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-update-channel.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -300,6 +300,14 @@ scripts/test-offvm-host-key.sh >/tmp/erpnext-dev-offvm-host-key.$$ 2>&1 || {
 }
 rm -f /tmp/erpnext-dev-offvm-host-key.$$
 pass "off-VM SSH host-key policy helpers passed"
+
+scripts/test-risky-shell-patterns.sh >/tmp/erpnext-dev-risky-shell.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-risky-shell.$$
+  rm -f /tmp/erpnext-dev-risky-shell.$$
+  fail "test-risky-shell-patterns.sh failed"
+}
+rm -f /tmp/erpnext-dev-risky-shell.$$
+pass "risky shell pattern audit passed"
 
 scripts/test-update-channel.sh >/tmp/erpnext-dev-update-channel.$$ 2>&1 || {
   cat /tmp/erpnext-dev-update-channel.$$
