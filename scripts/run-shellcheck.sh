@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Lint toolkit shell sources with shellcheck.
 # Supports SKIP_SHELLCHECK=1 (CI runs this once, then validate-release skips).
-# Parallel by default so GitHub runners finish before concurrency/cancel kills the job.
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -59,31 +58,34 @@ targets=(
   scripts/assert-github-release-assets.sh
 )
 
-for target in "${targets[@]}"; do
-  [[ -f "$target" ]] || {
-    echo "missing shellcheck target: $target" >&2
-    exit 1
-  }
-done
+# Per-file timeout so a single hung analysis cannot block the release job forever.
+SHELLCHECK_FILE_TIMEOUT="${SHELLCHECK_FILE_TIMEOUT:-180}"
 
-# Per-file timeout (seconds). A hung shellcheck must not cancel the whole release.
-SHELLCHECK_FILE_TIMEOUT="${SHELLCHECK_FILE_TIMEOUT:-120}"
-# Parallelism: keep modest on 2-core GitHub runners.
-SHELLCHECK_JOBS="${SHELLCHECK_JOBS:-2}"
-
-shellcheck_one() {
+run_sc() {
   local target="$1"
-  echo "shellcheck: ${target}"
   if command -v timeout >/dev/null 2>&1; then
     timeout "${SHELLCHECK_FILE_TIMEOUT}" shellcheck -x -S warning "$target"
   else
     shellcheck -x -S warning "$target"
   fi
 }
-export -f shellcheck_one
-export SHELLCHECK_FILE_TIMEOUT
 
-printf '%s\n' "${targets[@]}" \
-  | xargs -r -n1 -P "${SHELLCHECK_JOBS}" -I{} bash -c 'shellcheck_one "$@"' _ {}
+failed=0
+for target in "${targets[@]}"; do
+  [[ -f "$target" ]] || {
+    echo "missing shellcheck target: $target" >&2
+    exit 1
+  }
+  echo "shellcheck: ${target}"
+  if ! run_sc "$target"; then
+    echo "shellcheck FAILED: ${target}" >&2
+    failed=1
+  fi
+done
+
+if (( failed != 0 )); then
+  echo "shellcheck reported failures" >&2
+  exit 1
+fi
 
 echo "shellcheck passed for ${#targets[@]} file(s)"
