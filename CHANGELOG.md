@@ -13,6 +13,10 @@ Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#57](https
   `off-vm-strict-host-key-enable` / `disable`; dedicated
   `/etc/erpnext-dev/off-vm-known_hosts`; default remains `accept-new` for first
   setup. Docker off-VM SSH uses the same options via nameref (no `eval`).
+- **Remove remaining `eval` nameref patterns** ([#68](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/68)):
+  `docker_compose_resolve` uses a Bash nameref; hermetic
+  `scripts/test-risky-shell-patterns.sh` guards against new `eval` / sourced
+  `health.env` in `lib/`.
 
 ## v1.17.9 - Menu space: shorter labels + smarter columns
 
