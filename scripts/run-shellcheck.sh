@@ -59,20 +59,14 @@ targets=(
 )
 
 # Per-file timeout so a single hung analysis cannot block the release job forever.
-SHELLCHECK_FILE_TIMEOUT="${SHELLCHECK_FILE_TIMEOUT:-120}"
-# -x follows source= and makes large modules extremely slow on CI; default off
-# unless SHELLCHECK_FOLLOW_SOURCE=1 (local deep checks).
-SHELLCHECK_ARGS=(-S warning)
-if [[ "${SHELLCHECK_FOLLOW_SOURCE:-0}" == "1" ]]; then
-  SHELLCHECK_ARGS=(-x -S warning)
-fi
+SHELLCHECK_FILE_TIMEOUT="${SHELLCHECK_FILE_TIMEOUT:-180}"
 
 run_sc() {
   local target="$1"
   if command -v timeout >/dev/null 2>&1; then
-    timeout "${SHELLCHECK_FILE_TIMEOUT}" shellcheck "${SHELLCHECK_ARGS[@]}" "$target"
+    timeout "${SHELLCHECK_FILE_TIMEOUT}" shellcheck -x -S warning "$target"
   else
-    shellcheck "${SHELLCHECK_ARGS[@]}" "$target"
+    shellcheck -x -S warning "$target"
   fi
 }
 
