@@ -1270,22 +1270,19 @@ production_ssl_wizard() {
   provider="${ctx%%|*}"; ctx="${ctx#*|}"
   dns_ip="${ctx%%|*}"; ctx="${ctx#*|}"
   vm_ip="$ctx"
-  echo
-  echo "============================================================"
-  echo "Production SSL Provider Wizard"
-  echo "============================================================"
-  echo "Choose how this public ERPNext VM should handle HTTPS."
-  echo
+  ui_submenu_header "Production SSL Provider Wizard" \
+    "Choose how this public ERPNext VM should handle HTTPS"
   status_line "Recommended mode" "INFO" "$mode"
   status_line "Active provider" "INFO" "$provider"
   status_line "DNS / VM" "INFO" "DNS=${dns_ip}; VM=${vm_ip}"
   echo "Reason: $detail"
   echo
-  echo "1) Let's Encrypt certificate directly on this VM"
-  echo "2) Cloudflare Origin CA certificate for Cloudflare Full (strict)"
-  echo "3) Show current production SSL status"
-  echo "4) Show Cloudflare Origin CA guide"
-  echo "5) Show SSL mode guide/status"
+  print_two_column_menu \
+    "1) Let's Encrypt certificate directly on this VM" \
+    "2) Cloudflare Origin CA certificate for Cloudflare Full (strict)" \
+    "3) Show current production SSL status" \
+    "4) Show Cloudflare Origin CA guide" \
+    "5) Show SSL mode guide/status"
   menu_footer
   menu_read_choice choice
   case "$choice" in

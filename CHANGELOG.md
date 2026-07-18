@@ -1,3 +1,16 @@
+## v1.17.8 - Finish boxed submenu coverage
+
+Patch release that converts remaining option menus still on `====` / plain
+`1)` lists to the same boxed `[n]` UI as the main menu (Final QA, Security,
+Backup wizards, First Run, etc.).
+
+### Changed
+
+- **Final QA**, Health Monitoring, Security Hardening, Production SSL Provider
+  Wizard, Maintenance, Off-VM Backup, Restore Rehearsal, Backup Hardening,
+  Uninstall, Docker App Installation, First Run Wizard, Public VM Quickstart
+  use `ui_submenu_header` + `print_two_column_menu`.
+
 ## v1.17.7 - Status strip wrap + consistent boxed menus
 
 Patch release that keeps the main-menu status bar inside its border and makes

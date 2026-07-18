@@ -782,10 +782,8 @@ security_hardening_wizard() {
 
   require_sudo
   while true; do
-    echo
-    echo "============================================================"
-    echo "Security Hardening"
-    echo "============================================================"
+    ui_submenu_header "Security Hardening" \
+      "Local VM profile for erp.test · Production only after domain + HTTPS"
     security_mode_status
     echo
     print_two_column_menu \
@@ -800,8 +798,6 @@ security_hardening_wizard() {
       "9) Public firewall status" \
       "10) Firewall rollback snapshots" \
       "11) Advanced: restrict SSH in UFW"
-    echo
-    echo "Use Local VM profile for erp.test/dev access. Use Production profile only after real domain + HTTPS are verified."
     menu_footer
     menu_read_choice choice
     case "$choice" in

@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.17.7 (July 2026) — **status-strip wrap** + **consistent boxed submenus**. Still no auto-healing (v1.18). See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).  
+**Current release:** v1.17.8 (July 2026) — **finish boxed submenu coverage** (Final QA, Security, Backup wizards, First Run, …). Still no auto-healing (v1.18). See [`docs/HEALTH-ARCHITECTURE.md`](docs/HEALTH-ARCHITECTURE.md).  
 
 **External review (July 2026):** enterprise-candidate for single-admin Ubuntu VM ops — **9.4 / 10** (**9.6–9.7** after v1.8.2 + v1.9.0 + v1.9.1 + VPS pass)  
 **Full history:** [`CHANGELOG.md`](CHANGELOG.md) · **Security:** [`SECURITY.md`](SECURITY.md) · **Testing:** [`TESTING.md`](TESTING.md)
@@ -56,7 +56,8 @@ record for this dimension.
 | **v1.17.5** | **Operations Dashboard UI**: titled section boxes + status-colored rows (replace `====` report); `dashboard-render-test` + hermetic CI; main-channel update slot fix. | **implemented** |
 | **v1.17.6** | **Wait-ready static-asset gate** + **two-column menu fix** (pre-tee / `/dev/tty` width; two-col from 80 cols). | **implemented** |
 | **v1.17.7** | **Status-strip wrap** + **boxed submenus** (`ui_render_boxed_menu`; SSL/Apps/Ops/Status/Access/… match main menu). | **implemented** |
-| **v1.17.8** | **Menu polish cleanup**: real terminal screenshots replacing mockups; remaining echo-list wizards. | planned |
+| **v1.17.8** | **Finish boxed submenu coverage**: Final QA, Security, Backup/Off-VM/Restore, First Run, Public Quickstart, Docker apps, Uninstall. | **implemented** |
+| **v1.17.9** | **Menu polish**: smart single-column under ~100 cols; shorter App Library labels; real terminal screenshots. | planned |
 | **v1.18.0** | **Guarded auto-healing** (do not rush): modes `monitor` / `safe` / `advanced`; first actions = restart worker, scheduler/runtime, Docker service group, native app stack; **host reboot opt-in last resort only**. | planned |
 | **v1.19.0** | **External watchdog contract**: heartbeat endpoint/file + last-seen; external monitor + provider API abstraction; safe power-cycle policy; incident record after external recovery (frozen guest cannot self-heal). | planned |
 
