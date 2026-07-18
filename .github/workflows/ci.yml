@@ -13,13 +13,14 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+# NOTE: No workflow concurrency group. cancel-in-progress previously aborted
+# shellcheck mid-run on tag releases and main pushes (v1.17.7 publish failed
+# with "The operation was canceled" on the shellcheck step).
 
 jobs:
   validate-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -27,12 +28,22 @@ jobs:
           persist-credentials: false
 
       - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+        # Prefer the upstream static binary (faster/more consistent than apt).
+        run: |
+          set -euo pipefail
+          sc_ver="v0.10.0"
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${sc_ver}/shellcheck-${sc_ver}.linux.x86_64.tar.xz" \
+            | sudo tar -xJ -C /usr/local/bin --strip-components=1 "shellcheck-${sc_ver}/shellcheck"
+          shellcheck --version
+          command -v shellcheck
 
       - name: Run shellcheck
         run: scripts/run-shellcheck.sh
 
       - name: Validate release tree
+        # shellcheck already ran above; validate-release would otherwise re-run it.
+        env:
+          SKIP_SHELLCHECK: "1"
         run: scripts/validate-release.sh
 
       - name: Bundle installs from a clean extract (quickstart path)
