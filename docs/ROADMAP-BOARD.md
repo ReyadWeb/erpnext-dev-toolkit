@@ -46,7 +46,7 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 | [#68](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/68) | Remove or justify remaining `eval` patterns (**Done**) |
 | [#69](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/69) | CI: secret scanning, Scorecard, shfmt, risky-shell tests (**Done**) |
 
-**Current focus:** [#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58) — v1.18.1 Local VM Stable IP Foundation.
+**Current focus:** [#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58) — v1.18.1 Local VM Stable IP Foundation (**In Progress**).
 
 ---
 

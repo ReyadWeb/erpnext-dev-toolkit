@@ -1019,9 +1019,8 @@ show_kvm_vm_identification_guide() {
 
 
 
-# Universal fallback that works regardless of hypervisor/host OS: pin a static
-# address inside the guest with netplan. Printed as guidance only (the toolkit
-# does not rewrite guest networking automatically).
+# Universal fallback guidance (print-only). Prefer `local-static-ip-wizard` to
+# apply a backed-up Netplan static config via lib/local_ip.sh.
 print_guest_static_ip_fallback() {
   local vm_ip gateway
   vm_ip="$(get_vm_ip)"
@@ -1240,7 +1239,7 @@ show_access_menu() {
       "3) Local access doctor" \
       "4) Show host /etc/hosts command only" \
       "5) Show VM network/access status" \
-      "6) Show host access test guide" \
+      "6) Local network / stable IP menu" \
       "7) Verify ERPNext HTTP access" \
       "8) Show KVM VM identification + fixed IP helper" \
       "9) Show stable VM IP guide (per host OS / hypervisor)" \
@@ -1262,7 +1261,8 @@ show_access_menu() {
       "25) Production readiness preview" \
       "26) Production domain guide" \
       "27) Production SSL guide" \
-      "28) Environment / location check"
+      "28) Environment / location check" \
+      "29) Show host access test guide"
     menu_footer
     local access_choice=""
     menu_read_choice access_choice
@@ -1273,7 +1273,7 @@ show_access_menu() {
       3) local_access_doctor ;;
       4) show_host_hosts_command ;;
       5) show_network_status ;;
-      6) show_host_access_test_guide ;;
+      6) show_local_ip_menu ;;
       7) verify_access ;;
       8) show_kvm_vm_identification_guide ;;
       9) show_local_fixed_ip_guide ;;
@@ -1296,6 +1296,7 @@ show_access_menu() {
       26) show_production_domain_guide ;;
       27) show_production_ssl_guide ;;
       28) show_environment_check ;;
+      29) show_host_access_test_guide ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;

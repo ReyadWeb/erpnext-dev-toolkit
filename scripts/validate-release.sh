@@ -23,11 +23,13 @@ bash -n erpnext-dev.sh
 [[ -f lib/common.sh ]] || fail "lib/common.sh is missing"
 [[ -f lib/config.sh ]] || fail "lib/config.sh is missing"
 [[ -f lib/access.sh ]] || fail "lib/access.sh is missing"
+[[ -f lib/local_ip.sh ]] || fail "lib/local_ip.sh is missing"
 [[ -f lib/frappe.sh ]] || fail "lib/frappe.sh is missing"
 [[ -f lib/support.sh ]] || fail "lib/support.sh is missing"
 bash -n lib/common.sh
 bash -n lib/config.sh
 bash -n lib/access.sh
+bash -n lib/local_ip.sh
 bash -n lib/frappe.sh
 bash -n lib/support.sh
 [[ -f lib/backup.sh ]] || fail "lib/backup.sh is missing"
@@ -60,7 +62,7 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -321,6 +323,14 @@ scripts/test-resolve-latest-release-tag.sh >/tmp/erpnext-dev-resolve-latest.$$ 2
 }
 rm -f /tmp/erpnext-dev-resolve-latest.$$
 pass "latest-release tag resolver tests passed"
+
+scripts/test-local-ip.sh >/tmp/erpnext-dev-local-ip.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-local-ip.$$
+  rm -f /tmp/erpnext-dev-local-ip.$$
+  fail "test-local-ip.sh failed"
+}
+rm -f /tmp/erpnext-dev-local-ip.$$
+pass "local IP status/drift/wizard helpers passed"
 
 scripts/check-pinned-actions.sh >/tmp/erpnext-dev-pinned-actions.$$ 2>&1 || {
   cat /tmp/erpnext-dev-pinned-actions.$$

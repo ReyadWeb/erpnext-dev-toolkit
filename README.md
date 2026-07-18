@@ -404,9 +404,10 @@ cert, and `scp`s into the VM `/tmp/`), (4) stay in the wizard and press Enter af
 scp — it installs Nginx HTTPS and you open **`https://erp.test`**. Self-signed
 (wizard option 1) stays entirely in the VM but browsers will warn.
 
-For a stable IP, `sudo erpnext-dev local-fixed-ip-guide` prints guidance for your
-host OS and hypervisor (KVM/libvirt on Linux; UTM/VMware/Parallels on macOS;
-Hyper-V/VirtualBox/WSL2 on Windows), plus a universal in-guest netplan fallback.
+For a stable IP after reboot, use `sudo erpnext-dev local-ip-menu` (status, drift,
+Netplan static wizard + rollback) and see [`docs/LOCAL-VM-STABLE-IP.md`](docs/LOCAL-VM-STABLE-IP.md).
+`local-fixed-ip-guide` still prints hypervisor-specific reservation tips
+(KVM/libvirt, UTM/VMware/Parallels, Hyper-V/VirtualBox/WSL2).
 To rename the site later, use `sudo erpnext-dev change-local-domain` (then rebuild
 local SSL).
 

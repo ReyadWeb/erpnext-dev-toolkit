@@ -15,15 +15,16 @@ MAIN_MENU_ITEMS=(
   "6|Stop service"
   "7|Verify access"
   "8|Local HTTPS"
-  "9|Production HTTPS"
-  "10|Security profiles"
-  "11|Backups"
-  "12|Optional apps"
-  "13|Advanced"
-  "14|Final QA"
-  "15|Ops dashboard"
-  "16|Production operations"
-  "17|Help"
+  "9|Local network"
+  "10|Production HTTPS"
+  "11|Security profiles"
+  "12|Backups"
+  "13|Optional apps"
+  "14|Advanced"
+  "15|Final QA"
+  "16|Ops dashboard"
+  "17|Production operations"
+  "18|Help"
 )
 
 menu_json_string_field() {
@@ -291,15 +292,16 @@ show_menu() {
       6) run_stop ;;
       7) verify_access ;;
       8) show_local_ssl_menu ;;
-      9) show_production_ssl_menu ;;
-      10) security_hardening_wizard ;;
-      11) run_backup_maintenance_menu ;;
-      12) show_app_library_menu ;;
-      13) show_advanced_menu ;;
-      14) final_qa_wizard ;;
-      15) run_operations_dashboard ;;
-      16) production_ops_wizard ;;
-      17) show_help ;;
+      9) show_local_ip_menu ;;
+      10) show_production_ssl_menu ;;
+      11) security_hardening_wizard ;;
+      12) run_backup_maintenance_menu ;;
+      13) show_app_library_menu ;;
+      14) show_advanced_menu ;;
+      15) final_qa_wizard ;;
+      16) run_operations_dashboard ;;
+      17) production_ops_wizard ;;
+      18) show_help ;;
       q|Q) exit 0 ;;
       *)
         warn "Invalid option"

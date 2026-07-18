@@ -25,6 +25,7 @@ targets=(
   lib/ui.sh
   lib/config.sh
   lib/access.sh
+  lib/local_ip.sh
   lib/frappe.sh
   lib/support.sh
   lib/backup.sh
@@ -60,6 +61,7 @@ targets=(
   scripts/test-offvm-host-key.sh
   scripts/test-risky-shell-patterns.sh
   scripts/test-update-channel.sh
+  scripts/test-local-ip.sh
   scripts/release-signing-policy.sh
   scripts/assert-github-release-assets.sh
 )

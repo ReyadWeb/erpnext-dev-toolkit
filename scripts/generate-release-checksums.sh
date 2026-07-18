@@ -10,6 +10,7 @@ checksum_files=(
   lib/ui.sh
   lib/config.sh
   lib/access.sh
+  lib/local_ip.sh
   lib/frappe.sh
   lib/support.sh
   lib/backup.sh

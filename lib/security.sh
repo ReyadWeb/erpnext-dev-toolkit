@@ -13,7 +13,7 @@ TOOLKIT_SIGNING_FINGERPRINT_DEFAULT="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
 
 toolkit_release_lib_files() {
   printf '%s\n' \
-    common.sh ui.sh config.sh access.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
+    common.sh ui.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
     dashboard.sh menu.sh security.sh update.sh
 }

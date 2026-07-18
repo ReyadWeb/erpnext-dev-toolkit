@@ -1,5 +1,14 @@
 ## Unreleased
 
+### Added
+
+- **Local VM Stable IP foundation** ([#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58)):
+  `local-ip-status`, `local-ip-plan`, `local-ip-drift-check`, `local-ip-save`,
+  `local-static-ip-wizard` / `rollback`, `local-ip-menu`, and
+  [`docs/LOCAL-VM-STABLE-IP.md`](docs/LOCAL-VM-STABLE-IP.md). Saves mapping in
+  `/etc/erpnext-dev/local-ip.state`; Netplan changes are backed up under
+  `/etc/erpnext-dev/local-ip-backups/`. Hermetic: `scripts/test-local-ip.sh`.
+
 ### Fixed
 
 - **Install 404 race:** README “Start here” blocks resolve GitHub

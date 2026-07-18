@@ -1223,11 +1223,14 @@ run_local_dev_quickstart() {
   ui_box_end
 
   echo "The host DNS command will be generated with this VM's detected IP. Do not hardcode another user's IP."
+  echo "Warning: DHCP guest IPs often change after reboot and break ${SITE_NAME:-erp.test} / local HTTPS."
+  echo "Plan a stable IP early: $(toolkit_cmd local-ip-status) → $(toolkit_cmd local-ip-plan) → $(toolkit_cmd local-static-ip-wizard)."
   echo "After install, the toolkit will print browser URLs, host DNS guidance, and the direct local HTTPS command."
   echo "Useful follow-up commands:"
   echo "  $(toolkit_cmd local-host-checkpoint)"
   echo "  $(toolkit_cmd host-dns-guide)"
   echo "  $(toolkit_cmd local-ssl-wizard)"
+  echo "  $(toolkit_cmd local-ip-menu)"
   echo "  $(toolkit_cmd local-fixed-ip-guide)"
 
   if confirm "Save local defaults and start guided setup now?"; then

@@ -37,6 +37,7 @@ fi
 
 grep -q "ERPNext Developer Toolkit" "$tmp" || note_fail "missing toolkit title"
 grep -q "Setup wizard" "$tmp" || note_fail "missing Setup wizard item"
+grep -q "Local network" "$tmp" || note_fail "missing Local network item"
 grep -q "Production operations" "$tmp" || note_fail "missing Production operations item"
 grep -q "Choose an option" "$tmp" || note_fail "missing Choose an option prompt"
 grep -qE '\[q\]|q\) Quit' "$tmp" || note_fail "missing quit affordance"

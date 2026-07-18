@@ -143,12 +143,12 @@ v1.23.0  Documentation and launch polish
 **Docs:** `docs/LOCAL-VM-STABLE-IP.md` — why `erp.test` breaks, platform recommendations, Netplan static IP, hosts repair, troubleshooting, rollback. Wire a checkpoint into local quickstart / guided setup.
 
 **Acceptance**
-- [ ] Operator can see whether the guest IP looks stable or dynamic.
-- [ ] Drift between saved and current IP is detected.
-- [ ] Correct host `/etc/hosts` repair command is printed.
-- [ ] Local quickstart warns about dynamic IP risk.
-- [ ] Docs cover KVM, VirtualBox, Hyper-V, VMware/Proxmox.
-- [ ] Static IP wizard creates a backup and rollback path.
+- [x] Operator can see whether the guest IP looks stable or dynamic.
+- [x] Drift between saved and current IP is detected.
+- [x] Correct host `/etc/hosts` repair command is printed.
+- [x] Local quickstart warns about dynamic IP risk.
+- [x] Docs cover KVM, VirtualBox, Hyper-V, VMware/Proxmox.
+- [x] Static IP wizard creates a backup and rollback path.
 
 ---
 

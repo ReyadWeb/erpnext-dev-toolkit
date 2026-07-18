@@ -16,6 +16,8 @@ TESTING.md
 VALIDATION.md
 ROADMAP.md
 docs/HEALTH-ARCHITECTURE.md
+docs/LOCAL-VM-STABLE-IP.md
+docs/ROADMAP-BOARD.md
 scripts/validate-release.sh
 scripts/test-health-snapshot.sh
 scripts/generate-release-checksums.sh
@@ -26,6 +28,7 @@ scripts/check-shfmt.sh
 scripts/check-release-doc-alignment.sh
 scripts/resolve-latest-release-tag.sh
 scripts/test-resolve-latest-release-tag.sh
+scripts/test-local-ip.sh
 .gitleaks.toml
 scripts/build-release-bundle.sh
 scripts/host-firefox-trust-mkcert.sh
@@ -33,6 +36,7 @@ lib/common.sh
 lib/ui.sh
 lib/config.sh
 lib/access.sh
+lib/local_ip.sh
 lib/frappe.sh
 lib/support.sh
 lib/backup.sh
