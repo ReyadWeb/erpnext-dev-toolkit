@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
 **Current release:** v1.18.1 (July 2026)  
-**Theme for v1.18–v1.23:** security closure → local IP stability → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.18.2 — Frontend asset readiness gaps.
+**Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
+**Next up:** v1.18.2 — Repository security & governance hardening.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -85,7 +85,8 @@ Sequence is intentional: **close root security → stabilize local identity → 
 ```text
 v1.18.0  Security hardening closure
 v1.18.1  Local VM stable IP foundation
-v1.18.2  Frontend asset readiness gaps
+v1.18.2  Repository security & governance hardening
+v1.18.3  Frontend asset readiness gaps
 v1.19.0  Guarded auto-healing MVP
 v1.19.1  Auto-healing hardening
 v1.20.0  External watchdog foundation
@@ -155,9 +156,32 @@ v1.23.0  Documentation and launch polish
 
 ---
 
-### v1.18.2 — Frontend Asset Readiness Gaps
+### v1.18.2 — Repository Security & Governance Hardening
 
-**Goal:** Close remaining “unstyled login after ready” holes. **Core gate already shipped** in v1.15.1 / v1.17.6 (`probe_login_static_asset`, `wait_for_erpnext_ready`).
+**Status:** In progress (epic [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82)).
+
+**Goal:** Close OpenSSF Scorecard P0/P1 gaps in repository governance and CI token scope before more feature work. Does **not** weaken the signed-release / `release-signing` path.
+
+**Scope**
+- Least-privilege [`release.yml`](.github/workflows/release.yml): workflow `contents: read`; publish job keeps `contents: write`.
+- Tighten classic `main` branch protection (expanded required CI checks); document Scorecard `enforce_admins` / Code-Review solo-maintainer gaps.
+- Expand [`.github/CODEOWNERS`](.github/CODEOWNERS) for security/release-sensitive paths (no hard code-owner gate until a second maintainer).
+- Dedicated [`security-analysis.yml`](.github/workflows/security-analysis.yml): CodeQL for GitHub Actions + hermetic adversarial-input suite (not Scorecard fuzz ecosystems).
+- Document accepted Scorecard findings in [`SECURITY.md`](SECURITY.md).
+
+**Acceptance**
+- [ ] Workflow-level `release.yml` is `contents: read`; only `publish` is `write`.
+- [ ] `main` requires PR + expanded CI checks; force-push/delete blocked.
+- [ ] CODEOWNERS covers security/release-sensitive paths.
+- [ ] `security-analysis.yml` runs on PR/`main`; adversarial suite green in validate-release.
+- [ ] Frontend Asset Readiness epic tracked as **v1.18.3**.
+- [ ] Signed v1.18.2 published; Scorecard findings reclassified.
+
+---
+
+### v1.18.3 — Frontend Asset Readiness Gaps
+
+**Goal:** Close remaining “unstyled login after ready” holes. **Core gate already shipped** in v1.15.1 / v1.17.6 (`probe_login_static_asset`, `wait_for_erpnext_ready`). Epic [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59).
 
 **Scope (gaps only — not a greenfield rewrite)**
 - Explicit commands: `verify-frontend-assets`, `wait-frontend-assets`, `repair-frontend-assets`.

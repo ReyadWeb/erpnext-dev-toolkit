@@ -29,7 +29,8 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 |-----------|------|
 | v1.18.0 | [#57](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/57) Security Hardening Closure |
 | v1.18.1 | [#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58) Local VM Stable IP Foundation |
-| v1.18.2 | [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59) Frontend Asset Readiness Gaps |
+| v1.18.2 | [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82) Repository Security & Governance Hardening |
+| v1.18.3 | [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59) Frontend Asset Readiness Gaps |
 | v1.19.0 | [#60](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/60) Guarded Auto-Healing MVP |
 | v1.19.1 | [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61) Auto-Healing Hardening |
 | v1.20.0 | [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) External Watchdog Foundation |
@@ -48,7 +49,9 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 
 **v1.18.1 shipped:** [#58](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/58) Local VM Stable IP Foundation (**Done**).
 
-**Current focus:** [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59) — v1.18.2 Frontend Asset Readiness Gaps.
+**Current focus:** [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82) — v1.18.2 Repository Security & Governance Hardening (**In Progress**).
+
+**Next:** [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59) — v1.18.3 Frontend Asset Readiness Gaps (**Todo**).
 
 ---
 

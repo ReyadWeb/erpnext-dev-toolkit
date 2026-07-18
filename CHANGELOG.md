@@ -1,3 +1,13 @@
+## Unreleased
+
+### Security
+
+- **Repository security & governance** ([#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82)):
+  least-privilege `release.yml` token (`contents: read` at workflow scope; publish
+  job keeps write), expanded CODEOWNERS, `security-analysis.yml` (CodeQL for
+  GitHub Actions + adversarial-input suite), tightened `main` required CI checks,
+  and Scorecard finding classification in `SECURITY.md`.
+
 ## v1.18.1 - Local VM Stable IP foundation
 
 Patch release that keeps `erp.test` / local HTTPS reliable when the guest IP

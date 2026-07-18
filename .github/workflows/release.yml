@@ -32,10 +32,11 @@ on:
     tags:
       - "v*"
 
-# Workflow-level ceiling. The reused validate/integration workflows self-limit to
-# `contents: read`; only the publish job below uses write (to create the release).
+# Least privilege: workflow default is read-only. Only the publish job below
+# elevates to contents: write (gh release create/upload/edit). Reused
+# validate/integration workflows also declare contents: read.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:

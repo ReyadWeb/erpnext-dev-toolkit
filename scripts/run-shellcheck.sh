@@ -60,6 +60,7 @@ targets=(
   scripts/test-health-env-parser.sh
   scripts/test-offvm-host-key.sh
   scripts/test-risky-shell-patterns.sh
+  scripts/test-adversarial-inputs.sh
   scripts/test-update-channel.sh
   scripts/test-local-ip.sh
   scripts/release-signing-policy.sh

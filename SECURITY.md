@@ -438,6 +438,26 @@ is published. Denying the approval blocks signing and publishing.
 - **Risky-shell hermetic test** (`scripts/test-risky-shell-patterns.sh`) already gates
   new `eval` / sourced `health.env` patterns in `lib/`.
 
+### Implemented / in progress — v1.18.2 (repository security & governance)
+
+OpenSSF Scorecard findings are triaged in epic
+[#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82). Stance:
+
+| Finding | Stance |
+|---------|--------|
+| **Token-Permissions** (workflow-level write) | **Fixed:** [`.github/workflows/release.yml`](.github/workflows/release.yml) uses workflow `contents: read`; only the `publish` job keeps `contents: write` (required for `gh release create/upload/edit`). |
+| **Token-Permissions** (publish job write) | **Accepted:** narrowly scoped release publish permission; do not remove to chase a perfect Scorecard score. |
+| **Branch-Protection** | Classic protection on `main` is required (PR, status checks, no force-push/delete). `enforce_admins` stays **false** for solo-maintainer emergency merges — Scorecard may still warn until a second maintainer or a conscious enforce-admins flip. |
+| **Code-Review** | **Accepted** for a single maintainer: PR + mandatory CI, no fake second reviewers. Revisit when a second trusted maintainer exists (approvals + CODEOWNERS hard gate). |
+| **SAST** | ShellCheck remains the Bash gate. CodeQL analyzes **GitHub Actions** workflows (Bash is unsupported). Hermetic adversarial-input tests cover dangerous config/CLI inputs. |
+| **Fuzzing** | Not integrating Scorecard fuzz ecosystems for Bash; adversarial suite is the practical substitute. |
+| **Maintained** | Informational for young/active repos — no artificial commits. |
+| **CII-Best-Practices** | Not a vulnerability; enroll for the OpenSSF Best Practices badge later (after technical controls). |
+
+Related in-repo controls: expanded [`.github/CODEOWNERS`](.github/CODEOWNERS),
+[`.github/workflows/security-analysis.yml`](.github/workflows/security-analysis.yml),
+`scripts/test-adversarial-inputs.sh`.
+
 ### Planned — v1.10.0 (object-storage backups)
 
 S3-compatible off-site backup target alongside rsync — after v1.9.1.
