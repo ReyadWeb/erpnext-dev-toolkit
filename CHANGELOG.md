@@ -1,3 +1,23 @@
+## v1.17.7 - Status strip wrap + consistent boxed menus
+
+Patch release that keeps the main-menu status bar inside its border and makes
+submenus use the same boxed `[n]` two-column UI as the main menu.
+
+### Fixed
+
+- **Status strip overflow:** badge fields (`HTTPS` … `Go-live`) split across two
+  padded rows so `Go-live` no longer spills past the right border on typical
+  80–100 column terminals.
+
+### Changed
+
+- Shared **`ui_render_boxed_menu`** / **`ui_row_add_badge`**; `print_two_column_menu`
+  now renders the boxed main-menu style for all callers.
+- Submenus (SSL, Status, Access, Credentials, Advanced, Backup, Service,
+  Production Ops, App menus) use `ui_submenu_header` + boxed options; footers
+  use `[b]` / `[q]`.
+- Hermetic UI test asserts Go-live is not on the same row as HTTPS.
+
 ## v1.17.6 - Wait-ready asset gate + two-column menu fix
 
 Patch release that stops declaring ERPNext “ready” on an unstyled login shell,

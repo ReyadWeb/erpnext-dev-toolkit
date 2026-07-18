@@ -304,31 +304,28 @@ menu_footer() {
   echo
   if declare -F ui_init >/dev/null 2>&1; then
     ui_init
-    ui_text muted "$(ui_repeat "${UI_H:--}" 29)"
-    printf '\n'
     if [[ "$mode" == "quit-only" ]]; then
-      ui_text cyan "q)"
+      ui_text cyan "[q]"
       printf ' Quit\n'
     elif [[ -n "$back_label" ]]; then
-      ui_text cyan "b)"
+      ui_text cyan "[b]"
       printf ' Back to %s\n' "$back_label"
-      ui_text cyan "q)"
+      ui_text cyan "[q]"
       printf ' Quit\n'
     else
-      ui_text cyan "b)"
-      printf ' Back                        '
-      ui_text cyan "q)"
+      ui_text cyan "[b]"
+      printf ' Back    '
+      ui_text cyan "[q]"
       printf ' Quit\n'
     fi
   else
-    echo "-----------------------------"
     if [[ "$mode" == "quit-only" ]]; then
-      printf 'q) Quit\n'
+      printf '[q] Quit\n'
     elif [[ -n "$back_label" ]]; then
-      printf 'b) Back to %s\n' "$back_label"
-      printf 'q) Quit\n'
+      printf '[b] Back to %s\n' "$back_label"
+      printf '[q] Quit\n'
     else
-      printf 'b) Back                        q) Quit\n'
+      printf '[b] Back    [q] Quit\n'
     fi
   fi
   echo
@@ -376,75 +373,16 @@ print_menu_item_text() {
 }
 
 print_two_column_menu() {
-  local items=("$@")
-  local total="${#items[@]}"
-  local cols half i left right left_len right_len
-  local max_left=0 max_right=0 gap=4 width required pad
-
-  if declare -F ui_init >/dev/null 2>&1; then
-    ui_init
-  fi
-
-  if declare -F ui_detect_terminal_cols >/dev/null 2>&1; then
-    cols="$(ui_detect_terminal_cols)"
-  else
-    cols="${MENU_TERMINAL_COLS:-${ERPNEXT_DEV_TTY_COLS:-${UI_COLS:-${COLUMNS:-}}}}"
-    if [[ -z "$cols" ]]; then
-      cols="$(tput cols 2>/dev/null || true)"
-    fi
-    if ! [[ "$cols" =~ ^[0-9]+$ ]] || ((cols <= 0)); then
-      cols=100
-    fi
-  fi
-
-  half=$(((total + 1) / 2))
-
-  for ((i = 0; i < half; i++)); do
-    left="${items[$i]}"
-    right="${items[$((i + half))]:-}"
-    left_len=${#left}
-    right_len=${#right}
-    ((left_len > max_left)) && max_left="$left_len"
-    ((right_len > max_right)) && max_right="$right_len"
-  done
-
-  required=$((max_left + gap + max_right))
-  if ((required > cols)); then
-    gap=2
-    required=$((max_left + gap + max_right))
-  fi
-
-  if [[ "${MENU_FORCE_ONE_COLUMN:-false}" == "true" ]]; then
-    for left in "${items[@]}"; do
-      print_menu_item_text "$left"
-      printf '\n'
-    done
+  # Prefer the shared boxed renderer so submenus match the main menu UI.
+  if declare -F ui_render_boxed_menu >/dev/null 2>&1; then
+    ui_render_boxed_menu "$@"
     return 0
   fi
 
-  if ((required > cols)) && [[ "${MENU_FORCE_TWO_COLUMNS:-false}" != "true" ]]; then
-    for left in "${items[@]}"; do
-      print_menu_item_text "$left"
-      printf '\n'
-    done
-    return 0
-  fi
-
-  width=$((max_left + gap))
-  if [[ -n "${MENU_COLUMN_WIDTH:-}" && "${MENU_COLUMN_WIDTH}" =~ ^[0-9]+$ ]]; then
-    width="${MENU_COLUMN_WIDTH}"
-  fi
-
-  for ((i = 0; i < half; i++)); do
-    left="${items[$i]}"
-    right="${items[$((i + half))]:-}"
-    print_menu_item_text "$left"
-    pad=$((width - ${#left}))
-    (( pad < 1 )) && pad=1
-    printf '%*s' "$pad" ""
-    if [[ -n "$right" ]]; then
-      print_menu_item_text "$right"
-    fi
+  # Legacy fallback (ui.sh not loaded).
+  local item
+  for item in "$@"; do
+    print_menu_item_text "$item"
     printf '\n'
   done
 }

@@ -22,6 +22,18 @@ sudo erpnext-dev toolkit-rollback   # return to previous signed slot if needed
 Expected: install slot is `main` or `vmain` (not overwriting signed `v1.17.4`);
 rollback restores the prior tag. Hermetic: `scripts/test-update-channel.sh`.
 
+## v1.17.7 status strip + boxed submenus
+
+Hermetic (no sudo / no install):
+
+```bash
+scripts/test-ui-render.sh
+```
+
+Expects Go-live on its own status row (not beside HTTPS) at `COLUMNS=100`, plus
+two-column `[1]` / `[10]` options. Submenus (e.g. Local SSL) should show boxed
+`[n]` items like the main menu.
+
 ## v1.17.6 wait-ready static-asset gate + two-column menu
 
 Hermetic (no sudo / no install):

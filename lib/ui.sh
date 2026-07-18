@@ -219,6 +219,133 @@ ui_status_badge() {
   fi
 }
 
+# Badge that also advances UI_ROW_USED (for padded status-box rows).
+ui_row_add_badge() {
+  local label="$1" value="$2"
+  local color vis
+  color="$(ui_status_color "$value")"
+  ui_text cyan "${label}:"
+  printf ' '
+  if [[ "$color" == "green" ]]; then
+    ui_text green "${UI_DOT} ${value}"
+    vis=$(( ${#label} + 2 + ${#UI_DOT} + 1 + ${#value} ))
+  else
+    ui_text "$color" "$value"
+    vis=$(( ${#label} + 2 + ${#value} ))
+  fi
+  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + vis ))
+}
+
+# Parse "12|Label" or "12) Label" into num|label on stdout. Returns 1 if unparseable.
+ui_menu_item_parts() {
+  local item="${1:-}"
+  if [[ "$item" =~ ^([0-9]+)\|(.+)$ ]]; then
+    printf '%s|%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    return 0
+  fi
+  if [[ "$item" =~ ^([0-9]+)\)[[:space:]]*(.*)$ ]]; then
+    printf '%s|%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    return 0
+  fi
+  return 1
+}
+
+# Boxed two-column option list matching the main menu ([n] labels, borders).
+# Accepts "n|label" or "n) label" items. Truncates labels to fit; never spills
+# past ui_panel_width. Single-column when compact / MENU_FORCE_ONE_COLUMN.
+ui_render_boxed_menu() {
+  local items=("$@")
+  local total="${#items[@]}"
+  local half width left_width right_width i left right ln lt rn rt parsed
+  local mode
+
+  ui_init
+  total="${#items[@]}"
+  (( total > 0 )) || return 0
+  half=$(( (total + 1) / 2 ))
+  width="$(ui_panel_width)"
+  mode="$(ui_layout_mode)"
+
+  if [[ "$mode" == "compact" || "${MENU_FORCE_ONE_COLUMN:-false}" == "true" ]]; then
+    ui_box_line top "$width"
+    for left in "${items[@]}"; do
+      parsed="$(ui_menu_item_parts "$left" || true)"
+      if [[ -n "$parsed" ]]; then
+        ln="${parsed%%|*}"
+        lt="${parsed#*|}"
+      else
+        ln=""
+        lt="$left"
+      fi
+      ui_row_begin
+      if [[ -n "$ln" ]]; then
+        ui_row_add_colored cyan "[${ln}]"
+        ui_row_add " "
+      fi
+      if (( ${#lt} > width - 10 )); then
+        lt="${lt:0:$((width - 13))}..."
+      fi
+      ui_row_add "$lt"
+      ui_row_end
+    done
+    ui_box_line bot "$width"
+    return 0
+  fi
+
+  left_width=$(( width / 2 - 4 ))
+  right_width=$(( width - left_width - 7 ))
+  (( left_width < 24 )) && left_width=24
+  (( right_width < 24 )) && right_width=24
+
+  ui_box_line top "$width"
+  for (( i = 0; i < half; i++ )); do
+    left="${items[$i]:-}"
+    right="${items[$((i + half))]:-}"
+    parsed="$(ui_menu_item_parts "$left" || true)"
+    if [[ -n "$parsed" ]]; then
+      ln="${parsed%%|*}"
+      lt="${parsed#*|}"
+    else
+      ln=""
+      lt="$left"
+    fi
+    if (( ${#lt} > left_width - 5 )); then
+      lt="${lt:0:$((left_width - 8))}..."
+    fi
+    printf '%s ' "$UI_V"
+    if [[ -n "$ln" ]]; then
+      ui_text cyan "[${ln}]"
+      printf ' %-*s ' "$((left_width - 5))" "$lt"
+    else
+      printf '%-*s ' "$left_width" "$lt"
+    fi
+    printf '%s ' "$UI_DIV"
+    if [[ -n "$right" ]]; then
+      parsed="$(ui_menu_item_parts "$right" || true)"
+      if [[ -n "$parsed" ]]; then
+        rn="${parsed%%|*}"
+        rt="${parsed#*|}"
+      else
+        rn=""
+        rt="$right"
+      fi
+      if (( ${#rt} > right_width - 5 )); then
+        rt="${rt:0:$((right_width - 8))}..."
+      fi
+      if [[ -n "$rn" ]]; then
+        ui_text cyan "[${rn}]"
+        printf ' %-*s' "$((right_width - 5))" "$rt"
+      else
+        printf '%-*s' "$right_width" "$rt"
+      fi
+    else
+      printf '%-*s' "$right_width" ""
+    fi
+    printf ' %s\n' "$UI_V"
+  done
+  ui_box_line bot "$width"
+}
+
 ui_prompt() {
   local prompt="${1:-Choose an option: }"
   local __target="${2:-}"

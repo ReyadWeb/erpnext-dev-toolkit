@@ -499,18 +499,16 @@ run_foreground_start() {
 
 show_service_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "Autostart / Service Manager"
-    echo "============================================================"
-    echo "1) Enable autostart on VM boot"
-    echo "2) Disable autostart"
-    echo "3) Start ERPNext service"
-    echo "4) Stop ERPNext service"
-    echo "5) Restart ERPNext service"
-    echo "6) Show service status"
-    echo "7) Show recent service logs"
-    echo "8) Follow service logs"
+    ui_submenu_header "Autostart / Service Manager" "systemd service control"
+    print_two_column_menu \
+      "1) Enable autostart on VM boot" \
+      "2) Disable autostart" \
+      "3) Start ERPNext service" \
+      "4) Stop ERPNext service" \
+      "5) Restart ERPNext service" \
+      "6) Show service status" \
+      "7) Show recent service logs" \
+      "8) Follow service logs"
     menu_footer
     local service_choice=""
     menu_read_choice service_choice

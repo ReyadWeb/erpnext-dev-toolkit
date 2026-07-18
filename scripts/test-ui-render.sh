@@ -58,6 +58,13 @@ if ! grep -qE '\[1\].*\[10\]' "$tmp2"; then
   echo "----- wide render -----" >&2
   cat "$tmp2" >&2 || true
 fi
+grep -q "Go-live:" "$tmp2" || note_fail "wide layout missing Go-live status badge"
+# Status badges must wrap: Go-live must not share a line with HTTPS.
+if grep -E 'HTTPS:.*Go-live:' "$tmp2" >/dev/null 2>&1; then
+  note_fail "Go-live still on the same status row as HTTPS (overflow risk)"
+  echo "----- wide render -----" >&2
+  cat "$tmp2" >&2 || true
+fi
 if grep -q $'\033' "$tmp2"; then
   note_fail "ANSI escape codes in wide layout with NO_COLOR=1"
 fi

@@ -2820,25 +2820,23 @@ backup_hardening_wizard() {
 
 run_backup_maintenance_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "Backup / Restore / Maintenance"
-    echo "============================================================"
-    echo "1) Create database backup"
-    echo "2) Create database + files backup"
-    echo "3) Backup status"
-    echo "4) Verify latest backup"
-    echo "5) Off-VM backup guide"
-    echo "6) Restore rehearsal guide"
-    echo "7) List backups"
-    echo "8) Restore database backup"
-    echo "9) Restore database + files backup"
-    echo "10) Scheduled backup status"
-    echo "11) Configure scheduled backups"
-    echo "12) Disable scheduled backups"
-    echo "13) Backup retention status"
-    echo "14) Cleanup old backups dry run"
-    echo "15) Maintenance tasks"
+    ui_submenu_header "Backup / Restore / Maintenance" "Local backups, restore, and scheduled jobs"
+    print_two_column_menu \
+      "1) Create database backup" \
+      "2) Create database + files backup" \
+      "3) Backup status" \
+      "4) Verify latest backup" \
+      "5) Off-VM backup guide" \
+      "6) Restore rehearsal guide" \
+      "7) List backups" \
+      "8) Restore database backup" \
+      "9) Restore database + files backup" \
+      "10) Scheduled backup status" \
+      "11) Configure scheduled backups" \
+      "12) Disable scheduled backups" \
+      "13) Backup retention status" \
+      "14) Cleanup old backups dry run" \
+      "15) Maintenance tasks"
     menu_footer
     local backup_choice=""
     menu_read_choice backup_choice

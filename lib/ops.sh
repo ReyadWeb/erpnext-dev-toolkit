@@ -66,15 +66,16 @@ production_ops_breadcrumb_title() {
 production_ops_services_menu() {
   require_sudo
   while true; do
-    ui_box_start "$(production_ops_breadcrumb_title "Services and Recovery")"
-    echo "1) Service status"
-    echo "2) Start ERPNext service"
-    echo "3) Stop ERPNext service"
-    echo "4) Restart ERPNext service"
-    echo "5) Wait for ERPNext readiness"
-    echo "6) Service logs"
-    echo "7) Follow service logs"
-    echo "8) Service recovery plan"
+    ui_submenu_header "Services and Recovery" "Production Operations"
+    print_two_column_menu \
+      "1) Service status" \
+      "2) Start ERPNext service" \
+      "3) Stop ERPNext service" \
+      "4) Restart ERPNext service" \
+      "5) Wait for ERPNext readiness" \
+      "6) Service logs" \
+      "7) Follow service logs" \
+      "8) Service recovery plan"
     menu_footer
     local services_choice=""
     menu_read_choice services_choice
@@ -97,18 +98,19 @@ production_ops_services_menu() {
 production_ops_backups_menu() {
   require_sudo
   while true; do
-    ui_box_start "$(production_ops_breadcrumb_title "Local Backups")"
-    echo "1) Create database + files backup"
-    echo "2) Backup status"
-    echo "3) Verify latest backup"
-    echo "4) Scheduled backup plan"
-    echo "5) Configure scheduled backups"
-    echo "6) Scheduled backup status"
-    echo "7) Retention plan"
-    echo "8) Retention status"
-    echo "9) Cleanup old backups dry run"
-    echo "10) Cleanup old backups"
-    echo "11) Full backup/maintenance menu"
+    ui_submenu_header "Local Backups" "Production Operations"
+    print_two_column_menu \
+      "1) Create database + files backup" \
+      "2) Backup status" \
+      "3) Verify latest backup" \
+      "4) Scheduled backup plan" \
+      "5) Configure scheduled backups" \
+      "6) Scheduled backup status" \
+      "7) Retention plan" \
+      "8) Retention status" \
+      "9) Cleanup old backups dry run" \
+      "10) Cleanup old backups" \
+      "11) Full backup/maintenance menu"
     menu_footer
     local local_backup_choice=""
     menu_read_choice local_backup_choice
@@ -134,16 +136,17 @@ production_ops_backups_menu() {
 production_ops_restore_menu() {
   require_sudo
   while true; do
-    ui_box_start "$(production_ops_breadcrumb_title "Restore Readiness and Rehearsal")"
-    echo "1) Restore rehearsal status"
-    echo "2) Restore rehearsal guide"
-    echo "3) Restore rehearsal wizard"
-    echo "4) Restore preflight"
-    echo "5) Record completed restore rehearsal"
-    echo "6) Restore rehearsal report"
-    echo "7) List local backups"
-    echo "8) Restore database only"
-    echo "9) Restore database + files"
+    ui_submenu_header "Restore Readiness and Rehearsal" "Production Operations"
+    print_two_column_menu \
+      "1) Restore rehearsal status" \
+      "2) Restore rehearsal guide" \
+      "3) Restore rehearsal wizard" \
+      "4) Restore preflight" \
+      "5) Record completed restore rehearsal" \
+      "6) Restore rehearsal report" \
+      "7) List local backups" \
+      "8) Restore database only" \
+      "9) Restore database + files"
     menu_footer
     local restore_choice=""
     menu_read_choice restore_choice
@@ -167,16 +170,17 @@ production_ops_restore_menu() {
 production_ops_security_menu() {
   require_sudo
   while true; do
-    ui_box_start "$(production_ops_breadcrumb_title "Security and Firewall")"
-    echo "1) Firewall hardening status"
-    echo "2) VM firewall status"
-    echo "3) Security hardening wizard"
-    echo "4) Configure VM firewall"
-    echo "5) Production firewall profile"
-    echo "6) Configure Fail2Ban"
-    echo "7) Fail2Ban status"
-    echo "8) Security audit"
-    echo "9) Cloud firewall checklist"
+    ui_submenu_header "Security and Firewall" "Production Operations"
+    print_two_column_menu \
+      "1) Firewall hardening status" \
+      "2) VM firewall status" \
+      "3) Security hardening wizard" \
+      "4) Configure VM firewall" \
+      "5) Production firewall profile" \
+      "6) Configure Fail2Ban" \
+      "7) Fail2Ban status" \
+      "8) Security audit" \
+      "9) Cloud firewall checklist"
     menu_footer
     local security_choice=""
     menu_read_choice security_choice
@@ -200,13 +204,14 @@ production_ops_security_menu() {
 production_ops_https_menu() {
   require_sudo
   while true; do
-    ui_box_start "$(production_ops_breadcrumb_title "HTTPS and Certificates")"
-    echo "1) Production SSL status"
-    echo "2) SSL mode status"
-    echo "3) Production HTTPS / SSL menu"
-    echo "4) Cloudflare Origin CA status"
-    echo "5) Cloudflare checklist"
-    echo "6) SSL compatibility guide"
+    ui_submenu_header "HTTPS and Certificates" "Production Operations"
+    print_two_column_menu \
+      "1) Production SSL status" \
+      "2) SSL mode status" \
+      "3) Production HTTPS / SSL menu" \
+      "4) Cloudflare Origin CA status" \
+      "5) Cloudflare checklist" \
+      "6) SSL compatibility guide"
     menu_footer
     local https_choice=""
     menu_read_choice https_choice
@@ -227,18 +232,19 @@ production_ops_https_menu() {
 production_ops_support_menu() {
   require_sudo
   while true; do
-    ui_box_start "$(production_ops_breadcrumb_title "Support and Diagnostics")"
-    echo "1) Doctor"
-    echo "2) Doctor JSON"
-    echo "3) Production checklist"
-    echo "4) Final QA"
-    echo "5) Command audit"
-    echo "6) Create support bundle"
-    echo "7) Show latest support bundle contents"
-    echo "8) Storage status"
-    echo "9) Port status"
-    echo "10) Verify toolkit integrity"
-    echo "11) Audit latest support bundle"
+    ui_submenu_header "Support and Diagnostics" "Production Operations"
+    print_two_column_menu \
+      "1) Doctor" \
+      "2) Doctor JSON" \
+      "3) Production checklist" \
+      "4) Final QA" \
+      "5) Command audit" \
+      "6) Create support bundle" \
+      "7) Show latest support bundle contents" \
+      "8) Storage status" \
+      "9) Port status" \
+      "10) Verify toolkit integrity" \
+      "11) Audit latest support bundle"
     menu_footer
     local support_choice=""
     menu_read_choice support_choice
@@ -263,25 +269,24 @@ production_ops_support_menu() {
 production_ops_wizard() {
   require_sudo
   while true; do
-    ui_box_start "ERPNext Production Operations"
-    status_line "Site" "INFO" "$SITE_NAME"
-    status_line "Toolkit" "INFO" "v${SCRIPT_VERSION}"
-    echo
+    ui_submenu_header "ERPNext Production Operations" \
+      "Site ${SITE_NAME} · toolkit v${SCRIPT_VERSION}"
     echo "Current state"
     production_ops_summary
     echo
-    echo "1) Operations dashboard (canonical health)"
-    echo "2) System health and readiness"
-    echo "3) Services and recovery"
-    echo "4) Local backups"
-    echo "5) Off-VM backups"
-    echo "6) Restore readiness and rehearsal"
-    echo "7) Health monitoring timer"
-    echo "8) Security and firewall"
-    echo "9) HTTPS and certificates"
-    echo "10) Go-live validation"
-    echo "11) Support and diagnostics"
-    echo "12) Final QA"
+    print_two_column_menu \
+      "1) Operations dashboard (canonical health)" \
+      "2) System health and readiness" \
+      "3) Services and recovery" \
+      "4) Local backups" \
+      "5) Off-VM backups" \
+      "6) Restore readiness and rehearsal" \
+      "7) Health monitoring timer" \
+      "8) Security and firewall" \
+      "9) HTTPS and certificates" \
+      "10) Go-live validation" \
+      "11) Support and diagnostics" \
+      "12) Final QA"
     menu_footer quit-only
     local ops_choice=""
     menu_read_choice ops_choice

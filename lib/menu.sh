@@ -138,103 +138,70 @@ load_menu_status_fast() {
 }
 
 render_main_status_panel() {
-  local width
+  local width runtime_color
   width="$(ui_panel_width)"
+  runtime_color="$(ui_status_color "$MENU_STATUS_RUNTIME")"
 
   ui_box_line top "$width"
 
-  # Line 1: toolkit / site / mode / runtime
-  printf '%s ' "$UI_V"
-  ui_text cyan "Toolkit:"
-  printf ' %-8s ' "v${SCRIPT_VERSION:-unknown}"
-  printf '%s ' "$UI_DIV"
-  ui_text cyan "Site:"
-  printf ' %-20s ' "${MENU_STATUS_SITE:0:20}"
-  printf '%s ' "$UI_DIV"
-  ui_text cyan "Mode:"
-  printf ' %-10s ' "${MENU_STATUS_MODE:0:10}"
-  printf '%s ' "$UI_DIV"
-  ui_text cyan "Runtime:"
-  printf ' '
-  ui_text "$(ui_status_color "$MENU_STATUS_RUNTIME")" "$MENU_STATUS_RUNTIME"
-  printf ' %s\n' "$UI_V"
+  # Line 1: toolkit / site / mode / runtime (padded to box width)
+  ui_row_begin
+  ui_row_add_colored cyan "Toolkit:"
+  ui_row_add " "
+  ui_row_add "$(printf '%-8s' "v${SCRIPT_VERSION:-unknown}")"
+  ui_row_add " "
+  ui_row_add "$UI_DIV"
+  ui_row_add " "
+  ui_row_add_colored cyan "Site:"
+  ui_row_add " "
+  ui_row_add "$(printf '%-20s' "${MENU_STATUS_SITE:0:20}")"
+  ui_row_add " "
+  ui_row_add "$UI_DIV"
+  ui_row_add " "
+  ui_row_add_colored cyan "Mode:"
+  ui_row_add " "
+  ui_row_add "$(printf '%-10s' "${MENU_STATUS_MODE:0:10}")"
+  ui_row_add " "
+  ui_row_add "$UI_DIV"
+  ui_row_add " "
+  ui_row_add_colored cyan "Runtime:"
+  ui_row_add " "
+  ui_row_add_colored "$runtime_color" "$MENU_STATUS_RUNTIME"
+  ui_row_end
 
   ui_box_line mid "$width"
 
-  # Line 2: badge strip (wraps visually on narrow panels via truncation of spacing)
-  printf '%s ' "$UI_V"
+  # Badge rows: never a single long strip (Go-live was overflowing the border).
   if [[ "$(ui_layout_mode)" == "compact" ]]; then
-    ui_status_badge "Health" "$MENU_STATUS_HEALTH"
-    printf '  '
-    ui_status_badge "HTTPS" "$MENU_STATUS_HTTPS"
-    printf '  '
-    ui_status_badge "Backups" "$MENU_STATUS_BACKUPS"
+    ui_row_begin
+    ui_row_add_badge "Health" "$MENU_STATUS_HEALTH"
+    ui_row_add "  "
+    ui_row_add_badge "HTTPS" "$MENU_STATUS_HTTPS"
+    ui_row_add "  "
+    ui_row_add_badge "Backups" "$MENU_STATUS_BACKUPS"
+    ui_row_end
   else
-    ui_status_badge "HTTPS" "$MENU_STATUS_HTTPS"
-    printf '  '
-    ui_status_badge "Backups" "$MENU_STATUS_BACKUPS"
-    printf '  '
-    ui_status_badge "Off-VM" "$MENU_STATUS_OFFVM"
-    printf '  '
-    ui_status_badge "Restore" "$MENU_STATUS_RESTORE"
-    printf '  '
-    ui_status_badge "Health" "$MENU_STATUS_HEALTH"
-    printf '  '
-    ui_status_badge "Go-live" "$MENU_STATUS_GOLIVE"
+    ui_row_begin
+    ui_row_add_badge "HTTPS" "$MENU_STATUS_HTTPS"
+    ui_row_add "  "
+    ui_row_add_badge "Backups" "$MENU_STATUS_BACKUPS"
+    ui_row_add "  "
+    ui_row_add_badge "Off-VM" "$MENU_STATUS_OFFVM"
+    ui_row_add "  "
+    ui_row_add_badge "Restore" "$MENU_STATUS_RESTORE"
+    ui_row_end
+    ui_row_begin
+    ui_row_add_badge "Health" "$MENU_STATUS_HEALTH"
+    ui_row_add "  "
+    ui_row_add_badge "Go-live" "$MENU_STATUS_GOLIVE"
+    ui_row_end
   fi
-  printf ' %s\n' "$UI_V"
 
   ui_box_line bot "$width"
 }
 
-render_main_menu_wide() {
-  local width left_width right_width i left right ln lt rn rt
-  local total="${#MAIN_MENU_ITEMS[@]}"
-  local half=$(( (total + 1) / 2 ))
-  width="$(ui_panel_width)"
-  left_width=$(( width / 2 - 4 ))
-  right_width=$(( width - left_width - 7 ))
-  (( left_width < 24 )) && left_width=24
-  (( right_width < 24 )) && right_width=24
-
-  ui_box_line top "$width"
-  for (( i = 0; i < half; i++ )); do
-    left="${MAIN_MENU_ITEMS[$i]:-}"
-    right="${MAIN_MENU_ITEMS[$((i + half))]:-}"
-    ln="${left%%|*}"
-    lt="${left#*|}"
-    # Truncate labels that would overflow the column on ~80-col terminals.
-    if (( ${#lt} > left_width - 5 )); then
-      lt="${lt:0:$((left_width - 8))}..."
-    fi
-    printf '%s ' "$UI_V"
-    ui_text cyan "[${ln}]"
-    printf ' %-*s ' "$((left_width - 5))" "$lt"
-    printf '%s ' "$UI_DIV"
-    if [[ -n "$right" ]]; then
-      rn="${right%%|*}"
-      rt="${right#*|}"
-      if (( ${#rt} > right_width - 5 )); then
-        rt="${rt:0:$((right_width - 8))}..."
-      fi
-      ui_text cyan "[${rn}]"
-      printf ' %-*s' "$((right_width - 5))" "$rt"
-    else
-      printf '%-*s' "$right_width" ""
-    fi
-    printf ' %s\n' "$UI_V"
-  done
-  ui_box_line bot "$width"
-}
-
-render_main_menu_compact() {
-  local item number label
-  for item in "${MAIN_MENU_ITEMS[@]}"; do
-    number="${item%%|*}"
-    label="${item#*|}"
-    ui_text cyan "[${number}]"
-    printf ' %s\n' "$label"
-  done
+render_main_menu_options() {
+  ui_render_boxed_menu "${MAIN_MENU_ITEMS[@]}"
 }
 
 render_main_menu_screen() {
@@ -252,11 +219,7 @@ render_main_menu_screen() {
 
   render_main_status_panel
   printf '\n'
-
-  case "$(ui_layout_mode)" in
-    wide|medium) render_main_menu_wide ;;
-    *) render_main_menu_compact ;;
-  esac
+  render_main_menu_options
 
   printf '\n'
   ui_text cyan "[q]"

@@ -2796,13 +2796,9 @@ run_local_ssl_wizard() {
     back_label="Continue guided setup"
   fi
   while true; do
-    echo
-    echo "============================================================"
-    echo "Local SSL Wizard"
-    echo "============================================================"
+    ui_submenu_header "Local SSL Wizard" \
+      "Local domains such as ${SITE_NAME} · public domains: production-ssl-menu"
     menu_location_note "Main menu > 8) Local VM HTTPS / SSL > 1) Local SSL Wizard" "local-ssl-wizard"
-    echo "Use this only for local VM domains such as ${SITE_NAME}."
-    echo "For public domains, use: $(toolkit_cmd production-ssl-menu)"
     echo "Already finished a step? Re-run the same option — completed work is detected where possible."
     echo
     print_two_column_menu \
@@ -2875,12 +2871,9 @@ show_production_ssl_menu() {
   local back_target="${1:-return}"
   local back_label="Main menu"
   while true; do
-    echo
-    echo "============================================================"
-    echo "Production HTTPS / SSL"
-    echo "============================================================"
+    ui_submenu_header "Production HTTPS / SSL" \
+      "Public domains only · local .test HTTPS: Main menu > 8"
     menu_location_note "Main menu > 9) Production HTTPS / SSL" "production-ssl-menu"
-    echo "Use this only for public domains. For local .test HTTPS, use Main menu > 8) Local VM HTTPS / SSL."
     echo
     print_two_column_menu \
       "1) Production SSL Wizard" \
@@ -2929,14 +2922,9 @@ show_local_ssl_menu() {
   local back_target="${1:-return}"
   local back_label="Main menu"
   while true; do
-    echo
-    echo "============================================================"
-    echo "Local VM HTTPS / SSL"
-    echo "============================================================"
+    ui_submenu_header "Local VM HTTPS / SSL" \
+      "Local domains such as ${SITE_NAME} · day-to-day: [1] Local SSL Wizard"
     menu_location_note "Main menu > 8) Local VM HTTPS / SSL" "local-ssl-menu"
-    echo "Use this for local VM domains such as ${SITE_NAME}."
-    echo "Day-to-day setup: choose 1) Local SSL Wizard (same as: $(toolkit_cmd local-ssl-wizard))."
-    echo "For public domains, use Main menu > 9) Production HTTPS / SSL."
     echo
     print_two_column_menu       "1) Local SSL Wizard"       "2) Local SSL Status"       "3) Local SSL Guide"       "4) Trusted mkcert Guide"       "5) Browser Trust Check"       "6) Install/Replace Cert"       "7) Verify Local SSL"       "8) Create Self-Signed Cert"       "9) Configure Local SSL"       "10) Disable Local SSL"       "11) Verify SSL Rollback"       "12) Change Local Domain"       "13) Local Domain / Host DNS Status"       "14) Local Access Doctor"       "15) Print Host /etc/hosts Command"       "16) SSL/HTTPS Roadmap"       "17) Local Security Profile"
     menu_footer back "$back_label"

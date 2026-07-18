@@ -238,16 +238,14 @@ run_service_summary() {
 
 show_status_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "Status"
-    echo "============================================================"
-    echo "1) Status Summary"
-    echo "2) Runtime Status"
-    echo "3) Installation Status"
-    echo "4) Service / Autostart Status"
-    echo "5) Optional App Status"
-    echo "6) Full Health Report"
+    ui_submenu_header "Status" "Runtime, install, and health views"
+    print_two_column_menu \
+      "1) Status Summary" \
+      "2) Runtime Status" \
+      "3) Installation Status" \
+      "4) Service / Autostart Status" \
+      "5) Optional App Status" \
+      "6) Full Health Report"
     menu_footer
     local status_choice=""
     menu_read_choice status_choice

@@ -1233,38 +1233,36 @@ EOF_MULTI
 }
 show_access_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "Access / Hostname / VM Networking Guide"
-    echo "============================================================"
-    echo "1) Show current VM browser access instructions"
-    echo "2) Local domain / host DNS status"
-    echo "3) Local access doctor"
-    echo "4) Show host /etc/hosts command only"
-    echo "5) Show VM network/access status"
-    echo "6) Show host access test guide"
-    echo "7) Verify ERPNext HTTP access"
-    echo "8) Show KVM VM identification + fixed IP helper"
-    echo "9) Show stable VM IP guide (per host OS / hypervisor)"
-    echo "10) Show multi-environment naming guide"
-    echo "11) Show SSL/HTTPS roadmap"
-    echo "12) Show local SSL status"
-    echo "13) Show local SSL guide"
-    echo "14) Local SSL wizard"
-    echo "15) Show trusted mkcert SSL guide"
-    echo "16) Show browser trust check guide"
-    echo "17) Verify local SSL"
-    echo "18) Install/replace local SSL cert"
-    echo "19) Create self-signed local cert"
-    echo "20) Configure local SSL reverse proxy"
-    echo "21) Disable local SSL reverse proxy"
-    echo "22) Verify SSL rollback"
-    echo "23) Show SSL rollback guide"
-    echo "24) Domain config"
-    echo "25) Production readiness preview"
-    echo "26) Production domain guide"
-    echo "27) Production SSL guide"
-    echo "28) Environment / location check"
+    ui_submenu_header "Access / Hostname / Networking" "Browser URLs, hosts DNS, and local SSL helpers"
+    print_two_column_menu \
+      "1) Show current VM browser access instructions" \
+      "2) Local domain / host DNS status" \
+      "3) Local access doctor" \
+      "4) Show host /etc/hosts command only" \
+      "5) Show VM network/access status" \
+      "6) Show host access test guide" \
+      "7) Verify ERPNext HTTP access" \
+      "8) Show KVM VM identification + fixed IP helper" \
+      "9) Show stable VM IP guide (per host OS / hypervisor)" \
+      "10) Show multi-environment naming guide" \
+      "11) Show SSL/HTTPS roadmap" \
+      "12) Show local SSL status" \
+      "13) Show local SSL guide" \
+      "14) Local SSL wizard" \
+      "15) Show trusted mkcert SSL guide" \
+      "16) Show browser trust check guide" \
+      "17) Verify local SSL" \
+      "18) Install/replace local SSL cert" \
+      "19) Create self-signed local cert" \
+      "20) Configure local SSL reverse proxy" \
+      "21) Disable local SSL reverse proxy" \
+      "22) Verify SSL rollback" \
+      "23) Show SSL rollback guide" \
+      "24) Domain config" \
+      "25) Production readiness preview" \
+      "26) Production domain guide" \
+      "27) Production SSL guide" \
+      "28) Environment / location check"
     menu_footer
     local access_choice=""
     menu_read_choice access_choice
@@ -1307,16 +1305,14 @@ show_access_menu() {
 
 show_credentials_menu() {
   while true; do
-    echo
-    echo "============================================================"
-    echo "Credentials / Login"
-    echo "============================================================"
-    echo "1) Safe credential overview (no passwords)"
-    echo "2) Show passwords (private console; type SHOW)"
-    echo "3) Credentials file status"
-    echo "4) Secure credentials file permissions"
-    echo "5) Delete plaintext credentials file (type DELETE)"
-    echo "6) Reset Administrator password"
+    ui_submenu_header "Credentials / Login" "Passwords only on a private console"
+    print_two_column_menu \
+      "1) Safe credential overview (no passwords)" \
+      "2) Show passwords (private console; type SHOW)" \
+      "3) Credentials file status" \
+      "4) Secure credentials file permissions" \
+      "5) Delete plaintext credentials file (type DELETE)" \
+      "6) Reset Administrator password"
     menu_footer
     local credentials_choice=""
     menu_read_choice credentials_choice
