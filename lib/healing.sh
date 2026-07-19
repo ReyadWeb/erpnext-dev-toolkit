@@ -88,6 +88,8 @@ healing_record_action_incident() {
   } >"$path"
   chmod 600 "$path" 2>/dev/null || true
   ln -sfn "$path" "${HEALTH_LIB_DIR}/incidents/latest.json" 2>/dev/null || cp -f "$path" "${HEALTH_LIB_DIR}/incidents/latest.json" 2>/dev/null || true
+  # Consumed by dashboard / alert path after heal executes.
+  # shellcheck disable=SC2034
   SNAPSHOT_LAST_INCIDENT_ID="$id"
   printf '%s' "$id"
 }
@@ -196,8 +198,11 @@ healing_write_state_merge() {
 healing_apply_snapshot_fields() {
   local mode detail
   mode="$(healing_mode_normalized)"
+  # Snapshot fields are rendered by lib/dashboard.sh after this module runs.
+  # shellcheck disable=SC2034
   SNAPSHOT_HEALING_MODE="$mode"
   if healing_is_locked; then
+    # shellcheck disable=SC2034
     SNAPSHOT_HEALING_STATE="locked"
     SNAPSHOT_HEALING_DETAIL="AUTO-HEALING LOCKED: $(healing_state_get lock_reason 'manual review required') — run healing-unlock"
     return 0

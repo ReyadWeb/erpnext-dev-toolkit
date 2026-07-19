@@ -107,7 +107,7 @@ for i in 1 2; do
   # Reset would-heal gate by clearing last_would_heal_at via empty streaks file rewrite
   if [[ -f "${HEALTH_LIB_DIR}/healing/state.json" ]]; then
     # Force cooldown elapsed: set last_would_heal_at far in the past while keeping fail counters
-    python3 - <<'PY' "${HEALTH_LIB_DIR}/healing/state.json"
+    python3 - "${HEALTH_LIB_DIR}/healing/state.json" <<'PY'
 import json, sys, re, pathlib
 p = pathlib.Path(sys.argv[1])
 text = p.read_text()
