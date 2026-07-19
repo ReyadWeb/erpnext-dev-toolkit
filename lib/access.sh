@@ -37,13 +37,18 @@ show_ready_summary() {
       echo "  Login:        https://${SITE_NAME}/login"
       echo "  Website/root: https://${SITE_NAME}"
       echo
-      echo "HTTP fallback (friendly hostname):"
+      echo "HTTP fallback (friendly hostname + port 8000):"
       echo "  http://${SITE_NAME}:8000"
+      echo
+      echo "Avoid bare http://${SITE_NAME} (port 80) if the page looks unstyled —"
+      echo "that path is not the same as https://${SITE_NAME} or :8000."
     else
       echo "Open this URL from the HOST after /etc/hosts is set:"
       echo "  Desk:         http://${SITE_NAME}:8000/app"
       echo "  Login:        http://${SITE_NAME}:8000/login"
       echo "  Website/root: http://${SITE_NAME}:8000"
+      echo
+      echo "Avoid bare http://${SITE_NAME} (port 80) and raw IP URLs."
     fi
     echo
     echo "HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."

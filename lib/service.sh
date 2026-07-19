@@ -194,6 +194,12 @@ try_rebuild_frontend_assets_once() {
     $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
   fi
 
+  # After assets exist on :443/:8000, also fix bare http://SITE (:80) so the
+  # default browser URL does not keep showing an unstyled login page.
+  if ssl_is_configured 2>/dev/null && port_listens 443; then
+    ensure_local_http_redirects_to_https || true
+  fi
+
   return 0
 }
 
@@ -332,11 +338,55 @@ _verify_frontend_assets_route() {
   return 1
 }
 
+# Diagnose bare http://SITE (port 80) — the URL browsers open by default.
+# Returns 0 when :80 redirects to HTTPS or serves all login assets; 1 when it
+# serves /login but assets fail; 2 when :80 is not usable / not listening.
+_verify_frontend_assets_port80() {
+  local http_head code
+  local probe_rc=0
+
+  if ! port_listens 80; then
+    status_line "Nginx :80 entry" "INFO" "port 80 not listening"
+    return 2
+  fi
+
+  echo
+  status_line "Nginx :80 entry" "INFO" "http://${SITE_NAME}/login"
+  http_head="$(curl_head_status "http://${SITE_NAME}/login" "$SITE_NAME" 80 "127.0.0.1" || true)"
+  code="$(http_status_code "$http_head")"
+
+  if [[ "$code" =~ ^30[1278]$ ]]; then
+    status_line "Port 80 behavior" "OK" "${http_head} (redirect — use https://${SITE_NAME}/login)"
+    return 0
+  fi
+
+  if [[ "$code" =~ ^2[0-9][0-9]$ ]]; then
+    status_line "Port 80 behavior" "INFO" "${http_head} (serving without redirect)"
+    if _verify_frontend_assets_route "Nginx :80 frontend" \
+      "http://${SITE_NAME}/login" "$SITE_NAME" 80; then
+      return 0
+    fi
+    status_line "Port 80 assets" "FAIL" "login HTML ok but CSS/JS missing on :80"
+    echo "    Browsers that open http://${SITE_NAME} (no port) hit this broken path."
+    echo "    Prefer: https://${SITE_NAME}/login  or  http://${SITE_NAME}:8000/login"
+    return 1
+  fi
+
+  if [[ "$http_head" == HTTP/* ]]; then
+    status_line "Port 80 behavior" "WARN" "$http_head"
+  else
+    status_line "Port 80 behavior" "WARN" "no response"
+  fi
+  return 2
+}
+
 # One-shot frontend asset status (all CSS/JS required by /login). Exit 0 when
-# the primary route (HTTPS if :443, else :8000) passes. Always diagnoses both.
+# the primary route (HTTPS if :443, else :8000) passes. Always diagnoses both
+# plus bare http:// :80 (common browser default).
 verify_frontend_assets() {
   local primary_ok=0
   local primary_url=""
+  local port80_rc=2
 
   require_site_environment >/dev/null || true
 
@@ -377,9 +427,39 @@ verify_frontend_assets() {
     fi
   fi
 
+  # If local HTTPS exists but bare http://SITE is broken, repair :80 → HTTPS
+  # before the final port-80 diagnosis (common unstyled-login failure mode).
+  if port_listens 443 && ssl_is_configured 2>/dev/null; then
+    ensure_local_http_redirects_to_https || true
+  fi
+
+  set +e
+  _verify_frontend_assets_port80
+  port80_rc=$?
+  set -e
+  # Bare http://SITE with HTML but missing assets: treat as not browser-ready.
+  if ((port80_rc == 1)); then
+    primary_ok=0
+  fi
+
+  echo
+  echo "Open in the HOST browser (hard refresh: Ctrl+Shift+R):"
+  if port_listens 443; then
+    echo "  Preferred:  https://${SITE_NAME}/login"
+    echo "  Fallback:   http://${SITE_NAME}:8000/login"
+    echo "  Avoid:      http://${SITE_NAME} unless it redirects to HTTPS"
+  else
+    echo "  Preferred:  http://${SITE_NAME}:8000/login"
+    echo "  Avoid:      http://${SITE_NAME}  (port 80) and raw IP URLs"
+  fi
   echo
   if ((primary_ok == 1)); then
     status_line "Browser readiness" "OK" "all required login CSS/JS"
+    if ((port80_rc == 0)) && port_listens 443; then
+      status_line "Default http:// URL" "OK" "port 80 redirects or serves assets"
+    elif ((port80_rc == 2)) && port_listens 443; then
+      status_line "Default http:// URL" "INFO" "use https://${SITE_NAME}/login (port 80 not serving)"
+    fi
     ui_next "$(toolkit_cmd wait-frontend-assets)" "$(toolkit_cmd repair-frontend-assets)" "$(toolkit_cmd verify-access)"
     ui_box_end
     return 0
@@ -387,6 +467,13 @@ verify_frontend_assets() {
 
   status_line "Browser readiness" "FAIL" "one or more required assets failed"
   echo
+  if ((port80_rc == 1)); then
+    echo "Port 80 served /login without the CSS/JS that :443/:8000 have."
+    echo "Use https://${SITE_NAME}/login or http://${SITE_NAME}:8000/login for now."
+    echo "Then repair the HTTP→HTTPS redirect:"
+    echo "  $(toolkit_cmd configure-local-ssl)"
+    echo "  $(toolkit_cmd verify-frontend-assets)"
+  fi
   echo "Recommended:"
   echo "  $(toolkit_cmd repair-frontend-assets)"
   echo "  $(toolkit_cmd wait-frontend-assets)"
@@ -416,10 +503,15 @@ repair_frontend_assets() {
   maintenance_clear_cache || fail "clear-cache failed after build."
   log "Restarting ERPNext service"
   restart_erpnext_service || fail "Service restart failed after asset rebuild."
+  if ssl_is_configured 2>/dev/null && port_listens 443; then
+    log "Ensuring bare http://${SITE_NAME} redirects to HTTPS"
+    ensure_local_http_redirects_to_https || true
+  fi
   echo
   if bench_static_assets_ready_stable; then
     status_line "Static assets" "OK" "all required login CSS/JS (2 consecutive checks)"
     ok "Frontend assets repaired and verified."
+    echo "Open: https://${SITE_NAME}/login  (or http://${SITE_NAME}:8000/login)"
     ui_next "$(toolkit_cmd verify-frontend-assets)" "$(toolkit_cmd verify-access)" "$(toolkit_cmd doctor)"
     ui_box_end
     return 0

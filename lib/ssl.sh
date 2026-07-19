@@ -2135,20 +2135,18 @@ create_self_signed_local_cert() {
 }
 
 write_local_ssl_nginx_config() {
-  local available_path cert_path key_path redirect_block
+  local available_path cert_path key_path
   available_path="$(ssl_nginx_available_path)"
   cert_path="$(ssl_cert_path)"
   key_path="$(ssl_key_path)"
 
-  if [[ "$SSL_REDIRECT_HTTP" == "true" ]]; then
-    redirect_block="return 301 https://\$host\$request_uri;"
-  else
-    redirect_block="proxy_pass http://127.0.0.1:8000;\n    proxy_set_header Host \$host;\n    proxy_set_header X-Forwarded-Host \$host;\n    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto http;\n    proxy_set_header X-Real-IP \$remote_addr;\n    proxy_redirect off;"
-  fi
-
   $SUDO mkdir -p "${SSL_NGINX_CONF_DIR}/sites-available" "${SSL_NGINX_CONF_DIR}/sites-enabled"
 
-  $SUDO tee "$available_path" >/dev/null <<EOF_NGINX
+  # Port 80 is what browsers open for http://SITE (no port). Default: redirect
+  # to HTTPS. Proxy mode uses real location blocks (proxy_pass is invalid at
+  # server scope and previously could leave bare http:// broken).
+  if [[ "$SSL_REDIRECT_HTTP" == "true" ]]; then
+    $SUDO tee "$available_path" >/dev/null <<EOF_NGINX
 # Managed by ERPNext Developer Toolkit.
 # Local development reverse proxy for ${SITE_NAME}.
 # Direct Bench access remains available on :8000.
@@ -2156,8 +2154,7 @@ write_local_ssl_nginx_config() {
 server {
     listen 80;
     server_name ${SITE_NAME};
-
-    ${redirect_block}
+    return 301 https://\$host\$request_uri;
 }
 
 server {
@@ -2200,6 +2197,136 @@ server {
     }
 }
 EOF_NGINX
+  else
+    $SUDO tee "$available_path" >/dev/null <<EOF_NGINX
+# Managed by ERPNext Developer Toolkit.
+# Local development reverse proxy for ${SITE_NAME}.
+# Direct Bench access remains available on :8000.
+
+server {
+    listen 80;
+    server_name ${SITE_NAME};
+
+    location /socket.io {
+        proxy_pass http://127.0.0.1:9000/socket.io;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${SITE_NAME};
+
+    ssl_certificate     ${cert_path};
+    ssl_certificate_key ${key_path};
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 100m;
+
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+
+    location /socket.io {
+        proxy_pass http://127.0.0.1:9000/socket.io;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;
+    }
+}
+EOF_NGINX
+  fi
+}
+
+# When local HTTPS is configured, bare http://SITE (port 80) must 301 to HTTPS.
+# Browsers open that URL by default; a non-redirecting :80 can serve login HTML
+# while CSS/JS 404 — the unstyled-page failure mode after assets are OK on :443.
+# Returns 0 when redirect is already correct or was repaired; 1 on failure.
+ensure_local_http_redirects_to_https() {
+  local http_head code available_path enabled_path
+  local saved_redirect="${SSL_REDIRECT_HTTP:-true}"
+
+  ssl_is_configured 2>/dev/null || return 0
+  port_listens 443 || return 0
+
+  if port_listens 80; then
+    http_head="$(curl_head_status "http://${SITE_NAME}/login" "$SITE_NAME" 80 "127.0.0.1" || true)"
+    code="$(http_status_code "$http_head")"
+    if [[ "$code" =~ ^30[1278]$ ]]; then
+      return 0
+    fi
+  fi
+
+  require_sudo
+  available_path="$(ssl_nginx_available_path)"
+  enabled_path="$(ssl_nginx_enabled_path)"
+
+  warn "Port 80 is not redirecting http://${SITE_NAME} to HTTPS — repairing Nginx."
+  echo "  Browsers that open bare http://${SITE_NAME} hit :80; it must redirect to https://${SITE_NAME}."
+
+  SSL_REDIRECT_HTTP=true
+  write_local_ssl_nginx_config
+  SSL_REDIRECT_HTTP="$saved_redirect"
+
+  # Debian/default site can steal :80 and break the friendly hostname path.
+  if [[ -L /etc/nginx/sites-enabled/default || -f /etc/nginx/sites-enabled/default ]]; then
+    log "Disabling Nginx default site so ${SITE_NAME} owns port 80"
+    $SUDO rm -f /etc/nginx/sites-enabled/default
+  fi
+
+  $SUDO ln -sfn "$available_path" "$enabled_path"
+  if ! $SUDO nginx -t; then
+    err "Nginx config test failed while repairing port-80 HTTPS redirect."
+    return 1
+  fi
+  $SUDO systemctl enable --now nginx >/dev/null 2>&1 || true
+  $SUDO systemctl reload nginx || return 1
+
+  http_head="$(curl_head_status "http://${SITE_NAME}/login" "$SITE_NAME" 80 "127.0.0.1" || true)"
+  code="$(http_status_code "$http_head")"
+  if [[ "$code" =~ ^30[1278]$ ]]; then
+    ok "Port 80 now redirects to HTTPS (${http_head})"
+    return 0
+  fi
+  warn "Port 80 still not redirecting after repair (${http_head:-no response}). Use https://${SITE_NAME}/login."
+  return 1
 }
 
 
@@ -2297,6 +2424,11 @@ configure_local_ssl() {
   log "Writing local SSL reverse proxy config"
   write_local_ssl_nginx_config
 
+  if [[ -L /etc/nginx/sites-enabled/default || -f /etc/nginx/sites-enabled/default ]]; then
+    log "Disabling Nginx default site so ${SITE_NAME} owns port 80"
+    $SUDO rm -f /etc/nginx/sites-enabled/default
+  fi
+
   log "Enabling local SSL Nginx site"
   $SUDO ln -sfn "$available_path" "$enabled_path"
 
@@ -2316,8 +2448,13 @@ configure_local_ssl() {
   echo "Nginx is listening on :443. Do not open the browser yet until"
   echo "$(toolkit_cmd wait-ready) / trusted-mkcert-setup reports static assets OK."
   echo
+  echo "Open from the HOST browser (preferred):"
+  echo "  https://${SITE_NAME}/login"
+  echo "Bare http://${SITE_NAME} should redirect to HTTPS."
+  echo
   echo "Test from the host (after assets are ready):"
   echo "  curl -kI https://${SITE_NAME}"
+  echo "  curl -I http://${SITE_NAME}   # expect 301 to https://"
   echo
   echo "Direct Bench access still works:"
   echo "  http://${SITE_NAME}:8000"

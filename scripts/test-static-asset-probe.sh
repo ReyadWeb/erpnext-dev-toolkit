@@ -281,6 +281,34 @@ else
   echo "OK: consecutive stability helper present"
 fi
 
+if ! grep -q '_verify_frontend_assets_port80' "${ROOT_DIR}/lib/service.sh"; then
+  echo "FAIL: verify-frontend-assets must diagnose port 80" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: port 80 browser-path diagnosis present"
+fi
+
+if ! grep -q 'ensure_local_http_redirects_to_https' "${ROOT_DIR}/lib/ssl.sh"; then
+  echo "FAIL: missing ensure_local_http_redirects_to_https" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: HTTP→HTTPS redirect repair helper present"
+fi
+
+# nginx writer: redirect mode must 301; proxy mode must use location /
+if ! grep -A30 'SSL_REDIRECT_HTTP" == "true"' "${ROOT_DIR}/lib/ssl.sh" | grep -q 'return 301 https://'; then
+  echo "FAIL: local SSL nginx must 301 http→https when redirect enabled" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: local SSL nginx redirect mode uses return 301"
+fi
+if grep -A5 'SSL_REDIRECT_HTTP" != "true"\|SSL_REDIRECT_HTTP" == "false"' "${ROOT_DIR}/lib/ssl.sh" | grep -q 'proxy_pass.*\\\\n'; then
+  echo "FAIL: proxy mode must not embed literal \\\\n proxy_pass at server scope" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: no broken literal-\\\\n proxy_pass pattern"
+fi
+
 # classify: file exists + 404 → STATIC_ROUTE_FAILURE
 fs_tmp="$(mktemp -d /tmp/erpnext-dev-fs.XXXXXX)"
 mkdir -p "${fs_tmp}/sites/assets/frappe/dist/css"

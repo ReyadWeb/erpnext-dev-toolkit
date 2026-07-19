@@ -1,3 +1,35 @@
+## v1.19.9 - Bare HTTP port-80 browser path
+
+Patch release that closes the field failure where `wait-ready` /
+`verify-frontend-assets` report CSS/JS OK on `:443` and `:8000`, but the host
+browser opens bare `http://SITE` (port 80) and still sees an unstyled login
+with asset 404s.
+
+### Fixed
+
+- **Port 80 must redirect (or cleanly proxy) to a working frontend path:** local
+  SSL nginx always writes a valid `:80` server (`return 301` to HTTPS by default,
+  or a real `location /` proxy). The Debian/nginx `default` site is disabled so
+  it cannot steal `:80`. `ensure_local_http_redirects_to_https` rewrites and
+  reloads nginx when bare `http://SITE` is not redirecting.
+- **`verify-frontend-assets` diagnoses `:80`:** reports redirect vs serving;
+  fails browser-ready when `:80` serves `/login` but CSS/JS 404; prints preferred
+  URLs (`https://SITE/login`, `http://SITE:8000/login`).
+- **Auto-repair after asset rebuild:** `wait-ready` one-shot rebuild and
+  `repair-frontend-assets` also ensure the HTTP→HTTPS redirect.
+- **Ready summary:** warns against bare `http://SITE` when the page looks
+  unstyled.
+
+### If this still fails in the field
+
+1. Open **`https://SITE/login`** or **`http://SITE:8000/login`** (hard refresh).
+2. On the VM: `sudo erpnext-dev configure-local-ssl` then
+   `sudo erpnext-dev verify-frontend-assets` (port 80 should show 301).
+3. Confirm host `/etc/hosts` maps `SITE` to the VM IP
+   (`sudo erpnext-dev local-host-checkpoint`).
+4. Last resort: `sudo erpnext-dev repair-frontend-assets` and collect
+   `sudo erpnext-dev support-bundle`.
+
 ## v1.19.8 - Browser Asset Consistency Closure
 
 Patch release that closes false browser-ready when only the first login CSS/JS
