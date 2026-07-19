@@ -341,8 +341,26 @@ jobs:
             exit 1
           fi
 
-          # 5. socket.io must be listening on :9000.
-          sudo ss -ltnp 2>/dev/null | grep -q ':9000' || { echo "::error::socket.io not listening on :9000"; exit 1; }
+          # 5. socket.io must accept TCP on :9000. Use nc (same as toolkit
+          # port_listens) with retries — one-shot `ss -ltnp` is flaky on
+          # ubuntu-26.04/sudo-rs even when supervisor node-socketio is RUNNING.
+          ok_sock=0
+          for i in $(seq 1 12); do
+            if nc -z 127.0.0.1 9000 2>/dev/null; then
+              echo "socket.io accepting on :9000 (attempt ${i})"
+              ok_sock=1
+              break
+            fi
+            echo "socket.io wait ${i}/12: :9000 not accepting yet"
+            sleep 2
+          done
+          if [ "$ok_sock" -ne 1 ]; then
+            echo "::error::socket.io not listening on :9000"
+            sudo supervisorctl status || true
+            nc -zv 127.0.0.1 9000 2>&1 || true
+            sudo ss -ltnp 2>/dev/null | grep -E ':8000|:9000' || echo "nothing on :8000/:9000 (ss)"
+            exit 1
+          fi
 
           echo "Production runtime conversion verified: supervisor up, gunicorn serving, no bench start."
 

@@ -59,16 +59,40 @@ asset_headers_nonempty $'HTTP/2 200\n' || {
   echo "FAIL: missing CL should pass" >&2
   fail=$((fail + 1))
 }
+# Redirect hop CL:0 must not mask final nonempty response (curl -L header dump).
+if asset_headers_nonempty $'HTTP/1.1 302\nContent-Length: 0\n\nHTTP/1.1 200 OK\nContent-Length: 42\n'; then
+  echo "OK: last Content-Length wins after redirect"
+else
+  echo "FAIL: last Content-Length after redirect should pass" >&2
+  fail=$((fail + 1))
+fi
+assert_eq "last HTTP status line" "HTTP/1.1 200 OK" \
+  "$(asset_headers_status_line $'HTTP/1.1 302\n\nHTTP/1.1 200 OK\n')"
 echo "OK: asset_headers_nonempty"
 
-# Mock curl for probes (login HEAD + asset HEAD).
+# Drift guard: login/asset probes must use GET header dump, not HEAD (-I).
+if grep -A20 '^curl_response_headers()' "${ROOT_DIR}/lib/access.sh" | grep -qE -- '-I\b'; then
+  echo "FAIL: curl_response_headers still uses HEAD (-I); GET is required for Link/CL reliability" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: curl_response_headers does not use HEAD -I"
+fi
+if ! grep -A25 '^curl_response_headers()' "${ROOT_DIR}/lib/access.sh" | grep -q -- '-D -'; then
+  echo "FAIL: curl_response_headers must dump GET headers with -D -" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: curl_response_headers uses GET -D -"
+fi
+
+# Mock curl for probes (login GET headers + asset GET headers).
 tmpdir="$(mktemp -d /tmp/erpnext-dev-asset-probe.XXXXXX)"
 trap 'rm -rf "$tmpdir"' EXIT
 
 cat >"${tmpdir}/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-# Last non-option arg is the URL.
+# Last non-option arg is the URL. Real curl_response_headers uses GET -D -;
+# this mock only needs to emit a header block on stdout.
 url="${*: -1}"
 case "$url" in
   */login)

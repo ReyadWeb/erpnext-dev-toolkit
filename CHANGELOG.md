@@ -1,3 +1,14 @@
+## Unreleased
+
+### Fixed
+
+- **Asset probe flap after first ready:** login/static probes now use GET header
+  dumps (not HEAD). HEAD often omitted `Link` preloads or advertised
+  `Content-Length: 0`, so `wait-ready` could pass once then stick on
+  `assets: wait`. Redirect hops use the last status/Content-Length.
+- **Ubuntu 26.04 production assert:** socket.io readiness uses `nc` with retries
+  (same as toolkit `port_listens`) instead of one-shot `ss -ltnp`.
+
 ## v1.19.3 - Dual CSS+JS browser-ready gate
 
 Patch release that requires both CSS and JS login Link preloads before declaring
