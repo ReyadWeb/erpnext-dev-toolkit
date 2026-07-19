@@ -1142,20 +1142,22 @@ show_kvm_vm_identification_guide() {
 
 
 
-# Universal fallback guidance (print-only). Prefer `local-static-ip-wizard` to
-# apply a backed-up Netplan static config via lib/local_ip.sh.
+# Universal fallback guidance (print-only). Prefer `local-static-ip-wizard`
+# (Netplan on Ubuntu, ifupdown on Debian) via lib/local_ip.sh.
 print_guest_static_ip_fallback() {
   local vm_ip gateway
   vm_ip="$(get_vm_ip)"
   gateway="$(get_default_gateway 2>/dev/null || true)"
   echo "Universal fallback (works on any hypervisor) — pin a static IP inside THIS VM:"
   echo
+  echo "  Preferred: $(toolkit_cmd local-static-ip-wizard)"
+  echo "  (uses Netplan when installed; otherwise classic Debian ifupdown)"
+  echo
   echo "  # Inspect the current interface and gateway first:"
   echo "  ip -brief address"
   echo "  ip route | awk '/default/ {print \$3; exit}'"
   echo
-  echo "  # Then create /etc/netplan/99-erpnext-static.yaml inside the VM (adjust"
-  echo "  # the interface name, address, and gateway to match your network):"
+  echo "  # Ubuntu / Netplan guests — /etc/netplan/99-erpnext-static.yaml:"
   echo "  network:"
   echo "    version: 2"
   echo "    ethernets:"
@@ -1167,8 +1169,15 @@ print_guest_static_ip_fallback() {
   echo "            via: ${gateway:-192.168.x.1}"
   echo "        nameservers:"
   echo "          addresses: [1.1.1.1, 8.8.8.8]"
-  echo
   echo "  sudo netplan apply"
+  echo
+  echo "  # Debian without Netplan — /etc/network/interfaces.d/99-erpnext-static:"
+  echo "  auto eth0"
+  echo "  iface eth0 inet static"
+  echo "      address ${vm_ip:-192.168.x.y}/24"
+  echo "      gateway ${gateway:-192.168.x.1}"
+  echo "      dns-nameservers 1.1.1.1 8.8.8.8"
+  echo "  sudo systemctl restart networking"
 }
 
 # Host-OS/hypervisor-aware stable local VM IP guidance. Linux hosts get the

@@ -24,8 +24,8 @@ pinning the guest IP) restores access.
 | `sudo erpnext-dev local-ip-plan` | Ranked options for this host/hypervisor |
 | `sudo erpnext-dev local-ip-drift-check` | Saved IP vs current IP |
 | `sudo erpnext-dev local-ip-save` | Record the current mapping |
-| `sudo erpnext-dev local-static-ip-wizard` | Guest Netplan static IP + backup |
-| `sudo erpnext-dev local-static-ip-rollback` | Restore prior Netplan |
+| `sudo erpnext-dev local-static-ip-wizard` | Guest static IP + backup (Netplan or ifupdown) |
+| `sudo erpnext-dev local-static-ip-rollback` | Restore prior guest network config |
 | `sudo erpnext-dev hosts-command` | Print host `/etc/hosts` repair commands |
 | `sudo erpnext-dev local-ip-menu` | Boxed submenu |
 
@@ -39,7 +39,8 @@ post-install guided follow-ups if the guest is still on DHCP.
 1. **Prefer a hypervisor DHCP reservation** (stable lease by MAC) when your host
    supports it — see platform notes below.
 2. **Or pin a static address inside the guest** with
-   `local-static-ip-wizard` (Netplan backup + apply + rollback).
+   `local-static-ip-wizard` (Netplan on Ubuntu; classic ifupdown on Debian
+   guests that do not ship Netplan — backup + apply + rollback either way).
 3. **Update HOST `/etc/hosts`** whenever the guest IP changes
    (`hosts-command`).
 4. **Save the mapping** with `local-ip-save` so `local-ip-drift-check` can warn

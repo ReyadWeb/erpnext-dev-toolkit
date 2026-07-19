@@ -1,3 +1,17 @@
+## v1.19.7 - Debian static IP without Netplan
+
+Patch release that keeps local guided setup alive on Debian guests that do not
+ship Netplan, by pinning a static IP via classic ifupdown instead of aborting.
+
+### Fixed
+
+- **Debian static-IP wizard without Netplan:** `local-static-ip-wizard` now
+  uses classic ifupdown (`/etc/network/interfaces.d`) when `netplan` is not
+  installed, instead of writing a Netplan file and calling `fail` (which exited
+  the whole `local-dev-quickstart`). Wizard/apply errors return to the caller so
+  guided setup can continue. Orphan Netplan drop-ins from a prior failed attempt
+  are removed when applying the ifupdown path.
+
 ## v1.19.6 - Local guided settle (stable IP + service restart)
 
 Patch release that makes local host install guide pin a stable guest IP and

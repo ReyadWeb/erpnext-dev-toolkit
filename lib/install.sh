@@ -1055,10 +1055,10 @@ local_guided_stable_ip_checkpoint() {
       show_local_ip_plan || true
     fi
     echo
-    if confirm "Pin this guest IP with local-static-ip-wizard (Netplan) now?"; then
+    if confirm "Pin this guest IP with local-static-ip-wizard now?"; then
       run_local_static_ip_wizard || true
     else
-      echo "Skipped Netplan wizard. Later: $(toolkit_cmd local-static-ip-wizard)"
+      echo "Skipped static-IP wizard. Later: $(toolkit_cmd local-static-ip-wizard)"
       echo "Hypervisor reservation guide: $(toolkit_cmd local-fixed-ip-guide)"
     fi
   else
