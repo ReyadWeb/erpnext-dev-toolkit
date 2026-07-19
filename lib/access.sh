@@ -31,25 +31,21 @@ show_ready_summary() {
     echo "  Domain :8000: http://${SITE_NAME}:8000"
     echo "Production note: public access to ports 8000 and 9000 should be blocked by the cloud firewall and UFW after hardening."
   else
+    # Frappe local contract: :8000 with Host=SITE is the primary path.
+    echo "Open from the HOST after /etc/hosts is set (Frappe local contract):"
+    echo "  Desk:         http://${SITE_NAME}:8000/app"
+    echo "  Login:        http://${SITE_NAME}:8000/login"
+    echo "  Website/root: http://${SITE_NAME}:8000"
     if ssl_is_configured 2>/dev/null && port_listens 443; then
-      echo "Open these HTTPS URLs from the HOST after /etc/hosts is set:"
+      echo
+      echo "Optional local HTTPS (after :8000 looks styled):"
       echo "  Desk:         https://${SITE_NAME}/app"
       echo "  Login:        https://${SITE_NAME}/login"
       echo "  Website/root: https://${SITE_NAME}"
-      echo
-      echo "HTTP fallback (friendly hostname + port 8000):"
-      echo "  http://${SITE_NAME}:8000"
-      echo
-      echo "Avoid bare http://${SITE_NAME} (port 80) if the page looks unstyled —"
-      echo "that path is not the same as https://${SITE_NAME} or :8000."
-    else
-      echo "Open this URL from the HOST after /etc/hosts is set:"
-      echo "  Desk:         http://${SITE_NAME}:8000/app"
-      echo "  Login:        http://${SITE_NAME}:8000/login"
-      echo "  Website/root: http://${SITE_NAME}:8000"
-      echo
-      echo "Avoid bare http://${SITE_NAME} (port 80) and raw IP URLs."
     fi
+    echo
+    echo "Avoid bare http://${SITE_NAME} (port 80) and raw IP URLs until verified."
+    echo "If unstyled: $(toolkit_cmd frappe-asset-checklist) — docs/FRAPPE-FRONTEND-ASSETS.md"
     echo
     echo "HOST /etc/hosts must map ${SITE_NAME} to ${vm_ip}."
     echo "Troubleshooting only (often unstyled — do not use as primary):"
@@ -353,6 +349,85 @@ classify_asset_failure() {
     return 0
   fi
   printf 'ASSET_HTTP_%s\n' "${http_code:-UNKNOWN}"
+}
+
+# Absolute path to bench sites/ (Frappe nginx root for /assets).
+bench_sites_dir() {
+  local bench_dir="${1:-}"
+  if [[ -z "$bench_dir" ]] && declare -F active_bench_dir >/dev/null 2>&1; then
+    bench_dir="$(active_bench_dir 2>/dev/null || true)"
+  fi
+  bench_dir="${bench_dir:-${BENCH_DIR:-/home/frappe/frappe/frappe-bench}}"
+  printf '%s/sites\n' "$bench_dir"
+}
+
+# True when the login-critical hashed bundles exist on disk (Frappe contract).
+# Checks website + login (frappe) and erpnext-web (erpnext).
+disk_login_asset_bundles_present() {
+  local bench_dir="${1:-}"
+  local assets
+  assets="$(bench_sites_dir "$bench_dir")/assets"
+  [[ -d "$assets" ]] || return 1
+  ls "${assets}/frappe/dist/css/website.bundle."*.css >/dev/null 2>&1 || return 1
+  ls "${assets}/frappe/dist/css/login.bundle."*.css >/dev/null 2>&1 || return 1
+  ls "${assets}/erpnext/dist/css/erpnext-web.bundle."*.css >/dev/null 2>&1 || return 1
+  ls "${assets}/frappe/dist/js/frappe-web.bundle."*.js >/dev/null 2>&1 || return 1
+  return 0
+}
+
+# Warn when RAM is below the install minimum (yarn/esbuild OOM → incomplete assets).
+warn_if_build_memory_low() {
+  local mem_mb min_mb="${MIN_INSTALL_RAM_MB:-4096}"
+  mem_mb="$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 0)"
+  if [[ "$mem_mb" =~ ^[0-9]+$ ]] && ((mem_mb > 0 && mem_mb < min_mb)); then
+    warn "Host RAM is ${mem_mb} MB (minimum ${min_mb} MB). bench build may OOM and leave login CSS/JS missing."
+    echo "  See docs/FRAPPE-FRONTEND-ASSETS.md and frappe#33468."
+    return 1
+  fi
+  return 0
+}
+
+# Evict Redis assets_json + site/website caches after bench build (frappe#29901).
+clear_bench_assets_json_cache() {
+  local bench_dir site="${SITE_NAME:-}"
+  bench_dir="$(active_bench_dir 2>/dev/null || true)"
+  [[ -n "$bench_dir" && -n "$site" ]] || return 1
+
+  log "Clearing site cache and Redis assets_json for ${site}"
+  run_as_frappe "cd '${bench_dir}' && bench --site '${site}' clear-cache" || true
+  run_as_frappe "cd '${bench_dir}' && bench --site '${site}' clear-website-cache" || true
+  # Explicit shared-key eviction; clear-cache should cover this, but stale
+  # assets_json is a known unstyled-login cause after rebuilds.
+  run_as_frappe "cd '${bench_dir}' && bench --site '${site}' execute frappe.cache_manager.clear_global_cache" || true
+  return 0
+}
+
+# Nginx location block matching Frappe bench setup nginx (disk /assets).
+# Prints lines suitable for embedding in an unquoted heredoc (\$ already expanded).
+frappe_nginx_assets_location_block() {
+  local sites_dir="${1:-}"
+  [[ -n "$sites_dir" ]] || sites_dir="$(bench_sites_dir)"
+  printf '%s\n' \
+    "    # Frappe contract (bench setup nginx): serve hashed bundles from disk." \
+    "    location /assets {" \
+    "        alias ${sites_dir}/assets;" \
+    "        try_files \$uri =404;" \
+    "        add_header Cache-Control \"max-age=31536000\";" \
+    "    }"
+}
+
+# CLI: Frappe-first disk/:8000 checklist (see docs/FRAPPE-FRONTEND-ASSETS.md).
+run_frappe_asset_checklist() {
+  local script_path root
+  require_site_environment >/dev/null || true
+  root="${_ERPNEXT_DEV_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+  script_path="${root}/scripts/frappe-frontend-asset-checklist.sh"
+  if [[ ! -f "$script_path" ]]; then
+    err "frappe-frontend-asset-checklist.sh not found at ${script_path}"
+    return 1
+  fi
+  SITE_NAME="${SITE_NAME}" BENCH_DIR="$(active_bench_dir 2>/dev/null || echo "${BENCH_DIR:-}")" \
+    bash "$script_path"
 }
 
 # Probe one asset URL with a real GET. Prints:

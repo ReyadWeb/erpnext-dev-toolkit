@@ -295,6 +295,83 @@ else
   echo "OK: HTTP→HTTPS redirect repair helper present"
 fi
 
+if ! grep -q 'frappe_nginx_assets_location_block' "${ROOT_DIR}/lib/access.sh"; then
+  echo "FAIL: missing frappe_nginx_assets_location_block" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: Frappe disk /assets nginx helper present"
+fi
+
+if ! grep -q 'frappe_nginx_assets_location_block' "${ROOT_DIR}/lib/ssl.sh"; then
+  echo "FAIL: ssl.sh must embed frappe_nginx_assets_location_block" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: ssl.sh embeds Frappe disk /assets block"
+fi
+
+if ! grep -q 'clear_bench_assets_json_cache' "${ROOT_DIR}/lib/access.sh"; then
+  echo "FAIL: missing clear_bench_assets_json_cache" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: assets_json cache clear helper present"
+fi
+
+if ! grep -q 'disk_login_asset_bundles_present' "${ROOT_DIR}/lib/access.sh"; then
+  echo "FAIL: missing disk_login_asset_bundles_present" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: disk login bundle helper present"
+fi
+
+if [[ ! -f "${ROOT_DIR}/docs/FRAPPE-FRONTEND-ASSETS.md" ]]; then
+  echo "FAIL: docs/FRAPPE-FRONTEND-ASSETS.md missing" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: Frappe frontend assets doc present"
+fi
+
+if [[ ! -x "${ROOT_DIR}/scripts/frappe-frontend-asset-checklist.sh" ]] && [[ ! -f "${ROOT_DIR}/scripts/frappe-frontend-asset-checklist.sh" ]]; then
+  echo "FAIL: frappe-frontend-asset-checklist.sh missing" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: frappe-frontend-asset-checklist.sh present"
+fi
+
+# disk helper smoke (tmpdir fixtures)
+fs_assets="$(mktemp -d /tmp/erpnext-dev-disk-assets.XXXXXX)"
+mkdir -p "${fs_assets}/sites/assets/frappe/dist/css" \
+  "${fs_assets}/sites/assets/frappe/dist/js" \
+  "${fs_assets}/sites/assets/erpnext/dist/css"
+touch "${fs_assets}/sites/assets/frappe/dist/css/website.bundle.A.css" \
+  "${fs_assets}/sites/assets/frappe/dist/css/login.bundle.B.css" \
+  "${fs_assets}/sites/assets/erpnext/dist/css/erpnext-web.bundle.C.css" \
+  "${fs_assets}/sites/assets/frappe/dist/js/frappe-web.bundle.D.js"
+if disk_login_asset_bundles_present "$fs_assets"; then
+  echo "OK: disk_login_asset_bundles_present accepts full set"
+else
+  echo "FAIL: disk_login_asset_bundles_present should pass with fixtures" >&2
+  fail=$((fail + 1))
+fi
+rm -f "${fs_assets}/sites/assets/frappe/dist/css/login.bundle.B.css"
+if disk_login_asset_bundles_present "$fs_assets"; then
+  echo "FAIL: disk helper should fail without login.bundle" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: disk helper fails when login.bundle missing"
+fi
+rm -rf "$fs_assets"
+
+assets_loc="$(frappe_nginx_assets_location_block /bench/sites)"
+printf '%s\n' "$assets_loc" | grep -q 'alias /bench/sites/assets' || {
+  echo "FAIL: assets location alias path wrong" >&2
+  fail=$((fail + 1))
+}
+printf '%s\n' "$assets_loc" | grep -q 'try_files \$uri =404' || printf '%s\n' "$assets_loc" | grep -q 'try_files $uri =404' || {
+  echo "FAIL: assets location missing try_files" >&2
+  fail=$((fail + 1))
+}
+echo "OK: frappe_nginx_assets_location_block shape"
+
 # nginx writer: redirect mode must 301; proxy mode must use location /
 if ! grep -A30 'SSL_REDIRECT_HTTP" == "true"' "${ROOT_DIR}/lib/ssl.sh" | grep -q 'return 301 https://'; then
   echo "FAIL: local SSL nginx must 301 http→https when redirect enabled" >&2

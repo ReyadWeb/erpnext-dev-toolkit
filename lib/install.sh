@@ -549,17 +549,26 @@ echo "==> Running migrate/build/clear-cache"
 
 bench --site "${SITE_NAME}" migrate
 bench build
-# Build sanity only: website.bundle CSS on disk. Final browser-ready gate runs
-# later against the live /login page (every discovered CSS/JS), not this glob.
-if ! ls sites/assets/frappe/dist/css/website.bundle.*.css >/dev/null 2>&1; then
-  echo "WARN: website CSS missing after first bench build — rebuilding once"
+# Frappe contract: login-critical hashed bundles on disk. Final browser-ready
+# gate still probes live /login CSS/JS; this blocks incomplete/OOM builds early.
+disk_ok() {
+  ls sites/assets/frappe/dist/css/website.bundle.*.css >/dev/null 2>&1 \\
+    && ls sites/assets/frappe/dist/css/login.bundle.*.css >/dev/null 2>&1 \\
+    && ls sites/assets/erpnext/dist/css/erpnext-web.bundle.*.css >/dev/null 2>&1 \\
+    && ls sites/assets/frappe/dist/js/frappe-web.bundle.*.js >/dev/null 2>&1
+}
+if ! disk_ok; then
+  echo "WARN: login-critical assets missing after first bench build — rebuilding once"
   bench build
 fi
-if ! ls sites/assets/frappe/dist/css/website.bundle.*.css >/dev/null 2>&1; then
-  echo "ERROR: website CSS still missing after rebuild. Login will be unstyled."
+if ! disk_ok; then
+  echo "ERROR: login CSS/JS still missing under sites/assets after rebuild."
+  echo "Often OOM during yarn/esbuild (need >=4GB RAM). See docs/FRAPPE-FRONTEND-ASSETS.md"
   exit 1
 fi
 bench --site "${SITE_NAME}" clear-cache
+bench --site "${SITE_NAME}" clear-website-cache || true
+bench --site "${SITE_NAME}" execute frappe.cache_manager.clear_global_cache || true
 EOF_USER
 
   create_start_helper

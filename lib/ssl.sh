@@ -642,6 +642,7 @@ production_ssl_runtime_detail() {
 
 write_production_nginx_config() {
   local mode="$1" domain available_path webroot fullchain key cert_provider ssl_block redirect_block
+  local sites_dir assets_block
   domain="$(production_ssl_domain)" || return 1
   available_path="$(production_nginx_available_path)"
   webroot="$PRODUCTION_SSL_WEBROOT"
@@ -649,6 +650,8 @@ write_production_nginx_config() {
   key="${3:-$(production_letsencrypt_key_path)}"
   cert_provider="${4:-}"
   [[ -n "$cert_provider" ]] || cert_provider="Let's Encrypt"
+  sites_dir="$(bench_sites_dir)"
+  assets_block="$(frappe_nginx_assets_location_block "$sites_dir")"
 
   $SUDO mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled "$webroot/.well-known/acme-challenge"
   $SUDO chown -R root:root "$webroot"
@@ -670,6 +673,8 @@ server {
 
     proxy_read_timeout 120s;
     proxy_send_timeout 120s;
+
+${assets_block}
 
     location /socket.io {
         proxy_pass http://127.0.0.1:9000/socket.io;
@@ -713,7 +718,7 @@ server {
 # Managed by ERPNext Developer Toolkit.
 # Production HTTPS reverse proxy for ${domain}.
 # Certificate provider: ${cert_provider}.
-# ERPNext Bench remains on localhost :8000/:9000 behind Nginx.
+# /assets from ${sites_dir}/assets (Frappe contract); app → :8000/:9000.
 
 server {
     listen 80;
@@ -724,6 +729,8 @@ server {
         default_type "text/plain";
         try_files \$uri =404;
     }
+
+${assets_block}
 
     location /socket.io {
         proxy_pass http://127.0.0.1:9000/socket.io;
@@ -2135,20 +2142,23 @@ create_self_signed_local_cert() {
 }
 
 write_local_ssl_nginx_config() {
-  local available_path cert_path key_path
+  local available_path cert_path key_path sites_dir assets_block
   available_path="$(ssl_nginx_available_path)"
   cert_path="$(ssl_cert_path)"
   key_path="$(ssl_key_path)"
+  sites_dir="$(bench_sites_dir)"
+  assets_block="$(frappe_nginx_assets_location_block "$sites_dir")"
 
   $SUDO mkdir -p "${SSL_NGINX_CONF_DIR}/sites-available" "${SSL_NGINX_CONF_DIR}/sites-enabled"
 
   # Port 80 is what browsers open for http://SITE (no port). Default: redirect
-  # to HTTPS. Proxy mode uses real location blocks (proxy_pass is invalid at
-  # server scope and previously could leave bare http:// broken).
+  # to HTTPS. /assets is served from disk (Frappe bench setup nginx contract);
+  # app routes still proxy to :8000. Direct Bench access remains on :8000.
   if [[ "$SSL_REDIRECT_HTTP" == "true" ]]; then
     $SUDO tee "$available_path" >/dev/null <<EOF_NGINX
 # Managed by ERPNext Developer Toolkit.
 # Local development reverse proxy for ${SITE_NAME}.
+# /assets from ${sites_dir}/assets (Frappe contract); app → :8000.
 # Direct Bench access remains available on :8000.
 
 server {
@@ -2171,6 +2181,8 @@ server {
 
     proxy_read_timeout 120s;
     proxy_send_timeout 120s;
+
+${assets_block}
 
     location /socket.io {
         proxy_pass http://127.0.0.1:9000/socket.io;
@@ -2201,11 +2213,13 @@ EOF_NGINX
     $SUDO tee "$available_path" >/dev/null <<EOF_NGINX
 # Managed by ERPNext Developer Toolkit.
 # Local development reverse proxy for ${SITE_NAME}.
-# Direct Bench access remains available on :8000.
+# /assets from ${sites_dir}/assets (Frappe contract); app → :8000.
 
 server {
     listen 80;
     server_name ${SITE_NAME};
+
+${assets_block}
 
     location /socket.io {
         proxy_pass http://127.0.0.1:9000/socket.io;
@@ -2246,6 +2260,8 @@ server {
 
     proxy_read_timeout 120s;
     proxy_send_timeout 120s;
+
+${assets_block}
 
     location /socket.io {
         proxy_pass http://127.0.0.1:9000/socket.io;

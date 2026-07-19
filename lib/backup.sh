@@ -504,8 +504,18 @@ maintenance_build() {
   require_sudo
   local bench_dir
   bench_dir="$(require_site_environment)" || return 1
+  warn_if_build_memory_low || true
   log "Building assets"
   run_as_frappe "cd '${bench_dir}' && bench build"
+  if ! disk_login_asset_bundles_present "$bench_dir"; then
+    warn "Login-critical bundles missing on disk after bench build — rebuilding once"
+    run_as_frappe "cd '${bench_dir}' && bench build" || true
+  fi
+  if ! disk_login_asset_bundles_present "$bench_dir"; then
+    err "Login CSS/JS still missing under sites/assets after rebuild. See docs/FRAPPE-FRONTEND-ASSETS.md"
+    return 1
+  fi
+  clear_bench_assets_json_cache || true
   ok "Build completed"
 }
 
@@ -514,8 +524,10 @@ maintenance_clear_cache() {
   local bench_dir
   bench_dir="$(require_site_environment)" || return 1
   ensure_bench_services_for_site_commands "clear-cache" || fail "Bench services are required before clearing cache."
-  log "Clearing cache for ${SITE_NAME}"
-  run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache"
+  clear_bench_assets_json_cache || {
+    log "Clearing cache for ${SITE_NAME}"
+    run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache"
+  }
   ok "Cache cleared"
 }
 

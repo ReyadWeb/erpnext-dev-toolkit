@@ -1,6 +1,6 @@
 # Testing guide
 
-**Current release:** v1.19.9 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.10 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
@@ -135,6 +135,25 @@ Expects Go-live on its own status row (not beside HTTPS) at `COLUMNS=100`, plus
 two-column `[1]` / `[10]` options. Submenus (e.g. Local SSL) should show boxed
 `[n]` items like the main menu.
 
+## Frappe-aligned frontend assets
+
+See [`docs/FRAPPE-FRONTEND-ASSETS.md`](docs/FRAPPE-FRONTEND-ASSETS.md) for the
+official vs toolkit matrix, nginx `/assets` contract, and Phase A/C ladder.
+
+Hermetic:
+
+```bash
+scripts/test-static-asset-probe.sh
+```
+
+Field (prefer Frappe local URL first):
+
+```bash
+sudo erpnext-dev frappe-asset-checklist
+sudo erpnext-dev verify-frontend-assets
+# Host browser: http://SITE:8000/login  (then optional https://SITE/login)
+```
+
 ## v1.19.9 bare HTTP port-80 browser path
 
 Hermetic (includes port-80 / redirect helpers):
@@ -146,22 +165,21 @@ scripts/test-static-asset-probe.sh
 Field (Debian/Ubuntu local VM with local HTTPS):
 
 ```bash
+sudo erpnext-dev frappe-asset-checklist
 sudo erpnext-dev verify-frontend-assets
-# Expect: :443 OK, :8000 OK, port 80 OK (301 redirect) or repaired
+# Expect: :8000 OK; :443 OK when SSL on; port 80 OK (301) or repaired
 curl -I --resolve "${SITE_NAME}:80:127.0.0.1" "http://${SITE_NAME}/login"
 # Expect: HTTP 301 … Location: https://…
 ```
 
 Open in the **host** browser (hard refresh):
 
-- Preferred: `https://SITE/login`
-- Fallback: `http://SITE:8000/login`
+- Preferred (Frappe local): `http://SITE:8000/login`
+- Optional HTTPS: `https://SITE/login`
 
-**If it still fails:** use the fallback URLs above →
-`sudo erpnext-dev configure-local-ssl` →
-`sudo erpnext-dev local-host-checkpoint` (fix host `/etc/hosts`) →
-`sudo erpnext-dev repair-frontend-assets` →
-`sudo erpnext-dev support-bundle`.
+**If it still fails:** follow the ladder in `docs/FRAPPE-FRONTEND-ASSETS.md` →
+`configure-local-ssl` → host `/etc/hosts` → `repair-frontend-assets` →
+`support-bundle`.
 
 ## v1.19.8 browser asset consistency (all login CSS/JS)
 

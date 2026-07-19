@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.9 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.19.10 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -157,7 +157,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.9"
+VERSION="v1.19.10"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
@@ -1064,6 +1064,7 @@ whether you deploy natively or with Docker.
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history and release notes |
 | [`SECURITY.md`](SECURITY.md) | Threat model, credential handling, release signing |
 | [`TESTING.md`](TESTING.md) | Validation scenarios and QA commands |
+| [`docs/FRAPPE-FRONTEND-ASSETS.md`](docs/FRAPPE-FRONTEND-ASSETS.md) | Frappe-aligned login CSS/JS: official vs toolkit, diagnosis ladder |
 | [`VALIDATION.md`](VALIDATION.md) | Combined go-live runbook (native + Docker production) for a real VPS + domain |
 | [`ROADMAP.md`](ROADMAP.md) | v1.18–v1.23 plan + historical milestones |
 | [Roadmap board](https://github.com/users/ReyadWeb/projects/3) | Public Todo / In Progress / Done tracking ([docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)) |

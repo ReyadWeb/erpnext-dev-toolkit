@@ -1,3 +1,22 @@
+## v1.19.10 - Frappe-aligned frontend assets
+
+Patch release that re-grounds login CSS/JS on official Frappe/ERPNext contracts
+(see [`docs/FRAPPE-FRONTEND-ASSETS.md`](docs/FRAPPE-FRONTEND-ASSETS.md)): disk
+bundles, Redis `assets_json`, and `http://SITE:8000` as the primary local URL.
+
+### Changed
+
+- **Disk `/assets` in toolkit nginx** (Frappe `bench setup nginx` contract): local
+  SSL and production nginx configs serve hashed bundles from `sites/assets`
+  via `location /assets`, then proxy app routes to `:8000`.
+- **Build completeness:** install + `maintenance_build` require
+  `website`/`login`/`erpnext-web` CSS and `frappe-web` JS on disk; warn on low RAM
+  (OOM incomplete builds).
+- **`assets_json` eviction:** after build/clear-cache, also
+  `clear-website-cache` + `frappe.cache_manager.clear_global_cache`.
+- **`frappe-asset-checklist`:** Frappe-first disk/:8000/OOM diagnosis CLI.
+- **Doctor + ready URLs:** prefer `http://SITE:8000/login` (Frappe local contract).
+
 ## v1.19.9 - Bare HTTP port-80 browser path
 
 Patch release that closes the field failure where `wait-ready` /

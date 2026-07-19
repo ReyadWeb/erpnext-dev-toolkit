@@ -179,9 +179,11 @@ try_rebuild_frontend_assets_once() {
     return 1
   fi
 
-  # Avoid maintenance_clear_cache → ensure_bench_services → wait_for_erpnext_ready.
+  # maintenance_build already clears cache/assets_json; keep a soft second clear
+  # without nesting ensure_bench_services → wait_for_erpnext_ready.
   log "Clearing site cache after asset rebuild"
-  run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || true
+  clear_bench_assets_json_cache || \
+    run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || true
 
   # Soft bounce only — never call restart_* helpers that nest wait_for_erpnext_ready.
   if deployment_engine_is_docker; then
@@ -444,14 +446,12 @@ verify_frontend_assets() {
 
   echo
   echo "Open in the HOST browser (hard refresh: Ctrl+Shift+R):"
+  echo "  Preferred (Frappe local):  http://${SITE_NAME}:8000/login"
   if port_listens 443; then
-    echo "  Preferred:  https://${SITE_NAME}/login"
-    echo "  Fallback:   http://${SITE_NAME}:8000/login"
-    echo "  Avoid:      http://${SITE_NAME} unless it redirects to HTTPS"
-  else
-    echo "  Preferred:  http://${SITE_NAME}:8000/login"
-    echo "  Avoid:      http://${SITE_NAME}  (port 80) and raw IP URLs"
+    echo "  Optional HTTPS:            https://${SITE_NAME}/login"
   fi
+  echo "  Avoid until verified:      http://${SITE_NAME}  (bare port 80)"
+  echo "  Diagnosis:                 $(toolkit_cmd frappe-asset-checklist)"
   echo
   if ((primary_ok == 1)); then
     status_line "Browser readiness" "OK" "all required login CSS/JS"
@@ -499,19 +499,25 @@ repair_frontend_assets() {
   echo
   log "Building assets (bench build)"
   maintenance_build || fail "bench build failed; fix the build error, then retry $(toolkit_cmd repair-frontend-assets)."
-  log "Clearing site cache"
-  maintenance_clear_cache || fail "clear-cache failed after build."
+  # maintenance_build already ran clear_bench_assets_json_cache; refresh once more
+  # via the service-aware helper when the stack is up.
+  log "Clearing site cache / assets_json"
+  maintenance_clear_cache || warn "clear-cache reported an issue; continuing with restart."
   log "Restarting ERPNext service"
   restart_erpnext_service || fail "Service restart failed after asset rebuild."
   if ssl_is_configured 2>/dev/null && port_listens 443; then
-    log "Ensuring bare http://${SITE_NAME} redirects to HTTPS"
+    log "Rewriting local SSL nginx (/assets from disk + HTTP→HTTPS)"
+    write_local_ssl_nginx_config || true
     ensure_local_http_redirects_to_https || true
   fi
   echo
   if bench_static_assets_ready_stable; then
     status_line "Static assets" "OK" "all required login CSS/JS (2 consecutive checks)"
     ok "Frontend assets repaired and verified."
-    echo "Open: https://${SITE_NAME}/login  (or http://${SITE_NAME}:8000/login)"
+    echo "Open (Frappe local contract): http://${SITE_NAME}:8000/login"
+    if port_listens 443; then
+      echo "Optional HTTPS:               https://${SITE_NAME}/login"
+    fi
     ui_next "$(toolkit_cmd verify-frontend-assets)" "$(toolkit_cmd verify-access)" "$(toolkit_cmd doctor)"
     ui_box_end
     return 0

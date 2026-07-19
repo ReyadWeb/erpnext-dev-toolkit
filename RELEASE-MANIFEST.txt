@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit Release Manifest v1.19.9
+# ERPNext Developer Toolkit Release Manifest v1.19.10
 # One repository-relative path per line. Blank lines and # comments are ignored.
 # validate-release.sh verifies every listed path exists before a tag is published.
 
@@ -35,6 +35,8 @@ scripts/test-adversarial-inputs.sh
 .github/workflows/security-analysis.yml
 scripts/build-release-bundle.sh
 scripts/host-firefox-trust-mkcert.sh
+scripts/frappe-frontend-asset-checklist.sh
+docs/FRAPPE-FRONTEND-ASSETS.md
 lib/common.sh
 lib/ui.sh
 lib/config.sh

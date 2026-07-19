@@ -273,6 +273,26 @@ doctor_collect() {
     doctor_add_check "Local SSL" "INFO" "not configured"
   fi
 
+  # Frappe-first frontend assets (disk + RAM). Live HTTP probe: verify-frontend-assets.
+  local mem_mb assets_dir
+  mem_mb="$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 0)"
+  if [[ "$mem_mb" =~ ^[0-9]+$ ]] && ((mem_mb > 0 && mem_mb < ${MIN_INSTALL_RAM_MB:-4096})); then
+    doctor_add_check "Build RAM" "WARN" "${mem_mb} MB (< ${MIN_INSTALL_RAM_MB:-4096}; OOM risks incomplete assets)"
+  elif [[ "$mem_mb" =~ ^[0-9]+$ ]] && ((mem_mb > 0)); then
+    doctor_add_check "Build RAM" "OK" "${mem_mb} MB"
+  else
+    doctor_add_check "Build RAM" "INFO" "could not detect"
+  fi
+  assets_dir="$(bench_sites_dir "$DOCTOR_BENCH_DIR")/assets"
+  if disk_login_asset_bundles_present "$DOCTOR_BENCH_DIR"; then
+    doctor_add_check "Login assets (disk)" "OK" "website/login/erpnext-web + frappe-web present"
+  elif [[ -d "$assets_dir" ]]; then
+    doctor_add_check "Login assets (disk)" "FAIL" "incomplete under ${assets_dir} — run repair-frontend-assets"
+  else
+    doctor_add_check "Login assets (disk)" "WARN" "sites/assets missing — install or bench build"
+  fi
+  doctor_add_check "Preferred local URL" "INFO" "http://${SITE_NAME}:8000/login (see docs/FRAPPE-FRONTEND-ASSETS.md)"
+
   if path_is_executable "${FRAPPE_HOME}/start-erpnext-dev.sh"; then
     doctor_add_check "Start helper" "OK" "${FRAPPE_HOME}/start-erpnext-dev.sh"
   else
