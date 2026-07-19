@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.18.2 (July 2026)  
+**Current release:** v1.18.3 (July 2026)  
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.18.3 — Frontend asset readiness gaps.
+**Next up:** v1.19.0 — Guarded auto-healing MVP.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -29,7 +29,8 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 | CI secret / Scorecard / shfmt gates | Shipped (v1.18.0) |
 | Local VM Stable IP CLI + docs | Shipped (v1.18.1) |
 | Repo governance / Scorecard P0 | Shipped (v1.18.2) |
-| Guarded auto-healing | **Not shipped** (after asset readiness gaps) |
+| Frontend asset verify/wait/repair | Shipped (v1.18.3) |
+| Guarded auto-healing | **Not shipped** (next: v1.19.0) |
 
 ### Maturity (single-admin dedicated VM)
 
@@ -56,7 +57,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.18.2)
+## Shipped foundation (through v1.18.3)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -181,6 +182,8 @@ v1.23.0  Documentation and launch polish
 ---
 
 ### v1.18.3 — Frontend Asset Readiness Gaps
+
+**Status:** Shipped as **v1.18.3**.
 
 **Goal:** Close remaining “unstyled login after ready” holes. **Core gate already shipped** in v1.15.1 / v1.17.6 (`probe_login_static_asset`, `wait_for_erpnext_ready`). Epic [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59).
 

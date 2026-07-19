@@ -51,7 +51,9 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 
 **v1.18.2 shipped:** [#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82) Repository Security & Governance Hardening (**Done**).
 
-**Current focus:** [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59) — v1.18.3 Frontend Asset Readiness Gaps.
+**v1.18.3 shipped:** [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59) Frontend Asset Readiness Gaps (**Done**).
+
+**Current focus:** [#60](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/60) — v1.19.0 Guarded Auto-Healing MVP.
 
 ---
 

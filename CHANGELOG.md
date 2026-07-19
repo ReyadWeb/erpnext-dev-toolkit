@@ -1,4 +1,10 @@
-## Unreleased
+## v1.18.3 - Frontend asset readiness gaps
+
+Patch release that closes remaining “unstyled login after ready” holes with
+explicit verify/wait/repair commands and clearer asset gates on app install,
+restore, and Docker ready paths.
+
+Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59).
 
 ### Added
 
