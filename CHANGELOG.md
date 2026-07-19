@@ -1,4 +1,9 @@
-## Unreleased
+## v1.19.1 - Auto-healing hardening
+
+Patch release that makes guarded healing production-safer with a dedicated
+policy file, per-action switches, an audit trail, and lockout/action alerts.
+
+Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61).
 
 ### Added
 

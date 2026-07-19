@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.0 (July 2026)  
+**Current release:** v1.19.1 (July 2026)  
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.19.1 — Auto-healing hardening.
+**Next up:** v1.20.0 — External watchdog foundation.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -30,7 +30,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 | Local VM Stable IP CLI + docs | Shipped (v1.18.1) |
 | Repo governance / Scorecard P0 | Shipped (v1.18.2) |
 | Frontend asset verify/wait/repair | Shipped (v1.18.3) |
-| Guarded auto-healing | Shipped (v1.19.0 MVP); hardening **in progress** (v1.19.1) |
+| Guarded auto-healing | Shipped (v1.19.0 MVP + v1.19.1 hardening) |
 
 ### Maturity (single-admin dedicated VM)
 
@@ -57,7 +57,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.19.0)
+## Shipped foundation (through v1.19.1)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -225,6 +225,8 @@ v1.23.0  Documentation and launch polish
 ---
 
 ### v1.19.1 — Auto-Healing Hardening
+
+**Status:** Shipped as **v1.19.1**.
 
 **Goal:** Make the first healing implementation production-safe.
 
