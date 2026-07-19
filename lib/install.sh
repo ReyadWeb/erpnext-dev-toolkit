@@ -899,9 +899,12 @@ print_summary() {
   echo "  cd ${bench_dir}"
   echo "  bench start"
   echo
-  echo "Browser access:"
-  echo "  Direct IP:    http://${vm_ip}:8000"
-  echo "  Friendly URL: http://${SITE_NAME}:8000"
+  echo "Browser access (use the friendly hostname after /etc/hosts):"
+  echo "  Login: http://${SITE_NAME}:8000/login"
+  echo "  Desk:  http://${SITE_NAME}:8000/app"
+  echo
+  warn "Raw IP (http://${vm_ip}:8000) often shows an unstyled page — Host header mismatch."
+  echo "  Prefer http://${SITE_NAME}:8000 after the host mapping below."
   echo
   if ! is_public_vm_workflow; then
     echo "Required host mapping checkpoint before local HTTPS:"
@@ -918,8 +921,9 @@ print_summary() {
   echo "Safe to repeat after VM recreation or DHCP IP changes:"
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
-  echo "Verify access after setup:"
+  echo "Verify access after setup (includes static-asset probe):"
   echo "  $(toolkit_cmd verify-access)"
+  echo "  $(toolkit_cmd wait-ready)"
   echo
   echo "Credentials file:"
   echo "  ${FRAPPE_HOME}/erpnext-dev-credentials.txt"
@@ -979,7 +983,16 @@ run_guided_setup() {
   run_install
 
   echo
-  ok "ERPNext installation workflow finished successfully."
+  if declare -F bench_static_assets_ready >/dev/null 2>&1 && \
+     { port_listens 443 || port_listens 8000; } && \
+     ! bench_static_assets_ready; then
+    warn "Install finished, but login CSS/JS are not ready yet."
+    warn "Opening the site now can show an unstyled page — wait, then refresh."
+    echo "  $(toolkit_cmd wait-frontend-assets)"
+    echo "  $(toolkit_cmd repair-frontend-assets)"
+  else
+    ok "ERPNext installation workflow finished successfully."
+  fi
   echo "Verifying access state..."
   verify_access
   post_core_install_checkpoint
@@ -1002,8 +1015,10 @@ local_guided_followups() {
   [[ "$ASSUME_YES" -eq 1 ]] && return 0
 
   ui_box_start "Local setup: guided follow-up steps"
-  echo "ERPNext is installed and reachable over HTTP. These optional steps finish a"
-  echo "local development environment. Each one is opt-in - press Enter to skip."
+  echo "ERPNext is installed. Prefer http://${SITE_NAME}:8000/login (not the raw IP)."
+  echo "If the login page looks unstyled, wait until $(toolkit_cmd wait-ready) reports"
+  echo "static assets OK, then hard-refresh the browser."
+  echo "These optional steps finish a local development environment (each is opt-in)."
   ui_box_end
 
   echo

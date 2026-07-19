@@ -2023,10 +2023,32 @@ run_trusted_mkcert_setup() {
 
   install_local_ssl_cert
   configure_local_ssl
-  verify_local_ssl || true
+
+  # Nginx :443 can listen before CSS/JS are served on the HTTPS origin. Wait for
+  # the same asset gate as wait-ready before telling the operator to open the
+  # browser (avoids the unstyled login that "fixes itself" after a refresh).
+  if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
+    wait_for_erpnext_ready || {
+      warn "HTTPS is configured, but login static assets are not ready yet."
+      echo "Wait, then open https://${SITE_NAME}/login — or run:"
+      echo "  $(toolkit_cmd wait-frontend-assets)"
+      echo "  $(toolkit_cmd repair-frontend-assets)"
+      echo "============================================================"
+      return 1
+    }
+  fi
+
+  if ! verify_local_ssl; then
+    warn "Trusted local HTTPS is configured, but verification reported problems."
+    echo "Do not treat the site as ready until Static assets show OK:"
+    echo "  $(toolkit_cmd verify-local-ssl)"
+    echo "  $(toolkit_cmd wait-frontend-assets)"
+    echo "============================================================"
+    return 1
+  fi
 
   echo
-  ok "Trusted local HTTPS should now be ready."
+  ok "Trusted local HTTPS is ready (HTTP + static assets OK)."
   echo "Open from the HOST browser (only recommended URL):"
   echo "  https://${SITE_NAME}"
   echo "  https://${SITE_NAME}/app"
@@ -2637,10 +2659,14 @@ verify_local_ssl() {
       status_line "Static assets" "OK" "${asset_head} (${asset_path##*/})"
     elif [[ "$probe_rc" -eq 1 ]]; then
       IFS='|' read -r asset_path asset_head <<<"$probe_out"
-      status_line "Static assets" "WARN" "asset did not load: ${asset_head:-no response}"
+      status_line "Static assets" "FAIL" "asset did not load: ${asset_head:-no response}"
       echo "    Assets are not serving. Rebuild and clear cache, then re-verify:"
-      echo "      $(toolkit_cmd clear-cache)"
-      echo "      (or: sudo -iu ${FRAPPE_USER} bash -lc 'cd $(active_bench_dir) && bench build')"
+      echo "      $(toolkit_cmd repair-frontend-assets)"
+      echo "      $(toolkit_cmd wait-frontend-assets)"
+      failed=1
+    elif [[ "$probe_rc" -eq 2 ]]; then
+      status_line "Static assets" "WARN" "login HTML had no Link preload (retry wait-ready)"
+      failed=1
     fi
   fi
 

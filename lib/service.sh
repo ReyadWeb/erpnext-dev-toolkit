@@ -21,13 +21,13 @@ start_erpnext_foreground() {
   echo
   echo "Keep this terminal open while using ERPNext."
   echo
-  echo "Direct browser URL, works immediately while Bench is running:"
+  echo "Preferred URL after HOST /etc/hosts is configured:"
+  echo "  http://${SITE_NAME}:8000/login"
+  echo
+  echo "Troubleshooting only (often unstyled — Host header mismatch):"
   echo "  http://${vm_ip}:8000"
   echo
-  echo "Friendly browser URL, works only after the HOST /etc/hosts entry is configured:"
-  echo "  http://${SITE_NAME}:8000"
-  echo
-  echo "If ${SITE_NAME} does not open, use the direct IP URL first, then run:"
+  echo "If ${SITE_NAME} does not open, confirm /etc/hosts, then run:"
   echo "  $(toolkit_cmd access)"
   echo
 
@@ -92,23 +92,29 @@ bench_readiness_line() {
     "$elapsed" "$timeout" "$web" "$http_state" "$assets_state" "$socket" "$queue" "$cache"
 }
 
-# Login CSS/JS must answer 2xx/3xx. Prefers HTTPS (nginx) when :443 listens so the
-# same path the browser uses is checked; otherwise probes bench :8000 directly.
-# Prevents "ready" while the unstyled HTML shell is still all that loads.
+# Login CSS/JS must answer 2xx/3xx with a non-empty body (probe_login_static_asset).
+# Prefers HTTPS (nginx) when :443 listens so the same path the browser uses is
+# checked; otherwise probes bench :8000 directly.
+# Must honor the probe return code — printing path|status alone is not success
+# (empty Content-Length: 0 bodies used to false-pass wait-ready).
 bench_static_assets_ready() {
-  local probe_out=""
+  local probe_rc=0
 
   if port_listens 443; then
-    probe_out="$(probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" || true)"
+    set +e
+    probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
+    probe_rc=$?
+    set -e
   elif port_listens 8000; then
-    probe_out="$(probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" || true)"
+    set +e
+    probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
+    probe_rc=$?
+    set -e
   else
     return 1
   fi
 
-  [[ -n "$probe_out" ]] || return 1
-  local asset_head="${probe_out#*|}"
-  http_status_ok "$asset_head"
+  [[ "$probe_rc" -eq 0 ]]
 }
 
 # shellcheck disable=SC2120 # timeout/interval are optional overrides with sane defaults

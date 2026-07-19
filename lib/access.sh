@@ -584,6 +584,28 @@ verify_access() {
     status_line "Local HTTPS" "INFO" "not configured yet"
   fi
 
+  # Same gate as wait-ready: HTML can 200 before CSS/JS exist.
+  if declare -F probe_login_static_asset >/dev/null 2>&1; then
+    local probe_out="" probe_rc=0
+    if port_listens 443; then
+      probe_out="$(probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+    elif port_listens 8000; then
+      probe_out="$(probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+    else
+      probe_rc=2
+    fi
+    if [[ "$probe_rc" -eq 0 ]]; then
+      status_line "Static assets" "OK" "${probe_out#*|} (${probe_out%%|*})"
+    elif [[ "$probe_rc" -eq 1 ]]; then
+      status_line "Static assets" "FAIL" "login CSS/JS not ready — page will look unstyled"
+      echo "    Wait or repair, then reload:"
+      echo "      $(toolkit_cmd wait-frontend-assets)"
+      echo "      $(toolkit_cmd repair-frontend-assets)"
+    else
+      status_line "Static assets" "WARN" "could not probe login Link assets yet"
+    fi
+  fi
+
   echo
   if is_public_vm_workflow; then
     echo "Production URL:"
@@ -597,9 +619,7 @@ verify_access() {
     echo "  curl -I --connect-timeout 10 http://${vm_ip}:8000"
     echo "  curl -I --connect-timeout 10 http://${vm_ip}:9000"
   else
-    echo "Open from the HOST after /etc/hosts is set:"
-    echo "  http://${vm_ip}:8000"
-    echo "  http://${SITE_NAME}:8000"
+    print_primary_access_urls
     echo
     echo "HOST /etc/hosts command:"
     print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
@@ -613,9 +633,12 @@ verify_access() {
   if is_public_vm_workflow; then
     echo "  Desk:  https://${PRODUCTION_DOMAIN:-$SITE_NAME}/app"
     echo "  Login: https://${PRODUCTION_DOMAIN:-$SITE_NAME}/login"
+  elif ssl_is_configured 2>/dev/null && port_listens 443; then
+    echo "  Desk:  https://${SITE_NAME}/app"
+    echo "  Login: https://${SITE_NAME}/login"
   else
-    echo "  Desk:  http://${vm_ip}:8000/app"
-    echo "  Login: http://${vm_ip}:8000/login"
+    echo "  Desk:  http://${SITE_NAME}:8000/app"
+    echo "  Login: http://${SITE_NAME}:8000/login"
   fi
 
   if site_app_installed education; then
@@ -854,12 +877,15 @@ show_next_step() {
   echo "  $(toolkit_cmd verify-access)"
   echo "  $(toolkit_cmd storage-status)"
   echo
-  echo "Open when running:"
-  echo "  http://${vm_ip}:8000"
-  echo "  http://${SITE_NAME}:8000"
-  if [[ "$ssl_state" == "configured" ]]; then
-    echo "  https://${SITE_NAME}"
+  echo "Open when running (friendly hostname — avoid raw IP):"
+  if [[ "$ssl_state" == "configured" ]] && port_listens 443; then
+    echo "  https://${SITE_NAME}/login"
+    echo "  https://${SITE_NAME}/app"
+  else
+    echo "  http://${SITE_NAME}:8000/login"
+    echo "  http://${SITE_NAME}:8000/app"
   fi
+  echo "  Troubleshooting only: http://${vm_ip}:8000"
   echo "============================================================"
 }
 show_host_hosts_command() {
