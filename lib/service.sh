@@ -92,23 +92,21 @@ bench_readiness_line() {
     "$elapsed" "$timeout" "$web" "$http_state" "$assets_state" "$socket" "$queue" "$cache"
 }
 
-# Browser-ready gate: login Link headers must advertise CSS *and* JS, and both
-# must answer 2xx/3xx with a non-empty body (probe_login_frontend_assets).
-# Prefers HTTPS (nginx) when :443 listens so the same path the browser uses is
-# checked; otherwise probes bench :8000 directly.
-# Must honor the probe return code — printing path|status alone is not success
-# (empty Content-Length: 0, or JS-only ready while CSS 404, used to false-pass).
+# Browser-ready gate: every local CSS/JS required by /login must GET with
+# size_download > 0 (probe_login_frontend_assets_all). Prefers HTTPS (nginx)
+# when :443 listens; otherwise probes bench :8000. One missing login.bundle /
+# erpnext-web.bundle style 404 must fail even if website.bundle is OK.
 bench_static_assets_ready() {
   local probe_rc=0
 
   if port_listens 443; then
     set +e
-    probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
+    probe_login_frontend_assets_all "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
     probe_rc=$?
     set -e
   elif port_listens 8000; then
     set +e
-    probe_login_frontend_assets "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
+    probe_login_frontend_assets_all "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
     probe_rc=$?
     set -e
   else
@@ -116,6 +114,49 @@ bench_static_assets_ready() {
   fi
 
   [[ "$probe_rc" -eq 0 ]]
+}
+
+# Require ASSET_READY_STABLE_CHECKS consecutive full successes (default 2)
+# separated by ASSET_READY_STABLE_GAP seconds (default 2). Any failure resets.
+bench_static_assets_ready_stable() {
+  local need="${ASSET_READY_STABLE_CHECKS:-2}"
+  local gap="${ASSET_READY_STABLE_GAP:-2}"
+  local i
+
+  [[ "$need" =~ ^[0-9]+$ ]] && ((need >= 1)) || need=2
+  [[ "$gap" =~ ^[0-9]+$ ]] || gap=2
+
+  for ((i = 1; i <= need; i++)); do
+    bench_static_assets_ready || return 1
+    if ((i < need)); then
+      sleep "$gap"
+    fi
+  done
+  return 0
+}
+
+# Capture failing assets (for diagnostics) before a rebuild. Best-effort.
+record_frontend_asset_failures() {
+  local url host port line
+  if port_listens 443; then
+    url="https://${SITE_NAME}/login"
+    host="$SITE_NAME"
+    port=443
+  elif port_listens 8000; then
+    url="http://${SITE_NAME}:8000/login"
+    host="$SITE_NAME"
+    port=8000
+  else
+    return 1
+  fi
+
+  echo "Missing / failed required assets:"
+  while IFS= read -r line; do
+    [[ "$line" == FAIL\|* ]] || continue
+    # FAIL|path|code|bytes|ctype|class
+    printf '  %s\n' "$(printf '%s' "$line" | awk -F'|' '{printf "%s  HTTP %s  (%s)", $2, $3, $6}')"
+  done < <(probe_login_frontend_assets_all "$url" "$host" "$port" "127.0.0.1" 2>/dev/null || true)
+  return 0
 }
 
 # Rebuild missing login CSS/JS once without nesting wait_for_erpnext_ready
@@ -130,6 +171,7 @@ try_rebuild_frontend_assets_once() {
   echo
   warn "Login CSS/JS still missing (often HTTP 404) — rebuilding assets once."
   echo "  This is the automatic fix for incomplete post-install bundle builds."
+  record_frontend_asset_failures || true
   echo
 
   if ! maintenance_build; then
@@ -171,6 +213,12 @@ wait_for_erpnext_ready() {
   echo "This can take up to ${timeout}s after start/restart (READY_TIMEOUT)."
   echo
 
+  local asset_stable_streak=0
+  local need_stable="${ASSET_READY_STABLE_CHECKS:-2}"
+  local gap_stable="${ASSET_READY_STABLE_GAP:-2}"
+  [[ "$need_stable" =~ ^[0-9]+$ ]] && ((need_stable >= 1)) || need_stable=2
+  [[ "$gap_stable" =~ ^[0-9]+$ ]] || gap_stable=2
+
   while (( elapsed <= timeout )); do
     http_state="wait"
     assets_state="wait"
@@ -180,20 +228,31 @@ wait_for_erpnext_ready() {
     # Assets depend on a working login response; skip the extra curls until ping works.
     if [[ "$http_state" == "OK" ]] && bench_static_assets_ready; then
       assets_state="OK"
+      asset_stable_streak=$((asset_stable_streak + 1))
+    else
+      asset_stable_streak=0
     fi
 
     bench_readiness_line "$elapsed" "$timeout" "$http_state" "$assets_state"
 
     # Ports alone are not enough: the login HTML can return before CSS/JS bundles
-    # are served (unstyled page). Require HTTP ping + static-asset probe in both
-    # development and production runtimes.
-    if bench_ports_ready && [[ "$http_state" == "OK" && "$assets_state" == "OK" ]]; then
+    # are served (unstyled page). Require HTTP ping + consecutive full asset
+    # probes so a transitional single pass cannot declare ready.
+    if bench_ports_ready && [[ "$http_state" == "OK" && "$assets_state" == "OK" ]] && \
+       ((asset_stable_streak >= need_stable)); then
       if runtime_is_production; then
         ok "ERPNext is ready. Production runtime is serving (HTTP + static assets)."
       else
         ok "ERPNext is ready. Development ports, HTTP, and static assets are OK."
       fi
       return 0
+    fi
+
+    # Between consecutive successes, wait the stability gap (not only READY_INTERVAL).
+    if [[ "$http_state" == "OK" && "$assets_state" == "OK" ]] && ((asset_stable_streak < need_stable)); then
+      sleep "$gap_stable"
+      elapsed=$((elapsed + gap_stable))
+      continue
     fi
 
     # Do not burn the full READY_TIMEOUT polling 404s — rebuild once, then continue.
@@ -203,6 +262,7 @@ wait_for_erpnext_ready() {
        (( elapsed >= repair_after && auto_repaired == 0 )); then
       auto_repaired=1
       try_rebuild_frontend_assets_once || true
+      asset_stable_streak=0
       # Service just bounced; give ports a moment before the next probe.
       sleep "$interval"
       elapsed=$((elapsed + interval))
@@ -228,30 +288,63 @@ wait_for_erpnext_ready() {
   return 1
 }
 
-# One-shot frontend asset status (login Link CSS + JS). Exit 0 when both OK.
+# Report all-assets probe for one route. Returns 0 when every required asset OK.
+_verify_frontend_assets_route() {
+  local label="$1" url="$2" host="$3" port="$4"
+  local probe_rc=0 line status path code bytes class tmp
+  local css_n=0 js_n=0 fail_n=0
+
+  echo
+  status_line "$label" "INFO" "$url"
+  tmp="$(mktemp /tmp/erpnext-dev-asset-verify.XXXXXX)"
+  set +e
+  probe_login_frontend_assets_all "$url" "$host" "$port" "127.0.0.1" >"$tmp"
+  probe_rc=$?
+  set -e
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    status="${line%%|*}"
+    path="$(printf '%s' "$line" | cut -d'|' -f2)"
+    code="$(printf '%s' "$line" | cut -d'|' -f3)"
+    bytes="$(printf '%s' "$line" | cut -d'|' -f4)"
+    class="$(printf '%s' "$line" | cut -d'|' -f6)"
+    case "$path" in
+      *.css) css_n=$((css_n + 1)) ;;
+      *.js) js_n=$((js_n + 1)) ;;
+    esac
+    if [[ "$status" == "OK" ]]; then
+      status_line "  ${path##*/}" "OK" "HTTP ${code} (${bytes} bytes)"
+    else
+      fail_n=$((fail_n + 1))
+      status_line "  ${path##*/}" "FAIL" "HTTP ${code} (${class})"
+    fi
+  done <"$tmp"
+  rm -f "$tmp"
+
+  status_line "Required CSS" "INFO" "$css_n"
+  status_line "Required JavaScript" "INFO" "$js_n"
+  if ((fail_n == 0 && css_n > 0 && js_n > 0 && probe_rc == 0)); then
+    status_line "Route readiness" "OK" "all required assets"
+    return 0
+  fi
+  status_line "Route readiness" "FAIL" "${fail_n} failed asset(s) (rc=${probe_rc})"
+  return 1
+}
+
+# One-shot frontend asset status (all CSS/JS required by /login). Exit 0 when
+# the primary route (HTTPS if :443, else :8000) passes. Always diagnoses both.
 verify_frontend_assets() {
-  local probe_out="" probe_rc=0
-  local css_path="" css_head="" js_path="" js_head=""
-  local mode="http"
+  local primary_ok=0
+  local primary_url=""
 
   require_site_environment >/dev/null || true
 
-  ui_box_start "Frontend assets"
+  ui_box_start "Frontend Assets"
   status_line "Site" "INFO" "${SITE_NAME}"
 
-  if port_listens 443; then
-    mode="https"
-    set +e
-    probe_out="$(probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")"
-    probe_rc=$?
-    set -e
-  elif port_listens 8000; then
-    set +e
-    probe_out="$(probe_login_frontend_assets "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1")"
-    probe_rc=$?
-    set -e
-  else
-    status_line "Static assets" "FAIL" "neither :443 nor :8000 is listening"
+  if ! port_listens 443 && ! port_listens 8000; then
+    status_line "Browser readiness" "FAIL" "neither :443 nor :8000 is listening"
     echo
     echo "Start the stack, then re-check:"
     echo "  $(toolkit_cmd start)"
@@ -260,31 +353,41 @@ verify_frontend_assets() {
     return 1
   fi
 
-  IFS='|' read -r css_path css_head js_path js_head <<<"$probe_out"
-  status_line "Probe mode" "INFO" "${mode}"
+  if port_listens 443; then
+    primary_url="https://${SITE_NAME}"
+    status_line "Primary URL" "INFO" "$primary_url"
+    if _verify_frontend_assets_route "Nginx :443 frontend" \
+      "https://${SITE_NAME}/login" "$SITE_NAME" 443; then
+      primary_ok=1
+    fi
+  fi
 
-  case "$probe_rc" in
-    0)
-      status_line "CSS asset" "OK" "${css_path} (${css_head})"
-      status_line "JS asset" "OK" "${js_path} (${js_head})"
-      ui_next "$(toolkit_cmd wait-frontend-assets)" "$(toolkit_cmd repair-frontend-assets)" "$(toolkit_cmd verify-access)"
-      ui_box_end
-      return 0
-      ;;
-    2)
-      status_line "Static assets" "FAIL" "login response missing CSS and/or JS Link preload"
-      [[ -n "$css_path" ]] && status_line "CSS asset" "INFO" "$css_path" || status_line "CSS asset" "FAIL" "not advertised"
-      [[ -n "$js_path" ]] && status_line "JS asset" "INFO" "$js_path" || status_line "JS asset" "FAIL" "not advertised"
-      ;;
-    *)
-      status_line "Static assets" "FAIL" "CSS and JS must both be nonempty 2xx/3xx"
-      status_line "CSS asset" "FAIL" "${css_path:-unknown} (${css_head:-no status})"
-      status_line "JS asset" "FAIL" "${js_path:-unknown} (${js_head:-no status})"
-      ;;
-  esac
+  if port_listens 8000; then
+    if [[ -z "$primary_url" ]]; then
+      primary_url="http://${SITE_NAME}:8000"
+      status_line "Primary URL" "INFO" "$primary_url"
+    fi
+    if _verify_frontend_assets_route "Bench :8000 frontend" \
+      "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000; then
+      if ! port_listens 443; then
+        primary_ok=1
+      fi
+    elif ! port_listens 443; then
+      primary_ok=0
+    fi
+  fi
 
   echo
-  echo "Repair path:"
+  if ((primary_ok == 1)); then
+    status_line "Browser readiness" "OK" "all required login CSS/JS"
+    ui_next "$(toolkit_cmd wait-frontend-assets)" "$(toolkit_cmd repair-frontend-assets)" "$(toolkit_cmd verify-access)"
+    ui_box_end
+    return 0
+  fi
+
+  status_line "Browser readiness" "FAIL" "one or more required assets failed"
+  echo
+  echo "Recommended:"
   echo "  $(toolkit_cmd repair-frontend-assets)"
   echo "  $(toolkit_cmd wait-frontend-assets)"
   ui_box_end
@@ -296,13 +399,16 @@ wait_frontend_assets() {
   wait_for_erpnext_ready "$@"
 }
 
-# Rebuild assets, clear cache, restart, and re-verify the login CSS/JS probe.
+# Rebuild assets, clear cache, restart, and re-verify the complete login asset gate.
 repair_frontend_assets() {
   require_sudo
   require_site_environment >/dev/null || fail "Site/bench environment is required before repairing frontend assets."
 
   ui_box_start "Repair frontend assets"
   status_line "Site" "INFO" "${SITE_NAME}"
+  echo
+  echo "Pre-repair failures:"
+  record_frontend_asset_failures || true
   echo
   log "Building assets (bench build)"
   maintenance_build || fail "bench build failed; fix the build error, then retry $(toolkit_cmd repair-frontend-assets)."
@@ -311,15 +417,16 @@ repair_frontend_assets() {
   log "Restarting ERPNext service"
   restart_erpnext_service || fail "Service restart failed after asset rebuild."
   echo
-  if bench_static_assets_ready; then
-    status_line "Static assets" "OK" "login CSS/JS probe passed"
+  if bench_static_assets_ready_stable; then
+    status_line "Static assets" "OK" "all required login CSS/JS (2 consecutive checks)"
     ok "Frontend assets repaired and verified."
     ui_next "$(toolkit_cmd verify-frontend-assets)" "$(toolkit_cmd verify-access)" "$(toolkit_cmd doctor)"
     ui_box_end
     return 0
   fi
-  status_line "Static assets" "FAIL" "probe still failing after rebuild"
+  status_line "Static assets" "FAIL" "complete probe still failing after rebuild"
   err "Assets still failing after build/clear-cache/restart."
+  record_frontend_asset_failures || true
   echo "Check: $(toolkit_cmd logs) · $(toolkit_cmd verify-frontend-assets) · $(toolkit_cmd verify-local-ssl)"
   ui_box_end
   return 1

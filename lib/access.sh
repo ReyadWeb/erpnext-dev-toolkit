@@ -174,35 +174,78 @@ curl_response_headers() {
   curl "${curl_args[@]}" "$url" 2>/dev/null | tr -d '\r' || true
 }
 
-# First /assets/*.css|js path from Link: preload headers (Frappe login).
-# Prefer extract_link_asset_path_css / _js for browser-ready gates.
+# Fetch login document: headers to stdout (for Link:), body to $2 path.
+# Return 0 when curl succeeds; body may still be empty.
+curl_login_document() {
+  local url="${1:-}"
+  local body_file="${2:-}"
+  local host_name="${3:-}"
+  local port="${4:-}"
+  local resolve_ip="${5:-}"
+  local curl_args=()
+
+  [[ -n "$url" && -n "$body_file" ]] || return 1
+
+  curl_args=(-k -sS -L --max-redirs 5 --max-time 15 -D - -o "$body_file")
+  if [[ -n "$host_name" && -n "$port" && -n "$resolve_ip" ]]; then
+    curl_args+=(--resolve "${host_name}:${port}:${resolve_ip}")
+  fi
+  curl "${curl_args[@]}" "$url" 2>/dev/null | tr -d '\r' || true
+}
+
+# Normalize a candidate asset URL/path to a local /assets/...css|js path, or empty.
+normalize_local_asset_path() {
+  local raw="${1:-}"
+  raw="${raw%%[?#]*}"
+  raw="${raw//$'\r'/}"
+  # Absolute same-host forms → path only.
+  if [[ "$raw" =~ ^https?://[^/]+(/assets/.+\.(css|js))$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$raw" =~ ^(/assets/.+\.(css|js))$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  # Protocol-relative or other external → ignore.
+  printf '\n'
+}
+
+# Extract every local /assets/*.css|js from Link: preload header lines (no head -n 1).
+extract_all_link_asset_paths() {
+  printf '%s\n' "${1:-}" \
+    | awk 'tolower($1)=="link:"{print}' \
+    | grep -oE '/assets/[^>,[:space:]]+\.(css|js)' \
+    | sed 's/[?#].*$//' \
+    | awk 'NF && !seen[$0]++' || true
+}
+
+# Extract every local /assets/*.css|js from login HTML (link href + script src).
+extract_all_html_asset_paths() {
+  local html="${1:-}"
+  {
+    printf '%s\n' "$html" | grep -oE '(href|src)="(/assets/[^"]+\.(css|js))"' || true
+    printf '%s\n' "$html" | grep -oE "(href|src)='(/assets/[^']+\.(css|js))'" || true
+  } | sed -E "s/^(href|src)=[\"']//; s/[\"']$//; s/[?#].*$//" \
+    | awk 'NF && !seen[$0]++' || true
+}
+
+# Compatibility: first path only (legacy helpers / older tests). Prefer
+# discover_login_frontend_assets / extract_all_* for browser-ready gates.
 extract_link_asset_path() {
-  printf '%s\n' "${1:-}" \
-    | awk 'tolower($1)=="link:"{print}' \
-    | grep -oE '/assets/[^>,]+\.(css|js)' \
-    | head -n 1 || true
+  extract_all_link_asset_paths "${1:-}" | head -n 1 || true
 }
 
-# First /assets/*.css preload from Link headers.
 extract_link_asset_path_css() {
-  printf '%s\n' "${1:-}" \
-    | awk 'tolower($1)=="link:"{print}' \
-    | grep -oE '/assets/[^>,]+\.css' \
-    | head -n 1 || true
+  extract_all_link_asset_paths "${1:-}" | grep '\.css$' | head -n 1 || true
 }
 
-# First /assets/*.js preload from Link headers.
 extract_link_asset_path_js() {
-  printf '%s\n' "${1:-}" \
-    | awk 'tolower($1)=="link:"{print}' \
-    | grep -oE '/assets/[^>,]+\.js' \
-    | head -n 1 || true
+  extract_all_link_asset_paths "${1:-}" | grep '\.js$' | head -n 1 || true
 }
 
-# True when response headers do not declare an empty body. Missing
-# Content-Length is OK (chunked / omitted); only an explicit Content-Length: 0
-# fails the gate. Uses the *last* Content-Length so redirect hops (often CL:0)
-# do not mask a nonempty final response when curl -L dumps all header blocks.
+# True when response headers do not declare an empty body. Legacy helper kept for
+# tests; browser-ready probes use curl size_download instead.
 asset_headers_nonempty() {
   local headers="${1:-}"
   local cl
@@ -217,15 +260,108 @@ asset_headers_status_line() {
   printf '%s\n' "${1:-}" | awk '/^HTTP\//{line=$0} END{print line}'
 }
 
-# Probe one asset URL (GET). Prints "path|status_line".
-# Return: 0 = OK nonempty, 1 = bad/empty/missing status.
+# Discover all local CSS/JS required by /login (HTML + Link headers, deduped).
+# Prints one /assets/... path per line. Return 0 if at least one CSS and one JS
+# were found; 1 if the document was fetched but incomplete; 2 on fetch failure.
+discover_login_frontend_assets() {
+  local url="${1:-}"
+  local host_name="${2:-}"
+  local port="${3:-}"
+  local resolve_ip="${4:-}"
+  local body_file headers html path normalized
+  local -a paths=()
+  local has_css=0 has_js=0
+
+  [[ -n "$url" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 2
+
+  body_file="$(mktemp /tmp/erpnext-dev-login-body.XXXXXX)"
+  headers="$(curl_login_document "$url" "$body_file" "$host_name" "$port" "$resolve_ip" || true)"
+  if [[ ! -s "$body_file" ]] && [[ -z "$headers" ]]; then
+    rm -f "$body_file"
+    return 2
+  fi
+  html="$(cat "$body_file" 2>/dev/null || true)"
+  rm -f "$body_file"
+
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    normalized="$(normalize_local_asset_path "$path")"
+    [[ -n "$normalized" ]] || continue
+    paths+=("$normalized")
+  done < <(
+    {
+      extract_all_link_asset_paths "$headers"
+      extract_all_html_asset_paths "$html"
+    } | awk 'NF && !seen[$0]++'
+  )
+
+  if ((${#paths[@]} == 0)); then
+    return 2
+  fi
+
+  for path in "${paths[@]}"; do
+    printf '%s\n' "$path"
+    [[ "$path" == *.css ]] && has_css=1
+    [[ "$path" == *.js ]] && has_js=1
+  done
+
+  if ((has_css == 1 && has_js == 1)); then
+    return 0
+  fi
+  return 1
+}
+
+# Map /assets/... URL path to a likely on-disk path under the active bench.
+asset_path_to_filesystem() {
+  local asset_path="${1:-}"
+  local bench_dir="${2:-}"
+  local rel
+
+  [[ -n "$asset_path" && -n "$bench_dir" ]] || return 1
+  # /assets/frappe/dist/... → sites/assets/frappe/dist/...
+  if [[ "$asset_path" == /assets/* ]]; then
+    rel="sites${asset_path}"
+    printf '%s/%s\n' "$bench_dir" "$rel"
+    return 0
+  fi
+  return 1
+}
+
+# Classify a failed asset probe for operator diagnostics.
+classify_asset_failure() {
+  local http_code="${1:-}"
+  local size_download="${2:-0}"
+  local fs_path="${3:-}"
+
+  if [[ "$http_code" == "404" ]]; then
+    if [[ -n "$fs_path" && -f "$fs_path" ]]; then
+      printf 'STATIC_ROUTE_FAILURE\n'
+    elif [[ -n "$fs_path" && ! -e "$fs_path" ]]; then
+      printf 'ASSET_FILE_MISSING\n'
+    else
+      printf 'ASSET_HTTP_404\n'
+    fi
+    return 0
+  fi
+  if [[ "$size_download" =~ ^[0-9]+$ ]] && ((size_download == 0)); then
+    printf 'ASSET_EMPTY\n'
+    return 0
+  fi
+  printf 'ASSET_HTTP_%s\n' "${http_code:-UNKNOWN}"
+}
+
+# Probe one asset URL with a real GET. Prints:
+#   path|http_code|size_download|content_type|class_or_OK
+# Return: 0 = OK (2xx/3xx and size_download > 0), 1 = fail.
 probe_one_static_asset() {
   local asset_path="${1:-}"
   local host_name="${2:-}"
   local port="${3:-}"
   local resolve_ip="${4:-}"
   local scheme="${5:-https}"
-  local asset_url asset_headers asset_head
+  local bench_dir="${6:-}"
+  local asset_url metrics http_code size_download content_type
+  local fs_path="" class="OK" curl_args=()
 
   [[ -n "$asset_path" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 1
 
@@ -235,73 +371,123 @@ probe_one_static_asset() {
     asset_url="http://${host_name}:${port}${asset_path}"
   fi
 
-  asset_headers="$(curl_response_headers "$asset_url" "$host_name" "$port" "$resolve_ip" || true)"
-  asset_head="$(asset_headers_status_line "$asset_headers")"
-  printf '%s|%s\n' "$asset_path" "${asset_head:-}"
-  if http_status_ok "$asset_head" && asset_headers_nonempty "$asset_headers"; then
+  curl_args=(-k -sS -L --max-redirs 5 --max-time 15 -o /dev/null \
+    -w '%{http_code}|%{size_download}|%{content_type}')
+  if [[ -n "$host_name" && -n "$port" && -n "$resolve_ip" ]]; then
+    curl_args+=(--resolve "${host_name}:${port}:${resolve_ip}")
+  fi
+
+  metrics="$(curl "${curl_args[@]}" "$asset_url" 2>/dev/null || true)"
+  IFS='|' read -r http_code size_download content_type <<<"${metrics:-||}"
+  http_code="${http_code:-000}"
+  size_download="${size_download:-0}"
+
+  if [[ -z "$bench_dir" ]] && declare -F active_bench_dir >/dev/null 2>&1; then
+    bench_dir="$(active_bench_dir 2>/dev/null || true)"
+  fi
+  if [[ -n "$bench_dir" ]]; then
+    fs_path="$(asset_path_to_filesystem "$asset_path" "$bench_dir" 2>/dev/null || true)"
+  fi
+
+  if [[ "$http_code" =~ ^[23][0-9][0-9]$ ]] && [[ "$size_download" =~ ^[0-9]+$ ]] && ((size_download > 0)); then
+    printf '%s|%s|%s|%s|OK\n' "$asset_path" "$http_code" "$size_download" "${content_type:-}"
     return 0
   fi
+
+  class="$(classify_asset_failure "$http_code" "$size_download" "$fs_path")"
+  printf '%s|%s|%s|%s|%s\n' "$asset_path" "$http_code" "$size_download" "${content_type:-}" "$class"
   return 1
 }
 
-# Probe that the login page's first preloaded CSS/JS asset returns 2xx/3xx and is
-# not an empty body. Prefer probe_login_frontend_assets for browser-ready gates.
-# Prints "asset_path|status_line" when a Link asset path was found.
-# Return codes: 0 = asset OK, 1 = path found but not OK, 2 = no Link asset path.
+# Compatibility wrapper: first discovered asset only (legacy single-asset probe).
+# Prefer probe_login_frontend_assets_all for browser-ready gates.
+# Prints "asset_path|http_code" ; RC 0/1/2 as before.
 probe_login_static_asset() {
   local url="${1:-}"
   local host_name="${2:-}"
   local port="${3:-}"
   local resolve_ip="${4:-}"
-  local headers asset_path scheme="http"
+  local scheme="http" asset_path out
 
   [[ -n "$url" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 2
 
-  headers="$(curl_response_headers "$url" "$host_name" "$port" "$resolve_ip")"
-  asset_path="$(extract_link_asset_path "$headers")"
+  asset_path="$(discover_login_frontend_assets "$url" "$host_name" "$port" "$resolve_ip" 2>/dev/null | head -n 1 || true)"
   if [[ -z "$asset_path" ]]; then
     return 2
   fi
 
   [[ "$url" == https://* ]] && scheme="https"
-  probe_one_static_asset "$asset_path" "$host_name" "$port" "$resolve_ip" "$scheme"
+  out="$(probe_one_static_asset "$asset_path" "$host_name" "$port" "$resolve_ip" "$scheme")" || true
+  # Legacy print shape: path|HTTP status token
+  printf '%s|HTTP %s\n' "$asset_path" "$(printf '%s' "$out" | cut -d'|' -f2)"
+  printf '%s' "$out" | grep -q '|OK$'
 }
 
-# Browser-ready gate: login Link headers must advertise both CSS and JS, and both
-# must return 2xx/3xx with a non-empty body. Prevents "JS ready, CSS still 404"
-# false readiness that leaves an unstyled login page.
-# Prints: "css_path|css_status|js_path|js_status"
-# Return: 0 = both OK, 1 = advertised but one/both failed, 2 = missing css and/or js Link.
-probe_login_frontend_assets() {
+# Browser-ready gate: every local CSS/JS required by /login must GET successfully
+# with size_download > 0. At least one CSS and one JS must be discovered.
+# Prints one result line per asset: STATUS|path|http_code|bytes|class
+# Return: 0 = all OK, 1 = one or more failed, 2 = discovery incomplete/failed.
+probe_login_frontend_assets_all() {
   local url="${1:-}"
   local host_name="${2:-}"
   local port="${3:-}"
   local resolve_ip="${4:-}"
-  local headers css_path js_path scheme="http"
-  local css_out="" js_out="" css_rc=0 js_rc=0
+  local scheme="http" path out rc=0 disc_rc=0
+  local -a assets=()
+  local fail_count=0 ok_count=0 has_css=0 has_js=0
 
   [[ -n "$url" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 2
 
-  headers="$(curl_response_headers "$url" "$host_name" "$port" "$resolve_ip")"
-  css_path="$(extract_link_asset_path_css "$headers")"
-  js_path="$(extract_link_asset_path_js "$headers")"
-  if [[ -z "$css_path" || -z "$js_path" ]]; then
-    printf '%s|%s|%s|%s\n' "${css_path:-}" "" "${js_path:-}" ""
+  local disc_tmp
+  disc_tmp="$(mktemp /tmp/erpnext-dev-discover.XXXXXX)"
+  set +e
+  discover_login_frontend_assets "$url" "$host_name" "$port" "$resolve_ip" >"$disc_tmp"
+  disc_rc=$?
+  set -e
+  mapfile -t assets <"$disc_tmp"
+  rm -f "$disc_tmp"
+
+  if ((${#assets[@]} == 0)) || ((disc_rc == 2)); then
     return 2
   fi
 
   [[ "$url" == https://* ]] && scheme="https"
 
-  # Capture independently so one failure still reports the other asset.
-  # `||` keeps set -e from aborting mid-probe.
-  css_out="$(probe_one_static_asset "$css_path" "$host_name" "$port" "$resolve_ip" "$scheme")" || css_rc=$?
-  js_out="$(probe_one_static_asset "$js_path" "$host_name" "$port" "$resolve_ip" "$scheme")" || js_rc=$?
+  for path in "${assets[@]}"; do
+    [[ -n "$path" ]] || continue
+    [[ "$path" == *.css ]] && has_css=1
+    [[ "$path" == *.js ]] && has_js=1
+    out=""
+    set +e
+    out="$(probe_one_static_asset "$path" "$host_name" "$port" "$resolve_ip" "$scheme")"
+    rc=$?
+    set -e
+    if [[ "$rc" -eq 0 ]]; then
+      printf 'OK|%s\n' "$out"
+      ok_count=$((ok_count + 1))
+    else
+      printf 'FAIL|%s\n' "${out:-${path}|000|0||UNKNOWN}"
+      fail_count=$((fail_count + 1))
+    fi
+  done
 
-  printf '%s|%s\n' "${css_out:-${css_path}|}" "${js_out:-${js_path}|}"
-  if [[ "$css_rc" -eq 0 && "$js_rc" -eq 0 ]]; then
-    return 0
+  if ((has_css == 0 || has_js == 0)) || ((disc_rc == 1 && fail_count == 0 && ok_count == 0)); then
+    return 2
   fi
-  return 1
+  # Incomplete discovery (css xor js) still fails the browser gate.
+  if ((has_css == 0 || has_js == 0)); then
+    return 2
+  fi
+  if ((fail_count > 0)); then
+    return 1
+  fi
+  return 0
+}
+
+# Alias: historical name now means the complete all-assets gate (not first CSS+JS).
+# Legacy dual-line print is no longer used; callers should use _all or check RC only.
+probe_login_frontend_assets() {
+  probe_login_frontend_assets_all "$@"
 }
 
 escape_hosts_regex() {
@@ -667,26 +853,25 @@ verify_access() {
     status_line "Local HTTPS" "INFO" "not configured yet"
   fi
 
-  # Same gate as wait-ready: HTML can 200 before CSS and JS both exist.
-  if declare -F probe_login_frontend_assets >/dev/null 2>&1; then
-    local probe_out="" probe_rc=0 css_path="" js_path=""
+  # Same gate as wait-ready: every CSS/JS required by /login must be nonempty.
+  if declare -F probe_login_frontend_assets_all >/dev/null 2>&1; then
+    local probe_rc=0
     if port_listens 443; then
-      probe_out="$(probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+      probe_login_frontend_assets_all "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null && probe_rc=0 || probe_rc=$?
     elif port_listens 8000; then
-      probe_out="$(probe_login_frontend_assets "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+      probe_login_frontend_assets_all "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null && probe_rc=0 || probe_rc=$?
     else
       probe_rc=2
     fi
-    IFS='|' read -r css_path _ js_path _ <<<"$probe_out"
     if [[ "$probe_rc" -eq 0 ]]; then
-      status_line "Static assets" "OK" "CSS+JS ready (${css_path##*/}, ${js_path##*/})"
+      status_line "Static assets" "OK" "all required login CSS/JS"
     elif [[ "$probe_rc" -eq 1 ]]; then
-      status_line "Static assets" "FAIL" "login CSS+JS not ready — page will look unstyled"
+      status_line "Static assets" "FAIL" "required login CSS/JS missing — page will look unstyled"
       echo "    Wait or repair, then reload:"
-      echo "      $(toolkit_cmd wait-frontend-assets)"
+      echo "      $(toolkit_cmd verify-frontend-assets)"
       echo "      $(toolkit_cmd repair-frontend-assets)"
     else
-      status_line "Static assets" "WARN" "could not probe login CSS+JS Link assets yet"
+      status_line "Static assets" "WARN" "could not discover login CSS/JS assets yet"
     fi
   fi
 

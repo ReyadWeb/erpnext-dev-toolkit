@@ -33,6 +33,8 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 | v1.18.3 | [#59](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/59) Frontend Asset Readiness Gaps |
 | v1.19.0 | [#60](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/60) Guarded Auto-Healing MVP |
 | v1.19.1 | [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61) Auto-Healing Hardening |
+| v1.19.8 | [#107](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/107) Browser Asset Consistency Closure |
+| v1.19.9 | [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) CLI Page UX Architecture |
 | v1.20.0 | [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) External Watchdog Foundation |
 | v1.21.0 | [#63](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/63) CloudPanel / Agent API Foundation |
 | v1.22.0 | [#64](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/64) Real VPS Validation Matrix |
@@ -57,7 +59,9 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 
 **v1.19.1 shipped:** [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61) Auto-Healing Hardening (**Done**).
 
-**Current focus:** [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) — v1.20.0 External Watchdog Foundation.
+**Current focus:** [#107](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/107) — v1.19.8 Browser Asset Consistency Closure (children [#103](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/103)–[#106](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/106)).  
+**Next:** [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) — v1.19.9 CLI Page UX.  
+**Deferred:** [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) — v1.20.0 until 1.19.8 + 1.19.9 are field-validated.
 
 ---
 
