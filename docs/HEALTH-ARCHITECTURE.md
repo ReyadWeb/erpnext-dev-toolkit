@@ -88,9 +88,9 @@ Level 6  External watchdog / provider recovery (outside guest)
 | `advanced` | Explicit opt-in; adds guarded reboot under policy |
 
 Default remains `monitor`. Operators enable execution with
-`erpnext-dev healing-enable-safe` (writes `HEALTH_HEALING_MODE=safe` into
-`health.env`). `advanced` shares the safe restart ladder in v1.19.0 (no host
-reboot yet).
+`erpnext-dev healing-enable-safe` (writes `HEALING_MODE=safe` into
+`/etc/erpnext-dev/healing.env`). `advanced` shares the safe restart ladder in
+v1.19.x (no host reboot yet).
 
 ### Five safety controls (non-negotiable for v1.19+)
 
@@ -100,10 +100,11 @@ reboot yet).
 4. **Max actions per window** — then `AUTO-HEALING LOCKED` (manual review).
 5. **Recovery verification** — every action records before/after and success/failure.
 
-Root-run policy files (`health.env`) must use a **strict allowlist parser**
-(v1.18.0) — never `source` as shell — before healing is armed. Healing knobs:
-`HEALTH_HEALING_MODE`, `HEALTH_HEALING_MAX_FAILURES`, `HEALTH_HEALING_MAX_ACTIONS`,
-`HEALTH_HEALING_ACTION_WINDOW_SEC`, `HEALTH_HEALING_VERIFY_WAIT_SEC`.
+Root-run policy files must use a **strict allowlist parser** — never `source` as
+shell. Thresholds stay in `health.env`; healing policy lives in
+`/etc/erpnext-dev/healing.env` (`HEALING_MODE`, `HEALING_MAX_*`, per-action
+switches, `HEALING_SIMULATE`, `HEALING_ALERT_ON_LOCKOUT`). Legacy
+`HEALTH_HEALING_*` keys in `health.env` still apply, then `healing.env` overrides.
 
 ---
 
@@ -115,7 +116,8 @@ Root-run policy files (`health.env`) must use a **strict allowlist parser**
 | `/etc/erpnext-dev/health-check.state` | Compat summary for existing readers (dual-written from snapshot) |
 | `/var/lib/erpnext-dev/metrics/` | `current.json`, rolling `history.jsonl` |
 | `/var/lib/erpnext-dev/incidents/` | Incident JSON records + `latest.json` |
-| `/var/lib/erpnext-dev/healing/` | Cooldown, would-heal / last action, lockout state (`state.json`) |
+| `/etc/erpnext-dev/healing.env` | Dedicated healing policy (allowlist parser; never sourced) |
+| `/var/lib/erpnext-dev/healing/` | `state.json` (cooldown / last action / lockout) + `audit.jsonl` |
 
 Core toolkit has **no Prometheus dependency**. `erpnext-dev health-metrics`
 emits OpenMetrics text for optional scrapers.
@@ -137,7 +139,8 @@ On every `dashboard` / `health-check` / `health-snapshot` run:
    when `HEALTH_ALERT_ON` matches (`CRITICAL` default).
 
 CLI: `incidents`, `incident-show`, `health-history`, `health-metrics`,
-`healing-status`, `healing-enable-safe`, `healing-disable`, `healing-unlock`.
+`healing-status`, `healing-policy`, `healing-history`, `healing-enable-safe`,
+`healing-disable`, `healing-unlock`.
 
 ---
 

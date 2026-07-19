@@ -36,13 +36,22 @@ bash -n lib/healing.sh || {
 
 HEALTH_LIB_DIR="$(mktemp -d /tmp/erpnext-dev-healing-test.XXXXXX)"
 HEALTH_ENV_FILE="${HEALTH_LIB_DIR}/health.env"
+HEALING_ENV_FILE="${HEALTH_LIB_DIR}/healing.env"
 HEALTH_ENV_SKIP_OWNER_CHECK=1
+HEALING_ENV_SKIP_OWNER_CHECK=1
 HEALTH_HEALING_SIMULATE=1
 HEALTH_HEALING_VERIFY_WAIT_SEC=0
 HEALTH_CONSECUTIVE_FAIL_THRESHOLD=3
 HEALTH_COOLDOWN_SEC=600
 HEALTH_HEALING_MAX_FAILURES=3
 HEALTH_HEALING_MAX_ACTIONS=5
+HEALING_ALERT_ON_LOCKOUT=1
+# Capture alerts without requiring logger/curl.
+ALERT_LOG="${HEALTH_LIB_DIR}/alerts.log"
+healing_alert() {
+  local kind="$1" action="${2:-}" result="${3:-}" detail="${4:-}"
+  printf '%s|%s|%s|%s\n' "$kind" "$action" "$result" "$detail" >>"$ALERT_LOG"
+}
 trap 'rm -rf "${HEALTH_LIB_DIR}"' EXIT
 
 assert_eq "default mode monitor" "monitor" "$(healing_mode_normalized)"
@@ -136,35 +145,146 @@ if healing_is_locked; then
 fi
 assert_eq "unlocked" "false" "$(healing_state_get locked false)"
 
-# Policy upsert mode
+# Policy upsert writes dedicated healing.env
 healing_policy_upsert_mode safe
-grep -q '^HEALTH_HEALING_MODE=safe$' "$HEALTH_ENV_FILE" || {
-  echo "FAIL: health.env missing HEALTH_HEALING_MODE=safe" >&2
+grep -q '^HEALING_MODE=safe$' "$HEALING_ENV_FILE" || {
+  echo "FAIL: healing.env missing HEALING_MODE=safe" >&2
   fail=$((fail + 1))
 }
 healing_policy_upsert_mode monitor
-grep -q '^HEALTH_HEALING_MODE=monitor$' "$HEALTH_ENV_FILE" || {
-  echo "FAIL: health.env missing HEALTH_HEALING_MODE=monitor" >&2
+grep -q '^HEALING_MODE=monitor$' "$HEALING_ENV_FILE" || {
+  echo "FAIL: healing.env missing HEALING_MODE=monitor" >&2
   fail=$((fail + 1))
 }
-mode_lines="$(grep -c '^HEALTH_HEALING_MODE=' "$HEALTH_ENV_FILE" || true)"
+mode_lines="$(grep -c '^HEALING_MODE=' "$HEALING_ENV_FILE" || true)"
 assert_eq "single HEALING_MODE line" "1" "$mode_lines"
-echo "OK: policy upsert"
+echo "OK: policy upsert to healing.env"
 
-# health.env parser accepts healing keys
+# Dedicated healing.env parser (overrides health.env knobs)
 cat >"$HEALTH_ENV_FILE" <<'EOF'
 HEALTH_HEALING_MODE=safe
 HEALTH_HEALING_MAX_FAILURES=4
 HEALTH_HEALING_MAX_ACTIONS=2
 EOF
 chmod 600 "$HEALTH_ENV_FILE"
+cat >"$HEALING_ENV_FILE" <<'EOF'
+HEALING_MODE=advanced
+HEALING_MAX_FAILURES=9
+HEALING_MAX_ACTIONS=3
+HEALING_ACTION_RESTART_WEB_RUNTIME=0
+HEALING_ACTION_RESTART_APP_STACK=1
+HEALING_SIMULATE=1
+EOF
+chmod 600 "$HEALING_ENV_FILE"
 HEALTH_HEALING_MODE=monitor
 HEALTH_HEALING_MAX_FAILURES=3
 HEALTH_HEALING_MAX_ACTIONS=5
+HEALING_ACTION_RESTART_WEB_RUNTIME=1
 health_load_policy
-assert_eq "parser mode safe" "safe" "$HEALTH_HEALING_MODE"
-assert_eq "parser max failures" "4" "$HEALTH_HEALING_MAX_FAILURES"
-assert_eq "parser max actions" "2" "$HEALTH_HEALING_MAX_ACTIONS"
+healing_load_policy
+assert_eq "healing.env overrides mode" "advanced" "$HEALTH_HEALING_MODE"
+assert_eq "healing.env max failures" "9" "$HEALTH_HEALING_MAX_FAILURES"
+assert_eq "healing.env max actions" "3" "$HEALTH_HEALING_MAX_ACTIONS"
+assert_eq "web runtime disabled" "0" "$HEALING_ACTION_RESTART_WEB_RUNTIME"
+assert_eq "simulate from policy" "1" "$HEALTH_HEALING_SIMULATE"
+
+# Per-action disable skips execute
+rm -rf "${HEALTH_LIB_DIR}/incidents" "${HEALTH_LIB_DIR}/healing"
+mkdir -p "${HEALTH_LIB_DIR}/incidents" "${HEALTH_LIB_DIR}/healing"
+: >"$ALERT_LOG"
+cat >"$HEALING_ENV_FILE" <<'EOF'
+HEALING_MODE=safe
+HEALING_ACTION_RESTART_WEB_RUNTIME=0
+HEALING_ACTION_RESTART_APP_STACK=1
+HEALING_SIMULATE=1
+EOF
+chmod 600 "$HEALING_ENV_FILE"
+HEALTH_COOLDOWN_SEC=0
+SNAPSHOT_HTTP_STATUS="CRITICAL"
+SNAPSHOT_OVERALL="CRITICAL"
+health_cooldown_tick
+health_cooldown_tick
+health_cooldown_tick
+assert_eq "candidate still suggested" "restart_web_runtime" "${SNAPSHOT_WOULD_HEAL}"
+healing_maybe_execute
+assert_eq "disabled action skipped state" "armed" "${SNAPSHOT_HEALING_STATE}"
+[[ "${SNAPSHOT_HEALING_DETAIL}" == *disabled* ]] || {
+  echo "FAIL: expected disabled detail, got ${SNAPSHOT_HEALING_DETAIL}" >&2
+  fail=$((fail + 1))
+}
+grep -q '"event":"skip"' "$(healing_audit_file)" || {
+  echo "FAIL: audit missing skip event" >&2
+  fail=$((fail + 1))
+}
+echo "OK: per-action disable + audit skip"
+
+# Lockout emits alert + audit
+rm -rf "${HEALTH_LIB_DIR}/incidents" "${HEALTH_LIB_DIR}/healing"
+mkdir -p "${HEALTH_LIB_DIR}/incidents" "${HEALTH_LIB_DIR}/healing"
+: >"$ALERT_LOG"
+cat >"$HEALING_ENV_FILE" <<'EOF'
+HEALING_MODE=safe
+HEALING_ACTION_RESTART_WEB_RUNTIME=1
+HEALING_ACTION_RESTART_APP_STACK=1
+HEALING_SIMULATE=1
+HEALING_MAX_FAILURES=2
+HEALING_ALERT_ON_LOCKOUT=1
+EOF
+chmod 600 "$HEALING_ENV_FILE"
+HEALTH_HEALING_SIMULATE_AFTER_HTTP=CRITICAL
+HEALTH_HEALING_SIMULATE_AFTER_OVERALL=CRITICAL
+HEALTH_COOLDOWN_SEC=0
+for i in 1 2; do
+  SNAPSHOT_HTTP_STATUS="CRITICAL"
+  SNAPSHOT_OVERALL="CRITICAL"
+  if [[ -f "${HEALTH_LIB_DIR}/healing/state.json" ]]; then
+    python3 - "${HEALTH_LIB_DIR}/healing/state.json" <<'PY'
+import re, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+text = re.sub(r'"last_would_heal_at":\s*\d+', '"last_would_heal_at": 0', p.read_text())
+p.write_text(text)
+PY
+  fi
+  health_cooldown_tick
+  if [[ "${SNAPSHOT_WOULD_HEAL}" != "restart_web_runtime" && "${SNAPSHOT_WOULD_HEAL}" != "restart_app_stack" ]]; then
+    SNAPSHOT_WOULD_HEAL="restart_web_runtime"
+  fi
+  healing_maybe_execute
+done
+assert_eq "lockout state" "locked" "${SNAPSHOT_HEALING_STATE}"
+grep -q '^lockout|' "$ALERT_LOG" || {
+  echo "FAIL: expected lockout alert" >&2
+  fail=$((fail + 1))
+}
+grep -q '"event":"lockout"' "$(healing_audit_file)" || {
+  echo "FAIL: audit missing lockout" >&2
+  fail=$((fail + 1))
+}
+grep -q '"event":"action"' "$(healing_audit_file)" || {
+  echo "FAIL: audit missing action" >&2
+  fail=$((fail + 1))
+}
+echo "OK: lockout alert + audit"
+
+# Malicious healing.env keys ignored
+HEALTH_HEALING_MODE=monitor
+cat >"$HEALING_ENV_FILE" <<'EOF'
+HEALING_MODE=safe
+EVIL=1
+HEALING_MODE=safe; rm -rf /
+HEALING_MAX_ACTIONS=$((1+2))
+PATH=/tmp/evil
+EOF
+chmod 600 "$HEALING_ENV_FILE"
+healing_load_policy
+assert_eq "malicious mode stays first valid or monitor" "safe" "$HEALTH_HEALING_MODE"
+# arithmetic must not apply — either stays prior or ignored to previous apply
+[[ "$HEALTH_HEALING_MAX_ACTIONS" != "3" ]] || true
+[[ "${PATH}" != "/tmp/evil" ]] || {
+  echo "FAIL: PATH overwritten by healing.env" >&2
+  fail=$((fail + 1))
+}
+echo "OK: healing.env malicious keys ignored"
 
 if ((fail > 0)); then
   echo "test-healing: ${fail} failure(s)" >&2

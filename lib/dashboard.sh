@@ -868,6 +868,9 @@ health_snapshot_collect() {
   local pair overall="HEALTHY" engine_label install_value runtime_value
 
   health_load_policy
+  if declare -F healing_load_policy >/dev/null 2>&1; then
+    healing_load_policy || true
+  fi
   SNAPSHOT_SCHEMA_VERSION="1"
   SNAPSHOT_GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   SNAPSHOT_SITE="${PRODUCTION_DOMAIN:-${SITE_NAME:-unknown}}"
@@ -1328,6 +1331,11 @@ health_snapshot_emit_json() {
   printf '    "state": ' ; json_escape "${SNAPSHOT_HEALING_STATE:-observing}" ; printf ',\n'
   printf '    "detail": ' ; json_escape "${SNAPSHOT_HEALING_DETAIL:-}" ; printf ',\n'
   printf '    "would_heal": ' ; json_escape "${SNAPSHOT_WOULD_HEAL:-none}" ; printf ',\n'
+  printf '    "last_action": ' ; json_escape "${SNAPSHOT_HEALING_LAST_ACTION:-}" ; printf ',\n'
+  printf '    "last_action_result": ' ; json_escape "${SNAPSHOT_HEALING_LAST_RESULT:-}" ; printf ',\n'
+  printf '    "locked": ' ; json_escape "${SNAPSHOT_HEALING_LOCKED:-false}" ; printf ',\n'
+  printf '    "lock_reason": ' ; json_escape "${SNAPSHOT_HEALING_LOCK_REASON:-}" ; printf ',\n'
+  printf '    "policy_file": ' ; json_escape "${HEALING_ENV_FILE:-/etc/erpnext-dev/healing.env}" ; printf ',\n'
   printf '    "http_fail_streak": %s,\n' "${SNAPSHOT_HTTP_FAIL_STREAK:-0}"
   printf '    "overall_fail_streak": %s\n' "${SNAPSHOT_OVERALL_FAIL_STREAK:-0}"
   printf '  },\n'
@@ -1453,11 +1461,16 @@ render_operations_dashboard_screen() {
   ui_section_open "Monitoring & auto-healing"
   dashboard_info_row "Mode" "${SNAPSHOT_HEALING_MODE:-monitor}"
   dashboard_info_row "State" "${SNAPSHOT_HEALING_STATE:-observing}"
+  dashboard_info_row "Locked" "${SNAPSHOT_HEALING_LOCKED:-false}"
+  if [[ "${SNAPSHOT_HEALING_LOCKED:-false}" == "true" || "${SNAPSHOT_HEALING_LOCKED:-false}" == "1" ]]; then
+    dashboard_info_row "Lock reason" "${SNAPSHOT_HEALING_LOCK_REASON:-manual review}"
+  fi
   if [[ "${SNAPSHOT_HEALING_MODE:-monitor}" == "monitor" ]]; then
     dashboard_info_row "Would heal" "${SNAPSHOT_WOULD_HEAL:-none} (dry-run)"
   else
     dashboard_info_row "Action" "${SNAPSHOT_WOULD_HEAL:-none}"
   fi
+  dashboard_info_row "Last action" "${SNAPSHOT_HEALING_LAST_ACTION:-none} (${SNAPSHOT_HEALING_LAST_RESULT:-none})"
   dashboard_info_row "HTTP streak" "${SNAPSHOT_HTTP_FAIL_STREAK:-0} / ${HEALTH_CONSECUTIVE_FAIL_THRESHOLD:-3}"
   dashboard_info_row "Overall streak" "${SNAPSHOT_OVERALL_FAIL_STREAK:-0} / ${HEALTH_CONSECUTIVE_FAIL_THRESHOLD:-3}"
   dashboard_info_row "Note" "${SNAPSHOT_HEALING_DETAIL:-}"
@@ -1466,9 +1479,9 @@ render_operations_dashboard_screen() {
   elif [[ -f "${HEALTH_LIB_DIR:-/var/lib/erpnext-dev}/incidents/latest.json" ]]; then
     dashboard_info_row "Latest incident" "$(basename "$(readlink -f "${HEALTH_LIB_DIR}/incidents/latest.json" 2>/dev/null || echo latest.json)")"
   fi
-  ui_row_plain "History: ${HEALTH_LIB_DIR:-/var/lib/erpnext-dev}/metrics/history.jsonl"
-  ui_row_plain "Incidents: $(toolkit_cmd incidents 2>/dev/null || echo erpnext-dev incidents)"
-  ui_row_plain "Healing: $(toolkit_cmd healing-status 2>/dev/null || echo erpnext-dev healing-status)"
+  ui_row_plain "Policy: ${HEALING_ENV_FILE:-/etc/erpnext-dev/healing.env}"
+  ui_row_plain "Audit: $(toolkit_cmd healing-history 2>/dev/null || echo erpnext-dev healing-history)"
+  ui_row_plain "Healing: $(toolkit_cmd healing-status 2>/dev/null || echo erpnext-dev healing-status) · $(toolkit_cmd healing-policy 2>/dev/null || echo erpnext-dev healing-policy)"
   ui_row_plain "Default is monitor-only; enable with healing-enable-safe."
   ui_section_close
 

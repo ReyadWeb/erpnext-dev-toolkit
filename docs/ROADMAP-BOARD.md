@@ -55,7 +55,7 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 
 **v1.19.0 shipped:** [#60](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/60) Guarded Auto-Healing MVP (**Done**).
 
-**Current focus:** [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61) — v1.19.1 Auto-Healing Hardening.
+**Current focus:** [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61) — v1.19.1 Auto-Healing Hardening (**In Progress**).
 
 ---
 

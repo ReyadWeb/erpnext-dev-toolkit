@@ -30,7 +30,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 | Local VM Stable IP CLI + docs | Shipped (v1.18.1) |
 | Repo governance / Scorecard P0 | Shipped (v1.18.2) |
 | Frontend asset verify/wait/repair | Shipped (v1.18.3) |
-| Guarded auto-healing | Shipped (v1.19.0 MVP) |
+| Guarded auto-healing | Shipped (v1.19.0 MVP); hardening **in progress** (v1.19.1) |
 
 ### Maturity (single-admin dedicated VM)
 
@@ -228,14 +228,14 @@ v1.23.0  Documentation and launch polish
 
 **Goal:** Make the first healing implementation production-safe.
 
-**Scope:** dedicated healing policy file with the **same safe parser pattern** as v1.18.0; per-action enable/disable; healing audit log; richer dashboard healing section; alert on lockout. (`HEALTH_HEALING_SIMULATE` exists for hermetic tests.)
+**Scope:** dedicated healing policy file with the **same safe parser pattern** as v1.18.0; per-action enable/disable; healing audit log; richer dashboard healing section; alert on lockout. (`HEALING_SIMULATE` / `HEALTH_HEALING_SIMULATE` for hermetic/operator dry-runs.)
 
-**Commands (illustrative):** `healing-policy`, `healing-history` (status/enable/disable/unlock shipped in v1.19.0).
+**Commands:** `healing-policy`, `healing-history` (plus status/enable/disable/unlock from v1.19.0).
 
 **Acceptance**
-- [ ] Operator can inspect a dedicated policy file and disable healing instantly.
-- [ ] Dashboard shows last action + lockout state (basic rows ship in v1.19.0).
-- [ ] Alerts include healing action and result.
+- [x] Operator can inspect a dedicated policy file and disable healing instantly.
+- [x] Dashboard shows last action + lockout state.
+- [x] Alerts include healing action and result.
 
 ---
 

@@ -1,3 +1,14 @@
+## Unreleased
+
+### Added
+
+- **Auto-healing hardening** ([#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61)):
+  dedicated `/etc/erpnext-dev/healing.env` (strict allowlist parser), per-action
+  enable/disable (`HEALING_ACTION_RESTART_WEB_RUNTIME` /
+  `HEALING_ACTION_RESTART_APP_STACK`), healing audit log
+  (`healing/audit.jsonl`), richer dashboard/JSON healing fields, alerts on
+  action result and lockout. CLI: `healing-policy`, `healing-history`.
+
 ## v1.19.0 - Guarded auto-healing MVP
 
 Minor release that turns the monitor-only healing dry-run into an explicitly
