@@ -26,6 +26,7 @@ export LOCAL_IP_BACKUP_DIR="${tmpdir}/backups"
 export LOCAL_IP_DETECT_IP="192.168.122.50"
 export LOCAL_IP_DETECT_IFACE="eth0"
 export LOCAL_IP_DETECT_GATEWAY="192.168.122.1"
+export LOCAL_IP_FORCE_BACKEND="netplan"
 export SITE_NAME="erp.test"
 export SUDO=""
 export APP_NAME="ERPNext Developer Toolkit"
@@ -44,6 +45,7 @@ fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
+err() { echo "ERROR: $*" >&2; }
 status_line() { printf '%s|%s|%s\n' "$1" "$2" "$3"; }
 warn() { echo "WARN: $*" >&2; }
 toolkit_cmd() { printf 'erpnext-dev %s' "$1"; }
@@ -122,6 +124,62 @@ echo "OK: rollback restored backup contents"
 show_local_ip_status >/dev/null
 show_local_ip_plan >/dev/null
 echo "OK: status/plan render"
+
+# Debian-style ifupdown backend (no netplan binary in PATH for this subshell)
+tmpdir2="$(mktemp -d /tmp/erpnext-dev-local-ip-ifup.XXXXXX)"
+export LOCAL_IP_STATE_FILE="${tmpdir2}/local-ip.state"
+export LOCAL_IP_NETPLAN_DIR="${tmpdir2}/netplan"
+export LOCAL_IP_BACKUP_DIR="${tmpdir2}/backups"
+export LOCAL_IP_INTERFACES_FILE="${tmpdir2}/interfaces"
+export LOCAL_IP_IFUPDOWN_DIR="${tmpdir2}/interfaces.d"
+export LOCAL_IP_FORCE_BACKEND="ifupdown"
+mkdir -p "${LOCAL_IP_NETPLAN_DIR}" "${LOCAL_IP_IFUPDOWN_DIR}"
+cat >"${LOCAL_IP_INTERFACES_FILE}" <<'EOF'
+source-directory /etc/network/interfaces.d
+allow-hotplug eth0
+iface eth0 inet dhcp
+EOF
+# Orphan Netplan drop-in from a prior failed Ubuntu-only attempt
+mkdir -p "${LOCAL_IP_NETPLAN_DIR}"
+cat >"${LOCAL_IP_NETPLAN_DIR}/99-erpnext-dev-static.yaml" <<'EOF'
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: false
+EOF
+assert_eq "backend ifupdown" "ifupdown" "$(local_ip_backend)"
+assert_eq "detect dhcp ifupdown" "dhcp" "$(local_ip_detect_method)"
+run_local_static_ip_wizard >/dev/null
+[[ -f "$(local_ip_ifupdown_path)" ]] || {
+  echo "FAIL: ifupdown drop-in not written" >&2
+  fail=$((fail + 1))
+}
+grep -q 'inet static' "$(local_ip_ifupdown_path)" || {
+  echo "FAIL: ifupdown drop-in missing inet static" >&2
+  fail=$((fail + 1))
+}
+grep -q 'erpnext-dev:.*iface eth0 inet dhcp' "${LOCAL_IP_INTERFACES_FILE}" || {
+  echo "FAIL: dhcp stanza was not commented out" >&2
+  fail=$((fail + 1))
+}
+[[ ! -f "$(local_ip_netplan_path)" ]] || {
+  echo "FAIL: orphan netplan drop-in should be removed on ifupdown path" >&2
+  fail=$((fail + 1))
+}
+assert_eq "method after ifupdown wizard" "static" "$(local_ip_detect_method)"
+echo "OK: ifupdown wizard wrote static drop-in and neutralized dhcp"
+
+# Missing backend must return (not exit) so guided install can continue
+export LOCAL_IP_FORCE_BACKEND="none"
+set +e
+run_local_static_ip_wizard >/dev/null 2>&1
+none_rc=$?
+set -e
+assert_eq "none backend returns 1" "1" "$none_rc"
+echo "OK: unsupported backend returns without exiting"
+
+rm -rf "${tmpdir2}"
 
 if ((fail > 0)); then
   echo "test-local-ip: ${fail} failure(s)" >&2
