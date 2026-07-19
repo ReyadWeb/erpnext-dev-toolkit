@@ -2648,24 +2648,23 @@ verify_local_ssl() {
   fi
 
   # Active asset probe (shared with wait_for_erpnext_ready): login HTML can return
-  # 200 while CSS/JS bundles do not. A 2xx here means assets ARE served (so a
-  # broken-looking page is usually browser cache -> hard refresh); anything else
-  # is a genuine asset problem with a concrete remediation.
+  # 200 while CSS and/or JS bundles do not. Both must be nonempty 2xx/3xx here
+  # (so a broken-looking page after OK is usually browser cache -> hard refresh);
+  # anything else is a genuine asset problem with a concrete remediation.
   if http_status_ok "$https_head"; then
-    local probe_out asset_path asset_head probe_rc=0
-    probe_out="$(probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+    local probe_out css_path css_head js_path js_head probe_rc=0
+    probe_out="$(probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+    IFS='|' read -r css_path css_head js_path js_head <<<"$probe_out"
     if [[ "$probe_rc" -eq 0 ]]; then
-      IFS='|' read -r asset_path asset_head <<<"$probe_out"
-      status_line "Static assets" "OK" "${asset_head} (${asset_path##*/})"
+      status_line "Static assets" "OK" "CSS+JS (${css_path##*/}, ${js_path##*/})"
     elif [[ "$probe_rc" -eq 1 ]]; then
-      IFS='|' read -r asset_path asset_head <<<"$probe_out"
-      status_line "Static assets" "FAIL" "asset did not load: ${asset_head:-no response}"
+      status_line "Static assets" "FAIL" "CSS/JS not ready (css=${css_head:-none}; js=${js_head:-none})"
       echo "    Assets are not serving. Rebuild and clear cache, then re-verify:"
       echo "      $(toolkit_cmd repair-frontend-assets)"
       echo "      $(toolkit_cmd wait-frontend-assets)"
       failed=1
     elif [[ "$probe_rc" -eq 2 ]]; then
-      status_line "Static assets" "WARN" "login HTML had no Link preload (retry wait-ready)"
+      status_line "Static assets" "WARN" "login HTML missing CSS and/or JS Link preload (retry wait-ready)"
       failed=1
     fi
   fi

@@ -135,6 +135,18 @@ Expects Go-live on its own status row (not beside HTTPS) at `COLUMNS=100`, plus
 two-column `[1]` / `[10]` options. Submenus (e.g. Local SSL) should show boxed
 `[n]` items like the main menu.
 
+## v1.19.3 dual CSS+JS browser-ready gate
+
+Hermetic (no sudo / no install):
+
+```bash
+scripts/test-static-asset-probe.sh
+```
+
+Expects `probe_login_frontend_assets` / `bench_static_assets_ready` to reject
+JS-OK/CSS-404, empty CSS body, and CSS-only Link headers; both nonempty CSS+JS
+must pass. Drift guard requires `lib/service.sh` to call the dual probe.
+
 ## v1.17.6 wait-ready static-asset gate + two-column menu
 
 Hermetic (no sudo / no install):

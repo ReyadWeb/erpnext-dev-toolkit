@@ -92,22 +92,23 @@ bench_readiness_line() {
     "$elapsed" "$timeout" "$web" "$http_state" "$assets_state" "$socket" "$queue" "$cache"
 }
 
-# Login CSS/JS must answer 2xx/3xx with a non-empty body (probe_login_static_asset).
+# Browser-ready gate: login Link headers must advertise CSS *and* JS, and both
+# must answer 2xx/3xx with a non-empty body (probe_login_frontend_assets).
 # Prefers HTTPS (nginx) when :443 listens so the same path the browser uses is
 # checked; otherwise probes bench :8000 directly.
 # Must honor the probe return code — printing path|status alone is not success
-# (empty Content-Length: 0 bodies used to false-pass wait-ready).
+# (empty Content-Length: 0, or JS-only ready while CSS 404, used to false-pass).
 bench_static_assets_ready() {
   local probe_rc=0
 
   if port_listens 443; then
     set +e
-    probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
+    probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
     probe_rc=$?
     set -e
   elif port_listens 8000; then
     set +e
-    probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
+    probe_login_frontend_assets "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
     probe_rc=$?
     set -e
   else
@@ -174,9 +175,10 @@ wait_for_erpnext_ready() {
   return 1
 }
 
-# One-shot frontend asset status (login Link CSS/JS). Exit 0 when OK.
+# One-shot frontend asset status (login Link CSS + JS). Exit 0 when both OK.
 verify_frontend_assets() {
-  local probe_out="" probe_rc=0 asset_path="" asset_head=""
+  local probe_out="" probe_rc=0
+  local css_path="" css_head="" js_path="" js_head=""
   local mode="http"
 
   require_site_environment >/dev/null || true
@@ -187,12 +189,12 @@ verify_frontend_assets() {
   if port_listens 443; then
     mode="https"
     set +e
-    probe_out="$(probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")"
+    probe_out="$(probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")"
     probe_rc=$?
     set -e
   elif port_listens 8000; then
     set +e
-    probe_out="$(probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1")"
+    probe_out="$(probe_login_frontend_assets "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1")"
     probe_rc=$?
     set -e
   else
@@ -205,22 +207,26 @@ verify_frontend_assets() {
     return 1
   fi
 
-  asset_path="${probe_out%%|*}"
-  asset_head="${probe_out#*|}"
+  IFS='|' read -r css_path css_head js_path js_head <<<"$probe_out"
   status_line "Probe mode" "INFO" "${mode}"
 
   case "$probe_rc" in
     0)
-      status_line "Static assets" "OK" "${asset_path} (${asset_head})"
+      status_line "CSS asset" "OK" "${css_path} (${css_head})"
+      status_line "JS asset" "OK" "${js_path} (${js_head})"
       ui_next "$(toolkit_cmd wait-frontend-assets)" "$(toolkit_cmd repair-frontend-assets)" "$(toolkit_cmd verify-access)"
       ui_box_end
       return 0
       ;;
     2)
-      status_line "Static assets" "FAIL" "login response has no Link preload for CSS/JS"
+      status_line "Static assets" "FAIL" "login response missing CSS and/or JS Link preload"
+      [[ -n "$css_path" ]] && status_line "CSS asset" "INFO" "$css_path" || status_line "CSS asset" "FAIL" "not advertised"
+      [[ -n "$js_path" ]] && status_line "JS asset" "INFO" "$js_path" || status_line "JS asset" "FAIL" "not advertised"
       ;;
     *)
-      status_line "Static assets" "FAIL" "${asset_path:-unknown} (${asset_head:-no status})"
+      status_line "Static assets" "FAIL" "CSS and JS must both be nonempty 2xx/3xx"
+      status_line "CSS asset" "FAIL" "${css_path:-unknown} (${css_head:-no status})"
+      status_line "JS asset" "FAIL" "${js_path:-unknown} (${js_head:-no status})"
       ;;
   esac
 
