@@ -169,10 +169,27 @@ curl_response_headers() {
 }
 
 # First /assets/*.css|js path from Link: preload headers (Frappe login).
+# Prefer extract_link_asset_path_css / _js for browser-ready gates.
 extract_link_asset_path() {
   printf '%s\n' "${1:-}" \
     | awk 'tolower($1)=="link:"{print}' \
     | grep -oE '/assets/[^>,]+\.(css|js)' \
+    | head -n 1 || true
+}
+
+# First /assets/*.css preload from Link headers.
+extract_link_asset_path_css() {
+  printf '%s\n' "${1:-}" \
+    | awk 'tolower($1)=="link:"{print}' \
+    | grep -oE '/assets/[^>,]+\.css' \
+    | head -n 1 || true
+}
+
+# First /assets/*.js preload from Link headers.
+extract_link_asset_path_js() {
+  printf '%s\n' "${1:-}" \
+    | awk 'tolower($1)=="link:"{print}' \
+    | grep -oE '/assets/[^>,]+\.js' \
     | head -n 1 || true
 }
 
@@ -187,26 +204,19 @@ asset_headers_nonempty() {
   ((cl > 0))
 }
 
-# Probe that the login page's preloaded CSS/JS asset returns 2xx/3xx and is not
-# an empty body (Content-Length: 0). Prints "asset_path|status_line" when a Link
-# asset path was found.
-# Return codes: 0 = asset OK, 1 = path found but not OK, 2 = no Link asset path.
-probe_login_static_asset() {
-  local url="${1:-}"
+# Probe one asset URL (HEAD). Prints "path|status_line".
+# Return: 0 = OK nonempty, 1 = bad/empty/missing status.
+probe_one_static_asset() {
+  local asset_path="${1:-}"
   local host_name="${2:-}"
   local port="${3:-}"
   local resolve_ip="${4:-}"
-  local headers asset_path asset_url asset_headers asset_head
+  local scheme="${5:-https}"
+  local asset_url asset_headers asset_head
 
-  [[ -n "$url" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 2
+  [[ -n "$asset_path" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 1
 
-  headers="$(curl_response_headers "$url" "$host_name" "$port" "$resolve_ip")"
-  asset_path="$(extract_link_asset_path "$headers")"
-  if [[ -z "$asset_path" ]]; then
-    return 2
-  fi
-
-  if [[ "$url" == https://* ]]; then
+  if [[ "$scheme" == "https" ]]; then
     asset_url="https://${host_name}${asset_path}"
   else
     asset_url="http://${host_name}:${port}${asset_path}"
@@ -216,6 +226,66 @@ probe_login_static_asset() {
   asset_head="$(printf '%s\n' "$asset_headers" | awk 'NR==1 {print; exit}')"
   printf '%s|%s\n' "$asset_path" "${asset_head:-}"
   if http_status_ok "$asset_head" && asset_headers_nonempty "$asset_headers"; then
+    return 0
+  fi
+  return 1
+}
+
+# Probe that the login page's first preloaded CSS/JS asset returns 2xx/3xx and is
+# not an empty body. Prefer probe_login_frontend_assets for browser-ready gates.
+# Prints "asset_path|status_line" when a Link asset path was found.
+# Return codes: 0 = asset OK, 1 = path found but not OK, 2 = no Link asset path.
+probe_login_static_asset() {
+  local url="${1:-}"
+  local host_name="${2:-}"
+  local port="${3:-}"
+  local resolve_ip="${4:-}"
+  local headers asset_path scheme="http"
+
+  [[ -n "$url" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 2
+
+  headers="$(curl_response_headers "$url" "$host_name" "$port" "$resolve_ip")"
+  asset_path="$(extract_link_asset_path "$headers")"
+  if [[ -z "$asset_path" ]]; then
+    return 2
+  fi
+
+  [[ "$url" == https://* ]] && scheme="https"
+  probe_one_static_asset "$asset_path" "$host_name" "$port" "$resolve_ip" "$scheme"
+}
+
+# Browser-ready gate: login Link headers must advertise both CSS and JS, and both
+# must return 2xx/3xx with a non-empty body. Prevents "JS ready, CSS still 404"
+# false readiness that leaves an unstyled login page.
+# Prints: "css_path|css_status|js_path|js_status"
+# Return: 0 = both OK, 1 = advertised but one/both failed, 2 = missing css and/or js Link.
+probe_login_frontend_assets() {
+  local url="${1:-}"
+  local host_name="${2:-}"
+  local port="${3:-}"
+  local resolve_ip="${4:-}"
+  local headers css_path js_path scheme="http"
+  local css_out="" js_out="" css_rc=0 js_rc=0
+
+  [[ -n "$url" && -n "$host_name" && -n "$port" && -n "$resolve_ip" ]] || return 2
+
+  headers="$(curl_response_headers "$url" "$host_name" "$port" "$resolve_ip")"
+  css_path="$(extract_link_asset_path_css "$headers")"
+  js_path="$(extract_link_asset_path_js "$headers")"
+  if [[ -z "$css_path" || -z "$js_path" ]]; then
+    printf '%s|%s|%s|%s\n' "${css_path:-}" "" "${js_path:-}" ""
+    return 2
+  fi
+
+  [[ "$url" == https://* ]] && scheme="https"
+
+  # Capture independently so one failure still reports the other asset.
+  # `||` keeps set -e from aborting mid-probe.
+  css_out="$(probe_one_static_asset "$css_path" "$host_name" "$port" "$resolve_ip" "$scheme")" || css_rc=$?
+  js_out="$(probe_one_static_asset "$js_path" "$host_name" "$port" "$resolve_ip" "$scheme")" || js_rc=$?
+
+  printf '%s|%s\n' "${css_out:-${css_path}|}" "${js_out:-${js_path}|}"
+  if [[ "$css_rc" -eq 0 && "$js_rc" -eq 0 ]]; then
     return 0
   fi
   return 1
@@ -584,25 +654,26 @@ verify_access() {
     status_line "Local HTTPS" "INFO" "not configured yet"
   fi
 
-  # Same gate as wait-ready: HTML can 200 before CSS/JS exist.
-  if declare -F probe_login_static_asset >/dev/null 2>&1; then
-    local probe_out="" probe_rc=0
+  # Same gate as wait-ready: HTML can 200 before CSS and JS both exist.
+  if declare -F probe_login_frontend_assets >/dev/null 2>&1; then
+    local probe_out="" probe_rc=0 css_path="" js_path=""
     if port_listens 443; then
-      probe_out="$(probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+      probe_out="$(probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
     elif port_listens 8000; then
-      probe_out="$(probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
+      probe_out="$(probe_login_frontend_assets "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
     else
       probe_rc=2
     fi
+    IFS='|' read -r css_path _ js_path _ <<<"$probe_out"
     if [[ "$probe_rc" -eq 0 ]]; then
-      status_line "Static assets" "OK" "${probe_out#*|} (${probe_out%%|*})"
+      status_line "Static assets" "OK" "CSS+JS ready (${css_path##*/}, ${js_path##*/})"
     elif [[ "$probe_rc" -eq 1 ]]; then
-      status_line "Static assets" "FAIL" "login CSS/JS not ready — page will look unstyled"
+      status_line "Static assets" "FAIL" "login CSS+JS not ready — page will look unstyled"
       echo "    Wait or repair, then reload:"
       echo "      $(toolkit_cmd wait-frontend-assets)"
       echo "      $(toolkit_cmd repair-frontend-assets)"
     else
-      status_line "Static assets" "WARN" "could not probe login Link assets yet"
+      status_line "Static assets" "WARN" "could not probe login CSS+JS Link assets yet"
     fi
   fi
 

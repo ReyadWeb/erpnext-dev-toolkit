@@ -782,7 +782,7 @@ docker_ready() {
   while :; do
     if curl -fsS -o /dev/null --max-time 5 -H "Host: ${site}" "$url" 2>/dev/null; then
       set +e
-      probe_login_static_asset \
+      probe_login_frontend_assets \
         "http://${site}:${DOCKER_PUBLISH_PORT}/login" \
         "$site" \
         "${DOCKER_PUBLISH_PORT}" \
@@ -790,7 +790,7 @@ docker_ready() {
       probe_rc=$?
       set -e
       if [[ "$probe_rc" -eq 0 ]]; then
-        ok "ERPNext is responding on port ${DOCKER_PUBLISH_PORT} (HTTP + static assets)."
+        ok "ERPNext is responding on port ${DOCKER_PUBLISH_PORT} (HTTP + CSS/JS assets)."
         return 0
       fi
     fi
@@ -2561,7 +2561,7 @@ docker_verify_access() {
   esac
 
   set +e
-  probe_login_static_asset \
+  probe_login_frontend_assets \
     "http://${site}:${DOCKER_PUBLISH_PORT}/login" \
     "$site" \
     "${DOCKER_PUBLISH_PORT}" \
@@ -2569,9 +2569,9 @@ docker_verify_access() {
   probe_rc=$?
   set -e
   case "$probe_rc" in
-    0) status_line "Static assets" "OK" "login CSS/JS probe passed" ;;
-    2) status_line "Static assets" "WARN" "no Link preload on login — try $(toolkit_cmd repair-frontend-assets)" ;;
-    *) status_line "Static assets" "WARN" "login CSS/JS not ready — try $(toolkit_cmd repair-frontend-assets)" ;;
+    0) status_line "Static assets" "OK" "login CSS+JS probe passed" ;;
+    2) status_line "Static assets" "WARN" "login missing CSS and/or JS Link preload — try $(toolkit_cmd repair-frontend-assets)" ;;
+    *) status_line "Static assets" "WARN" "login CSS+JS not ready — try $(toolkit_cmd repair-frontend-assets)" ;;
   esac
 
   docker_print_access

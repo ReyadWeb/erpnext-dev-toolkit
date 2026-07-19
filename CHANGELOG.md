@@ -1,3 +1,13 @@
+## Unreleased
+
+### Fixed
+
+- **Dual CSS+JS browser-ready gate:** readiness/`verify-*` now require both a CSS
+  and a JS login Link preload with nonempty 2xx/3xx bodies
+  (`probe_login_frontend_assets`). Prevents “JS ready, CSS still 404” false
+  readiness that left an unstyled login page. Hermetic coverage in
+  `scripts/test-static-asset-probe.sh`.
+
 ## v1.19.2 - Unstyled login after fresh install
 
 Patch release that closes the remaining post-install race where login HTML
