@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.5 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.19.6 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -157,7 +157,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.5"
+VERSION="v1.19.6"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
@@ -338,12 +338,15 @@ Install with the local quickstart (press **Enter** to accept the default site
 sudo ./erpnext-dev.sh local-dev-quickstart
 ```
 
-Run interactively, `local-dev-quickstart` guides you end to end: it installs
-ERPNext, then walks through the optional follow-ups — **trusted local HTTPS**,
-the **local security profile / firewall**, and the **optional app installer** —
-before opening the main menu. Each optional step is opt-in (press Enter to skip)
-and can be run later from the commands below. (The non-interactive
-`sudo ./erpnext-dev.sh -y install` only installs; use it for automation.)
+Run interactively, `local-dev-quickstart` guides you end to end: it offers a
+**stable guest IP** (static Netplan or hypervisor reservation) before install,
+installs ERPNext, then walks through the optional follow-ups — **stable IP**
+(again if still on DHCP), **trusted local HTTPS**, a **service-restart
+confirmation** to settle the stack, the **local security profile / firewall**,
+and the **optional app installer** — before opening the main menu. Each optional
+step is opt-in (press Enter to skip) and can be run later from the commands
+below. (The non-interactive `sudo ./erpnext-dev.sh -y install` only installs;
+use it for automation.)
 
 After install, map the local domain and enable HTTPS:
 
@@ -351,6 +354,7 @@ After install, map the local domain and enable HTTPS:
 sudo erpnext-dev local-host-checkpoint   # prints the /etc/hosts command for the HOST
 sudo erpnext-dev local-domain-status
 sudo erpnext-dev local-ssl-wizard        # option 2 = trusted mkcert (stay in wizard after scp)
+sudo erpnext-dev restart                 # settle ERPNext (+ nginx) after install/HTTPS
 sudo erpnext-dev local-access-doctor
 ```
 
@@ -404,8 +408,10 @@ cert, and `scp`s into the VM `/tmp/`), (4) stay in the wizard and press Enter af
 scp — it installs Nginx HTTPS and you open **`https://erp.test`**. Self-signed
 (wizard option 1) stays entirely in the VM but browsers will warn.
 
-For a stable IP after reboot, use `sudo erpnext-dev local-ip-menu` (status, drift,
-Netplan static wizard + rollback) and see [`docs/LOCAL-VM-STABLE-IP.md`](docs/LOCAL-VM-STABLE-IP.md).
+For a stable IP after reboot, `local-dev-quickstart` prompts for
+`local-static-ip-wizard` (or use `sudo erpnext-dev local-ip-menu` for status,
+drift, Netplan static wizard + rollback). See
+[`docs/LOCAL-VM-STABLE-IP.md`](docs/LOCAL-VM-STABLE-IP.md).
 `local-fixed-ip-guide` still prints hypervisor-specific reservation tips
 (KVM/libvirt, UTM/VMware/Parallels, Hyper-V/VirtualBox/WSL2).
 To rename the site later, use `sudo erpnext-dev change-local-domain` (then rebuild
@@ -413,7 +419,7 @@ local SSL).
 
 Recommended local test order:
 
-1. `local-dev-quickstart`
+1. `local-dev-quickstart` (stable IP → install → HTTPS → service restart confirm)
 2. `doctor --plain`
 3. `verify-access`
 4. `backup-files` → `backup-verify`

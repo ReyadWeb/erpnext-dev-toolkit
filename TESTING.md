@@ -1,6 +1,6 @@
 # Testing guide
 
-**Current release:** v1.19.5 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.6 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
@@ -1909,7 +1909,7 @@ bash -n erpnext-dev.sh
 ./erpnext-dev.sh version
 ./erpnext-dev.sh --help | grep -E "local-ssl-wizard|local-fixed-ip-guide|kvm-fixed-ip-guide"
 ./erpnext-dev.sh local-fixed-ip-guide | grep -E "KVM / libvirt Fixed IP Guide|Current VM IP|HOST machine"
-printf 'n\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh local-dev-quickstart | grep -E "local-ssl-wizard|local-fixed-ip-guide|host-dns-guide"
+printf 'n\n' | MENU_TERMINAL_COLS=100 ./erpnext-dev.sh local-dev-quickstart | grep -E "local-ssl-wizard|local-fixed-ip-guide|host-dns-guide|local-static-ip-wizard|restart"
 ```
 
 Expected:
