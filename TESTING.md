@@ -1,6 +1,6 @@
 # Testing guide
 
-**Current release:** v1.19.7 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.8 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
@@ -134,6 +134,31 @@ scripts/test-ui-render.sh
 Expects Go-live on its own status row (not beside HTTPS) at `COLUMNS=100`, plus
 two-column `[1]` / `[10]` options. Submenus (e.g. Local SSL) should show boxed
 `[n]` items like the main menu.
+
+## v1.19.8 browser asset consistency (all login CSS/JS)
+
+Hermetic:
+
+```bash
+scripts/test-static-asset-probe.sh
+```
+
+Expects discovery of **every** local `/assets` CSS/JS from login HTML + `Link`
+headers (not `head -n 1`), real GET `size_download > 0`, and FAIL when
+`login.bundle` / `erpnext-web.bundle` 404 while `website.bundle` is OK.
+`bench_static_assets_ready` must call `probe_login_frontend_assets_all`.
+Consecutive stability: `ASSET_READY_STABLE_CHECKS` (default 2) +
+`ASSET_READY_STABLE_GAP` (default 2s).
+
+Field / integration:
+
+```bash
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+```
+
+Browser DevTools on `/login` must show zero required CSS/JS 404s immediately
+after the toolkit says ready. Integration CI has a hard gate for this.
 
 ## v1.19.5 auto-repair missing assets during wait-ready
 

@@ -549,9 +549,8 @@ echo "==> Running migrate/build/clear-cache"
 
 bench --site "${SITE_NAME}" migrate
 bench build
-# Frappe sometimes finishes "bench build" while release bundles are still
-# missing ("Assets for Release … don't exist"). Re-run once if the login CSS
-# bundle is absent so wait-ready does not start against HTTP 404s.
+# Build sanity only: website.bundle CSS on disk. Final browser-ready gate runs
+# later against the live /login page (every discovered CSS/JS), not this glob.
 if ! ls sites/assets/frappe/dist/css/website.bundle.*.css >/dev/null 2>&1; then
   echo "WARN: website CSS missing after first bench build — rebuilding once"
   bench build
@@ -996,17 +995,16 @@ run_guided_setup() {
   run_install
 
   echo
-  if declare -F bench_static_assets_ready >/dev/null 2>&1 && \
-     { port_listens 443 || port_listens 8000; } && \
-     ! bench_static_assets_ready; then
-    warn "Install finished, but login CSS/JS are not ready yet — rebuilding once."
-    if declare -F try_rebuild_frontend_assets_once >/dev/null 2>&1 && \
-       try_rebuild_frontend_assets_once && \
-       wait_for_erpnext_ready; then
-      ok "Assets rebuilt; ERPNext is ready (HTTP + static assets)."
+  # Final browser gate: discover every CSS/JS from live /login and verify all
+  # (with consecutive stability). Disk website.bundle check alone is not enough.
+  if declare -F wait_for_erpnext_ready >/dev/null 2>&1 && \
+     { port_listens 443 || port_listens 8000; }; then
+    if wait_for_erpnext_ready; then
+      ok "ERPNext installation workflow finished successfully (browser assets verified)."
     else
-      warn "Opening the site now can show an unstyled page."
+      warn "Install finished, but browser assets are not ready yet."
       echo "  $(toolkit_cmd repair-frontend-assets)"
+      echo "  $(toolkit_cmd verify-frontend-assets)"
       echo "  $(toolkit_cmd wait-frontend-assets)"
     fi
   else

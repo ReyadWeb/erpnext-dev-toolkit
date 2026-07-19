@@ -1,8 +1,9 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.7 (July 2026)  
+**Current release:** v1.19.8 (July 2026)  
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.20.0 — External watchdog foundation.
+**Next up:** v1.19.9 — CLI Page UX Architecture (P1), after v1.19.8 field validation.  
+**Deferred:** v1.20.0 External Watchdog until v1.19.8 + v1.19.9 are field-validated.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -57,7 +58,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.19.7)
+## Shipped foundation (through v1.19.8)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -91,7 +92,9 @@ v1.18.2  Repository security & governance hardening
 v1.18.3  Frontend asset readiness gaps
 v1.19.0  Guarded auto-healing MVP
 v1.19.1  Auto-healing hardening
-v1.20.0  External watchdog foundation
+v1.19.8  Browser asset consistency closure (P0)   ← current
+v1.19.9  CLI page UX architecture (P1)
+v1.20.0  External watchdog foundation            ← deferred until 1.19.8+1.19.9
 v1.21.0  CloudPanel / agent API foundation
 v1.22.0  Real VPS validation matrix (bounded)
 v1.23.0  Documentation and launch polish
@@ -241,7 +244,32 @@ v1.23.0  Documentation and launch polish
 
 ---
 
+### v1.19.8 — Browser Asset Consistency Closure (P0)
+
+**Status:** Shipped as **v1.19.8** (field validation still recommended). Epic [#107](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/107).
+
+**Goal:** The toolkit must not report browser-ready while any CSS/JS required by the actual `/login` page returns 404 or empty body. Discover assets from login HTML + `Link` headers (no `head -n 1`, no hardcoded bundle names); verify with real GET `size_download`; require two consecutive full passes.
+
+**Commands / gates:** `verify-frontend-assets`, `wait-frontend-assets`, `repair-frontend-assets`, `bench_static_assets_ready`, install final gate.
+
+**Acceptance**
+- [ ] Fresh install cannot report ready while any `/login`-referenced local asset 404s.
+- [ ] All discovered CSS/JS tested with real GET download sizes.
+- [ ] Two consecutive full checks before “ERPNext is ready”.
+- [ ] `:8000` and HTTPS independently diagnosable.
+- [ ] Hermetic multi-CSS fixture + integration zero-404 assert.
+
+### v1.19.9 — CLI Page UX Architecture (P1)
+
+**Status:** Planned after v1.19.8 field validation. Epic [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108).
+
+**Goal:** One interactive page lifecycle (clear → result → pause → parent) using existing `lib/ui.sh`; direct CLI stays print-and-exit; credentials become a focused secret page.
+
+---
+
 ### v1.20.0 — External Watchdog Foundation
+
+**Status:** Deferred until v1.19.8 + v1.19.9 are field-validated.
 
 **Goal:** Contract for Case B — frozen, powered-off, or unreachable VM (cannot self-heal from inside).
 

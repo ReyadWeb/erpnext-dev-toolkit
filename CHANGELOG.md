@@ -1,3 +1,21 @@
+## v1.19.8 - Browser Asset Consistency Closure
+
+Patch release that closes false browser-ready when only the first login CSS/JS
+Link assets pass while other required bundles (e.g. login.bundle,
+erpnext-web.bundle) still 404.
+
+### Fixed
+
+- **Browser asset consistency (all login CSS/JS):** readiness no longer checks
+  only the first Link CSS + first Link JS. `discover_login_frontend_assets`
+  collects every local `/assets/…css|js` from login HTML and `Link` headers;
+  `probe_login_frontend_assets_all` GETs each with real `size_download > 0`.
+  Two consecutive full passes are required before “ERPNext is ready”.
+  `verify-frontend-assets` reports per-asset status for `:8000` and `:443`.
+  Auto-repair records failing assets before rebuild. Install final gate uses
+  the live `/login` discovery path (disk `website.bundle` remains build sanity
+  only). Hermetic multi-CSS field fixture + integration zero-404 assert.
+
 ## v1.19.7 - Debian static IP without Netplan
 
 Patch release that keeps local guided setup alive on Debian guests that do not

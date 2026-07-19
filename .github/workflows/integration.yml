@@ -235,6 +235,17 @@ jobs:
           curl -sv -H "Host: ${SITE_NAME}" "http://127.0.0.1:8000/api/method/ping" 2>&1 | head -40 || true
           exit 1
 
+      - name: Browser asset consistency (hard gate)
+        run: |
+          set -euo pipefail
+          # Discover every local CSS/JS required by /login and assert zero 404s.
+          # This catches "first CSS+JS OK, login.bundle 404" false readiness.
+          # wait-ready requires two consecutive all-asset passes; verify prints
+          # per-asset status for Bench :8000 (and :443 when present).
+          sudo -E ./erpnext-dev.sh wait-ready
+          sudo -E ./erpnext-dev.sh verify-frontend-assets
+          echo "Browser asset consistency passed (wait-ready + verify-frontend-assets)."
+
       - name: Backup and restore round trip
         run: |
           set -uo pipefail

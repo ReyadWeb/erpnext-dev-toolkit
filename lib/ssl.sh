@@ -2647,24 +2647,28 @@ verify_local_ssl() {
     failed=1
   fi
 
-  # Active asset probe (shared with wait_for_erpnext_ready): login HTML can return
-  # 200 while CSS and/or JS bundles do not. Both must be nonempty 2xx/3xx here
-  # (so a broken-looking page after OK is usually browser cache -> hard refresh);
-  # anything else is a genuine asset problem with a concrete remediation.
+  # Active asset probe (shared with wait_for_erpnext_ready): every CSS/JS required
+  # by /login must GET with nonempty body. A broken-looking page after OK is
+  # usually browser cache → hard refresh; anything else needs repair.
   if http_status_ok "$https_head"; then
-    local probe_out css_path css_head js_path js_head probe_rc=0
-    probe_out="$(probe_login_frontend_assets "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
-    IFS='|' read -r css_path css_head js_path js_head <<<"$probe_out"
+    local probe_rc=0 fail_n=0 probe_tmp
+    probe_tmp="$(mktemp /tmp/erpnext-dev-ssl-assets.XXXXXX)"
+    set +e
+    probe_login_frontend_assets_all "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >"$probe_tmp"
+    probe_rc=$?
+    set -e
+    fail_n="$(grep -c '^FAIL|' "$probe_tmp" || true)"
+    rm -f "$probe_tmp"
     if [[ "$probe_rc" -eq 0 ]]; then
-      status_line "Static assets" "OK" "CSS+JS (${css_path##*/}, ${js_path##*/})"
+      status_line "Static assets" "OK" "all required login CSS/JS"
     elif [[ "$probe_rc" -eq 1 ]]; then
-      status_line "Static assets" "FAIL" "CSS/JS not ready (css=${css_head:-none}; js=${js_head:-none})"
+      status_line "Static assets" "FAIL" "${fail_n} required asset(s) failed"
       echo "    Assets are not serving. Rebuild and clear cache, then re-verify:"
       echo "      $(toolkit_cmd repair-frontend-assets)"
-      echo "      $(toolkit_cmd wait-frontend-assets)"
+      echo "      $(toolkit_cmd verify-frontend-assets)"
       failed=1
     elif [[ "$probe_rc" -eq 2 ]]; then
-      status_line "Static assets" "WARN" "login HTML missing CSS and/or JS Link preload (retry wait-ready)"
+      status_line "Static assets" "WARN" "could not discover login CSS/JS yet (retry wait-ready)"
       failed=1
     fi
   fi
