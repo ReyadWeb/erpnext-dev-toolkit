@@ -1,3 +1,13 @@
+## Unreleased
+
+### Fixed
+
+- **Unstyled login after fresh install:** `bench_static_assets_ready` now honors
+  `probe_login_static_asset` return codes (rejects empty CSS/JS bodies). Trusted
+  mkcert setup waits for assets before declaring HTTPS ready; `verify-local-ssl`
+  fails on missing assets; `verify-access` / install summary / next-step prefer
+  the friendly hostname over raw IP (Host-header mismatch).
+
 ## v1.19.1 - Auto-healing hardening
 
 Patch release that makes guarded healing production-safer with a dedicated

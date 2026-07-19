@@ -133,6 +133,85 @@ probe_rc=0
 probe_out="$(probe_login_static_asset "https://erp.test/login" "erp.test" 443 "127.0.0.1")" && probe_rc=0 || probe_rc=$?
 assert_eq "probe rc no link" "2" "$probe_rc"
 
+# bench_static_assets_ready must honor probe rc (empty body = not ready).
+# Minimal copy of the fixed helper so we do not source all of lib/service.sh.
+bench_static_assets_ready() {
+  local probe_rc=0
+  if port_listens 443; then
+    set +e
+    probe_login_static_asset "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
+    probe_rc=$?
+    set -e
+  elif port_listens 8000; then
+    set +e
+    probe_login_static_asset "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
+    probe_rc=$?
+    set -e
+  else
+    return 1
+  fi
+  [[ "$probe_rc" -eq 0 ]]
+}
+port_listens() { [[ "$1" == "443" ]]; }
+
+# Empty CL: probe prints path|200 but returns 1 — ready helper must fail.
+cat >"${tmpdir}/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+url="${*: -1}"
+case "$url" in
+*/login)
+  printf 'HTTP/2 200\r\nLink: </assets/frappe/dist/css/website.bundle.TEST.css>; as=style; rel=preload\r\n\r\n'
+  ;;
+*)
+  printf 'HTTP/2 200\r\nContent-Length: 0\r\n\r\n'
+  ;;
+esac
+EOF
+chmod +x "${tmpdir}/curl"
+if bench_static_assets_ready; then
+  echo "FAIL: bench_static_assets_ready should reject empty Content-Length" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: bench_static_assets_ready rejects empty body"
+fi
+
+# Non-empty CL: ready helper must pass.
+cat >"${tmpdir}/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+url="${*: -1}"
+case "$url" in
+*/login)
+  printf 'HTTP/2 200\r\nLink: </assets/frappe/dist/css/website.bundle.TEST.css>; as=style; rel=preload\r\n\r\n'
+  ;;
+*)
+  printf 'HTTP/2 200\r\nContent-Length: 42\r\n\r\n'
+  ;;
+esac
+EOF
+chmod +x "${tmpdir}/curl"
+if bench_static_assets_ready; then
+  echo "OK: bench_static_assets_ready accepts nonempty body"
+else
+  echo "FAIL: bench_static_assets_ready should accept nonempty asset" >&2
+  fail=$((fail + 1))
+fi
+
+# Drift guard: production helper must use probe return code, not only HTTP status.
+if grep -A20 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -q 'http_status_ok "\$asset_head"'; then
+  echo "FAIL: lib/service.sh bench_static_assets_ready still uses http_status_ok on probe output (ignores empty body)" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: lib/service.sh bench_static_assets_ready uses probe rc"
+fi
+if ! grep -A25 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -q 'probe_rc'; then
+  echo "FAIL: lib/service.sh bench_static_assets_ready missing probe_rc check" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: lib/service.sh probe_rc present"
+fi
+
 if ((fail > 0)); then
   echo "test-static-asset-probe: ${fail} failure(s)" >&2
   exit 1
