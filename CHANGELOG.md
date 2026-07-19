@@ -1,4 +1,7 @@
-## Unreleased
+## v1.19.2 - Unstyled login after fresh install
+
+Patch release that closes the remaining post-install race where login HTML
+could look ready before CSS/JS were served (or operators opened a raw-IP URL).
 
 ### Fixed
 
