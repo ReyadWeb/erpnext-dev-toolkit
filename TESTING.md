@@ -135,6 +135,20 @@ Expects Go-live on its own status row (not beside HTTPS) at `COLUMNS=100`, plus
 two-column `[1]` / `[10]` options. Submenus (e.g. Local SSL) should show boxed
 `[n]` items like the main menu.
 
+## v1.19.4 GET asset probes + socket.io CI assert
+
+Hermetic:
+
+```bash
+scripts/test-static-asset-probe.sh
+```
+
+Expects `curl_response_headers` to use GET (`-D -`, not HEAD `-I`), last
+Content-Length after redirects, and the existing dual CSS+JS cases.
+
+Integration: production-runtime assert must accept `:9000` via `nc -z` retries
+(not a single `ss -ltnp` grep).
+
 ## v1.19.3 dual CSS+JS browser-ready gate
 
 Hermetic (no sudo / no install):

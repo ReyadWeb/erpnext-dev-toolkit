@@ -148,8 +148,12 @@ http_status_ok() {
   [[ "$code" =~ ^[23][0-9][0-9]$ ]]
 }
 
-# Full HEAD response headers (not just the status line). Same resolve args as
-# curl_head_status so callers can pin Host:port to 127.0.0.1 inside the VM.
+# Full response headers for asset/login probes (GET, not HEAD). Same resolve
+# args as curl_head_status so callers can pin Host:port to 127.0.0.1 inside the VM.
+#
+# HEAD is unreliable here: Frappe/Werkzeug often omit Link: preload headers on
+# HEAD, or advertise Content-Length: 0 for static files that GET serves fine —
+# that false-failed wait-ready after an earlier successful probe.
 curl_response_headers() {
   local url="${1:-}"
   local host_name="${2:-}"
@@ -159,7 +163,9 @@ curl_response_headers() {
 
   [[ -n "$url" ]] || return 1
 
-  curl_args=(-k -sS -I --max-time 10)
+  # -D - dumps headers to stdout; -o /dev/null discards the body. -L follows
+  # /login → /login/ style redirects so Link headers on the final HTML are seen.
+  curl_args=(-k -sS -L --max-redirs 5 --max-time 10 -D - -o /dev/null)
 
   if [[ -n "$host_name" && -n "$port" && -n "$resolve_ip" ]]; then
     curl_args+=(--resolve "${host_name}:${port}:${resolve_ip}")
@@ -193,18 +199,25 @@ extract_link_asset_path_js() {
     | head -n 1 || true
 }
 
-# True when HEAD headers do not declare an empty body. Missing Content-Length is
-# OK (chunked / omitted); only an explicit Content-Length: 0 fails the gate.
+# True when response headers do not declare an empty body. Missing
+# Content-Length is OK (chunked / omitted); only an explicit Content-Length: 0
+# fails the gate. Uses the *last* Content-Length so redirect hops (often CL:0)
+# do not mask a nonempty final response when curl -L dumps all header blocks.
 asset_headers_nonempty() {
   local headers="${1:-}"
   local cl
-  cl="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2; exit}')"
+  cl="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:"{v=$2} END{print v}')"
   [[ -z "$cl" ]] && return 0
   [[ "$cl" =~ ^[0-9]+$ ]] || return 0
   ((cl > 0))
 }
 
-# Probe one asset URL (HEAD). Prints "path|status_line".
+# Last HTTP status line in a (possibly multi-response) header dump.
+asset_headers_status_line() {
+  printf '%s\n' "${1:-}" | awk '/^HTTP\//{line=$0} END{print line}'
+}
+
+# Probe one asset URL (GET). Prints "path|status_line".
 # Return: 0 = OK nonempty, 1 = bad/empty/missing status.
 probe_one_static_asset() {
   local asset_path="${1:-}"
@@ -223,7 +236,7 @@ probe_one_static_asset() {
   fi
 
   asset_headers="$(curl_response_headers "$asset_url" "$host_name" "$port" "$resolve_ip" || true)"
-  asset_head="$(printf '%s\n' "$asset_headers" | awk 'NR==1 {print; exit}')"
+  asset_head="$(asset_headers_status_line "$asset_headers")"
   printf '%s|%s\n' "$asset_path" "${asset_head:-}"
   if http_status_ok "$asset_head" && asset_headers_nonempty "$asset_headers"; then
     return 0
