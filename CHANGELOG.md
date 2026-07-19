@@ -1,3 +1,19 @@
+## v1.19.6 - Local guided settle (stable IP + service restart)
+
+Patch release that makes local host install guide pin a stable guest IP and
+confirm the install with an ERPNext/nginx service restart (field-proven settle
+step without a full VM reboot).
+
+### Changed
+
+- **Local guided install: stable IP + service-restart confirmation.**
+  `local-dev-quickstart` and post-install `local_guided_followups` now include an
+  interactive stable-guest-IP checkpoint (`local-ip-status` /
+  `local-static-ip-wizard` / `local-fixed-ip-guide`) and a default-Yes step to
+  restart ERPNext (and nginx when HTTPS is active) to settle the stack after
+  install — the guided equivalent of the VM reboot that cleared post-install
+  flakiness in the field. Lifecycle plan / README updated to match.
+
 ## v1.19.5 - Auto-rebuild missing login assets
 
 Patch release that stops fresh installs from sitting on `assets: wait` / unstyled

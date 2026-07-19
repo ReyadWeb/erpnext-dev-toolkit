@@ -33,6 +33,9 @@ Menu path: **Main menu → Local network**.
 
 ## Recommended order
 
+`local-dev-quickstart` offers this checkpoint **before install** and again in
+post-install guided follow-ups if the guest is still on DHCP.
+
 1. **Prefer a hypervisor DHCP reservation** (stable lease by MAC) when your host
    supports it — see platform notes below.
 2. **Or pin a static address inside the guest** with
@@ -41,6 +44,8 @@ Menu path: **Main menu → Local network**.
    (`hosts-command`).
 4. **Save the mapping** with `local-ip-save` so `local-ip-drift-check` can warn
    you after the next reboot.
+5. After HTTPS, accept the guided **service restart confirmation** (or run
+   `sudo erpnext-dev restart`) so ERPNext/nginx settle without a full VM reboot.
 
 ## Platform notes
 

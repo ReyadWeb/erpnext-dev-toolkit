@@ -955,15 +955,17 @@ show_setup_lifecycle_plan() {
   echo "Local VM order:"
   echo "  1) Check requirements and storage"
   echo "  2) Choose local .test domain, default erp.test"
-  echo "  3) Install ERPNext and verify service health"
-  echo "  4) Run host DNS mapping checkpoint on the host machine"
-  echo "  5) Confirm HTTP works from the host"
-  echo "  6) Create backup checkpoint / VM snapshot"
-  echo "  7) Configure local HTTPS if wanted"
-  echo "  8) Apply Local VM security profile only"
-  echo "  9) Install optional apps one at a time"
-  echo "  10) Backup after every optional app"
-  echo "  11) Final status summary and credentials"
+  echo "  3) Pin a stable guest IP (local-static-ip-wizard or hypervisor reservation)"
+  echo "  4) Install ERPNext and verify service health"
+  echo "  5) Run host DNS mapping checkpoint on the host machine"
+  echo "  6) Confirm HTTP works from the host"
+  echo "  7) Create backup checkpoint / VM snapshot"
+  echo "  8) Configure local HTTPS if wanted"
+  echo "  9) Restart ERPNext (+ nginx) to confirm the install is settled"
+  echo "  10) Apply Local VM security profile only"
+  echo "  11) Install optional apps one at a time"
+  echo "  12) Backup after every optional app"
+  echo "  13) Final status summary and credentials"
   echo
   echo "Production order:"
   echo "  1) Check requirements, storage, public IP, DNS readiness"
@@ -1021,6 +1023,91 @@ run_guided_setup() {
   prompt_open_main_menu_after_install
 }
 
+# Stable guest IP checkpoint for local installs. DHCP leases often change after
+# reboot and break HOST /etc/hosts + local HTTPS. Offered before install
+# (local-dev-quickstart) and again in post-install follow-ups if still DHCP.
+local_guided_stable_ip_checkpoint() {
+  [[ -t 0 ]] || return 0
+  [[ "$ASSUME_YES" -eq 1 ]] && return 0
+
+  local method
+  method="$(local_ip_detect_method 2>/dev/null || echo unknown)"
+
+  echo
+  ui_box_start "Local setup: stable guest IP"
+  echo "Keep ${SITE_NAME:-erp.test} and local HTTPS working after guest reboot."
+  echo "Prefer a hypervisor DHCP reservation, or pin a static IP inside this guest."
+  ui_box_end
+
+  if declare -F show_local_ip_status >/dev/null 2>&1; then
+    show_local_ip_status || true
+  fi
+
+  if [[ "$method" == "static" ]]; then
+    ok "Guest addressing already looks static."
+    echo "If the IP ever changes, refresh HOST /etc/hosts: $(toolkit_cmd hosts-command)"
+    return 0
+  fi
+
+  echo
+  if confirm "Configure a stable guest IP now (recommended for local installs)?"; then
+    if declare -F show_local_ip_plan >/dev/null 2>&1; then
+      show_local_ip_plan || true
+    fi
+    echo
+    if confirm "Pin this guest IP with local-static-ip-wizard (Netplan) now?"; then
+      run_local_static_ip_wizard || true
+    else
+      echo "Skipped Netplan wizard. Later: $(toolkit_cmd local-static-ip-wizard)"
+      echo "Hypervisor reservation guide: $(toolkit_cmd local-fixed-ip-guide)"
+    fi
+  else
+    echo "Skipped. Plan later: $(toolkit_cmd local-ip-plan) → $(toolkit_cmd local-static-ip-wizard)"
+    echo "Or: $(toolkit_cmd local-fixed-ip-guide)"
+  fi
+}
+
+# Confirm the install by bouncing ERPNext (+ nginx when HTTPS is active).
+# Field reports: a VM reboot after static IP often cleared post-install flakiness;
+# a targeted service restart is the same settle step without rebooting the guest.
+local_guided_service_settle_checkpoint() {
+  [[ -t 0 ]] || return 0
+  [[ "$ASSUME_YES" -eq 1 ]] && return 0
+
+  local reply
+  echo
+  ui_box_start "Local setup: confirm install (service restart)"
+  echo "Restart ERPNext (and nginx if local HTTPS is active) to settle the stack."
+  echo "This is the guided equivalent of rebooting services after a fresh install."
+  ui_box_end
+  echo
+  read -r -p "Restart ERPNext services now to confirm the install? [Y/n]: " reply
+  reply="${reply:-Y}"
+  if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+    echo "Skipped. Restart later with: $(toolkit_cmd restart)"
+    return 0
+  fi
+
+  if declare -F restart_erpnext_service >/dev/null 2>&1; then
+    restart_erpnext_service || warn "ERPNext restart did not fully succeed; check $(toolkit_cmd status)"
+  else
+    warn "restart helper unavailable; run: $(toolkit_cmd restart)"
+    return 0
+  fi
+
+  if systemctl is-active --quiet nginx 2>/dev/null; then
+    log "Restarting nginx (local HTTPS)"
+    if $SUDO systemctl restart nginx; then
+      ok "nginx restarted"
+      if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
+        wait_for_erpnext_ready || warn "Ready check after nginx restart did not pass yet."
+      fi
+    else
+      warn "nginx restart failed; check: systemctl status nginx"
+    fi
+  fi
+}
+
 # Guided local follow-up chain: after the core install, walk the user through
 # the optional steps that finish a local development environment. Each step is
 # opt-in (confirm defaults to "No"), mirroring the way the public-vm guided setup
@@ -1035,8 +1122,10 @@ local_guided_followups() {
   echo "ERPNext is installed. Prefer http://${SITE_NAME}:8000/login (not the raw IP)."
   echo "If the login page looks unstyled, wait until $(toolkit_cmd wait-ready) reports"
   echo "static assets OK, then hard-refresh the browser."
-  echo "These optional steps finish a local development environment (each is opt-in)."
+  echo "Guided order: stable IP → HTTPS → service restart confirm → credentials → security → apps."
   ui_box_end
+
+  local_guided_stable_ip_checkpoint
 
   echo
   echo "Trusted local HTTPS uses mkcert so ${SITE_NAME} opens without browser warnings."
@@ -1050,6 +1139,8 @@ local_guided_followups() {
   else
     echo "Skipped. Run later with: $(toolkit_cmd local-ssl-wizard)"
   fi
+
+  local_guided_service_settle_checkpoint
 
   local_guided_credentials_checkpoint
 
@@ -1109,9 +1200,10 @@ prompt_open_main_menu_after_install() {
   else
     echo "Recommended local VM follow-up actions:"
     echo "  Required host step:     $(toolkit_cmd local-host-checkpoint)"
+    echo "  Stable guest IP:        $(toolkit_cmd local-static-ip-wizard) / $(toolkit_cmd local-fixed-ip-guide)"
     echo "  Next after HTTP works:  $(toolkit_cmd local-ssl-wizard)"
     echo "  More SSL options:       $(toolkit_cmd local-ssl-menu)"
-    echo "  Keep VM IP stable:      $(toolkit_cmd local-fixed-ip-guide)"
+    echo "  Confirm install settle: $(toolkit_cmd restart)"
     echo "  Local security profile: $(toolkit_cmd security-hardening-wizard)"
     echo "  Optional apps:          $(toolkit_cmd app-install-wizard)"
     echo "  Next step check:        $(toolkit_cmd next-step)"
@@ -1256,14 +1348,18 @@ run_local_dev_quickstart() {
 
   echo "The host DNS command will be generated with this VM's detected IP. Do not hardcode another user's IP."
   echo "Warning: DHCP guest IPs often change after reboot and break ${SITE_NAME:-erp.test} / local HTTPS."
-  echo "Plan a stable IP early: $(toolkit_cmd local-ip-status) → $(toolkit_cmd local-ip-plan) → $(toolkit_cmd local-static-ip-wizard)."
-  echo "After install, the toolkit will print browser URLs, host DNS guidance, and the direct local HTTPS command."
+  echo "After install, guided follow-ups cover stable IP, HTTPS, and a service-restart confirmation."
   echo "Useful follow-up commands:"
   echo "  $(toolkit_cmd local-host-checkpoint)"
   echo "  $(toolkit_cmd host-dns-guide)"
   echo "  $(toolkit_cmd local-ssl-wizard)"
   echo "  $(toolkit_cmd local-ip-menu)"
+  echo "  $(toolkit_cmd local-static-ip-wizard)"
   echo "  $(toolkit_cmd local-fixed-ip-guide)"
+  echo "  $(toolkit_cmd restart)"
+
+  # Offer static/stable IP before install so hosts + HTTPS use a durable address.
+  local_guided_stable_ip_checkpoint
 
   if confirm "Save local defaults and start guided setup now?"; then
     set_local_dev_defaults
