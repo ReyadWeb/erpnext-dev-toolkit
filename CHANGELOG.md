@@ -19,6 +19,13 @@ Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#59](https
 - Scorecard follow-up: document live scores; `main` requires
   `require_last_push_approval` plus CodeQL / adversarial status checks.
 
+### Fixed
+
+- **Post-restore readiness:** `ensure_bench` no longer blocks mid-flow ops behind
+  a full asset wait; post-restore `bench build` is best-effort so a yarn flake
+  does not fail an otherwise successful restore (repair via
+  `repair-frontend-assets`).
+
 ## v1.18.2 - Repository security & governance hardening
 
 Patch release that hardens GitHub Actions token scope, branch-protection
