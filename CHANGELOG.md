@@ -1,4 +1,10 @@
-## Unreleased
+## v1.19.0 - Guarded auto-healing MVP
+
+Minor release that turns the monitor-only healing dry-run into an explicitly
+armed safe restart ladder with cooldown, lockout, and recovery verification.
+Default remains **monitor-only** until an operator enables safe mode.
+
+Public roadmap: https://github.com/users/ReyadWeb/projects/3 · epic [#60](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/60).
 
 ### Added
 
