@@ -986,10 +986,16 @@ run_guided_setup() {
   if declare -F bench_static_assets_ready >/dev/null 2>&1 && \
      { port_listens 443 || port_listens 8000; } && \
      ! bench_static_assets_ready; then
-    warn "Install finished, but login CSS/JS are not ready yet."
-    warn "Opening the site now can show an unstyled page — wait, then refresh."
-    echo "  $(toolkit_cmd wait-frontend-assets)"
-    echo "  $(toolkit_cmd repair-frontend-assets)"
+    warn "Install finished, but login CSS/JS are not ready yet — rebuilding once."
+    if declare -F try_rebuild_frontend_assets_once >/dev/null 2>&1 && \
+       try_rebuild_frontend_assets_once && \
+       wait_for_erpnext_ready; then
+      ok "Assets rebuilt; ERPNext is ready (HTTP + static assets)."
+    else
+      warn "Opening the site now can show an unstyled page."
+      echo "  $(toolkit_cmd repair-frontend-assets)"
+      echo "  $(toolkit_cmd wait-frontend-assets)"
+    fi
   else
     ok "ERPNext installation workflow finished successfully."
   fi

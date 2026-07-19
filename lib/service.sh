@@ -118,12 +118,52 @@ bench_static_assets_ready() {
   [[ "$probe_rc" -eq 0 ]]
 }
 
+# Rebuild missing login CSS/JS once without nesting wait_for_erpnext_ready
+# (restart_erpnext_service / repair_frontend_assets would recurse). Used when
+# http is OK but hashed bundles 404 — the failure mode from "Assets for Release
+# … don't exist" after a fresh install.
+try_rebuild_frontend_assets_once() {
+  local bench_dir
+
+  bench_dir="$(require_site_environment 2>/dev/null)" || return 1
+
+  echo
+  warn "Login CSS/JS still missing (often HTTP 404) — rebuilding assets once."
+  echo "  This is the automatic fix for incomplete post-install bundle builds."
+  echo
+
+  if ! maintenance_build; then
+    warn "Automatic asset rebuild failed. Run: $(toolkit_cmd repair-frontend-assets)"
+    return 1
+  fi
+
+  # Avoid maintenance_clear_cache → ensure_bench_services → wait_for_erpnext_ready.
+  log "Clearing site cache after asset rebuild"
+  run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || true
+
+  # Soft bounce only — never call restart_* helpers that nest wait_for_erpnext_ready.
+  if deployment_engine_is_docker; then
+    docker_compose restart || return 1
+  elif runtime_is_production && production_runtime_configured; then
+    log "Restarting production runtime after asset rebuild"
+    $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || true
+  elif service_exists; then
+    log "Restarting ERPNext service after asset rebuild"
+    $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
+  fi
+
+  return 0
+}
+
 # shellcheck disable=SC2120 # timeout/interval are optional overrides with sane defaults
 wait_for_erpnext_ready() {
   local timeout="${1:-$READY_TIMEOUT}"
   local interval="${2:-$READY_INTERVAL}"
   local elapsed=0
   local http_state assets_state
+  local auto_repaired=0
+  # Seconds of http-OK / assets-wait before one automatic rebuild (0 disables).
+  local repair_after="${ASSET_AUTO_REPAIR_AFTER:-30}"
 
   echo
   echo "Waiting for ERPNext services to become ready..."
@@ -154,6 +194,19 @@ wait_for_erpnext_ready() {
         ok "ERPNext is ready. Development ports, HTTP, and static assets are OK."
       fi
       return 0
+    fi
+
+    # Do not burn the full READY_TIMEOUT polling 404s — rebuild once, then continue.
+    if [[ "$http_state" == "OK" && "$assets_state" != "OK" ]] && \
+       [[ "${AUTO_REPAIR_ASSETS:-1}" != "0" ]] && \
+       [[ "$repair_after" =~ ^[0-9]+$ ]] && (( repair_after > 0 )) && \
+       (( elapsed >= repair_after && auto_repaired == 0 )); then
+      auto_repaired=1
+      try_rebuild_frontend_assets_once || true
+      # Service just bounced; give ports a moment before the next probe.
+      sleep "$interval"
+      elapsed=$((elapsed + interval))
+      continue
     fi
 
     sleep "$interval"

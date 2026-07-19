@@ -2025,14 +2025,14 @@ run_trusted_mkcert_setup() {
   configure_local_ssl
 
   # Nginx :443 can listen before CSS/JS are served on the HTTPS origin. Wait for
-  # the same asset gate as wait-ready before telling the operator to open the
-  # browser (avoids the unstyled login that "fixes itself" after a refresh).
+  # the same asset gate as wait-ready (includes one automatic asset rebuild when
+  # bundles 404) before telling the operator to open the browser.
   if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
     wait_for_erpnext_ready || {
       warn "HTTPS is configured, but login static assets are not ready yet."
-      echo "Wait, then open https://${SITE_NAME}/login — or run:"
-      echo "  $(toolkit_cmd wait-frontend-assets)"
+      echo "Automatic rebuild during wait-ready did not clear it. Run:"
       echo "  $(toolkit_cmd repair-frontend-assets)"
+      echo "  $(toolkit_cmd wait-frontend-assets)"
       echo "============================================================"
       return 1
     }
@@ -2313,11 +2313,11 @@ configure_local_ssl() {
 
   ok "Local HTTPS reverse proxy configured"
   echo
-  echo "Test from the host:"
-  echo "  curl -kI https://${SITE_NAME}"
+  echo "Nginx is listening on :443. Do not open the browser yet until"
+  echo "$(toolkit_cmd wait-ready) / trusted-mkcert-setup reports static assets OK."
   echo
-  echo "Open in browser:"
-  echo "  https://${SITE_NAME}"
+  echo "Test from the host (after assets are ready):"
+  echo "  curl -kI https://${SITE_NAME}"
   echo
   echo "Direct Bench access still works:"
   echo "  http://${SITE_NAME}:8000"

@@ -135,6 +135,13 @@ Expects Go-live on its own status row (not beside HTTPS) at `COLUMNS=100`, plus
 two-column `[1]` / `[10]` options. Submenus (e.g. Local SSL) should show boxed
 `[n]` items like the main menu.
 
+## v1.19.5 auto-repair missing assets during wait-ready
+
+On a VM after fresh install, if `verify-frontend-assets` shows HTTPS 404 for
+CSS/JS, `wait-ready` should trigger one automatic rebuild after ~30s (log line
+mentions rebuilding assets once) and then flip `assets: OK` — without a manual
+`repair-frontend-assets`. Opt out: `AUTO_REPAIR_ASSETS=0`.
+
 ## v1.19.4 GET asset probes + socket.io CI assert
 
 Hermetic:

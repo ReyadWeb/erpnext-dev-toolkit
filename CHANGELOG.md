@@ -1,3 +1,14 @@
+## Unreleased
+
+### Fixed
+
+- **Auto-rebuild missing login assets during wait-ready:** when HTTP is OK but
+  CSS/JS stay on `assets: wait` (typical HTTP 404 / “Assets for Release … don't
+  exist”), `wait-ready` runs one automatic `bench build` + clear-cache + restart
+  instead of burning the full READY_TIMEOUT. Guided install uses the same path.
+  Disable with `AUTO_REPAIR_ASSETS=0` or delay with `ASSET_AUTO_REPAIR_AFTER`
+  (seconds, default 30).
+
 ## v1.19.4 - GET asset probes and socket.io CI assert
 
 Patch release that stops wait-ready asset flaps (GET vs HEAD) and hardens the
