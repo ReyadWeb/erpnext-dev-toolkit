@@ -311,13 +311,18 @@ run_post_restore_maintenance() {
 
   log "Running post-restore asset build"
   echo "The detailed build output is saved to a log file to keep the restore screen readable."
-  run_as_frappe_quiet "post-restore asset build" "cd '${bench_dir}' && bench build" || maintenance_failed=1
+  # Best-effort: a failed rebuild must not fail the restore when migrate succeeded —
+  # existing site assets usually still serve; operators can repair-frontend-assets.
+  if ! run_as_frappe_quiet "post-restore asset build" "cd '${bench_dir}' && bench build"; then
+    warn "post-restore asset build failed; continuing with existing assets."
+    echo "  Later: $(toolkit_cmd repair-frontend-assets)"
+  fi
 
-  if ! ensure_bench_services_for_site_commands "post-restore cache cleanup"; then
-    maintenance_failed=1
-  else
+  if ensure_bench_services_for_site_commands "post-restore cache cleanup"; then
     log "Clearing post-restore cache"
     run_as_frappe_quiet "post-restore clear-cache" "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || maintenance_failed=1
+  else
+    maintenance_failed=1
   fi
 
   if [[ "$maintenance_failed" -ne 0 ]]; then
