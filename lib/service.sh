@@ -725,6 +725,62 @@ restart_erpnext_service() {
   fi
 }
 
+# After local HTTPS nginx is written, bounce ERPNext + nginx then wait-ready.
+# Field (v1.19.11): VM Static assets OK while the host browser still looked wrong
+# until a full guest reboot — usually because the post-HTTPS settle restart was
+# skipped. This is that settle, and it must run before we print browser URLs.
+# Sets LOCAL_HTTPS_STACK_SETTLED=1 so the guided checkpoint can skip a duplicate.
+settle_stack_after_local_https() {
+  require_sudo
+  local rc=0
+
+  echo
+  log "Settling stack after local HTTPS (ERPNext + nginx restart)"
+  echo "Required so the host browser matches VM asset probes (reboot workaround)."
+
+  if deployment_engine_is_docker; then
+    if declare -F docker_runtime_restart >/dev/null 2>&1; then
+      docker_runtime_restart || rc=1
+    fi
+  elif declare -F runtime_is_production >/dev/null 2>&1 && runtime_is_production && \
+       declare -F production_runtime_configured >/dev/null 2>&1 && production_runtime_configured; then
+    log "Restarting production runtime after local HTTPS"
+    $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || rc=1
+  else
+    if service_exists; then
+      log "Restarting ERPNext service"
+      $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || rc=1
+    elif declare -F create_erpnext_service >/dev/null 2>&1; then
+      create_erpnext_service || true
+      $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || rc=1
+    fi
+  fi
+
+  if systemctl list-unit-files nginx.service >/dev/null 2>&1 || \
+     systemctl is-active --quiet nginx 2>/dev/null; then
+    log "Restarting nginx (local HTTPS)"
+    if $SUDO systemctl restart nginx; then
+      ok "nginx restarted"
+    else
+      warn "nginx restart failed; check: systemctl status nginx"
+      rc=1
+    fi
+  fi
+
+  if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
+    wait_for_erpnext_ready || rc=1
+  fi
+
+  LOCAL_HTTPS_STACK_SETTLED=1
+  export LOCAL_HTTPS_STACK_SETTLED
+  if [[ "$rc" -eq 0 ]]; then
+    ok "Stack settled after local HTTPS (ready for host browser)."
+  else
+    warn "Settle after local HTTPS did not fully succeed; check $(toolkit_cmd status)"
+  fi
+  return "$rc"
+}
+
 show_erpnext_service_status() {
   require_sudo
 

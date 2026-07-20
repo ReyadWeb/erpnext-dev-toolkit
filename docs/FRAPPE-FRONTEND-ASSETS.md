@@ -125,6 +125,14 @@ Do **not** treat “toolkit ready OK” as proof the host browser path is correc
 5. `sudo erpnext-dev configure-local-ssl` if `:80` should 301 to HTTPS
 6. `sudo erpnext-dev support-bundle`
 
+### Fresh local install — check before and after HTTPS
+
+On a clean VM (guided local quickstart):
+
+1. **Before HTTPS:** after install/`wait-ready`, open **`http://SITE:8000/login`** — must be styled.
+2. Accept trusted mkcert when prompted. The toolkit **auto-settles** (ERPNext + nginx restart + `wait-ready`) before printing `https://` URLs — do not treat that bounce as optional.
+3. **After HTTPS:** open **`https://SITE/login`** (hard refresh). Must match the `:8000` look. A full VM reboot should not be required.
+
 ---
 
 ## Related toolkit commands

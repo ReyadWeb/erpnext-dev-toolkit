@@ -1,3 +1,13 @@
+## Unreleased
+
+### Fixed
+
+- **Post-HTTPS settle before browser URLs:** trusted mkcert setup now always
+  restarts ERPNext + nginx and re-runs `wait-ready` before printing
+  `https://SITE` links. Skippable settle after HTTPS left the host browser
+  wrong until a full VM reboot even when VM Static assets showed OK. Guided
+  follow-up skips the duplicate prompt when settle already ran.
+
 ## v1.19.11 - Stale assets_json fix + stable release CI gate
 
 Patch release for the field failure where login HTML advertised ghost hashed

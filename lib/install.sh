@@ -1077,21 +1077,39 @@ local_guided_stable_ip_checkpoint() {
 # Confirm the install by bouncing ERPNext (+ nginx when HTTPS is active).
 # Field reports: a VM reboot after static IP often cleared post-install flakiness;
 # a targeted service restart is the same settle step without rebooting the guest.
+# When trusted mkcert just ran settle_stack_after_local_https, skip the prompt
+# (that path must not be skippable — it replaces the reboot workaround).
 local_guided_service_settle_checkpoint() {
   [[ -t 0 ]] || return 0
   [[ "$ASSUME_YES" -eq 1 ]] && return 0
+
+  if [[ "${LOCAL_HTTPS_STACK_SETTLED:-0}" == "1" ]]; then
+    echo
+    ok "Stack already settled after local HTTPS (ERPNext + nginx + wait-ready)."
+    echo "No second restart needed. Optional: $(toolkit_cmd restart)"
+    return 0
+  fi
 
   local reply
   echo
   ui_box_start "Local setup: confirm install (service restart)"
   echo "Restart ERPNext (and nginx if local HTTPS is active) to settle the stack."
   echo "This is the guided equivalent of rebooting services after a fresh install."
+  echo "Do not skip if the host browser still looks unstyled after HTTPS."
   ui_box_end
   echo
   read -r -p "Restart ERPNext services now to confirm the install? [Y/n]: " reply
   reply="${reply:-Y}"
   if [[ ! "$reply" =~ ^[Yy]$ ]]; then
-    echo "Skipped. Restart later with: $(toolkit_cmd restart)"
+    warn "Skipped settle restart. If the host login looks wrong, run:"
+    echo "  $(toolkit_cmd restart)"
+    echo "  $(toolkit_cmd wait-ready)"
+    return 0
+  fi
+
+  if declare -F settle_stack_after_local_https >/dev/null 2>&1 && \
+     systemctl is-active --quiet nginx 2>/dev/null; then
+    settle_stack_after_local_https || warn "Settle did not fully succeed; check $(toolkit_cmd status)"
     return 0
   fi
 
@@ -1127,9 +1145,10 @@ local_guided_followups() {
 
   ui_box_start "Local setup: guided follow-up steps"
   echo "ERPNext is installed. Prefer http://${SITE_NAME}:8000/login (not the raw IP)."
-  echo "If the login page looks unstyled, wait until $(toolkit_cmd wait-ready) reports"
-  echo "static assets OK, then hard-refresh the browser."
-  echo "Guided order: stable IP → HTTPS → service restart confirm → credentials → security → apps."
+  echo "Field check before HTTPS: open http://${SITE_NAME}:8000/login (styled?)."
+  echo "After trusted HTTPS, the toolkit settles ERPNext+nginx automatically, then"
+  echo "open https://${SITE_NAME}/login (hard refresh). Do not skip wait-ready."
+  echo "Guided order: stable IP → HTTPS (auto-settle) → credentials → security → apps."
   ui_box_end
 
   local_guided_stable_ip_checkpoint
