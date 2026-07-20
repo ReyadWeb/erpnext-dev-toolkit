@@ -3002,7 +3002,7 @@ backup_hardening_wizard() {
 
 run_backup_maintenance_menu() {
   while true; do
-    ui_submenu_header "Backups" "Local backups, restore, and scheduled jobs"
+    ui_submenu_header "Backup & Recovery" "Local backups, restore, schedules, retention, and maintenance"
     print_two_column_menu \
       "1) Database backup" \
       "2) DB + files backup" \

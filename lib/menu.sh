@@ -8,23 +8,17 @@ _ERPNEXT_DEV_MENU_LOADED=1
 # number|label
 MAIN_MENU_ITEMS=(
   "1|Start here"
-  "2|Production setup"
-  "3|Local VM setup"
-  "4|Status"
-  "5|Start service"
-  "6|Stop service"
-  "7|Verify access"
-  "8|Local HTTPS"
-  "9|Local network"
-  "10|Production HTTPS"
-  "11|Security"
-  "12|Backups"
-  "13|Apps"
-  "14|Advanced"
-  "15|Final QA"
-  "16|Dashboard"
-  "17|Production ops"
-  "18|Help"
+  "2|Local development"
+  "3|Production setup"
+  "4|Status & health"
+  "5|Access & networking"
+  "6|HTTPS & domains"
+  "7|Applications"
+  "8|Security"
+  "9|Backup & recovery"
+  "10|Operations"
+  "11|Advanced"
+  "12|Help"
 )
 
 menu_json_string_field() {
@@ -302,6 +296,145 @@ render_main_menu_screen() {
   printf ' Quit\n\n'
 }
 
+
+show_local_development_menu() {
+  while true; do
+    ui_submenu_header "Local Development" \
+      "Guided setup and the day-to-day tools for a local ERPNext VM"
+    print_two_column_menu \
+      "1) Guided local setup" \
+      "2) Status & health" \
+      "3) Service controls" \
+      "4) Access & networking" \
+      "5) HTTPS & domains" \
+      "6) Applications" \
+      "7) Credentials" \
+      "8) Environment check" \
+      "9) Setup lifecycle guide"
+    menu_footer back "Main menu"
+    local choice=""
+    menu_read_choice choice
+
+    case "$choice" in
+      1) run_local_dev_quickstart; pause_after_screen "Press Enter to return to Local Development..." ;;
+      2) show_status_menu ;;
+      3) show_service_menu ;;
+      4) show_access_menu ;;
+      5) show_https_domains_menu ;;
+      6) show_app_library_menu ;;
+      7) show_credentials_menu ;;
+      8) show_environment_check; pause_after_screen "Press Enter to return to Local Development..." ;;
+      9) show_setup_lifecycle_plan; show_setup_effort_guide; pause_after_screen "Press Enter to return to Local Development..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_production_setup_menu() {
+  while true; do
+    ui_submenu_header "Production Setup" \
+      "Guided deployment, readiness, security, backup, and go-live"
+    print_two_column_menu \
+      "1) Guided end-to-end setup" \
+      "2) Step-by-step setup menu" \
+      "3) Production readiness" \
+      "4) HTTPS & domains" \
+      "5) Security" \
+      "6) Backup & recovery" \
+      "7) Production operations" \
+      "8) Final QA" \
+      "9) Setup lifecycle guide"
+    menu_footer back "Main menu"
+    local choice=""
+    menu_read_choice choice
+
+    case "$choice" in
+      1) run_public_vm_guided_setup; pause_after_screen "Press Enter to return to Production Setup..." ;;
+      2) run_public_vm_quickstart ;;
+      3) show_production_readiness; show_public_vm_readiness; pause_after_screen "Press Enter to return to Production Setup..." ;;
+      4) show_https_domains_menu ;;
+      5) security_hardening_wizard ;;
+      6) run_backup_maintenance_menu ;;
+      7) production_ops_wizard ;;
+      8) final_qa_wizard; pause_after_screen "Press Enter to return to Production Setup..." ;;
+      9) show_setup_lifecycle_plan; show_setup_effort_guide; pause_after_screen "Press Enter to return to Production Setup..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_https_domains_menu() {
+  while true; do
+    ui_submenu_header "HTTPS & Domains" \
+      "Local trust, production certificates, domains, and SSL guidance"
+    print_two_column_menu \
+      "1) Local HTTPS" \
+      "2) Production HTTPS" \
+      "3) Domain configuration" \
+      "4) Change local domain" \
+      "5) Local domain / DNS status" \
+      "6) SSL / HTTPS roadmap" \
+      "7) SSL mode status & guide" \
+      "8) Production readiness"
+    menu_footer back "Main menu"
+    local choice=""
+    menu_read_choice choice
+
+    case "$choice" in
+      1) show_local_ssl_menu ;;
+      2) show_production_ssl_menu ;;
+      3) show_domain_config; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
+      4) change_local_domain_wizard; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
+      5) show_local_domain_status; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
+      6) show_ssl_roadmap_guide; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
+      7) show_ssl_mode_status; show_ssl_mode_guide; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
+      8) show_production_readiness; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_operations_menu() {
+  while true; do
+    ui_submenu_header "Operations" \
+      "Runtime control, maintenance, updates, production operations, and QA"
+    print_two_column_menu \
+      "1) Operations dashboard" \
+      "2) Service manager" \
+      "3) Maintenance" \
+      "4) Update preflight" \
+      "5) Safe ERPNext update" \
+      "6) Production operations" \
+      "7) Final QA" \
+      "8) Next recommended action" \
+      "9) Service recovery plan"
+    menu_footer back "Main menu"
+    local choice=""
+    menu_read_choice choice
+
+    case "$choice" in
+      1) run_operations_dashboard; pause_after_screen "Press Enter to return to Operations..." ;;
+      2) show_service_menu ;;
+      3) run_maintenance_menu ;;
+      4) run_update_preflight; pause_after_screen "Press Enter to return to Operations..." ;;
+      5) run_safe_update_wizard; pause_after_screen "Press Enter to return to Operations..." ;;
+      6) production_ops_wizard ;;
+      7) final_qa_wizard; pause_after_screen "Press Enter to return to Operations..." ;;
+      8) show_next_step; pause_after_screen "Press Enter to return to Operations..." ;;
+      9) show_service_recovery_plan; pause_after_screen "Press Enter to return to Operations..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
 show_menu() {
   local choice
   while true; do
@@ -315,23 +448,17 @@ show_menu() {
 
     case "$choice" in
       1) run_first_run_wizard ;;
-      2) run_public_vm_guided_setup; pause_after_screen "Press Enter to return to Main menu..." ;;
-      3) run_local_dev_quickstart; pause_after_screen "Press Enter to return to Main menu..." ;;
+      2) show_local_development_menu ;;
+      3) show_production_setup_menu ;;
       4) show_status_menu ;;
-      5) run_start; pause_after_screen "Press Enter to return to Main menu..." ;;
-      6) run_stop; pause_after_screen "Press Enter to return to Main menu..." ;;
-      7) verify_access; pause_after_screen "Press Enter to return to Main menu..." ;;
-      8) show_local_ssl_menu ;;
-      9) show_local_ip_menu ;;
-      10) show_production_ssl_menu ;;
-      11) security_hardening_wizard ;;
-      12) run_backup_maintenance_menu ;;
-      13) show_app_library_menu ;;
-      14) show_advanced_menu ;;
-      15) final_qa_wizard ;;
-      16) run_operations_dashboard; pause_after_screen "Press Enter to return to Main menu..." ;;
-      17) production_ops_wizard ;;
-      18) show_help; pause_after_screen "Press Enter to return to Main menu..." ;;
+      5) show_access_menu ;;
+      6) show_https_domains_menu ;;
+      7) show_app_library_menu ;;
+      8) security_hardening_wizard ;;
+      9) run_backup_maintenance_menu ;;
+      10) show_operations_menu ;;
+      11) show_advanced_menu ;;
+      12) show_help; pause_after_screen "Press Enter to return to Main menu..." ;;
       q|Q) exit 0 ;;
       *)
         warn "Invalid option"

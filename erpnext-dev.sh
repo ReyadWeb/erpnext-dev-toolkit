@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.19.15"
+SCRIPT_VERSION="1.19.16"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -765,65 +765,218 @@ show_toolkit_versions() {
 
 
 
+show_advanced_installation_menu() {
+  while true; do
+    ui_submenu_header "Advanced > Installation & Repair" \
+      "Install, preflight, repair, or intentionally remove the environment"
+    print_two_column_menu \
+      "1) Install / reinstall" \
+      "2) Repair environment" \
+      "3) Installation preflight" \
+      "4) Uninstall / reset [destructive]"
+    menu_footer back "Advanced"
+    local choice=""
+    menu_read_choice choice
+    case "$choice" in
+      1) run_install; pause_after_screen "Press Enter to return to Installation & Repair..." ;;
+      2) run_repair; pause_after_screen "Press Enter to return to Installation & Repair..." ;;
+      3) run_install_preflight; pause_after_screen "Press Enter to return to Installation & Repair..." ;;
+      4) run_uninstall_menu ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_advanced_engine_menu() {
+  while true; do
+    ui_submenu_header "Advanced > Deployment Engine" \
+      "Inspect or choose the native / Docker deployment engine"
+    print_two_column_menu \
+      "1) Deployment engine status" \
+      "2) Choose deployment engine" \
+      "3) Environment / location check" \
+      "4) Multi-environment guide"
+    menu_footer back "Advanced"
+    local choice=""
+    menu_read_choice choice
+    case "$choice" in
+      1) show_engine_status; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
+      2) run_set_engine; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
+      3) show_environment_check; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
+      4) show_multi_environment_guide; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_advanced_services_menu() {
+  while true; do
+    ui_submenu_header "Advanced > Services & Logs" \
+      "Service management, foreground Bench, runtime state, and logs"
+    print_two_column_menu \
+      "1) Service manager" \
+      "2) Start Bench in foreground" \
+      "3) Show service logs" \
+      "4) Runtime status" \
+      "5) Service recovery plan"
+    menu_footer back "Advanced"
+    local choice=""
+    menu_read_choice choice
+    case "$choice" in
+      1) show_service_menu ;;
+      2) run_foreground_start; pause_after_screen "Press Enter to return to Services & Logs..." ;;
+      3) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Services & Logs..." ;;
+      4) run_runtime_status; pause_after_screen "Press Enter to return to Services & Logs..." ;;
+      5) show_service_recovery_plan; pause_after_screen "Press Enter to return to Services & Logs..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_advanced_storage_menu() {
+  while true; do
+    ui_submenu_header "Advanced > Storage" \
+      "Inspect, expand, and verify VM root storage"
+    print_two_column_menu \
+      "1) Storage status" \
+      "2) Expand root storage" \
+      "3) Verify storage"
+    menu_footer back "Advanced"
+    local choice=""
+    menu_read_choice choice
+    case "$choice" in
+      1) show_storage_status; pause_after_screen "Press Enter to return to Storage..." ;;
+      2) expand_root_storage; pause_after_screen "Press Enter to return to Storage..." ;;
+      3) verify_storage; pause_after_screen "Press Enter to return to Storage..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_advanced_networking_menu() {
+  while true; do
+    ui_submenu_header "Advanced > Networking" \
+      "Access routing, VM network state, stable IP, and host guidance"
+    print_two_column_menu \
+      "1) Access & networking" \
+      "2) VM network status" \
+      "3) Local network & stable IP" \
+      "4) KVM fixed IP guide" \
+      "5) Multi-environment guide" \
+      "6) Verify ERPNext HTTP access"
+    menu_footer back "Advanced"
+    local choice=""
+    menu_read_choice choice
+    case "$choice" in
+      1) show_access_menu ;;
+      2) show_network_status; pause_after_screen "Press Enter to return to Networking..." ;;
+      3) show_local_ip_menu ;;
+      4) show_kvm_fixed_ip_guide; pause_after_screen "Press Enter to return to Networking..." ;;
+      5) show_multi_environment_guide; pause_after_screen "Press Enter to return to Networking..." ;;
+      6) verify_access; pause_after_screen "Press Enter to return to Networking..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_advanced_diagnostics_menu() {
+  while true; do
+    ui_submenu_header "Advanced > Diagnostics" \
+      "Health, readiness, environment, and recommended-next-step checks"
+    print_two_column_menu \
+      "1) Full health report" \
+      "2) Optional app status" \
+      "3) Environment / location check" \
+      "4) Production readiness preview" \
+      "5) Public VM readiness" \
+      "6) Next recommended action" \
+      "7) Verify ERPNext HTTP access" \
+      "8) Operations dashboard"
+    menu_footer back "Advanced"
+    local choice=""
+    menu_read_choice choice
+    case "$choice" in
+      1) run_full_status; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      2) run_app_status; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      3) show_environment_check; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      4) show_production_readiness; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      5) show_public_vm_readiness; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      6) show_next_step; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      7) verify_access; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      8) run_operations_dashboard; pause_after_screen "Press Enter to return to Diagnostics..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
+show_advanced_developer_tools_menu() {
+  while true; do
+    ui_submenu_header "Advanced > Developer Tools" \
+      "Applications, compatibility, custom app tools, and rollback guidance"
+    print_two_column_menu \
+      "1) Application library" \
+      "2) App install wizard" \
+      "3) Optional app status" \
+      "4) App compatibility" \
+      "5) App rollback guide" \
+      "6) Advanced app tools"
+    menu_footer back "Advanced"
+    local choice=""
+    menu_read_choice choice
+    case "$choice" in
+      1) show_app_library_menu ;;
+      2) run_app_install_wizard ;;
+      3) run_app_status; pause_after_screen "Press Enter to return to Developer Tools..." ;;
+      4) show_app_compatibility_matrix; pause_after_screen "Press Enter to return to Developer Tools..." ;;
+      5) show_app_rollback_guide; pause_after_screen "Press Enter to return to Developer Tools..." ;;
+      6) show_advanced_app_tools_menu ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
 show_advanced_menu() {
   while true; do
-    ui_submenu_header "Advanced Options" "Install, SSL, storage, production, and diagnostics"
-    print_two_column_menu       "1) Install / Reinstall"       "2) Repair Environment"       "3) Uninstall / Reset"       "4) Autostart / Service Manager"       "5) Backup / Maintenance"       "6) App Library"       "7) Optional App Status"       "8) Full Health Report"       "9) VM Network Status"       "10) Environment / location check"       "11) KVM Fixed IP Guide"       "12) Multi-Environment Guide"       "13) Local VM HTTPS / SSL"       "14) Local SSL Status"       "15) Local SSL Guide"       "16) Local SSL Wizard"       "17) Trusted mkcert SSL Guide"       "18) Browser Trust Check Guide"       "19) Install/Replace Local SSL Cert"       "20) Verify Local SSL"       "21) Create Self-Signed Local Cert"       "22) Configure Local SSL"       "23) Disable Local SSL"       "24) Verify SSL Rollback"       "25) Storage Status"       "26) Expand Root Storage"       "27) Verify Storage"       "28) Domain Config"       "29) Production Readiness Preview"       "30) Production Domain Guide"       "31) Production SSL Guide"       "32) Public VM Readiness"       "33) Production SSL Plan"       "34) Production Firewall Plan"       "35) Firewall Hardening Status"       "36) Configure Production SSL"       "37) Production SSL Status"       "38) Disable Production SSL"       "39) Start Bench in Foreground"       "40) Show Service Logs"       "41) Access Submenu"       "42) Next Step"       "43) Verify ERPNext HTTP Access"       "44) App Install Wizard"       "45) App Rollback Guide"       "46) Install Environment Preflight"       "47) Change Local Domain"       "48) Deployment Engine Status"       "49) Choose Deployment Engine"       "50) Credentials / Login"
-    menu_footer
+    ui_submenu_header "Advanced" \
+      "Grouped expert tools; normal workflows remain in the Main menu"
+    print_two_column_menu \
+      "1) Installation & repair" \
+      "2) Deployment engine" \
+      "3) Services & logs" \
+      "4) Storage" \
+      "5) Networking" \
+      "6) Domains & HTTPS" \
+      "7) Credentials" \
+      "8) Diagnostics" \
+      "9) Developer tools"
+    menu_footer back "Main menu"
     local advanced_choice=""
     menu_read_choice advanced_choice
 
     case "$advanced_choice" in
-      1) run_install; pause_after_screen "Press Enter to return to Advanced..." ;;
-      2) run_repair; pause_after_screen "Press Enter to return to Advanced..." ;;
-      3) run_uninstall_menu ;;
-      4) show_service_menu ;;
-      5) run_backup_maintenance_menu ;;
-      6) show_app_library_menu ;;
-      7) run_app_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      8) run_full_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      9) show_network_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      10) show_environment_check; pause_after_screen "Press Enter to return to Advanced..." ;;
-      11) show_kvm_fixed_ip_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      12) show_multi_environment_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      13) show_local_ssl_menu ;;
-      14) show_ssl_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      15) show_local_ssl_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      16) run_local_ssl_wizard ;;
-      17) show_mkcert_local_ssl_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      18) show_browser_trust_check_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      19) install_local_ssl_cert; pause_after_screen "Press Enter to return to Advanced..." ;;
-      20) verify_local_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
-      21) create_self_signed_local_cert; pause_after_screen "Press Enter to return to Advanced..." ;;
-      22) configure_local_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
-      23) disable_local_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
-      24) verify_ssl_rollback; pause_after_screen "Press Enter to return to Advanced..." ;;
-      25) show_storage_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      26) expand_root_storage; pause_after_screen "Press Enter to return to Advanced..." ;;
-      27) verify_storage; pause_after_screen "Press Enter to return to Advanced..." ;;
-      28) show_domain_config; pause_after_screen "Press Enter to return to Advanced..." ;;
-      29) show_production_readiness; pause_after_screen "Press Enter to return to Advanced..." ;;
-      30) show_production_domain_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      31) show_production_ssl_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      32) show_public_vm_readiness; pause_after_screen "Press Enter to return to Advanced..." ;;
-      33) show_production_ssl_plan; pause_after_screen "Press Enter to return to Advanced..." ;;
-      34) show_production_firewall_plan; pause_after_screen "Press Enter to return to Advanced..." ;;
-      35) show_firewall_hardening_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      36) configure_production_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
-      37) show_production_ssl_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      38) disable_production_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
-      39) run_foreground_start; pause_after_screen "Press Enter to return to Advanced..." ;;
-      40) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Advanced..." ;;
-      41) show_access_menu ;;
-      42) show_next_step; pause_after_screen "Press Enter to return to Advanced..." ;;
-      43) verify_access; pause_after_screen "Press Enter to return to Advanced..." ;;
-      44) run_app_install_wizard ;;
-      45) show_app_rollback_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
-      46) run_install_preflight; pause_after_screen "Press Enter to return to Advanced..." ;;
-      47) change_local_domain_wizard; pause_after_screen "Press Enter to return to Advanced..." ;;
-      48) show_engine_status; pause_after_screen "Press Enter to return to Advanced..." ;;
-      49) run_set_engine; pause_after_screen "Press Enter to return to Advanced..." ;;
-      50) show_credentials_menu ;;
+      1) show_advanced_installation_menu ;;
+      2) show_advanced_engine_menu ;;
+      3) show_advanced_services_menu ;;
+      4) show_advanced_storage_menu ;;
+      5) show_advanced_networking_menu ;;
+      6) show_https_domains_menu ;;
+      7) show_credentials_menu ;;
+      8) show_advanced_diagnostics_menu ;;
+      9) show_advanced_developer_tools_menu ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -931,15 +1084,19 @@ menu_navigation_self_test() {
 
   # Test a few nested submenu paths where prior bugs could drop the user into shell.
   local nested_tests=(
-    "advanced|4|q"
+    "advanced|1|q"
+    "advanced|3|q"
     "advanced|5|q"
     "advanced|6|q"
-    "advanced|13|q"
-    "advanced|50|q"
-    "menu|8|q"
+    "advanced|7|q"
+    "advanced|9|q"
+    "menu|2|q"
+    "menu|3|q"
+    "menu|5|q"
+    "menu|6|q"
     "menu|9|q"
-    "menu|12|q"
-    "menu|13|q"
+    "menu|10|q"
+    "menu|11|q"
     "health-monitoring-wizard|3|q"
     "production-ops-wizard|7|b"
     "production-ops-wizard|10|b"
@@ -1248,7 +1405,7 @@ Common environment overrides:
   EDUCATION_BRANCH=version-16
   LMS_BRANCH=                     # blank = repository default branch
 
-Use $(toolkit_cmd advanced) for the complete command menu.
+Use $(toolkit_cmd advanced) for grouped expert tools; direct CLI commands remain available.
 After first run, use the short command: sudo erpnext-dev menu
 
 Questions or bugs? See SUPPORT.md. Want to contribute? See CONTRIBUTING.md.

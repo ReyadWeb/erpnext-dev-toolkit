@@ -238,7 +238,7 @@ run_service_summary() {
 
 show_status_menu() {
   while true; do
-    ui_submenu_header "Status" "Runtime, install, and health views"
+    ui_submenu_header "Status & Health" "Runtime, installation, services, apps, and full health views"
     print_two_column_menu \
       "1) Status Summary" \
       "2) Runtime Status" \

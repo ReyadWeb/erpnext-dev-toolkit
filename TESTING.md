@@ -1,6 +1,49 @@
 # Testing guide
 
-**Current release:** v1.19.15 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.16 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+
+---
+
+## v1.19.16 menu information architecture
+
+Purpose: verify the interactive navigation is task-oriented without changing direct CLI command dispatch.
+
+Hermetic checks:
+
+```bash
+bash -n erpnext-dev.sh
+find lib -maxdepth 1 -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+bash scripts/test-ui-render.sh
+bash scripts/check-module-consistency.sh
+bash scripts/check-release-doc-alignment.sh
+```
+
+Manual render checks:
+
+```bash
+printf 'q\n' | MENU_TERMINAL_COLS=80 ./erpnext-dev.sh menu
+printf 'q\n' | MENU_TERMINAL_COLS=80 ./erpnext-dev.sh advanced
+printf 'q\n' | MENU_TERMINAL_COLS=80 ./erpnext-dev.sh access
+```
+
+Expected:
+
+- Main menu has 12 task-oriented choices and stays two-column at 80 columns.
+- Advanced has 9 grouped expert categories, not the former 50-item flat list.
+- Access & Networking has 7 routes, not the former 29-item flat list.
+- Destructive uninstall/reset is isolated under Advanced > Installation & Repair.
+- Existing direct commands such as `start`, `stop`, `local-ssl-menu`, `production-ssl-menu`, `backup-menu`, and `app-library` still dispatch unchanged.
+- `b` / `B` return from nested menus and `q` / `Q` exit cleanly.
+
+Field smoke after install/update:
+
+```bash
+sudo erpnext-dev menu
+sudo erpnext-dev menu-self-test
+sudo erpnext-dev version
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+```
 
 ---
 

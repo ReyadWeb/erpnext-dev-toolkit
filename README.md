@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.15 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.19.16 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -157,7 +157,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.15"
+VERSION="v1.19.16"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
@@ -358,7 +358,7 @@ sudo erpnext-dev restart                 # settle ERPNext (+ nginx) after instal
 sudo erpnext-dev local-access-doctor
 ```
 
-From the interactive menu that is **Main menu > 8) Local HTTPS > 1) SSL Wizard**.
+From the interactive menu that is **Main menu > 6) HTTPS & domains > 1) Local HTTPS > 1) SSL Wizard**.
 Press `b` to go back one level; reopen anytime with the command above (or
 `sudo erpnext-dev local-ssl-menu` for the parent screen). Re-running a wizard
 option continues safely when that step is already done.
@@ -514,7 +514,19 @@ single-column on small SSH sessions. It supports `NO_COLOR=1` / `--no-color`,
 `TERM=dumb`, and ASCII fallback. Status badges read the **cached** health
 snapshot only — live probes stay on `dashboard` / `health-check`.
 
-![Main menu UI mockup](docs/assets/menu-ui-mockup.png)
+The v1.19.16 menu is task-oriented rather than a flat command index:
+
+```text
+Start here              Applications
+Local development       Security
+Production setup        Backup & recovery
+Status & health         Operations
+Access & networking     Advanced
+HTTPS & domains         Help
+```
+
+`Advanced` is grouped into 9 expert categories, while `Access & networking`
+contains 7 routing choices. Existing direct CLI commands remain available.
 
 Handy basics:
 
@@ -540,7 +552,7 @@ sudo erpnext-dev install-cli    # or: repair-cli
 The toolkit saves the generated ERPNext Administrator password and database
 credentials on the VM. The safe overview does **not** print passwords.
 
-From the interactive menu: **Advanced → 50) Credentials / Login**, or open that
+From the interactive menu: **Main menu → Advanced → Credentials**, or open that
 submenu directly:
 
 ```bash
@@ -865,8 +877,8 @@ sudo erpnext-dev ssl-mode-guide
 Local VM: `local-ssl-wizard`, `verify-local-ssl`, `change-local-domain`,
 `disable-local-ssl`. Production: `production-ssl-wizard`,
 `configure-cloudflare-origin-ssl`, `production-ssl-status`,
-`disable-production-ssl`. The main menu separates **Local HTTPS** from
-**Production HTTPS** — use local HTTPS only for `.test` domains.
+`disable-production-ssl`. The main menu groups both under **HTTPS & domains**;
+choose **Local HTTPS** for `.test` domains and **Production HTTPS** for public domains.
 
 ---
 

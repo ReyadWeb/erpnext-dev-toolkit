@@ -3087,8 +3087,8 @@ show_production_ssl_menu() {
   local back_label="Main menu"
   while true; do
     ui_submenu_header "Production HTTPS" \
-      "Public domains only · local .test HTTPS: Main menu > 8"
-    menu_location_note "Main menu > 9) Production HTTPS" "production-ssl-menu"
+      "Public domains only · local .test HTTPS: HTTPS & Domains > 1"
+    menu_location_note "Main menu > 6) HTTPS & Domains > 2) Production HTTPS" "production-ssl-menu"
     echo
     print_two_column_menu \
       "1) SSL Wizard" \
@@ -3139,7 +3139,7 @@ show_local_ssl_menu() {
   while true; do
     ui_submenu_header "Local HTTPS" \
       "Local domains such as ${SITE_NAME} · day-to-day: [1] SSL Wizard"
-    menu_location_note "Main menu > 8) Local HTTPS" "local-ssl-menu"
+    menu_location_note "Main menu > 6) HTTPS & Domains > 1) Local HTTPS" "local-ssl-menu"
     echo
     print_two_column_menu \
       "1) SSL Wizard" \
