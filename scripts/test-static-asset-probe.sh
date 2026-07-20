@@ -315,6 +315,26 @@ if ! grep -q 'clear_bench_assets_json_cache' "${ROOT_DIR}/lib/access.sh"; then
 else
   echo "OK: assets_json cache clear helper present"
 fi
+if ! grep -q 'evict_redis_assets_json_keys' "${ROOT_DIR}/lib/access.sh"; then
+  echo "FAIL: missing evict_redis_assets_json_keys (must DEL on redis_cache :13000)" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: hard redis assets_json eviction helper present"
+fi
+# wait-ready must prefer Frappe local :8000 over :443
+if ! grep -A25 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -q 'port_listens 8000'; then
+  echo "FAIL: bench_static_assets_ready must probe :8000" >&2
+  fail=$((fail + 1))
+else
+  # Prefer 8000: first port_listens in the function body should be 8000
+  first_port="$(grep -A25 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -m1 'port_listens' || true)"
+  if [[ "$first_port" != *8000* ]]; then
+    echo "FAIL: bench_static_assets_ready must prefer :8000 before :443 (got: ${first_port})" >&2
+    fail=$((fail + 1))
+  else
+    echo "OK: bench_static_assets_ready prefers :8000"
+  fi
+fi
 
 if ! grep -q 'disk_login_asset_bundles_present' "${ROOT_DIR}/lib/access.sh"; then
   echo "FAIL: missing disk_login_asset_bundles_present" >&2

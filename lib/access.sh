@@ -387,6 +387,76 @@ warn_if_build_memory_low() {
   return 0
 }
 
+# Parse host:port from redis:// URL in common_site_config (bench cache is often :13000).
+bench_redis_cache_host_port() {
+  local bench_dir="${1:-}" cfg url hostport
+  [[ -n "$bench_dir" ]] || bench_dir="$(active_bench_dir 2>/dev/null || true)"
+  cfg="${bench_dir}/sites/common_site_config.json"
+  [[ -f "$cfg" ]] || return 1
+  url="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('redis_cache','') or '')" "$cfg" 2>/dev/null || true)"
+  [[ "$url" == redis://* || "$url" == rediss://* ]] || return 1
+  hostport="${url#*://}"
+  hostport="${hostport%%/*}"
+  # strip userinfo if present
+  hostport="${hostport##*@}"
+  [[ -n "$hostport" ]] || return 1
+  printf '%s\n' "$hostport"
+}
+
+# Hard-DEL assets_json keys on the bench redis_cache instance (not host :6379).
+# plain `redis-cli KEYS` misses frappe cache on :13000 — field failure on e.test.
+evict_redis_assets_json_keys() {
+  local bench_dir="${1:-}" hostport host port
+  local -a keys=()
+
+  hostport="$(bench_redis_cache_host_port "$bench_dir")" || return 1
+  if [[ "$hostport" == *:* ]]; then
+    host="${hostport%:*}"
+    port="${hostport##*:}"
+  else
+    host="$hostport"
+    port=6379
+  fi
+  command -v redis-cli >/dev/null 2>&1 || return 1
+
+  mapfile -t keys < <(redis-cli -h "$host" -p "$port" --scan --pattern '*assets_json*' 2>/dev/null || true)
+  if ((${#keys[@]} == 0)); then
+    # Frappe often uses the bare key name as well.
+    keys=("assets_json")
+  fi
+  redis-cli -h "$host" -p "$port" DEL "${keys[@]}" >/dev/null 2>&1 || true
+  return 0
+}
+
+# True when sites/assets/assets.json login/website hashes exist as files on disk.
+assets_json_login_hashes_on_disk() {
+  local bench_dir="${1:-}" assets json
+  assets="$(bench_sites_dir "$bench_dir")/assets"
+  json="${assets}/assets.json"
+  [[ -f "$json" ]] || return 1
+  python3 - "$assets" "$json" <<'PY'
+import json, os, sys
+assets, path = sys.argv[1], sys.argv[2]
+data = json.load(open(path))
+needles = ("login.bundle", "website.bundle", "erpnext-web.bundle", "frappe-web.bundle")
+checked = 0
+for key, val in data.items():
+    if not any(n in str(key) or n in str(val) for n in needles):
+        continue
+    rel = str(val).lstrip("/")
+    if rel.startswith("assets/"):
+        rel = rel[len("assets/"):]
+    fp = os.path.join(assets, rel)
+    if not os.path.isfile(fp):
+        # val may already be app/dist/... under assets/
+        fp2 = os.path.join(assets, str(val).lstrip("/"))
+        if not os.path.isfile(fp2):
+            sys.exit(1)
+    checked += 1
+sys.exit(0 if checked else 1)
+PY
+}
+
 # Evict Redis assets_json + site/website caches after bench build (frappe#29901).
 clear_bench_assets_json_cache() {
   local bench_dir site="${SITE_NAME:-}"
@@ -399,6 +469,20 @@ clear_bench_assets_json_cache() {
   # Explicit shared-key eviction; clear-cache should cover this, but stale
   # assets_json is a known unstyled-login cause after rebuilds.
   run_as_frappe "cd '${bench_dir}' && bench --site '${site}' execute frappe.cache_manager.clear_global_cache" || true
+  # Bench redis_cache is usually 127.0.0.1:13000 — never assume host redis-cli :6379.
+  if evict_redis_assets_json_keys "$bench_dir"; then
+    log "Deleted assets_json keys on bench redis_cache ($(bench_redis_cache_host_port "$bench_dir" 2>/dev/null || echo unknown))"
+  else
+    warn "Could not hard-DEL assets_json on redis_cache; relying on bench clear-cache only"
+  fi
+  # If assets.json points at hashes that are not on disk, drop it so the next
+  # bench build regenerates a consistent map (HTML 404 ghost-hash failure mode).
+  if [[ -f "$(bench_sites_dir "$bench_dir")/assets/assets.json" ]] && \
+     ! assets_json_login_hashes_on_disk "$bench_dir"; then
+    warn "sites/assets/assets.json hashes do not match files on disk — removing stale map"
+    run_as_frappe "rm -f '$(bench_sites_dir "$bench_dir")/assets/assets.json'" || \
+      $SUDO rm -f "$(bench_sites_dir "$bench_dir")/assets/assets.json" 2>/dev/null || true
+  fi
   return 0
 }
 

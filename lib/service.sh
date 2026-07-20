@@ -93,27 +93,27 @@ bench_readiness_line() {
 }
 
 # Browser-ready gate: every local CSS/JS required by /login must GET with
-# size_download > 0 (probe_login_frontend_assets_all). Prefers HTTPS (nginx)
-# when :443 listens; otherwise probes bench :8000. One missing login.bundle /
+# size_download > 0 (probe_login_frontend_assets_all). Prefers Frappe local
+# :8000 first, then HTTPS :443 (nginx). One missing login.bundle /
 # erpnext-web.bundle style 404 must fail even if website.bundle is OK.
 bench_static_assets_ready() {
   local probe_rc=0
 
+  if port_listens 8000; then
+    set +e
+    probe_login_frontend_assets_all "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
+    probe_rc=$?
+    set -e
+    [[ "$probe_rc" -eq 0 ]] && return 0
+  fi
   if port_listens 443; then
     set +e
     probe_login_frontend_assets_all "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
     probe_rc=$?
     set -e
-  elif port_listens 8000; then
-    set +e
-    probe_login_frontend_assets_all "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
-    probe_rc=$?
-    set -e
-  else
-    return 1
+    [[ "$probe_rc" -eq 0 ]] && return 0
   fi
-
-  [[ "$probe_rc" -eq 0 ]]
+  return 1
 }
 
 # Require ASSET_READY_STABLE_CHECKS consecutive full successes (default 2)
@@ -138,14 +138,15 @@ bench_static_assets_ready_stable() {
 # Capture failing assets (for diagnostics) before a rebuild. Best-effort.
 record_frontend_asset_failures() {
   local url host port line
-  if port_listens 443; then
-    url="https://${SITE_NAME}/login"
-    host="$SITE_NAME"
-    port=443
-  elif port_listens 8000; then
+  # Prefer :8000 (Frappe local contract) so diagnostics match wait-ready.
+  if port_listens 8000; then
     url="http://${SITE_NAME}:8000/login"
     host="$SITE_NAME"
     port=8000
+  elif port_listens 443; then
+    url="https://${SITE_NAME}/login"
+    host="$SITE_NAME"
+    port=443
   else
     return 1
   fi

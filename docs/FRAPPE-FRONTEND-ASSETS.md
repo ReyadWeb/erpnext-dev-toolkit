@@ -106,7 +106,7 @@ sudo erpnext-dev frappe-asset-checklist
 Classify in order:
 
 1. **Incomplete build** — missing `login.bundle.*.css` / `website.bundle.*.css` on disk; dmesg OOM; log “Assets for Release don’t exist” without a completed yarn build.
-2. **Stale `assets_json`** — HTML references hashes not on disk (or opposite after rebuild without cache clear).
+2. **Stale `assets_json`** — HTML references hashes not on disk (or opposite after rebuild without cache clear). Bench cache is **`redis://127.0.0.1:13000`** — `redis-cli` without `-p 13000` is the wrong instance. Also compare `sites/assets/assets.json` to files under `sites/assets/*/dist/`.
 3. **Host / DNS** — raw IP or wrong `/etc/hosts`; Host header ≠ site name.
 4. **Permissions** — files exist but not readable by nginx/frappe user.
 5. **Wrong entry URL** — bare `http://SITE` while only `:8000` / HTTPS proxy is valid.
