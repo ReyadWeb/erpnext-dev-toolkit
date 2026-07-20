@@ -2031,10 +2031,20 @@ run_trusted_mkcert_setup() {
   install_local_ssl_cert
   configure_local_ssl
 
-  # Nginx :443 can listen before CSS/JS are served on the HTTPS origin. Wait for
-  # the same asset gate as wait-ready (includes one automatic asset rebuild when
-  # bundles 404) before telling the operator to open the browser.
-  if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
+  # Bounce ERPNext + nginx and flush the dedicated redis_cache DB before any
+  # "open the browser" message. This restores the v1.19.14 field fix: a valid
+  # assets.json on disk can still coexist with ghost CSS hashes in Redis.
+  if declare -F settle_stack_after_local_https >/dev/null 2>&1; then
+    settle_stack_after_local_https || {
+      warn "HTTPS is configured, but post-HTTPS settle / assets are not ready yet."
+      echo "Run:"
+      echo "  $(toolkit_cmd restart)"
+      echo "  $(toolkit_cmd repair-frontend-assets)"
+      echo "  $(toolkit_cmd wait-frontend-assets)"
+      echo "============================================================"
+      return 1
+    }
+  elif declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
     wait_for_erpnext_ready || {
       warn "HTTPS is configured, but login static assets are not ready yet."
       echo "Automatic rebuild during wait-ready did not clear it. Run:"

@@ -1,3 +1,11 @@
+## v1.19.17 - Frontend asset consistency
+
+- Restored the dedicated `redis_cache` settle lifecycle.
+- Enforced frontend settling for non-interactive local installations.
+- Added stable asset-manifest fingerprint verification before readiness passes.
+- Added an independent frontend asset verification after installation.
+- Improved Ubuntu integration diagnostics for missing or changing frontend assets.
+
 ## v1.19.16 - Menu information architecture
 
 UX-focused patch that turns the interactive toolkit from a large command index
@@ -23,10 +31,27 @@ command and the v1.19.15 page lifecycle.
 - **Navigation labels:** updated local/production HTTPS and local-network path
   hints to match the new hierarchy.
 
+### Fixed
+
+- **Frontend settle regression restored:** restored the v1.19.14 dedicated
+  `redis_cache` `FLUSHDB` safety helper and mandatory local stack settle after
+  install and trusted local HTTPS. The helper refuses to flush when
+  `redis_cache` shares the `redis_queue` endpoint.
+- **Non-interactive install consistency:** `-y install` now receives the same
+  post-install cache flush, runtime restart, stable readiness gate, and final
+  independent frontend verification as interactive local setup.
+- **Stable asset-manifest readiness:** `wait-ready` now requires the same
+  complete `/login` asset-path fingerprint to pass repeatedly (three checks by
+  default), preventing alternating stale/new asset manifests from producing a
+  false-ready result.
+- **Integration diagnostics:** the Ubuntu install smoke now captures the Frappe
+  asset checklist, `assets.json`, on-disk bundle lists, repeated live manifests,
+  Redis configuration, and service logs when browser consistency fails.
+
 ### Compatibility
 
-- Existing direct CLI commands and aliases are unchanged; this release changes
-  interactive menu information architecture only.
+- Existing direct CLI commands and aliases are unchanged. This release changes
+  interactive navigation and hardens the existing frontend readiness lifecycle.
 
 ### Validation
 

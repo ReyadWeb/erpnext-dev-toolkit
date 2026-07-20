@@ -96,38 +96,72 @@ bench_readiness_line() {
 # size_download > 0 (probe_login_frontend_assets_all). Prefers Frappe local
 # :8000 first, then HTTPS :443 (nginx). One missing login.bundle /
 # erpnext-web.bundle style 404 must fail even if website.bundle is OK.
-bench_static_assets_ready() {
-  local probe_rc=0
+_frontend_asset_route_fingerprint() {
+  local url="${1:-}" host="${2:-}" port="${3:-}" tmp probe_rc=0 fingerprint=""
 
+  [[ -n "$url" && -n "$host" && -n "$port" ]] || return 1
+  tmp="$(mktemp /tmp/erpnext-dev-ready-assets.XXXXXX)"
+  set +e
+  probe_login_frontend_assets_all "$url" "$host" "$port" "127.0.0.1" >"$tmp"
+  probe_rc=$?
+  set -e
+
+  if [[ "$probe_rc" -eq 0 ]]; then
+    fingerprint="$(
+      awk -F'|' '$1 == "OK" && $2 != "" {print $2}' "$tmp" \
+        | LC_ALL=C sort -u \
+        | sha256sum \
+        | awk '{print $1}'
+    )"
+  fi
+  rm -f "$tmp"
+
+  [[ "$probe_rc" -eq 0 && -n "$fingerprint" ]] || return 1
+  printf '%s\n' "$fingerprint"
+}
+
+bench_static_assets_probe_fingerprint() {
+  local fingerprint=""
+
+  # Preserve the historical route order: try the Frappe-local :8000 contract
+  # first, then HTTPS :443 when the first route is not browser-ready.
   if port_listens 8000; then
-    set +e
-    probe_login_frontend_assets_all "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000 "127.0.0.1" >/dev/null
-    probe_rc=$?
-    set -e
-    [[ "$probe_rc" -eq 0 ]] && return 0
+    fingerprint="$(_frontend_asset_route_fingerprint \
+      "http://${SITE_NAME}:8000/login" "$SITE_NAME" 8000)" && {
+      printf '%s\n' "$fingerprint"
+      return 0
+    }
   fi
   if port_listens 443; then
-    set +e
-    probe_login_frontend_assets_all "https://${SITE_NAME}/login" "$SITE_NAME" 443 "127.0.0.1" >/dev/null
-    probe_rc=$?
-    set -e
-    [[ "$probe_rc" -eq 0 ]] && return 0
+    fingerprint="$(_frontend_asset_route_fingerprint \
+      "https://${SITE_NAME}/login" "$SITE_NAME" 443)" && {
+      printf '%s\n' "$fingerprint"
+      return 0
+    }
   fi
   return 1
 }
 
-# Require ASSET_READY_STABLE_CHECKS consecutive full successes (default 2)
+bench_static_assets_ready() {
+  bench_static_assets_probe_fingerprint >/dev/null
+}
+
+# Require ASSET_READY_STABLE_CHECKS consecutive full successes (default 3)
 # separated by ASSET_READY_STABLE_GAP seconds (default 2). Any failure resets.
 bench_static_assets_ready_stable() {
-  local need="${ASSET_READY_STABLE_CHECKS:-2}"
+  local need="${ASSET_READY_STABLE_CHECKS:-3}"
   local gap="${ASSET_READY_STABLE_GAP:-2}"
-  local i
+  local i fingerprint previous=""
 
-  [[ "$need" =~ ^[0-9]+$ ]] && ((need >= 1)) || need=2
+  [[ "$need" =~ ^[0-9]+$ ]] && ((need >= 1)) || need=3
   [[ "$gap" =~ ^[0-9]+$ ]] || gap=2
 
   for ((i = 1; i <= need; i++)); do
-    bench_static_assets_ready || return 1
+    fingerprint="$(bench_static_assets_probe_fingerprint)" || return 1
+    if [[ -n "$previous" && "$fingerprint" != "$previous" ]]; then
+      return 1
+    fi
+    previous="$fingerprint"
     if ((i < need)); then
       sleep "$gap"
     fi
@@ -215,44 +249,64 @@ wait_for_erpnext_ready() {
   local auto_repaired=0
   # Seconds of http-OK / assets-wait before one automatic rebuild (0 disables).
   local repair_after="${ASSET_AUTO_REPAIR_AFTER:-30}"
+  local asset_stable_streak=0
+  local need_stable="${ASSET_READY_STABLE_CHECKS:-3}"
+  local gap_stable="${ASSET_READY_STABLE_GAP:-2}"
+  local asset_fingerprint="" previous_asset_fingerprint="" asset_probe_rc=1
 
   echo
   echo "Waiting for ERPNext services to become ready..."
-  echo "Requires ports, HTTP ping, and login static assets (CSS/JS)."
+  echo "Requires ports, HTTP ping, and a stable login asset manifest (CSS/JS)."
   echo "This can take up to ${timeout}s after start/restart (READY_TIMEOUT)."
   echo
 
-  local asset_stable_streak=0
-  local need_stable="${ASSET_READY_STABLE_CHECKS:-2}"
-  local gap_stable="${ASSET_READY_STABLE_GAP:-2}"
-  [[ "$need_stable" =~ ^[0-9]+$ ]] && ((need_stable >= 1)) || need_stable=2
+  [[ "$need_stable" =~ ^[0-9]+$ ]] && ((need_stable >= 1)) || need_stable=3
   [[ "$gap_stable" =~ ^[0-9]+$ ]] || gap_stable=2
 
-  while (( elapsed <= timeout )); do
+  while ((elapsed <= timeout)); do
     http_state="wait"
     assets_state="wait"
+    asset_fingerprint=""
+
     if bench_http_ready; then
       http_state="OK"
     fi
-    # Assets depend on a working login response; skip the extra curls until ping works.
-    if [[ "$http_state" == "OK" ]] && bench_static_assets_ready; then
-      assets_state="OK"
-      asset_stable_streak=$((asset_stable_streak + 1))
+
+    # Probe every asset advertised by one /login response and fingerprint that
+    # exact successful asset set. A changing hash set resets readiness even when
+    # each individual request happened to return HTTP 200.
+    if [[ "$http_state" == "OK" ]]; then
+      set +e
+      asset_fingerprint="$(bench_static_assets_probe_fingerprint)"
+      asset_probe_rc=$?
+      set -e
+      if [[ "$asset_probe_rc" -eq 0 && -n "$asset_fingerprint" ]]; then
+        assets_state="OK"
+        if [[ -n "$previous_asset_fingerprint" && "$asset_fingerprint" == "$previous_asset_fingerprint" ]]; then
+          asset_stable_streak=$((asset_stable_streak + 1))
+        else
+          asset_stable_streak=1
+          previous_asset_fingerprint="$asset_fingerprint"
+        fi
+      else
+        asset_stable_streak=0
+        previous_asset_fingerprint=""
+      fi
     else
       asset_stable_streak=0
+      previous_asset_fingerprint=""
     fi
 
     bench_readiness_line "$elapsed" "$timeout" "$http_state" "$assets_state"
 
-    # Ports alone are not enough: the login HTML can return before CSS/JS bundles
-    # are served (unstyled page). Require HTTP ping + consecutive full asset
-    # probes so a transitional single pass cannot declare ready.
+    # Ports alone are not enough: require HTTP plus the same complete asset
+    # manifest to pass repeatedly. This rejects rotating stale assets_json views.
     if bench_ports_ready && [[ "$http_state" == "OK" && "$assets_state" == "OK" ]] && \
        ((asset_stable_streak >= need_stable)); then
       if runtime_is_production; then
-        ok "ERPNext is ready. Production runtime is serving (HTTP + static assets)."
+        ok "ERPNext is ready. Production runtime is serving a stable frontend manifest."
       else
-        ok "ERPNext is ready. Development ports, HTTP, and static assets are OK."
+        ok "ERPNext is ready. Development ports, HTTP, and a stable frontend manifest are OK."
       fi
       return 0
     fi
@@ -267,11 +321,12 @@ wait_for_erpnext_ready() {
     # Do not burn the full READY_TIMEOUT polling 404s — rebuild once, then continue.
     if [[ "$http_state" == "OK" && "$assets_state" != "OK" ]] && \
        [[ "${AUTO_REPAIR_ASSETS:-1}" != "0" ]] && \
-       [[ "$repair_after" =~ ^[0-9]+$ ]] && (( repair_after > 0 )) && \
-       (( elapsed >= repair_after && auto_repaired == 0 )); then
+       [[ "$repair_after" =~ ^[0-9]+$ ]] && ((repair_after > 0)) && \
+       ((elapsed >= repair_after && auto_repaired == 0)); then
       auto_repaired=1
       try_rebuild_frontend_assets_once || true
       asset_stable_streak=0
+      previous_asset_fingerprint=""
       # Service just bounced; give ports a moment before the next probe.
       sleep "$interval"
       elapsed=$((elapsed + interval))
@@ -504,6 +559,12 @@ repair_frontend_assets() {
   # via the service-aware helper when the stack is up.
   log "Clearing site cache / assets_json"
   maintenance_clear_cache || warn "clear-cache reported an issue; continuing with restart."
+  # Field (v1.19.13/v1.19.14): ghost CSS hashes can survive selective
+  # assets_json eviction. Flush only the dedicated redis_cache DB before the
+  # restart; the helper refuses to touch a shared redis_queue endpoint.
+  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
+    flush_bench_redis_cache || warn "redis_cache FLUSHDB failed; continuing with restart"
+  fi
   log "Restarting ERPNext service"
   restart_erpnext_service || fail "Service restart failed after asset rebuild."
   if ssl_is_configured 2>/dev/null && port_listens 443; then
@@ -513,7 +574,7 @@ repair_frontend_assets() {
   fi
   echo
   if bench_static_assets_ready_stable; then
-    status_line "Static assets" "OK" "all required login CSS/JS (2 consecutive checks)"
+    status_line "Static assets" "OK" "stable login asset manifest (${ASSET_READY_STABLE_CHECKS:-3} checks)"
     ok "Frontend assets repaired and verified."
     echo "Open (Frappe local contract): http://${SITE_NAME}:8000/login"
     if port_listens 443; then
@@ -723,6 +784,116 @@ restart_erpnext_service() {
     err "Could not restart ${ERPNEXT_SERVICE_NAME}. Check logs with: $(toolkit_cmd logs)"
     return 1
   fi
+}
+
+# Soft-bounce ERPNext (or docker/production runtime) without nesting
+# wait_for_erpnext_ready / restart_erpnext_service (those recurse into wait).
+_soft_restart_erpnext_runtime() {
+  if deployment_engine_is_docker; then
+    log "Restarting docker compose services"
+    if declare -F docker_compose >/dev/null 2>&1; then
+      docker_compose restart || return 1
+      return 0
+    fi
+    return 1
+  fi
+  if declare -F runtime_is_production >/dev/null 2>&1 && runtime_is_production && \
+     declare -F production_runtime_configured >/dev/null 2>&1 && production_runtime_configured; then
+    log "Restarting production runtime"
+    $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || return 1
+    return 0
+  fi
+  if service_exists; then
+    log "Restarting ERPNext service"
+    $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
+    return 0
+  fi
+  if declare -F create_erpnext_service >/dev/null 2>&1; then
+    create_erpnext_service || true
+    $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
+    return 0
+  fi
+  return 1
+}
+
+# Clear Redis cache + bounce ERPNext (+ nginx if up) + wait-ready.
+# Field (v1.19.13): assets.json on disk matched real CSS files, but HTML still
+# advertised ghost CSS hashes until `redis-cli -p 13000 FLUSHDB` + restart —
+# selective DEL *assets_json* was not enough (namespaced / worker-held cache).
+# Must run after install (before HTTPS) and again after trusted mkcert.
+settle_local_stack() {
+  require_sudo
+  local reason="${1:-local stack}"
+  local rc=0
+
+  echo
+  log "Settling stack after ${reason} (FLUSHDB redis_cache + ERPNext restart)"
+  echo "Required so the host browser matches VM probes (replaces guest reboot)."
+
+  if declare -F clear_bench_assets_json_cache >/dev/null 2>&1; then
+    clear_bench_assets_json_cache || \
+      warn "Could not clear site/assets_json cache; continuing with redis FLUSHDB"
+  fi
+
+  # Reboot-equivalent: wipe the whole redis_cache DB (not queue/socketio).
+  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
+    if flush_bench_redis_cache; then
+      ok "redis_cache FLUSHDB completed"
+    else
+      warn "redis_cache FLUSHDB failed; ghost CSS hashes may persist until reboot"
+      rc=1
+    fi
+  else
+    warn "redis_cache FLUSHDB helper unavailable"
+    rc=1
+  fi
+
+  _soft_restart_erpnext_runtime || rc=1
+
+  if systemctl list-unit-files nginx.service >/dev/null 2>&1 || \
+     systemctl is-active --quiet nginx 2>/dev/null; then
+    log "Restarting nginx"
+    if $SUDO systemctl restart nginx; then
+      ok "nginx restarted"
+    else
+      warn "nginx restart failed; check: systemctl status nginx"
+      rc=1
+    fi
+  fi
+
+  if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
+    wait_for_erpnext_ready || rc=1
+  fi
+
+  LOCAL_STACK_SETTLED=1
+  export LOCAL_STACK_SETTLED
+  if [[ "$rc" -eq 0 ]]; then
+    ok "Stack settled after ${reason} (ready for host browser)."
+  else
+    warn "Settle after ${reason} did not fully succeed; check $(toolkit_cmd status)"
+  fi
+  return "$rc"
+}
+
+# After core install / before guided HTTPS: mandatory settle (not skippable).
+settle_stack_after_install() {
+  settle_local_stack "install" || return 1
+  LOCAL_INSTALL_STACK_SETTLED=1
+  export LOCAL_INSTALL_STACK_SETTLED
+  return 0
+}
+
+# After local HTTPS nginx is written: settle again, then print browser URLs.
+# Sets LOCAL_HTTPS_STACK_SETTLED=1 so the guided checkpoint can skip a duplicate.
+settle_stack_after_local_https() {
+  settle_local_stack "local HTTPS" || {
+    LOCAL_HTTPS_STACK_SETTLED=1
+    export LOCAL_HTTPS_STACK_SETTLED
+    return 1
+  }
+  LOCAL_HTTPS_STACK_SETTLED=1
+  export LOCAL_HTTPS_STACK_SETTLED
+  return 0
 }
 
 show_erpnext_service_status() {

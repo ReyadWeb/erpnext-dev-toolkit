@@ -1,10 +1,37 @@
 # Testing guide
 
-**Current release:** v1.19.16 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.17 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
+## v1.19.17 frontend asset consistency
+
+Release validation adds coverage for:
+
+- dedicated `redis_cache` flush safety;
+- post-install frontend settling;
+- post-HTTPS frontend settling;
+- stable asset-manifest fingerprints;
+- independent frontend asset verification;
+- improved Ubuntu integration failure diagnostics.
+
 ## v1.19.16 menu information architecture
+
+### Frontend settle regression gate
+
+The Ubuntu 24.04 integration install must prove that browser readiness is stable,
+not just momentarily successful:
+
+- local/native `-y install` runs the redis-cache settle before returning success;
+- `wait-ready` requires three consecutive successful probes of the same complete
+  `/login` asset manifest by default;
+- `verify-frontend-assets` runs as a fresh independent hard gate immediately
+  afterward;
+- on failure, CI captures `assets.json`, on-disk bundles, five live manifest
+  samples, the Frappe asset checklist, Redis configuration, and service logs.
+
+Regression coverage lives in `scripts/test-static-asset-probe.sh`.
+
 
 Purpose: verify the interactive navigation is task-oriented without changing direct CLI command dispatch.
 

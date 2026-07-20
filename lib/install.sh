@@ -748,6 +748,27 @@ run_install() {
       echo "  $(toolkit_cmd start)"
     fi
   fi
+
+  # A local/native install is not complete merely because the service started.
+  # Clear stale Frappe asset metadata, FLUSHDB the dedicated redis_cache DB,
+  # bounce the runtime, require a stable asset manifest, then perform a fresh
+  # independent browser-asset verification. This path also runs under `-y`, so
+  # CI and automation receive the same protection as the interactive wizard.
+  if ! is_public_vm_workflow && { port_listens 8000 || port_listens 443; }; then
+    if ! declare -F settle_stack_after_install >/dev/null 2>&1; then
+      fail "Post-install frontend settle helper is unavailable; refusing to mark the local install ready."
+    fi
+    if ! settle_stack_after_install; then
+      fail "Post-install frontend settle failed. Run $(toolkit_cmd repair-frontend-assets), then $(toolkit_cmd wait-ready)."
+    fi
+    if declare -F verify_frontend_assets >/dev/null 2>&1; then
+      if ! verify_frontend_assets; then
+        fail "Independent post-install frontend verification failed after settle."
+      fi
+      ok "Independent post-install frontend verification passed."
+    fi
+  fi
+
   post_install_validation_summary
 }
 
@@ -1081,37 +1102,26 @@ local_guided_service_settle_checkpoint() {
   [[ -t 0 ]] || return 0
   [[ "$ASSUME_YES" -eq 1 ]] && return 0
 
-  local reply
+  if [[ "${LOCAL_HTTPS_STACK_SETTLED:-0}" == "1" ]] || \
+     [[ "${LOCAL_INSTALL_STACK_SETTLED:-0}" == "1" ]] || \
+     [[ "${LOCAL_STACK_SETTLED:-0}" == "1" ]]; then
+    echo
+    ok "Stack already settled (redis_cache flushed + ERPNext restart + stable wait-ready)."
+    echo "Host check: http://${SITE_NAME}:8000/login (styled Sign In). Optional: $(toolkit_cmd restart)"
+    return 0
+  fi
+
+  # Should not happen after run_install; recover without a skippable prompt.
   echo
-  ui_box_start "Local setup: confirm install (service restart)"
-  echo "Restart ERPNext (and nginx if local HTTPS is active) to settle the stack."
-  echo "This is the guided equivalent of rebooting services after a fresh install."
+  ui_box_start "Local setup: settling stack"
+  echo "Clearing frontend cache state and restarting ERPNext (reboot workaround)."
   ui_box_end
-  echo
-  read -r -p "Restart ERPNext services now to confirm the install? [Y/n]: " reply
-  reply="${reply:-Y}"
-  if [[ ! "$reply" =~ ^[Yy]$ ]]; then
-    echo "Skipped. Restart later with: $(toolkit_cmd restart)"
-    return 0
-  fi
-
-  if declare -F restart_erpnext_service >/dev/null 2>&1; then
-    restart_erpnext_service || warn "ERPNext restart did not fully succeed; check $(toolkit_cmd status)"
+  if declare -F settle_stack_after_install >/dev/null 2>&1; then
+    settle_stack_after_install || warn "Settle did not fully succeed; check $(toolkit_cmd status)"
+  elif declare -F settle_local_stack >/dev/null 2>&1; then
+    settle_local_stack "guided recover" || warn "Settle did not fully succeed; check $(toolkit_cmd status)"
   else
-    warn "restart helper unavailable; run: $(toolkit_cmd restart)"
-    return 0
-  fi
-
-  if systemctl is-active --quiet nginx 2>/dev/null; then
-    log "Restarting nginx (local HTTPS)"
-    if $SUDO systemctl restart nginx; then
-      ok "nginx restarted"
-      if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
-        wait_for_erpnext_ready || warn "Ready check after nginx restart did not pass yet."
-      fi
-    else
-      warn "nginx restart failed; check: systemctl status nginx"
-    fi
+    warn "Settle helper unavailable; run: $(toolkit_cmd restart) && $(toolkit_cmd wait-ready)"
   fi
 }
 

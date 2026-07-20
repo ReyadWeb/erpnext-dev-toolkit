@@ -1,9 +1,9 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.16 (July 2026)  
+**Current release:** v1.19.17 (July 2026)  
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.20.0 External Watchdog, after v1.19.16 field validation.  
-**Deferred:** v1.20.0 until v1.19.16 is field-validated.
+**Next up:** v1.20.0 External Watchdog, after v1.19.17 field validation.  
+**Deferred:** v1.20.0 until v1.19.17 is field-validated.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -58,7 +58,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.19.16)
+## Shipped foundation (through v1.19.17)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -100,8 +100,9 @@ v1.19.12 Post-HTTPS settle before browser URLs
 v1.19.13 Post-install settle before HTTPS
 v1.19.14 redis_cache FLUSHDB settle (ghost CSS)
 v1.19.15 CLI UX + ShellCheck + modular recovery
-v1.19.16 Menu information architecture             ← current
-v1.20.0  External watchdog foundation              ← deferred until 1.19.16
+v1.19.16 Menu information architecture
+v1.19.17 Frontend asset consistency                 ← current
+v1.20.0  External watchdog foundation              ← deferred until v1.19.17
 v1.21.0  CloudPanel / agent API foundation
 v1.22.0  Real VPS validation matrix (bounded)
 v1.23.0  Documentation and launch polish
@@ -336,7 +337,7 @@ v1.23.0  Documentation and launch polish
 
 ### v1.20.0 — External Watchdog Foundation
 
-**Status:** Deferred until v1.19.16 is field-validated.
+**Status:** Deferred until v1.19.17 is field-validated.
 
 **Goal:** Contract for Case B — frozen, powered-off, or unreachable VM (cannot self-heal from inside).
 

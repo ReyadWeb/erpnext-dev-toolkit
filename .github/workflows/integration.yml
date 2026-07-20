@@ -146,6 +146,25 @@ jobs:
       - name: Install ERPNext (non-interactive)
         run: sudo -E ./erpnext-dev.sh -y install
 
+      - name: Collect install failure diagnostics
+        if: failure()
+        run: |
+          set +e
+          BENCH_DIR="/home/frappe/frappe/frappe-bench"
+          echo "===== toolkit asset checklist ====="
+          sudo -E ./erpnext-dev.sh frappe-asset-checklist || true
+          echo "===== sites/assets/assets.json ====="
+          sudo cat "${BENCH_DIR}/sites/assets/assets.json" 2>/dev/null || echo "assets.json missing"
+          echo "===== hashed CSS/JS files on disk ====="
+          sudo find "${BENCH_DIR}/sites/assets/frappe/dist/css" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+          sudo find "${BENCH_DIR}/sites/assets/erpnext/dist/css" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+          sudo find "${BENCH_DIR}/sites/assets/frappe/dist/js" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+          echo "===== redis/site config ====="
+          sudo cat "${BENCH_DIR}/sites/common_site_config.json" 2>/dev/null || true
+          echo "===== service tail ====="
+          sudo systemctl status erpnext-dev.service --no-pager -l 2>/dev/null || true
+          sudo journalctl -u erpnext-dev.service --no-pager -n 200 2>/dev/null || true
+
       - name: Assert stable toolkit at /opt (install contract)
         run: |
           set -euo pipefail
@@ -271,12 +290,46 @@ jobs:
         run: |
           set -euo pipefail
           # Discover every local CSS/JS required by /login and assert zero 404s.
-          # This catches "first CSS+JS OK, login.bundle 404" false readiness.
-          # wait-ready requires two consecutive all-asset passes; verify prints
-          # per-asset status for Bench :8000 (and :443 when present).
-          sudo -E ./erpnext-dev.sh wait-ready
-          sudo -E ./erpnext-dev.sh verify-frontend-assets
-          echo "Browser asset consistency passed (wait-ready + verify-frontend-assets)."
+          # wait-ready requires the same complete asset manifest to pass repeatedly;
+          # verify-frontend-assets then performs an independent fresh probe.
+          asset_gate_rc=0
+          sudo -E ./erpnext-dev.sh wait-ready || asset_gate_rc=1
+          sudo -E ./erpnext-dev.sh verify-frontend-assets || asset_gate_rc=1
+
+          if [[ "$asset_gate_rc" -eq 0 ]]; then
+            echo "Browser asset consistency passed (stable wait-ready + independent verify-frontend-assets)."
+            exit 0
+          fi
+
+          echo "::error::Browser asset consistency failed; collecting frontend diagnostics."
+          echo "===== toolkit asset checklist ====="
+          sudo -E ./erpnext-dev.sh frappe-asset-checklist || true
+
+          BENCH_DIR="/home/frappe/frappe/frappe-bench"
+          echo "===== sites/assets/assets.json ====="
+          sudo cat "${BENCH_DIR}/sites/assets/assets.json" 2>/dev/null || echo "assets.json missing"
+
+          echo "===== hashed CSS/JS files on disk ====="
+          sudo find "${BENCH_DIR}/sites/assets/frappe/dist/css" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+          sudo find "${BENCH_DIR}/sites/assets/erpnext/dist/css" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+          sudo find "${BENCH_DIR}/sites/assets/frappe/dist/js" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+
+          echo "===== five consecutive /login asset manifests ====="
+          for i in 1 2 3 4 5; do
+            echo "--- manifest ${i} ---"
+            curl -sS -D - -H "Host: ${SITE_NAME}" "http://127.0.0.1:8000/login" 2>/dev/null \
+              | grep -oE '/assets/[^>"'"'"',[:space:]]+\.(css|js)' \
+              | sed 's/[?#].*$//' \
+              | sort -u || true
+            sleep 1
+          done
+
+          echo "===== redis cache endpoints ====="
+          sudo cat "${BENCH_DIR}/sites/common_site_config.json" 2>/dev/null || true
+          echo "===== service tail ====="
+          sudo systemctl status erpnext-dev.service --no-pager -l 2>/dev/null || true
+          sudo journalctl -u erpnext-dev.service --no-pager -n 200 2>/dev/null || true
+          exit 1
 
       - name: Backup and restore round trip
         run: |

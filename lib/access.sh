@@ -405,6 +405,7 @@ bench_redis_cache_host_port() {
 
 # Hard-DEL assets_json keys on the bench redis_cache instance (not host :6379).
 # plain `redis-cli KEYS` misses frappe cache on :13000 — field failure on e.test.
+# Prefer flush_bench_redis_cache for settle (field: selective DEL left ghost CSS).
 evict_redis_assets_json_keys() {
   local bench_dir="${1:-}" hostport host port
   local -a keys=()
@@ -425,6 +426,50 @@ evict_redis_assets_json_keys() {
     keys=("assets_json")
   fi
   redis-cli -h "$host" -p "$port" DEL "${keys[@]}" >/dev/null 2>&1 || true
+  return 0
+}
+
+# FLUSHDB on bench redis_cache only (usually :13000). Reboot-equivalent for
+# ghost login CSS hashes when selective DEL misses namespaced keys. Never
+# touches redis_queue / redis_socketio (different ports in common_site_config).
+flush_bench_redis_cache() {
+  local bench_dir="${1:-}" hostport host port queue_url cache_url cfg
+  local queue_hostport=""
+
+  [[ -n "$bench_dir" ]] || bench_dir="$(active_bench_dir 2>/dev/null || true)"
+  [[ -n "$bench_dir" ]] || return 1
+  cfg="${bench_dir}/sites/common_site_config.json"
+  [[ -f "$cfg" ]] || return 1
+
+  hostport="$(bench_redis_cache_host_port "$bench_dir")" || return 1
+  if [[ "$hostport" == *:* ]]; then
+    host="${hostport%:*}"
+    port="${hostport##*:}"
+  else
+    host="$hostport"
+    port=6379
+  fi
+  command -v redis-cli >/dev/null 2>&1 || return 1
+
+  cache_url="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('redis_cache','') or '')" "$cfg" 2>/dev/null || true)"
+  queue_url="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('redis_queue','') or '')" "$cfg" 2>/dev/null || true)"
+  # Refuse if misconfigured to the same URL as the queue DB.
+  if [[ -n "$cache_url" && -n "$queue_url" && "$cache_url" == "$queue_url" ]]; then
+    warn "redis_cache and redis_queue share the same URL — refusing FLUSHDB"
+    return 1
+  fi
+  if [[ "$queue_url" == redis://* || "$queue_url" == rediss://* ]]; then
+    queue_hostport="${queue_url#*://}"
+    queue_hostport="${queue_hostport%%/*}"
+    queue_hostport="${queue_hostport##*@}"
+    if [[ "$queue_hostport" == "${host}:${port}" ]]; then
+      warn "redis_cache host:port matches redis_queue — refusing FLUSHDB"
+      return 1
+    fi
+  fi
+
+  log "FLUSHDB on bench redis_cache ${host}:${port} (ghost assets_json / reboot-equivalent)"
+  redis-cli -h "$host" -p "$port" FLUSHDB >/dev/null 2>&1 || return 1
   return 0
 }
 

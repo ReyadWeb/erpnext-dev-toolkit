@@ -10,6 +10,8 @@ _ERPNEXT_DEV_ROOT="$ROOT_DIR"
 
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/lib/access.sh"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/lib/service.sh"
 
 fail=0
 assert_eq() {
@@ -266,12 +268,12 @@ probe_rc=0
 probe_login_frontend_assets_all "https://erp.test/login" "erp.test" 443 "127.0.0.1" >/dev/null && probe_rc=0 || probe_rc=$?
 assert_eq "css-only discovery -> rc 2" "2" "$probe_rc"
 
-# bench_static_assets_ready must use all-assets probe
-if ! grep -A20 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -q 'probe_login_frontend_assets_all'; then
-  echo "FAIL: bench_static_assets_ready must call probe_login_frontend_assets_all" >&2
+# Readiness fingerprint path must use the complete all-assets probe.
+if ! grep -A30 '^_frontend_asset_route_fingerprint()' "${ROOT_DIR}/lib/service.sh" | grep -q 'probe_login_frontend_assets_all'; then
+  echo "FAIL: readiness fingerprint must call probe_login_frontend_assets_all" >&2
   fail=$((fail + 1))
 else
-  echo "OK: service.sh uses all-assets probe"
+  echo "OK: readiness fingerprint uses all-assets probe"
 fi
 
 if ! grep -q 'bench_static_assets_ready_stable' "${ROOT_DIR}/lib/service.sh"; then
@@ -322,17 +324,17 @@ else
   echo "OK: hard redis assets_json eviction helper present"
 fi
 # wait-ready must prefer Frappe local :8000 over :443
-if ! grep -A25 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -q 'port_listens 8000'; then
-  echo "FAIL: bench_static_assets_ready must probe :8000" >&2
+if ! grep -A35 '^bench_static_assets_probe_fingerprint()' "${ROOT_DIR}/lib/service.sh" | grep -q 'port_listens 8000'; then
+  echo "FAIL: asset fingerprint readiness must probe :8000" >&2
   fail=$((fail + 1))
 else
-  # Prefer 8000: first port_listens in the function body should be 8000
-  first_port="$(grep -A25 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -m1 'port_listens' || true)"
+  # Prefer 8000: first port_listens in the function body should be 8000.
+  first_port="$(grep -A35 '^bench_static_assets_probe_fingerprint()' "${ROOT_DIR}/lib/service.sh" | grep -m1 'port_listens' || true)"
   if [[ "$first_port" != *8000* ]]; then
-    echo "FAIL: bench_static_assets_ready must prefer :8000 before :443 (got: ${first_port})" >&2
+    echo "FAIL: asset fingerprint readiness must prefer :8000 before :443 (got: ${first_port})" >&2
     fail=$((fail + 1))
   else
-    echo "OK: bench_static_assets_ready prefers :8000"
+    echo "OK: asset fingerprint readiness prefers :8000"
   fi
 fi
 
@@ -429,6 +431,101 @@ if grep -n 'extract_all_link_asset_paths\|extract_all_html_asset_paths\|discover
   fi
 else
   echo "OK: all-extract helpers have no head -n 1"
+fi
+
+# Stable-readiness fingerprint must represent the exact all-asset probe set.
+port_listens() { [[ "$1" == "8000" ]]; }
+export MOCK_LOGIN_MODE=full3
+fingerprint_full="$(bench_static_assets_probe_fingerprint 2>/dev/null || true)"
+if [[ "$fingerprint_full" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "OK: stable asset fingerprint generated"
+else
+  echo "FAIL: stable asset fingerprint missing/invalid: ${fingerprint_full}" >&2
+  fail=$((fail + 1))
+fi
+export MOCK_LOGIN_MODE=dual_only
+fingerprint_dual="$(bench_static_assets_probe_fingerprint 2>/dev/null || true)"
+if [[ -n "$fingerprint_full" && -n "$fingerprint_dual" && "$fingerprint_full" != "$fingerprint_dual" ]]; then
+  echo "OK: asset fingerprint changes when advertised manifest changes"
+else
+  echo "FAIL: asset fingerprint did not detect manifest change" >&2
+  fail=$((fail + 1))
+fi
+
+# Dedicated redis_cache FLUSHDB must target only the configured cache endpoint
+# and refuse a cache/queue endpoint collision.
+redis_bench="$(mktemp -d /tmp/erpnext-dev-redis-cache.XXXXXX)"
+mkdir -p "${redis_bench}/sites"
+cat >"${redis_bench}/sites/common_site_config.json" <<'EOF_REDIS_CFG'
+{
+  "redis_cache": "redis://127.0.0.1:13000",
+  "redis_queue": "redis://127.0.0.1:11000"
+}
+EOF_REDIS_CFG
+redis_log="${tmpdir}/redis-cli.log"
+cat >"${tmpdir}/redis-cli" <<'EOF_REDIS_MOCK'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${REDIS_CLI_LOG}"
+exit 0
+EOF_REDIS_MOCK
+chmod +x "${tmpdir}/redis-cli"
+export REDIS_CLI_LOG="$redis_log"
+: >"$redis_log"
+warn() { :; }
+log() { :; }
+if flush_bench_redis_cache "$redis_bench" && grep -q -- '-p 13000 FLUSHDB' "$redis_log"; then
+  echo "OK: redis_cache FLUSHDB targets only cache endpoint"
+else
+  echo "FAIL: redis_cache FLUSHDB did not target port 13000" >&2
+  fail=$((fail + 1))
+fi
+cat >"${redis_bench}/sites/common_site_config.json" <<'EOF_REDIS_SHARED'
+{
+  "redis_cache": "redis://127.0.0.1:13000",
+  "redis_queue": "redis://127.0.0.1:13000"
+}
+EOF_REDIS_SHARED
+before_calls="$(wc -l <"$redis_log" | tr -d ' ')"
+if flush_bench_redis_cache "$redis_bench"; then
+  echo "FAIL: redis_cache FLUSHDB must refuse shared queue endpoint" >&2
+  fail=$((fail + 1))
+else
+  after_calls="$(wc -l <"$redis_log" | tr -d ' ')"
+  assert_eq "shared cache/queue endpoint sends no FLUSHDB" "$before_calls" "$after_calls"
+fi
+rm -rf "$redis_bench"
+
+# Regression guards for the v1.19.13/v1.19.14 settle implementation.
+if grep -q '^flush_bench_redis_cache()' "${ROOT_DIR}/lib/access.sh"; then
+  echo "OK: dedicated redis_cache FLUSHDB helper present"
+else
+  echo "FAIL: missing flush_bench_redis_cache regression fix" >&2
+  fail=$((fail + 1))
+fi
+if grep -q '^settle_stack_after_install()' "${ROOT_DIR}/lib/service.sh" \
+  && grep -q '^settle_stack_after_local_https()' "${ROOT_DIR}/lib/service.sh"; then
+  echo "OK: post-install and post-HTTPS settle helpers present"
+else
+  echo "FAIL: missing mandatory local settle helpers" >&2
+  fail=$((fail + 1))
+fi
+if grep -A120 '^run_install()' "${ROOT_DIR}/lib/install.sh" | grep -q 'settle_stack_after_install'; then
+  echo "OK: run_install enforces local post-install settle"
+else
+  echo "FAIL: run_install does not enforce post-install settle" >&2
+  fail=$((fail + 1))
+fi
+if grep -A180 '^run_trusted_mkcert_setup()' "${ROOT_DIR}/lib/ssl.sh" | grep -q 'settle_stack_after_local_https'; then
+  echo "OK: trusted mkcert path enforces post-HTTPS settle"
+else
+  echo "FAIL: trusted mkcert path does not enforce post-HTTPS settle" >&2
+  fail=$((fail + 1))
+fi
+if grep -A70 '^repair_frontend_assets()' "${ROOT_DIR}/lib/service.sh" | grep -q 'flush_bench_redis_cache'; then
+  echo "OK: frontend repair flushes dedicated redis_cache before restart"
+else
+  echo "FAIL: frontend repair lost redis_cache FLUSHDB regression fix" >&2
+  fail=$((fail + 1))
 fi
 
 if ((fail > 0)); then
