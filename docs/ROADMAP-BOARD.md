@@ -37,7 +37,8 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 | v1.19.9 | Bare HTTP port-80 browser path (follow-on from [#107](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/107) field) |
 | v1.19.10 | Frappe-aligned frontend assets ([FRAPPE-FRONTEND-ASSETS.md](FRAPPE-FRONTEND-ASSETS.md)) |
 | v1.19.11 | Stale `assets_json` Redis :13000 fix + stable release CI gate |
-| v1.19.12 | [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) CLI Page UX Architecture |
+| v1.19.12 | Post-HTTPS settle before browser URLs (no reboot workaround) |
+| v1.19.13 | [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) CLI Page UX Architecture |
 | v1.20.0 | [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) External Watchdog Foundation |
 | v1.21.0 | [#63](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/63) CloudPanel / Agent API Foundation |
 | v1.22.0 | [#64](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/64) Real VPS Validation Matrix |
@@ -62,9 +63,9 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 
 **v1.19.1 shipped:** [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61) Auto-Healing Hardening (**Done**).
 
-**Current focus:** v1.19.11 stale `assets_json` / Redis :13000 fix (field validation).  
-**Next:** [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) — v1.19.12 CLI Page UX.  
-**Deferred:** [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) — v1.20.0 until 1.19.11 + 1.19.12 are field-validated.
+**Current focus:** v1.19.12 post-HTTPS settle (field validation before/after HTTPS).  
+**Next:** [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) — v1.19.13 CLI Page UX.  
+**Deferred:** [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) — v1.20.0 until 1.19.12 + 1.19.13 are field-validated.
 
 ---
 

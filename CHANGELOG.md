@@ -1,4 +1,7 @@
-## Unreleased
+## v1.19.12 - Post-HTTPS settle before browser URLs
+
+Patch release so trusted local HTTPS always settles ERPNext + nginx and
+re-runs wait-ready before printing host browser URLs (no guest reboot).
 
 ### Fixed
 
