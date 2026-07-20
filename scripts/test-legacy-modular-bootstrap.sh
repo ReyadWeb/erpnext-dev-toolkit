@@ -39,7 +39,7 @@ chmod 700 "$gpg_home"
 cp erpnext-dev.sh "$release_tree/erpnext-dev.sh"
 cp -a lib/. "$release_tree/lib/"
 
-cat > "${work}/gpg-batch" <<GPG
+cat >"${work}/gpg-batch" <<GPG
 Key-Type: RSA
 Key-Length: 2048
 Name-Real: ERPNext Toolkit Bootstrap Test
@@ -51,7 +51,7 @@ GPG
 GNUPGHOME="$gpg_home" gpg --batch --quiet --generate-key "${work}/gpg-batch"
 fingerprint="$(GNUPGHOME="$gpg_home" gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
 [[ -n "$fingerprint" ]] || fail "could not determine test signing fingerprint"
-GNUPGHOME="$gpg_home" gpg --batch --armor --export "$fingerprint" > "${release_tree}/docs/erpnext-dev-signing-key.asc"
+GNUPGHOME="$gpg_home" gpg --batch --armor --export "$fingerprint" >"${release_tree}/docs/erpnext-dev-signing-key.asc"
 
 (
   cd "$release_tree"
@@ -59,7 +59,7 @@ GNUPGHOME="$gpg_home" gpg --batch --armor --export "$fingerprint" > "${release_t
     sha256sum erpnext-dev.sh
     find lib -maxdepth 1 -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum
     sha256sum docs/erpnext-dev-signing-key.asc
-  } > SHA256SUMS
+  } >SHA256SUMS
   GNUPGHOME="$gpg_home" gpg --batch --yes --armor --detach-sign --local-user "$fingerprint" --output SHA256SUMS.asc SHA256SUMS
 )
 
@@ -72,12 +72,12 @@ chmod 755 "${legacy_root}/erpnext-dev.sh"
 
 output="$(
   INSTALLER_CANONICAL_PATH="${legacy_root}/erpnext-dev.sh" \
-  TOOLKIT_CLI_PATH="${legacy_root}/bin/erpnext-dev" \
-  TOOLKIT_RELEASE_GITHUB="file://${release_root}" \
-  TOOLKIT_BOOTSTRAP_SIGNING_FINGERPRINT="$fingerprint" \
-  LOG_DIR="${legacy_root}/logs" \
-  LOCK_DIR="${legacy_root}/locks" \
-  "${legacy_root}/erpnext-dev.sh" version 2>&1
+    TOOLKIT_CLI_PATH="${legacy_root}/bin/erpnext-dev" \
+    TOOLKIT_RELEASE_GITHUB="file://${release_root}" \
+    TOOLKIT_BOOTSTRAP_SIGNING_FINGERPRINT="$fingerprint" \
+    LOG_DIR="${legacy_root}/logs" \
+    LOCK_DIR="${legacy_root}/locks" \
+    "${legacy_root}/erpnext-dev.sh" version 2>&1
 )" || {
   printf '%s\n' "$output" >&2
   fail "legacy modular bootstrap command failed"
@@ -98,10 +98,10 @@ printf '%s\n' "$output" | grep -q "Recovered the complete signed ${tag} toolkit"
 # A second invocation must use the recovered tree directly and remain healthy.
 second="$(
   INSTALLER_CANONICAL_PATH="${legacy_root}/erpnext-dev.sh" \
-  TOOLKIT_CLI_PATH="${legacy_root}/bin/erpnext-dev" \
-  LOG_DIR="${legacy_root}/logs" \
-  LOCK_DIR="${legacy_root}/locks" \
-  "${legacy_root}/erpnext-dev.sh" version 2>&1
+    TOOLKIT_CLI_PATH="${legacy_root}/bin/erpnext-dev" \
+    LOG_DIR="${legacy_root}/logs" \
+    LOCK_DIR="${legacy_root}/locks" \
+    "${legacy_root}/erpnext-dev.sh" version 2>&1
 )" || fail "second invocation after recovery failed"
 printf '%s\n' "$second" | grep -q "ERPNext Developer Toolkit v${version}" \
   || fail "second invocation returned the wrong version"
