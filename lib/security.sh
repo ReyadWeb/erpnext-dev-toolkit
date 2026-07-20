@@ -70,13 +70,15 @@ resolve_toolkit_update_version() {
 
   # Mutable main channel installs into releases/<slot> (default: main), never into
   # releases/vX.Y.Z — that would overwrite a signed tagged release directory.
-  if toolkit_update_uses_main_branch; then
-    version="${TOOLKIT_UPDATE_SLOT:-${TOOLKIT_UPDATE_VERSION:-main}}"
-    # Ignore accidental v* tags on the main channel; slot names stay unversioned.
+  if toolkit_update_uses_mutable_branch; then
+    local channel
+    channel="$(toolkit_update_branch_name)"
+    version="${TOOLKIT_UPDATE_SLOT:-${TOOLKIT_UPDATE_VERSION:-$channel}}"
+    # Ignore accidental v* tags on mutable channels; slot names stay unversioned.
     if [[ "$version" == v* ]]; then
-      version="${TOOLKIT_UPDATE_SLOT:-main}"
+      version="${TOOLKIT_UPDATE_SLOT:-$channel}"
     fi
-    [[ -n "$version" ]] || version="main"
+    [[ -n "$version" ]] || version="$channel"
     printf '%s\n' "$version"
     return 0
   fi
@@ -95,20 +97,34 @@ resolve_toolkit_update_version() {
   printf '%s\n' "$version"
 }
 
+toolkit_update_branch_name() {
+  case "${TOOLKIT_UPDATE_CHANNEL:-tag}" in
+    main) printf 'main\n' ;;
+    beta) printf 'beta\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+toolkit_update_uses_mutable_branch() {
+  toolkit_update_branch_name >/dev/null 2>&1 || [[ "${TOOLKIT_UPDATE_FROM_MAIN:-0}" == "1" ]]
+}
+
 toolkit_update_uses_main_branch() {
   [[ "${TOOLKIT_UPDATE_CHANNEL:-tag}" == "main" ]] || [[ "${TOOLKIT_UPDATE_FROM_MAIN:-0}" == "1" ]]
 }
 
 toolkit_update_guard_production_channel() {
-  if ! toolkit_update_uses_main_branch; then
+  local channel
+  if ! toolkit_update_uses_mutable_branch; then
     return 0
   fi
+  channel="$(toolkit_update_branch_name 2>/dev/null || printf 'main\n')"
 
-  if is_public_vm_workflow && [[ "${TOOLKIT_UPDATE_ALLOW_MAIN:-0}" != "1" ]]; then
-    fail "Refusing main-branch update on production/public-vm workflow. Set TOOLKIT_UPDATE_VERSION=vX.Y.Z for a tagged release, or set TOOLKIT_UPDATE_ALLOW_MAIN=1 to override (not recommended)."
+  if is_public_vm_workflow && [[ "${TOOLKIT_UPDATE_ALLOW_MUTABLE:-${TOOLKIT_UPDATE_ALLOW_MAIN:-0}}" != "1" ]]; then
+    fail "Refusing mutable ${channel}-branch update on production/public-vm workflow. Use a signed vX.Y.Z release, or set TOOLKIT_UPDATE_ALLOW_MUTABLE=1 to override for controlled testing."
   fi
 
-  warn "Mutable main branch selected. Prefer TOOLKIT_UPDATE_VERSION=vX.Y.Z for production systems."
+  warn "Mutable ${channel} branch selected for testing. Do not treat this as a signed stable release."
 }
 
 verify_toolkit_integrity() {
@@ -430,7 +446,7 @@ update_toolkit() {
   workdir="$(mktemp -d "${stable_root}/.staging.XXXXXX")" || fail "Could not create staging directory under ${stable_root}."
 
   ui_box_start "Update ERPNext Toolkit (atomic)"
-  if toolkit_update_uses_main_branch; then
+  if toolkit_update_uses_mutable_branch; then
     status_line "Install slot" "INFO" "$version"
   else
     status_line "Release tag" "INFO" "$version"
@@ -439,19 +455,22 @@ update_toolkit() {
   status_line "Model" "INFO" "releases/<ver> + current symlink (rollback-capable)"
   status_line "Checksum gate" "OK" "whole-tree sha256sum -c required"
 
-  if toolkit_update_uses_main_branch; then
-    # main channel: no release bundle exists; assemble the tree from raw files.
-    release_base="${TOOLKIT_RELEASE_REPO}/main"
+  if toolkit_update_uses_mutable_branch; then
+    # Mutable branch channels (main/beta): no signed release bundle exists;
+    # assemble the tree from checksum-gated raw files.
+    local mutable_branch
+    mutable_branch="$(toolkit_update_branch_name 2>/dev/null || printf 'main\n')"
+    release_base="${TOOLKIT_RELEASE_REPO}/${mutable_branch}"
     tree="${workdir}/tree"
     mkdir -p "${tree}/lib"
-    status_line "Channel" "INFO" "main (raw files, unsigned) → releases/${version}"
+    status_line "Channel" "INFO" "${mutable_branch} (raw files, unsigned beta/testing channel) → releases/${version}"
 
     log "Downloading SHA256SUMS"
-    curl -fsSL "${release_base}/SHA256SUMS" -o "${tree}/SHA256SUMS" || fail "Failed to download SHA256SUMS from main."
+    curl -fsSL "${release_base}/SHA256SUMS" -o "${tree}/SHA256SUMS" || fail "Failed to download SHA256SUMS from ${mutable_branch}."
     checksum_file="${tree}/SHA256SUMS"
 
     log "Downloading erpnext-dev.sh"
-    curl -fsSL "${release_base}/erpnext-dev.sh" -o "${tree}/erpnext-dev.sh" || fail "Failed to download erpnext-dev.sh from main."
+    curl -fsSL "${release_base}/erpnext-dev.sh" -o "${tree}/erpnext-dev.sh" || fail "Failed to download erpnext-dev.sh from ${mutable_branch}."
     verify_release_file_checksum "$checksum_file" "erpnext-dev.sh" "${tree}/erpnext-dev.sh"
 
     while IFS= read -r lib_file; do

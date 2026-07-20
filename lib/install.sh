@@ -797,12 +797,12 @@ else
 fi
 
 echo
-echo "==> Starting temporary Bench services for Redis Queue"
+echo "==> Starting temporary Bench services for Redis Queue (watcher disabled)"
 
 mkdir -p logs
 BENCH_INSTALL_LOG="logs/install-bench-start.log"
-
-bench start > "\$BENCH_INSTALL_LOG" 2>&1 &
+awk '!/^[[:space:]]*watch[[:space:]]*:/' Procfile > Procfile.toolkit
+bench start --procfile Procfile.toolkit > "\$BENCH_INSTALL_LOG" 2>&1 &
 BENCH_PID=\$!
 
 cleanup_bench() {
@@ -1069,23 +1069,27 @@ run_install() {
     fi
   fi
 
-  # A local/native install is not complete merely because the service started.
-  # Clear stale Frappe asset metadata, FLUSHDB the dedicated redis_cache DB,
-  # bounce the runtime, require a stable asset manifest, then perform a fresh
-  # independent browser-asset verification. This path also runs under `-y`, so
-  # CI and automation receive the same protection as the interactive wizard.
+  # Core installation success is separate from browser-asset readiness. The
+  # frontend gate remains release-blocking in CI, but a completed ERPNext install
+  # must not be falsely reported as failed because the browser layer is degraded.
   if ! is_public_vm_workflow && { port_listens 8000 || port_listens 443; }; then
-    if ! declare -F settle_stack_after_install >/dev/null 2>&1; then
-      fail "Post-install frontend settle helper is unavailable; refusing to mark the local install ready."
+    local frontend_ready=1
+    if declare -F settle_stack_after_install >/dev/null 2>&1; then
+      settle_stack_after_install || frontend_ready=0
+    else
+      warn "Post-install frontend settle helper unavailable."
+      frontend_ready=0
     fi
-    if ! settle_stack_after_install; then
-      fail "Post-install frontend settle failed. Run $(toolkit_cmd repair-frontend-assets), then $(toolkit_cmd wait-ready)."
+    if ((frontend_ready == 1)) && declare -F verify_frontend_assets >/dev/null 2>&1; then
+      verify_frontend_assets || frontend_ready=0
     fi
-    if declare -F verify_frontend_assets >/dev/null 2>&1; then
-      if ! verify_frontend_assets; then
-        fail "Independent post-install frontend verification failed after settle."
-      fi
+    if ((frontend_ready == 1)); then
       ok "Independent post-install frontend verification passed."
+    else
+      warn "ERPNext core installation completed, but frontend assets are not browser-ready yet."
+      warn "Overall state: DEGRADED (installation preserved; no automatic rebuild loop)."
+      echo "Repair explicitly with: $(toolkit_cmd repair-frontend-assets)"
+      echo "Then verify with:      $(toolkit_cmd wait-ready)"
     fi
   fi
 

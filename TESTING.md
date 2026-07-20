@@ -1,8 +1,35 @@
 # Testing guide
 
-**Current release:** v1.19.18 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.19-beta.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.19.19-beta.1 asset build isolation beta
+
+This beta must be proven on the persistent `beta` branch before a stable v1.19.19 tag is created.
+
+Fast regression coverage:
+
+```bash
+bash scripts/test-asset-build-isolation.sh
+bash scripts/test-update-channel.sh
+bash scripts/validate-release.sh
+```
+
+The beta branch additionally triggers the real Ubuntu 24.04 integration workflow on every push. Required field/CI scenarios:
+
+1. fresh install: no managed `watch.1`, no automatic rebuild from `wait-ready`, frontend assets stable without reboot;
+2. existing-environment reinstall: old runtime isolated, fresh install succeeds, frontend stable without reboot;
+3. explicit repair: managed runtime is stopped during `bench build`, then restarted and verified;
+4. failure semantics: core install remains installed and reports frontend `DEGRADED` rather than a false core-install failure.
+
+Beta VM update after the branch exists:
+
+```bash
+TOOLKIT_UPDATE_CHANNEL=beta TOOLKIT_UPDATE_SLOT=beta sudo -E erpnext-dev update-toolkit
+```
+
+Do not merge beta to `main` or create a stable tag until all beta integration and real-VM checks pass.
 
 ## v1.19.18 clean reinstall isolation
 

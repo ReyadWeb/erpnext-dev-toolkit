@@ -1,9 +1,9 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.18 (July 2026)
+**Current release:** v1.19.19-beta.1 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.20.0 External Watchdog, after v1.19.18 field validation.
-**Deferred:** v1.20.0 until v1.19.18 is field-validated.
+**Next up:** v1.20.0 External Watchdog, after v1.19.19 field validation.
+**Deferred:** v1.20.0 until v1.19.19 is field-validated.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -58,7 +58,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.19.18)
+## Shipped foundation (through v1.19.18; v1.19.19 beta under validation)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -361,6 +361,17 @@ v1.23.0  Documentation and launch polish
 - [x] Browser asset readiness is re-verified after the reinstall without reboot.
 
 ---
+
+
+### v1.19.19 — Asset Build Isolation (P0)
+
+**Status:** Beta validation (`v1.19.19-beta.1`) before stable release.
+
+- Make `wait-ready` strictly read-only.
+- Remove `bench watch` from toolkit-managed background runtime.
+- Run explicit asset builds only while the managed runtime is stopped.
+- Preserve successful core installs when frontend readiness is degraded.
+- Prove fresh install, same-path reinstall, and repair on the persistent `beta` branch before promotion.
 
 ### v1.20.0 — External Watchdog Foundation
 

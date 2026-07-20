@@ -26,8 +26,7 @@ trap 'rm -rf "$tmpdir"' EXIT
 export BENCH_PARENT="${tmpdir}/frappe"
 export BENCH_NAME="frappe-bench"
 export BENCH_DIR="${BENCH_PARENT}/${BENCH_NAME}"
-FRAPPE_USER="$(id -un)"
-export FRAPPE_USER
+export FRAPPE_USER="$(id -un)"
 export SUDO=""
 export ERPNEXT_DEV_PROC_ROOT="${tmpdir}/proc"
 export ERPNEXT_SERVICE_NAME="erpnext-dev.service"

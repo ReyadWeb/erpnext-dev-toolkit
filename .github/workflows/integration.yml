@@ -10,6 +10,10 @@ name: Integration (disposable VM)
 # repositories, so it runs on demand, weekly, and on release tags.
 
 on:
+  # Persistent beta proving ground: every push gets a real Ubuntu 24.04 install
+  # before code is eligible for promotion to main/stable tags.
+  push:
+    branches: [ beta ]
   workflow_dispatch:
     inputs:
       site_name:

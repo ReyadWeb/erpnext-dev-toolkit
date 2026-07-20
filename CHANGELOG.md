@@ -1,3 +1,21 @@
+## v1.19.19-beta.1 - Asset build isolation beta
+
+### Fixed
+
+- **Read-only readiness:** `wait-ready` no longer rebuilds assets, clears caches, or restarts services. Health checks now observe only.
+- **Watcher/build race:** toolkit-managed development services use `Procfile.toolkit`, generated from Frappe's Procfile without the `watch:` process, so background asset watching cannot race explicit `bench build`.
+- **Install-time watcher isolation:** temporary Bench services used during installation also start with the watcher disabled before ERPNext migrate/build steps.
+- **Transactional frontend repair:** `repair-frontend-assets` stops the managed runtime, performs one isolated build, restarts the runtime, clears the dedicated cache, and then runs read-only verification.
+- **Install result accuracy:** a completed core ERPNext installation is preserved and reported as `DEGRADED` when frontend verification fails instead of being falsely reported as a failed installation.
+- **Beta channel:** added a persistent mutable `beta` update channel and CI path so real VM testing happens before stable tags are created.
+
+### Beta validation required
+
+- Fresh native install without reboot.
+- Same-path clean reinstall without reboot.
+- Explicit frontend repair without a concurrent watcher.
+- Stable login CSS/JS across repeated probes.
+
 ## v1.19.18 - Clean reinstall isolation
 
 ### Fixed

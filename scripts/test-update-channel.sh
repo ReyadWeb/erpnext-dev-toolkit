@@ -44,8 +44,15 @@ unset TOOLKIT_UPDATE_VERSION TOOLKIT_UPDATE_CHANNEL
 TOOLKIT_UPDATE_VERSION=v1.17.5
 assert_eq "tag channel keeps VERSION" "v1.17.5" "$(resolve_toolkit_update_version)"
 
+# Mutable beta channel resolves to beta slot/ref, independently of main.
+unset TOOLKIT_UPDATE_CHANNEL TOOLKIT_UPDATE_FROM_MAIN TOOLKIT_UPDATE_VERSION TOOLKIT_UPDATE_SLOT
+TOOLKIT_UPDATE_CHANNEL=beta
+assert_eq "beta channel default slot" "beta" "$(resolve_toolkit_update_version)"
+assert_eq "beta channel branch ref" "beta" "$(toolkit_update_branch_name)"
+
 if ((fail > 0)); then
   echo "test-update-channel: ${fail} failure(s)" >&2
   exit 1
 fi
+
 echo "test-update-channel: all checks passed"
