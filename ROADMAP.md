@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.18 (July 2026)  
+**Current release:** v1.19.18 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.20.0 External Watchdog, after v1.19.18 field validation.  
+**Next up:** v1.20.0 External Watchdog, after v1.19.18 field validation.
 **Deferred:** v1.20.0 until v1.19.18 is field-validated.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
