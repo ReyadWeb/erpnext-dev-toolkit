@@ -1,9 +1,9 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.15 (July 2026)  
+**Current release:** v1.19.16 (July 2026)  
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.20.0 External Watchdog, after v1.19.15 field validation.  
-**Deferred:** v1.20.0 until v1.19.15 is field-validated.
+**Next up:** v1.20.0 External Watchdog, after v1.19.16 field validation.  
+**Deferred:** v1.20.0 until v1.19.16 is field-validated.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -58,7 +58,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.19.15)
+## Shipped foundation (through v1.19.16)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -99,8 +99,9 @@ v1.19.11 Stale assets_json Redis :13000 + CI gate
 v1.19.12 Post-HTTPS settle before browser URLs
 v1.19.13 Post-install settle before HTTPS
 v1.19.14 redis_cache FLUSHDB settle (ghost CSS)
-v1.19.15 CLI UX + ShellCheck + modular recovery ← current
-v1.20.0  External watchdog foundation            ← deferred until 1.19.15
+v1.19.15 CLI UX + ShellCheck + modular recovery
+v1.19.16 Menu information architecture             ← current
+v1.20.0  External watchdog foundation              ← deferred until 1.19.16
 v1.21.0  CloudPanel / agent API foundation
 v1.22.0  Real VPS validation matrix (bounded)
 v1.23.0  Documentation and launch polish
@@ -306,11 +307,36 @@ v1.23.0  Documentation and launch polish
 - `MENU_NO_CLEAR` exported from `menu_render_test` (SC2034 / validate-release gate).
 - Legacy modular bootstrap recovers missing `lib/` from the signed `SCRIPT_VERSION` bundle.
 
+
+---
+
+### v1.19.16 — Menu Information Architecture (P1)
+
+**Status:** Shipped as **v1.19.16**.
+
+**Goal:** Reduce interactive decision overload without removing any CLI capability. The Main menu becomes task-oriented, Advanced becomes a small set of expert categories, and Access becomes a routing hub instead of a 29-item command index.
+
+**Shipped**
+- Main menu reduced from 18 choices to 12 task-oriented sections.
+- Added Local Development, Production Setup, HTTPS & Domains, and Operations routing hubs.
+- Advanced reduced from 50 flat choices to 9 grouped expert categories.
+- Access & Networking reduced from 29 flat choices to 7 task-oriented routes, with a dedicated Hostname & Hosts Mapping submenu.
+- Destructive uninstall/reset is isolated and labeled inside Installation & Repair.
+- Existing direct CLI commands remain unchanged and available for expert users and automation.
+- Navigation smoke tests updated for the new hierarchy; UI render tests assert the flat-menu regressions do not return.
+
+**Acceptance**
+- [x] Main menu has no more than 12 top-level choices.
+- [x] Advanced has no more than 9 top-level categories.
+- [x] Access & Networking has no more than 7 top-level routes.
+- [x] Existing command dispatch remains intact.
+- [x] 80-column two-column rendering and 70-column fallback remain covered by CI.
+
 ---
 
 ### v1.20.0 — External Watchdog Foundation
 
-**Status:** Deferred until v1.19.15 is field-validated.
+**Status:** Deferred until v1.19.16 is field-validated.
 
 **Goal:** Contract for Case B — frozen, powered-off, or unreachable VM (cannot self-heal from inside).
 

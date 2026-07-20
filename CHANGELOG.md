@@ -1,3 +1,39 @@
+## v1.19.16 - Menu information architecture
+
+UX-focused patch that turns the interactive toolkit from a large command index
+into a task-oriented navigation hierarchy while preserving every direct CLI
+command and the v1.19.15 page lifecycle.
+
+### Changed
+
+- **Main menu:** reduced from 18 choices to 12 task-oriented sections: Start
+  here, Local development, Production setup, Status & health, Access &
+  networking, HTTPS & domains, Applications, Security, Backup & recovery,
+  Operations, Advanced, and Help.
+- **Advanced:** replaced the 50-item flat menu with 9 grouped expert categories:
+  Installation & repair, Deployment engine, Services & logs, Storage,
+  Networking, Domains & HTTPS, Credentials, Diagnostics, and Developer tools.
+- **Access & Networking:** replaced the 29-item flat menu with 7 task-oriented
+  routes and a dedicated Hostname & Hosts Mapping submenu.
+- **Routing hubs:** added focused Local Development, Production Setup, HTTPS &
+  Domains, and Operations menus so users navigate by intent instead of internal
+  command names.
+- **Destructive-action separation:** uninstall/reset is isolated inside
+  Advanced > Installation & Repair and explicitly labeled destructive.
+- **Navigation labels:** updated local/production HTTPS and local-network path
+  hints to match the new hierarchy.
+
+### Compatibility
+
+- Existing direct CLI commands and aliases are unchanged; this release changes
+  interactive menu information architecture only.
+
+### Validation
+
+- Updated UI render assertions for the 12-item Main menu and added regression
+  checks that the legacy 50-item Advanced and 29-item Access menus do not return.
+- Updated nested menu-navigation smoke paths for the new hierarchy.
+
 ## v1.19.15 - CLI page UX + ShellCheck + modular recovery
 
 Patch release that ships the CLI page UX work, unblocks the ShellCheck release

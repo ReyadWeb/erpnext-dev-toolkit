@@ -1711,73 +1711,61 @@ Recommended rule:
 ============================================================
 EOF_MULTI
 }
+show_hostname_hosts_menu() {
+  while true; do
+    ui_submenu_header "Hostname & Hosts Mapping" \
+      "Local DNS, host mapping, VM identity, and multi-environment naming"
+    print_two_column_menu \
+      "1) Local domain / DNS status" \
+      "2) Show host /etc/hosts command" \
+      "3) Host mapping checkpoint" \
+      "4) KVM VM identification guide" \
+      "5) Stable VM IP guide" \
+      "6) Multi-environment naming guide" \
+      "7) Host access test guide"
+    menu_footer back "Access & Networking"
+    local choice=""
+    menu_read_choice choice
+
+    case "$choice" in
+      1) show_local_domain_status; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
+      2) show_host_hosts_command; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
+      3) show_local_host_mapping_checkpoint; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
+      4) show_kvm_vm_identification_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
+      5) show_local_fixed_ip_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
+      6) show_multi_environment_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
+      7) show_host_access_test_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
+      b|B|"") return 0 ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid option" ;;
+    esac
+  done
+}
+
 show_access_menu() {
   while true; do
-    ui_submenu_header "Access / Hostname / Networking" "Browser URLs, hosts DNS, and local SSL helpers"
+    ui_submenu_header "Access & Networking" \
+      "Browser access, stable IP, host mapping, and routing to HTTPS tools"
     print_two_column_menu \
-      "1) Show current VM browser access instructions" \
-      "2) Local domain / host DNS status" \
-      "3) Local access doctor" \
-      "4) Show host /etc/hosts command only" \
-      "5) Show VM network/access status" \
-      "6) Local network / stable IP menu" \
-      "7) Verify ERPNext HTTP access" \
-      "8) Show KVM VM identification + fixed IP helper" \
-      "9) Show stable VM IP guide (per host OS / hypervisor)" \
-      "10) Show multi-environment naming guide" \
-      "11) Show SSL/HTTPS roadmap" \
-      "12) Show local SSL status" \
-      "13) Show local SSL guide" \
-      "14) Local SSL wizard" \
-      "15) Show trusted mkcert SSL guide" \
-      "16) Show browser trust check guide" \
-      "17) Verify local SSL" \
-      "18) Install/replace local SSL cert" \
-      "19) Create self-signed local cert" \
-      "20) Configure local SSL reverse proxy" \
-      "21) Disable local SSL reverse proxy" \
-      "22) Verify SSL rollback" \
-      "23) Show SSL rollback guide" \
-      "24) Domain config" \
-      "25) Production readiness preview" \
-      "26) Production domain guide" \
-      "27) Production SSL guide" \
-      "28) Environment / location check" \
-      "29) Show host access test guide"
-    menu_footer
+      "1) Browser access information" \
+      "2) Verify browser access" \
+      "3) Local network & stable IP" \
+      "4) Hostname & hosts mapping" \
+      "5) HTTPS & domains" \
+      "6) Local access doctor" \
+      "7) Environment / location check"
+    menu_footer back "Main menu"
     local access_choice=""
     menu_read_choice access_choice
 
     case "$access_choice" in
-      1) show_access_instructions; pause_after_screen "Press Enter to return to Access..." ;;
-      2) show_local_domain_status; pause_after_screen "Press Enter to return to Access..." ;;
-      3) local_access_doctor; pause_after_screen "Press Enter to return to Access..." ;;
-      4) show_host_hosts_command; pause_after_screen "Press Enter to return to Access..." ;;
-      5) show_network_status; pause_after_screen "Press Enter to return to Access..." ;;
-      6) show_local_ip_menu ;;
-      7) verify_access; pause_after_screen "Press Enter to return to Access..." ;;
-      8) show_kvm_vm_identification_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      9) show_local_fixed_ip_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      10) show_multi_environment_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      11) show_ssl_roadmap_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      12) show_ssl_status; pause_after_screen "Press Enter to return to Access..." ;;
-      13) show_local_ssl_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      14) run_local_ssl_wizard ;;
-      15) show_mkcert_local_ssl_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      16) show_browser_trust_check_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      17) verify_local_ssl; pause_after_screen "Press Enter to return to Access..." ;;
-      18) install_local_ssl_cert; pause_after_screen "Press Enter to return to Access..." ;;
-      19) create_self_signed_local_cert; pause_after_screen "Press Enter to return to Access..." ;;
-      20) configure_local_ssl; pause_after_screen "Press Enter to return to Access..." ;;
-      21) disable_local_ssl; pause_after_screen "Press Enter to return to Access..." ;;
-      22) verify_ssl_rollback; pause_after_screen "Press Enter to return to Access..." ;;
-      23) show_ssl_rollback_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      24) show_domain_config; pause_after_screen "Press Enter to return to Access..." ;;
-      25) show_production_readiness; pause_after_screen "Press Enter to return to Access..." ;;
-      26) show_production_domain_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      27) show_production_ssl_guide; pause_after_screen "Press Enter to return to Access..." ;;
-      28) show_environment_check; pause_after_screen "Press Enter to return to Access..." ;;
-      29) show_host_access_test_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      1) show_access_instructions; pause_after_screen "Press Enter to return to Access & Networking..." ;;
+      2) verify_access; pause_after_screen "Press Enter to return to Access & Networking..." ;;
+      3) show_local_ip_menu ;;
+      4) show_hostname_hosts_menu ;;
+      5) show_https_domains_menu ;;
+      6) local_access_doctor; pause_after_screen "Press Enter to return to Access & Networking..." ;;
+      7) show_environment_check; pause_after_screen "Press Enter to return to Access & Networking..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;

@@ -37,8 +37,10 @@ fi
 
 grep -q "ERPNext Developer Toolkit" "$tmp" || note_fail "missing toolkit title"
 grep -q "Start here" "$tmp" || note_fail "missing Start here item"
-grep -q "Local network" "$tmp" || note_fail "missing Local network item"
-grep -q "Production ops" "$tmp" || note_fail "missing Production ops item"
+grep -q "Access & networking" "$tmp" || note_fail "missing Access & networking item"
+grep -q "HTTPS & domains" "$tmp" || note_fail "missing HTTPS & domains item"
+grep -q "Backup & recovery" "$tmp" || note_fail "missing Backup & recovery item"
+grep -q "Operations" "$tmp" || note_fail "missing Operations item"
 grep -q "Choose an option" "$tmp" || note_fail "missing Choose an option prompt"
 grep -qE '\[q\]|q\) Quit' "$tmp" || note_fail "missing quit affordance"
 
@@ -46,16 +48,16 @@ if grep -q $'\033' "$tmp"; then
   note_fail "ANSI escape codes present with NO_COLOR=1 / TERM=dumb"
 fi
 
-# Wide / two-column layout (no MENU_FORCE_TWO_COLUMNS): item 1 and 10 share a row.
+# Wide / two-column layout (no MENU_FORCE_TWO_COLUMNS): item 1 and 7 share a row.
 export COLUMNS=100
 export MENU_TERMINAL_COLS=100
 export MENU_FORCE_ONE_COLUMN=false
 unset MENU_FORCE_TWO_COLUMNS
 tmp2="$(mktemp /tmp/erpnext-dev-ui-render-wide.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp2" 2>/dev/null || note_fail "wide menu-render-test failed"
-grep -q "Dashboard" "$tmp2" || note_fail "wide layout missing Dashboard"
-if ! grep -qE '\[1\].*\[10\]' "$tmp2"; then
-  note_fail "expected two-column row with [1] and [10] at COLUMNS=100"
+grep -q "Operations" "$tmp2" || note_fail "wide layout missing Operations"
+if ! grep -qE '\[1\].*\[7\]' "$tmp2"; then
+  note_fail "expected two-column row with [1] and [7] at COLUMNS=100"
   echo "----- wide render -----" >&2
   cat "$tmp2" >&2 || true
 else
@@ -83,7 +85,7 @@ export MENU_FORCE_ONE_COLUMN=false
 unset MENU_FORCE_TWO_COLUMNS
 tmp3="$(mktemp /tmp/erpnext-dev-ui-render-80.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp3" 2>/dev/null || note_fail "80-col menu-render-test failed"
-if ! grep -qE '\[1\].*\[10\]' "$tmp3"; then
+if ! grep -qE '\[1\].*\[7\]' "$tmp3"; then
   note_fail "expected two-column menu at COLUMNS=80"
   echo "----- 80-col render -----" >&2
   cat "$tmp3" >&2 || true
@@ -98,7 +100,7 @@ export COLUMNS=70
 export MENU_TERMINAL_COLS=70
 tmpn="$(mktemp /tmp/erpnext-dev-ui-render-70.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmpn" 2>/dev/null || note_fail "70-col menu-render-test failed"
-if grep -qE '\[1\].*\[10\]' "$tmpn"; then
+if grep -qE '\[1\].*\[7\]' "$tmpn"; then
   note_fail "expected single-column menu at COLUMNS=70"
   cat "$tmpn" >&2 || true
 else
@@ -113,7 +115,7 @@ export MENU_FORCE_ONE_COLUMN=false
 unset MENU_FORCE_TWO_COLUMNS
 tmp4="$(mktemp /tmp/erpnext-dev-ui-render-120.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp4" 2>/dev/null || note_fail "120-col menu-render-test failed"
-if ! grep -qE '\[1\].*\[10\]' "$tmp4"; then
+if ! grep -qE '\[1\].*\[7\]' "$tmp4"; then
   note_fail "expected two-column menu at COLUMNS=120"
   echo "----- 120-col render -----" >&2
   cat "$tmp4" >&2 || true
@@ -231,6 +233,35 @@ if printf 'q\n' | bash -c '
 else
   note_fail "result-page footer q handling failed"
 fi
+
+# v1.19.16 information architecture: Advanced and Access are grouped routing menus,
+# not the former 50-item / 29-item flat command indexes.
+adv_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced.XXXXXX)"
+if ! printf 'q\n' | ./erpnext-dev.sh advanced >"$adv_tmp" 2>/dev/null; then
+  note_fail "advanced menu render failed"
+fi
+grep -q "Installation & repair" "$adv_tmp" || note_fail "Advanced missing Installation & repair"
+grep -q "Deployment engine" "$adv_tmp" || note_fail "Advanced missing Deployment engine"
+grep -q "Services & logs" "$adv_tmp" || note_fail "Advanced missing Services & logs"
+grep -q "Domains & HTTPS" "$adv_tmp" || note_fail "Advanced missing Domains & HTTPS"
+grep -q "Developer tools" "$adv_tmp" || note_fail "Advanced missing Developer tools"
+if grep -q "50) Credentials / Login" "$adv_tmp"; then
+  note_fail "Advanced still exposes the legacy 50-item flat menu"
+fi
+rm -f "$adv_tmp"
+
+access_tmp="$(mktemp /tmp/erpnext-dev-ui-access.XXXXXX)"
+if ! printf 'q\n' | ./erpnext-dev.sh access >"$access_tmp" 2>/dev/null; then
+  note_fail "access menu render failed"
+fi
+grep -q "Browser access information" "$access_tmp" || note_fail "Access missing browser access information"
+grep -q "Local network & stable IP" "$access_tmp" || note_fail "Access missing local network routing"
+grep -q "Hostname & hosts mapping" "$access_tmp" || note_fail "Access missing hostname / hosts routing"
+grep -q "HTTPS & domains" "$access_tmp" || note_fail "Access missing HTTPS & domains routing"
+if grep -q "29) Show host access test guide" "$access_tmp"; then
+  note_fail "Access still exposes the legacy 29-item flat menu"
+fi
+rm -f "$access_tmp"
 
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2

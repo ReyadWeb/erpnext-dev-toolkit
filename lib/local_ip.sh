@@ -759,7 +759,7 @@ show_local_ip_menu() {
   while true; do
     ui_submenu_header "Local network / Stable IP" \
       "Keep ${SITE_NAME:-erp.test} working when the guest IP changes"
-    menu_location_note "Main menu > Local network" "local-ip-menu"
+    menu_location_note "Main menu > 5) Access & Networking > 3) Local network & stable IP" "local-ip-menu"
     echo
     print_two_column_menu \
       "1) IP status" \
