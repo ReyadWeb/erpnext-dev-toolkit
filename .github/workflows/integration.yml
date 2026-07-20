@@ -81,7 +81,7 @@ jobs:
     name: Install + smoke (${{ matrix.os }})
     needs: resolve-matrix
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 75
+    timeout-minutes: 120
     # ubuntu-26.04 is canary-only (schedule / workflow_dispatch, or explicit
     # run_experimental_os on workflow_call). When present it stays continue-on-error
     # so a preview flake never blocks. Tag releases omit it so GitHub checks stay
@@ -330,6 +330,96 @@ jobs:
           sudo systemctl status erpnext-dev.service --no-pager -l 2>/dev/null || true
           sudo journalctl -u erpnext-dev.service --no-pager -n 200 2>/dev/null || true
           exit 1
+
+      - name: Existing-environment clean reinstall isolation (hard gate)
+        if: matrix.experimental == false
+        run: |
+          set -euo pipefail
+
+          # Reproduce the real field condition that previously needed a VM reboot:
+          # an existing Bench at the canonical path plus an orphaned same-user
+          # process that still references that live tree. The reinstall must
+          # quiesce the old runtime, archive it, preserve unrelated same-user
+          # processes, install a fresh site at the same BENCH_PARENT, and pass the
+          # frontend asset gate without rebooting the runner.
+          BENCH_PARENT="/home/frappe/frappe"
+          BENCH_DIR="${BENCH_PARENT}/frappe-bench"
+          REINSTALL_SITE="reinstall.test"
+          SENTINEL_DIR="/home/frappe/frappe-backup-sentinel/frappe-bench"
+          sudo mkdir -p "$SENTINEL_DIR"
+          sudo chown -R frappe:frappe "/home/frappe/frappe-backup-sentinel"
+
+          stale_pid="$(sudo -u frappe bash -lc "nohup python3 -c 'import time; time.sleep(1800)' '${BENCH_DIR}/stale-runtime-marker' >/tmp/erpnext-dev-stale-runtime.log 2>&1 & echo \$!")"
+          sentinel_pid="$(sudo -u frappe bash -lc "nohup python3 -c 'import time; time.sleep(1800)' '${SENTINEL_DIR}/sentinel-marker' >/tmp/erpnext-dev-sentinel-runtime.log 2>&1 & echo \$!")"
+          echo "stale Bench PID=${stale_pid}; unrelated same-user PID=${sentinel_pid}"
+          sudo kill -0 "$stale_pid"
+          sudo kill -0 "$sentinel_pid"
+
+          pid_is_live_non_zombie() {
+            local pid="$1" stat
+            sudo kill -0 "$pid" 2>/dev/null || return 1
+            stat="$(sudo ps -o stat= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+            [[ -n "$stat" && "$stat" != Z* ]]
+          }
+
+          echo "== Reinstall over existing BENCH_PARENT without reboot =="
+          sudo -E env SITE_NAME="$REINSTALL_SITE" ./erpnext-dev.sh -y install
+
+          if pid_is_live_non_zombie "$stale_pid"; then
+            echo "::error::Old Bench-referencing process survived clean reinstall (PID ${stale_pid})."
+            sudo ps -fp "$stale_pid" || true
+            exit 1
+          fi
+          echo "Old Bench-referencing process was terminated before archive."
+
+          if ! pid_is_live_non_zombie "$sentinel_pid"; then
+            echo "::error::Unrelated same-user process was killed by reinstall isolation."
+            exit 1
+          fi
+          echo "Unrelated same-user process was preserved."
+          sudo kill "$sentinel_pid" 2>/dev/null || true
+
+          archive_count="$(find /home/frappe -maxdepth 1 -type d -name 'frappe-backup-*' ! -name 'frappe-backup-sentinel' | wc -l | tr -d ' ')"
+          if [[ "$archive_count" -lt 1 ]]; then
+            echo "::error::Expected the previous Bench tree to be archived before reinstall."
+            find /home/frappe -maxdepth 1 -type d -printf '%f\n' | sort || true
+            exit 1
+          fi
+
+          sudo -E env SITE_NAME="$REINSTALL_SITE" ./erpnext-dev.sh wait-ready
+          sudo -E env SITE_NAME="$REINSTALL_SITE" ./erpnext-dev.sh verify-frontend-assets
+
+          # The runner is disposable; reclaim the archived first Bench before the
+          # later backup/restore gates so the regression does not create disk-pressure
+          # flakes unrelated to reinstall safety.
+          while IFS= read -r archive_dir; do
+            [[ -n "$archive_dir" ]] || continue
+            sudo rm -rf "$archive_dir"
+          done < <(find /home/frappe -maxdepth 1 -type d -name 'frappe-backup-*' ! -name 'frappe-backup-sentinel' -print)
+          sudo rm -rf "/home/frappe/frappe-backup-sentinel"
+
+          # Subsequent backup/restore/production-runtime gates should exercise the
+          # freshly reinstalled site rather than the archived first installation.
+          echo "SITE_NAME=${REINSTALL_SITE}" >> "$GITHUB_ENV"
+          echo "Clean reinstall isolation passed without a VM reboot."
+
+      - name: Collect clean reinstall failure diagnostics
+        if: failure() && matrix.experimental == false
+        run: |
+          set +e
+          echo "===== /home/frappe environment trees ====="
+          sudo find /home/frappe -maxdepth 2 -type d -name 'frappe*' -print 2>/dev/null | sort || true
+          echo "===== frappe-owned runtime processes ====="
+          ps -u frappe -o pid,ppid,stat,lstart,cmd 2>/dev/null || true
+          echo "===== runtime listeners ====="
+          sudo ss -ltnp 2>/dev/null | grep -E ':6787|:8000|:9000|:11000|:12000|:13000' || true
+          echo "===== toolkit service ====="
+          sudo systemctl status erpnext-dev.service --no-pager -l 2>/dev/null || true
+          sudo journalctl -u erpnext-dev.service --no-pager -n 200 2>/dev/null || true
+          echo "===== Supervisor ====="
+          sudo supervisorctl status 2>/dev/null || true
+          echo "===== frontend assets ====="
+          sudo -E env SITE_NAME=reinstall.test ./erpnext-dev.sh frappe-asset-checklist || true
 
       - name: Backup and restore round trip
         run: |

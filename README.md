@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.17 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.19.18 · **Readiness:** ~9.5/10 for single-admin local/public VM
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -157,7 +157,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.17"
+VERSION="v1.19.18"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
@@ -232,6 +232,25 @@ See [`ROADMAP.md`](ROADMAP.md) for the full plan and timeline. VPS production ch
 [`TESTING.md` — VPS production validation](TESTING.md#vps-production-validation-v190).
 
 ---
+
+## Clean reinstall safety
+
+When a native installation already exists at the configured `BENCH_PARENT`, a
+clean reinstall now treats the archive step as a hard runtime boundary. Before
+the old tree is moved, the toolkit stops its systemd service, stops only the
+Supervisor programs declared by that Bench, terminates any remaining
+`frappe`-owned processes that still reference the active Bench path, and
+verifies the Bench runtime ports are free. If isolation cannot be proven, the
+archive and reinstall stop instead of moving a live environment.
+
+This protects reinstall scenarios where stale workers, Redis processes, or
+other Bench children could otherwise survive against the archived tree while a
+new Bench is created at the same path. Archive-sibling directories and unrelated
+processes owned by the same Linux user are deliberately excluded from targeted
+termination.
+If the archived installation was using the Supervisor production runtime, the
+fresh Bench regenerates its Supervisor configuration and restores that runtime
+before the reinstall is considered complete.
 
 ## Install and verify
 
