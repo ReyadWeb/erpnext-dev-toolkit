@@ -321,6 +321,15 @@ if ! grep -q 'evict_redis_assets_json_keys' "${ROOT_DIR}/lib/access.sh"; then
 else
   echo "OK: hard redis assets_json eviction helper present"
 fi
+if ! grep -q '^settle_stack_after_local_https()' "${ROOT_DIR}/lib/service.sh"; then
+  echo "FAIL: missing settle_stack_after_local_https (post-HTTPS reboot workaround)" >&2
+  fail=$((fail + 1))
+elif ! grep -q 'settle_stack_after_local_https' "${ROOT_DIR}/lib/ssl.sh"; then
+  echo "FAIL: ssl.sh must call settle_stack_after_local_https after trusted mkcert" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: post-HTTPS settle wired into trusted mkcert setup"
+fi
 # wait-ready must prefer Frappe local :8000 over :443
 if ! grep -A25 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -q 'port_listens 8000'; then
   echo "FAIL: bench_static_assets_ready must probe :8000" >&2
