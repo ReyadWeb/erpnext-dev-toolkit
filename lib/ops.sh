@@ -90,7 +90,7 @@ production_ops_services_menu() {
       6) verify_frontend_assets; pause_after_screen "Press Enter to return to Services and Recovery..." ;;
       7) repair_frontend_assets; pause_after_screen "Press Enter to return to Services and Recovery..." ;;
       8) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Services and Recovery..." ;;
-      9) follow_erpnext_service_logs ;;
+      9) follow_erpnext_service_logs; pause_after_screen "Press Enter to return to Services and Recovery..." ;;
       10) show_service_recovery_plan; pause_after_screen "Press Enter to return to Services and Recovery..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;

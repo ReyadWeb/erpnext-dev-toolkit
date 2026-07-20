@@ -36,9 +36,9 @@ if ! ./erpnext-dev.sh menu-render-test >"$tmp" 2>/tmp/erpnext-dev-ui-render.err;
 fi
 
 grep -q "ERPNext Developer Toolkit" "$tmp" || note_fail "missing toolkit title"
-grep -q "Setup wizard" "$tmp" || note_fail "missing Setup wizard item"
+grep -q "Start here" "$tmp" || note_fail "missing Start here item"
 grep -q "Local network" "$tmp" || note_fail "missing Local network item"
-grep -q "Production operations" "$tmp" || note_fail "missing Production operations item"
+grep -q "Production ops" "$tmp" || note_fail "missing Production ops item"
 grep -q "Choose an option" "$tmp" || note_fail "missing Choose an option prompt"
 grep -qE '\[q\]|q\) Quit' "$tmp" || note_fail "missing quit affordance"
 
@@ -53,7 +53,7 @@ export MENU_FORCE_ONE_COLUMN=false
 unset MENU_FORCE_TWO_COLUMNS
 tmp2="$(mktemp /tmp/erpnext-dev-ui-render-wide.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp2" 2>/dev/null || note_fail "wide menu-render-test failed"
-grep -q "Ops dashboard" "$tmp2" || note_fail "wide layout missing Ops dashboard"
+grep -q "Dashboard" "$tmp2" || note_fail "wide layout missing Dashboard"
 if ! grep -qE '\[1\].*\[10\]' "$tmp2"; then
   note_fail "expected two-column row with [1] and [10] at COLUMNS=100"
   echo "----- wide render -----" >&2
@@ -76,22 +76,35 @@ if grep -q $'\033' "$tmp2"; then
 fi
 rm -f "$tmp2"
 
-# 80-col terminals stay single-column (threshold raised to 100 in v1.17.9).
+# 80-col terminals now stay two-column when labels fit (v1.19.11 page UX).
 export COLUMNS=80
 export MENU_TERMINAL_COLS=80
 export MENU_FORCE_ONE_COLUMN=false
 unset MENU_FORCE_TWO_COLUMNS
 tmp3="$(mktemp /tmp/erpnext-dev-ui-render-80.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp3" 2>/dev/null || note_fail "80-col menu-render-test failed"
-if grep -qE '\[1\].*\[10\]' "$tmp3"; then
-  note_fail "expected single-column menu at COLUMNS=80 (no [1]/[10] pair)"
+if ! grep -qE '\[1\].*\[10\]' "$tmp3"; then
+  note_fail "expected two-column menu at COLUMNS=80"
   echo "----- 80-col render -----" >&2
   cat "$tmp3" >&2 || true
 else
-  pass "single-column menu at COLUMNS=80"
+  pass "two-column menu at COLUMNS=80"
 fi
-grep -q "Setup wizard" "$tmp3" || note_fail "80-col missing Setup wizard"
+grep -q "Start here" "$tmp3" || note_fail "80-col missing Start here"
 rm -f "$tmp3"
+
+# Genuinely narrow terminals remain one-column.
+export COLUMNS=70
+export MENU_TERMINAL_COLS=70
+tmpn="$(mktemp /tmp/erpnext-dev-ui-render-70.XXXXXX)"
+./erpnext-dev.sh menu-render-test >"$tmpn" 2>/dev/null || note_fail "70-col menu-render-test failed"
+if grep -qE '\[1\].*\[10\]' "$tmpn"; then
+  note_fail "expected single-column menu at COLUMNS=70"
+  cat "$tmpn" >&2 || true
+else
+  pass "single-column menu at COLUMNS=70"
+fi
+rm -f "$tmpn"
 
 # 120-col stays two-column.
 export COLUMNS=120
@@ -188,6 +201,35 @@ if [[ "$got" != "q" ]]; then
   note_fail "menu_read_choice did not return q (got='${got}') — ui_prompt shadowing regress?"
 else
   pass "menu_read_choice returns typed selection"
+fi
+
+# Numbered choices trigger the interactive page clear hook; back/quit do not.
+clear_hook_file="$(mktemp /tmp/erpnext-dev-menu-clear-hook.XXXXXX)"
+printf '4\n' | bash -c '
+  source "'"$ROOT_DIR"'/lib/common.sh"
+  source "'"$ROOT_DIR"'/lib/ui.sh"
+  ui_clear_screen() { printf clear > "'"$clear_hook_file"'"; }
+  menu_read_choice got
+' >/dev/null
+if [[ "$(cat "$clear_hook_file" 2>/dev/null || true)" == "clear" ]]; then
+  pass "numbered menu selection starts a fresh action page"
+else
+  note_fail "numbered menu selection did not trigger page clear"
+fi
+rm -f "$clear_hook_file"
+
+# The page return footer must accept q/Q as a real quit path instead of treating
+# it as ignored text at an Enter-only pause.
+if printf 'q\n' | bash -c '
+  source "'"$ROOT_DIR"'/lib/common.sh"
+  ASSUME_YES=0
+  MENU_TEST_INTERACTIVE_PAUSE=1
+  pause_after_screen "Press Enter to return to Test menu..."
+  exit 99
+' >/dev/null 2>&1; then
+  pass "result-page footer accepts q to quit"
+else
+  note_fail "result-page footer q handling failed"
 fi
 
 if ((fail > 0)); then

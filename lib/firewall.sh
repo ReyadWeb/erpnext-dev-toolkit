@@ -801,17 +801,17 @@ security_hardening_wizard() {
     menu_footer
     menu_read_choice choice
     case "$choice" in
-      1) security_mode_status ;;
-      2) configure_local_vm_firewall ;;
-      3) configure_production_vm_firewall ;;
-      4) configure_vm_firewall ;;
-      5) repair_local_access ;;
-      6) show_vm_firewall_status ;;
-      7) configure_fail2ban ;;
-      8) show_fail2ban_status ;;
-      9) show_firewall_hardening_status ;;
-      10) show_firewall_rollback_snapshots ;;
-      11) configure_ufw_ssh_admin_only ;;
+      1) security_mode_status; pause_after_screen "Press Enter to return to Security..." ;;
+      2) configure_local_vm_firewall; pause_after_screen "Press Enter to return to Security..." ;;
+      3) configure_production_vm_firewall; pause_after_screen "Press Enter to return to Security..." ;;
+      4) configure_vm_firewall; pause_after_screen "Press Enter to return to Security..." ;;
+      5) repair_local_access; pause_after_screen "Press Enter to return to Security..." ;;
+      6) show_vm_firewall_status; pause_after_screen "Press Enter to return to Security..." ;;
+      7) configure_fail2ban; pause_after_screen "Press Enter to return to Security..." ;;
+      8) show_fail2ban_status; pause_after_screen "Press Enter to return to Security..." ;;
+      9) show_firewall_hardening_status; pause_after_screen "Press Enter to return to Security..." ;;
+      10) show_firewall_rollback_snapshots; pause_after_screen "Press Enter to return to Security..." ;;
+      11) configure_ufw_ssh_admin_only; pause_after_screen "Press Enter to return to Security..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option." ;;

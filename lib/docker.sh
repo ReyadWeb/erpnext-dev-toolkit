@@ -2626,16 +2626,16 @@ docker_app_install_wizard() {
     menu_footer
     menu_read_choice choice
     case "$choice" in
-      1) install_app_profile crm ;;
-      2) install_app_profile hrms ;;
-      3) install_app_profile helpdesk ;;
-      4) install_app_profile payments ;;
-      5) install_app_profile lms ;;
-      6) install_app_profile webshop ;;
-      7) install_app_profile builder ;;
-      8) install_app_profile insights ;;
-      9) install_app_profile print_designer ;;
-      10) install_app_profile wiki ;;
+      1) install_app_profile crm; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      2) install_app_profile hrms; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      3) install_app_profile helpdesk; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      4) install_app_profile payments; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      5) install_app_profile lms; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      6) install_app_profile webshop; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      7) install_app_profile builder; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      8) install_app_profile insights; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      9) install_app_profile print_designer; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
+      10) install_app_profile wiki; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;

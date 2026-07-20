@@ -123,14 +123,31 @@ ui_layout_mode() {
     printf 'wide'
     return 0
   fi
-  # Two-column from 100 cols upward. 80–99 col SSH panels stay single-column
-  # so long option labels remain readable without heavy truncation.
-  if (( ${UI_COLS:-100} < 100 )); then
+  # Keep two columns on ordinary 80-column SSH terminals whenever labels fit.
+  # The fit check in ui_render_boxed_menu still falls back to one column for
+  # long submenu labels, so compact mode is reserved for genuinely narrow TTYs.
+  if (( ${UI_COLS:-100} < 76 )); then
     printf 'compact'
-  elif (( ${UI_COLS:-100} < 115 )); then
+  elif (( ${UI_COLS:-100} < 100 )); then
     printf 'medium'
   else
     printf 'wide'
+  fi
+}
+
+# Clear only the operator's live terminal, never the captured log stream.
+# This keeps interactive menus page-oriented even after stdout is redirected
+# through tee, while direct/non-interactive CLI commands remain print-and-exit.
+ui_clear_screen() {
+  [[ "${MENU_NO_CLEAR:-0}" != "1" ]] || return 0
+  [[ "${TERM:-}" != "dumb" ]] || return 0
+  [[ -t 0 ]] || return 0
+  [[ -w /dev/tty ]] || return 0
+
+  if command -v tput >/dev/null 2>&1; then
+    tput clear >/dev/tty 2>/dev/null || true
+  else
+    printf '\033[2J\033[H' >/dev/tty 2>/dev/null || true
   fi
 }
 

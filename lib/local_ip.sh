@@ -777,16 +777,16 @@ show_local_ip_menu() {
     menu_read_choice choice
 
     case "$choice" in
-      1) show_local_ip_status ;;
-      2) show_local_ip_plan ;;
-      3) run_local_ip_drift_check || true ;;
-      4) local_ip_save_mapping ;;
-      5) show_host_hosts_command ;;
-      6) run_local_static_ip_wizard ;;
-      7) run_local_static_ip_rollback || true ;;
-      8) show_local_ip_doc_guide ;;
-      9) show_kvm_vm_identification_guide ;;
-      10) show_local_ip_doc_guide "overview" ;;
+      1) show_local_ip_status; pause_after_screen "Press Enter to return to Local network..." ;;
+      2) show_local_ip_plan; pause_after_screen "Press Enter to return to Local network..." ;;
+      3) run_local_ip_drift_check || true; pause_after_screen "Press Enter to return to Local network..." ;;
+      4) local_ip_save_mapping; pause_after_screen "Press Enter to return to Local network..." ;;
+      5) show_host_hosts_command; pause_after_screen "Press Enter to return to Local network..." ;;
+      6) run_local_static_ip_wizard; pause_after_screen "Press Enter to return to Local network..." ;;
+      7) run_local_static_ip_rollback || true; pause_after_screen "Press Enter to return to Local network..." ;;
+      8) show_local_ip_doc_guide; pause_after_screen "Press Enter to return to Local network..." ;;
+      9) show_kvm_vm_identification_guide; pause_after_screen "Press Enter to return to Local network..." ;;
+      10) show_local_ip_doc_guide "overview"; pause_after_screen "Press Enter to return to Local network..." ;;
       b|B|"")
         if [[ "$back_target" == "main" ]]; then
           show_menu

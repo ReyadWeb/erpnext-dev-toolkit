@@ -1,6 +1,6 @@
 # Testing guide
 
-**Current release:** v1.19.14 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.11 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
@@ -111,6 +111,34 @@ sudo erpnext-dev toolkit-rollback   # return to previous signed slot if needed
 Expected: install slot is `main` or `vmain` (not overwriting signed `v1.17.4`);
 rollback restores the prior tag. Hermetic: `scripts/test-update-channel.sh`.
 
+## v1.19.11 CLI page UX architecture
+
+Hermetic (no sudo / no install):
+
+```bash
+scripts/test-ui-render.sh
+```
+
+Expects:
+
+- `COLUMNS=80` uses the two-column main menu when labels fit.
+- `COLUMNS=70` falls back to one column.
+- Numbered interactive selections trigger the shared action-page clear hook.
+- The result footer accepts `q/Q` as a real quit path.
+- `NO_COLOR=1` / `TERM=dumb` still emit no ANSI escapes.
+
+Interactive smoke:
+
+```bash
+sudo erpnext-dev menu
+```
+
+Choose a read-only action such as **Status → Status Summary**. Expected lifecycle:
+the menu clears, the result stays visible, and the footer shows
+`[Enter] Back to Status Menu    [q] Quit`. Press Enter and confirm the parent
+menu returns. Direct commands such as `erpnext-dev status` must still print and
+exit without clearing the terminal.
+
 ## v1.17.9 shorter labels + smarter columns
 
 Hermetic (no sudo / no install):
@@ -119,9 +147,10 @@ Hermetic (no sudo / no install):
 scripts/test-ui-render.sh
 ```
 
-Expects single-column at `COLUMNS=80`, two-column at `100`/`120` with `[1]` /
-`[10]` paired, fit-based single-column for oversized labels, and shortened main
-labels (`Setup wizard`, `Local HTTPS`, `Ops dashboard`).
+Historical v1.17.9 expectation: single-column at `COLUMNS=80`, two-column at
+`100`/`120` with `[1]` / `[10]` paired, fit-based single-column for oversized
+labels, and shorter labels. **Superseded by v1.19.11:** 80-column terminals now
+use two columns whenever labels fit.
 
 ## v1.17.7 status strip + boxed submenus
 
@@ -176,13 +205,6 @@ Open in the **host** browser (hard refresh):
 
 - Preferred (Frappe local): `http://SITE:8000/login`
 - Optional HTTPS: `https://SITE/login`
-
-**Fresh local install (before HTTPS):** after guided install you should see
-“Settling stack after install (FLUSHDB redis_cache …)” / `redis_cache FLUSHDB
-completed`, then another wait-ready. Only then open `http://SITE:8000/login` —
-expect **styled Sign In** without a guest reboot. (Setup Wizard appears after
-Administrator login.) If CSS still 404 while `assets.json` matches disk, that is
-the pre-FLUSHDB ghost-hash failure mode.
 
 **If it still fails:** follow the ladder in `docs/FRAPPE-FRONTEND-ASSETS.md` →
 `configure-local-ssl` → host `/etc/hosts` → `repair-frontend-assets` →
@@ -282,7 +304,7 @@ NO_COLOR=1 TERM=dumb COLUMNS=100 ./erpnext-dev.sh dashboard-render-test | od -c 
 
 Expected:
 
-- Title, all 17 main options, and “Choose an option” appear.
+- Title, all current main options, and “Choose an option” appear.
 - With `NO_COLOR=1` / `TERM=dumb`, output contains **no** ANSI escapes.
 - `scripts/test-ui-render.sh` also asserts OK/status `GREEN` survives the
   post-`tee` color re-init path (regression from v1.16–v1.17.3).
@@ -296,7 +318,8 @@ Interactive smoke:
 ```bash
 sudo erpnext-dev menu
 # wide terminal: two-column boxed menu + status strip
-# narrow / COLUMNS=80: single-column list
+# normal SSH / COLUMNS=80: two-column list when labels fit
+# genuinely narrow / COLUMNS=70: single-column fallback
 sudo erpnext-dev dashboard
 sudo erpnext-dev dashboard --details
 sudo erpnext-dev dashboard --no-color

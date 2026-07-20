@@ -405,7 +405,6 @@ bench_redis_cache_host_port() {
 
 # Hard-DEL assets_json keys on the bench redis_cache instance (not host :6379).
 # plain `redis-cli KEYS` misses frappe cache on :13000 — field failure on e.test.
-# Prefer flush_bench_redis_cache for settle (field: selective DEL left ghost CSS).
 evict_redis_assets_json_keys() {
   local bench_dir="${1:-}" hostport host port
   local -a keys=()
@@ -426,50 +425,6 @@ evict_redis_assets_json_keys() {
     keys=("assets_json")
   fi
   redis-cli -h "$host" -p "$port" DEL "${keys[@]}" >/dev/null 2>&1 || true
-  return 0
-}
-
-# FLUSHDB on bench redis_cache only (usually :13000). Reboot-equivalent for
-# ghost login CSS hashes when selective DEL misses namespaced keys. Never
-# touches redis_queue / redis_socketio (different ports in common_site_config).
-flush_bench_redis_cache() {
-  local bench_dir="${1:-}" hostport host port queue_url cache_url cfg
-  local queue_hostport=""
-
-  [[ -n "$bench_dir" ]] || bench_dir="$(active_bench_dir 2>/dev/null || true)"
-  [[ -n "$bench_dir" ]] || return 1
-  cfg="${bench_dir}/sites/common_site_config.json"
-  [[ -f "$cfg" ]] || return 1
-
-  hostport="$(bench_redis_cache_host_port "$bench_dir")" || return 1
-  if [[ "$hostport" == *:* ]]; then
-    host="${hostport%:*}"
-    port="${hostport##*:}"
-  else
-    host="$hostport"
-    port=6379
-  fi
-  command -v redis-cli >/dev/null 2>&1 || return 1
-
-  cache_url="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('redis_cache','') or '')" "$cfg" 2>/dev/null || true)"
-  queue_url="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('redis_queue','') or '')" "$cfg" 2>/dev/null || true)"
-  # Refuse if misconfigured to the same URL as the queue DB.
-  if [[ -n "$cache_url" && -n "$queue_url" && "$cache_url" == "$queue_url" ]]; then
-    warn "redis_cache and redis_queue share the same URL — refusing FLUSHDB"
-    return 1
-  fi
-  if [[ "$queue_url" == redis://* || "$queue_url" == rediss://* ]]; then
-    queue_hostport="${queue_url#*://}"
-    queue_hostport="${queue_hostport%%/*}"
-    queue_hostport="${queue_hostport##*@}"
-    if [[ "$queue_hostport" == "${host}:${port}" ]]; then
-      warn "redis_cache host:port matches redis_queue — refusing FLUSHDB"
-      return 1
-    fi
-  fi
-
-  log "FLUSHDB on bench redis_cache ${host}:${port} (ghost assets_json / reboot-equivalent)"
-  redis-cli -h "$host" -p "$port" FLUSHDB >/dev/null 2>&1 || return 1
   return 0
 }
 
@@ -1794,35 +1749,35 @@ show_access_menu() {
     menu_read_choice access_choice
 
     case "$access_choice" in
-      1) show_access_instructions ;;
-      2) show_local_domain_status ;;
-      3) local_access_doctor ;;
-      4) show_host_hosts_command ;;
-      5) show_network_status ;;
+      1) show_access_instructions; pause_after_screen "Press Enter to return to Access..." ;;
+      2) show_local_domain_status; pause_after_screen "Press Enter to return to Access..." ;;
+      3) local_access_doctor; pause_after_screen "Press Enter to return to Access..." ;;
+      4) show_host_hosts_command; pause_after_screen "Press Enter to return to Access..." ;;
+      5) show_network_status; pause_after_screen "Press Enter to return to Access..." ;;
       6) show_local_ip_menu ;;
-      7) verify_access ;;
-      8) show_kvm_vm_identification_guide ;;
-      9) show_local_fixed_ip_guide ;;
-      10) show_multi_environment_guide ;;
-      11) show_ssl_roadmap_guide ;;
-      12) show_ssl_status ;;
-      13) show_local_ssl_guide ;;
+      7) verify_access; pause_after_screen "Press Enter to return to Access..." ;;
+      8) show_kvm_vm_identification_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      9) show_local_fixed_ip_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      10) show_multi_environment_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      11) show_ssl_roadmap_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      12) show_ssl_status; pause_after_screen "Press Enter to return to Access..." ;;
+      13) show_local_ssl_guide; pause_after_screen "Press Enter to return to Access..." ;;
       14) run_local_ssl_wizard ;;
-      15) show_mkcert_local_ssl_guide ;;
-      16) show_browser_trust_check_guide ;;
-      17) verify_local_ssl ;;
-      18) install_local_ssl_cert ;;
-      19) create_self_signed_local_cert ;;
-      20) configure_local_ssl ;;
-      21) disable_local_ssl ;;
-      22) verify_ssl_rollback ;;
-      23) show_ssl_rollback_guide ;;
-      24) show_domain_config ;;
-      25) show_production_readiness ;;
-      26) show_production_domain_guide ;;
-      27) show_production_ssl_guide ;;
-      28) show_environment_check ;;
-      29) show_host_access_test_guide ;;
+      15) show_mkcert_local_ssl_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      16) show_browser_trust_check_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      17) verify_local_ssl; pause_after_screen "Press Enter to return to Access..." ;;
+      18) install_local_ssl_cert; pause_after_screen "Press Enter to return to Access..." ;;
+      19) create_self_signed_local_cert; pause_after_screen "Press Enter to return to Access..." ;;
+      20) configure_local_ssl; pause_after_screen "Press Enter to return to Access..." ;;
+      21) disable_local_ssl; pause_after_screen "Press Enter to return to Access..." ;;
+      22) verify_ssl_rollback; pause_after_screen "Press Enter to return to Access..." ;;
+      23) show_ssl_rollback_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      24) show_domain_config; pause_after_screen "Press Enter to return to Access..." ;;
+      25) show_production_readiness; pause_after_screen "Press Enter to return to Access..." ;;
+      26) show_production_domain_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      27) show_production_ssl_guide; pause_after_screen "Press Enter to return to Access..." ;;
+      28) show_environment_check; pause_after_screen "Press Enter to return to Access..." ;;
+      29) show_host_access_test_guide; pause_after_screen "Press Enter to return to Access..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
@@ -1832,14 +1787,14 @@ show_access_menu() {
 
 show_credentials_menu() {
   while true; do
-    ui_submenu_header "Credentials / Login" "Passwords only on a private console"
+    ui_submenu_header "Credentials / Login" "Private console required to reveal passwords"
     print_two_column_menu \
-      "1) Safe credential overview (no passwords)" \
-      "2) Show passwords (private console; type SHOW)" \
-      "3) Credentials file status" \
-      "4) Secure credentials file permissions" \
-      "5) Delete plaintext credentials file (type DELETE)" \
-      "6) Reset Administrator password"
+      "1) Login info" \
+      "2) Show password" \
+      "3) File status" \
+      "4) Secure file" \
+      "5) Delete local file" \
+      "6) Reset admin password"
     menu_footer
     local credentials_choice=""
     menu_read_choice credentials_choice
@@ -1861,49 +1816,30 @@ show_credentials_menu() {
 show_credentials_info() {
   require_sudo
 
-  local cred_file bench_dir current_site reset_site
+  local cred_file current_site
   cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
-  bench_dir="$(active_bench_dir 2>/dev/null || printf '%s' "${BENCH_DIR}")"
   current_site="${PRODUCTION_DOMAIN:-${SITE_NAME}}"
-  reset_site="${SITE_NAME}"
 
-  echo
-  echo "============================================================"
-  echo "ERPNext Credentials / Login Info"
-  echo "============================================================"
-  echo
-  status_line "ERPNext username" "INFO" "Administrator"
+  ui_box_start "ERPNext Login"
+  status_line "Username" "INFO" "Administrator"
+  status_line "Site" "INFO" "$current_site"
   if path_is_file "$cred_file"; then
     status_line "Credentials file" "OK" "$cred_file"
   else
     status_line "Credentials file" "WARN" "missing at $cred_file"
   fi
-  status_line "Site" "INFO" "$current_site"
-  status_line "Bench" "INFO" "$bench_dir"
   echo
-  echo "Recommended commands:"
-  echo "  Credentials / Login menu:        $(toolkit_cmd credentials-menu)"
-  echo "  View safe credential info:       $(toolkit_cmd credentials-info)"
-  echo "  Show generated password:         $(toolkit_cmd credentials-show)"
-  echo "  Check credential file security:  $(toolkit_cmd credentials-file-status)"
-  echo "  Fix credential file permissions: $(toolkit_cmd credentials-secure)"
-  echo "  Delete local plaintext file:     $(toolkit_cmd credentials-delete)"
-  echo "  Reset Administrator password:    $(toolkit_cmd reset-admin-password)"
+  echo "Password"
+  echo "  $(toolkit_cmd credentials-show)"
   echo
-  echo "ERPNext web login:"
-  echo "  Username: Administrator"
-  echo "  Password: value shown by credentials-show or in ${cred_file}"
+  echo "Manage"
+  echo "  File status:    $(toolkit_cmd credentials-file-status)"
+  echo "  Secure file:    $(toolkit_cmd credentials-secure)"
+  echo "  Reset password: $(toolkit_cmd reset-admin-password)"
+  echo "  Delete file:    $(toolkit_cmd credentials-delete)"
   echo
-  echo "Security note:"
-  echo "  credentials-info does not print passwords."
-  echo "  The toolkit does not print passwords in diagnostics, support bundles, or shared logs."
-  echo "  After saving credentials in a password manager, remove the local plaintext file on production systems."
-  echo
-  echo "Manual fallback for experienced admins: sudo cat ${cred_file}"
-  echo "Prefer credentials-show because it includes safety warnings."
-  echo
-  echo "For a public/production site, replace ${reset_site} with the actual site name if different."
-  echo "============================================================"
+  echo "The password command writes secrets only to the private terminal, not the toolkit log."
+  ui_box_end
 }
 
 show_credentials_file_status() {
@@ -2017,9 +1953,19 @@ credentials_show() {
   # terminal (non-interactive/CI), refuse rather than leak into a logged stream.
   if [[ -w /dev/tty ]]; then
     {
-      echo "----- BEGIN CREDENTIALS (${cred_file}) -----"
-      $SUDO cat "$cred_file"
-      echo "----- END CREDENTIALS -----"
+      echo "============================================================"
+      echo "ERPNext Credentials"
+      echo "============================================================"
+      $SUDO awk '
+        /^Login:/ { section="login"; next }
+        /^MariaDB Bench Admin:/ { section="db"; next }
+        /^Start ERPNext:/ { exit }
+        section == "login" && /^[[:space:]]+Username:/ { sub(/^[[:space:]]+/, ""); print "ERPNext " $0; next }
+        section == "login" && /^[[:space:]]+Password:/ { sub(/^[[:space:]]+/, ""); print "ERPNext " $0; next }
+        section == "db" && /^[[:space:]]+User:/ { sub(/^[[:space:]]+/, ""); print "MariaDB " $0; next }
+        section == "db" && /^[[:space:]]+Password:/ { sub(/^[[:space:]]+/, ""); print "MariaDB " $0; next }
+      ' "$cred_file"
+      echo "============================================================"
     } > /dev/tty
   else
     warn "No private terminal (/dev/tty) available; not writing secrets to the logged output stream."

@@ -1,52 +1,7 @@
-## v1.19.14 - redis_cache FLUSHDB settle (ghost CSS)
+## v1.19.11 - CLI Page UX Architecture
 
-Patch release so post-install settle wipes bench `redis_cache` with `FLUSHDB`
-(not only selective `DEL`), matching the field fix for styled Sign In.
-
-### Fixed
-
-- **Settle uses `FLUSHDB` on redis_cache:** v1.19.13 selective `DEL *assets_json*`
-  left ghost CSS hashes while `assets.json` on disk was already correct (JS 200,
-  CSS 404). Field fix was `redis-cli -p 13000 FLUSHDB` + `systemctl restart
-  erpnext-dev`. `settle_local_stack` now FLUSHDB’s bench `redis_cache` only
-  (refuses if cache URL equals `redis_queue`), then restarts ERPNext. Guided
-  install skips HTTPS follow-ups when settle fails. `repair-frontend-assets`
-  also FLUSHDB’s before restart.
-
-## v1.19.13 - Post-install settle before HTTPS
-
-Patch release so local guided install clears Redis `assets_json` and restarts
-ERPNext before any browser/HTTPS step (no guest reboot for styled Sign In).
-
-### Fixed
-
-- **Post-install settle before HTTPS (reboot-equivalent):** after a local guided
-  install, clear Redis `assets_json` (`:13000`), restart ERPNext (+ nginx if
-  active), and re-run `wait-ready` **before** stable-IP / HTTPS prompts. Field
-  on v1.19.12: `http://SITE:8000/login` stayed unstyled (all hashed CSS/JS 404)
-  until a full guest reboot — reboot wipes `redis_cache`; a service-only
-  post-HTTPS bounce did not. Shared `settle_local_stack` powers both post-install
-  and post-mkcert settle. Guided copy clarifies Sign In is expected; Setup Wizard
-  follows Administrator login.
-
-## v1.19.12 - Post-HTTPS settle before browser URLs
-
-Patch release so trusted local HTTPS always settles ERPNext + nginx and
-re-runs wait-ready before printing host browser URLs (no guest reboot).
-
-### Fixed
-
-- **Post-HTTPS settle before browser URLs:** trusted mkcert setup now always
-  restarts ERPNext + nginx and re-runs `wait-ready` before printing
-  `https://SITE` links. Skippable settle after HTTPS left the host browser
-  wrong until a full VM reboot even when VM Static assets showed OK. Guided
-  follow-up skips the duplicate prompt when settle already ran.
-
-## v1.19.11 - Stale assets_json fix + stable release CI gate
-
-Patch release for the field failure where login HTML advertised ghost hashed
-bundles (404) while the real files on disk returned 200, plus a cleaner
-release-check signal (no red experimental ubuntu-26.04 on tags).
+Patch release that gives the interactive toolkit one consistent page lifecycle
+without changing direct CLI behavior.
 
 ### Fixed
 
@@ -58,6 +13,25 @@ release-check signal (no red experimental ubuntu-26.04 on tags).
 - **wait-ready prefers `:8000`:** probe Frappe local first, then `:443`.
 
 ### Changed
+
+- **Interactive page lifecycle:** numbered menu selections clear only the live
+  TTY before rendering the selected action/result page. Direct commands remain
+  print-and-exit, and terminal clearing does not pollute tee-captured logs.
+- **Result-page navigation:** shared pauses now render a compact
+  `[Enter] Back to …    [q] Quit` footer and honor q/Q consistently.
+- **High-use menus retain results:** Main, Advanced, Access, Service Manager,
+  Local Network, Local/Production HTTPS, Security, Public VM setup, Docker app
+  install, and uninstall flows pause before returning to their parent menu.
+- **Smaller-terminal two-column layout:** ordinary 80-column terminals use two
+  columns whenever labels fit; genuinely narrow terminals and oversized labels
+  still fall back to one column automatically.
+- **Cleaner main menu:** shorter labels (`Start here`, `Production setup`,
+  `Local VM setup`, `Security`, `Apps`, `Dashboard`, `Production ops`) and a
+  less crowded 80-column status panel.
+- **Focused credentials UX:** concise Credentials / Login labels and overview;
+  `credentials-show` now writes only the ERPNext and MariaDB credential fields
+  to the private terminal instead of dumping the entire generated environment
+  file.
 
 - **Stable release CI gate:** tag releases run native install smoke on
   **Ubuntu 24.04 only** (plus Docker legs). `ubuntu-26.04` is canary-only

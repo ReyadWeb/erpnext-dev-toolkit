@@ -504,10 +504,6 @@ repair_frontend_assets() {
   # via the service-aware helper when the stack is up.
   log "Clearing site cache / assets_json"
   maintenance_clear_cache || warn "clear-cache reported an issue; continuing with restart."
-  # Field (v1.19.13): ghost CSS can survive selective DEL; FLUSHDB redis_cache.
-  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
-    flush_bench_redis_cache || warn "redis_cache FLUSHDB failed; continuing with restart"
-  fi
   log "Restarting ERPNext service"
   restart_erpnext_service || fail "Service restart failed after asset rebuild."
   if ssl_is_configured 2>/dev/null && port_listens 443; then
@@ -729,113 +725,6 @@ restart_erpnext_service() {
   fi
 }
 
-# Soft-bounce ERPNext (or docker/production runtime) without nesting
-# wait_for_erpnext_ready / restart_erpnext_service (those recurse into wait).
-_soft_restart_erpnext_runtime() {
-  if deployment_engine_is_docker; then
-    log "Restarting docker compose services"
-    if declare -F docker_compose >/dev/null 2>&1; then
-      docker_compose restart || return 1
-      return 0
-    fi
-    return 1
-  fi
-  if declare -F runtime_is_production >/dev/null 2>&1 && runtime_is_production && \
-     declare -F production_runtime_configured >/dev/null 2>&1 && production_runtime_configured; then
-    log "Restarting production runtime"
-    $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || return 1
-    return 0
-  fi
-  if service_exists; then
-    log "Restarting ERPNext service"
-    $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
-    return 0
-  fi
-  if declare -F create_erpnext_service >/dev/null 2>&1; then
-    create_erpnext_service || true
-    $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
-    return 0
-  fi
-  return 1
-}
-
-# Clear Redis cache + bounce ERPNext (+ nginx if up) + wait-ready.
-# Field (v1.19.13): assets.json on disk matched real CSS files, but HTML still
-# advertised ghost CSS hashes until `redis-cli -p 13000 FLUSHDB` + restart —
-# selective DEL *assets_json* was not enough (namespaced / worker-held cache).
-# Must run after install (before HTTPS) and again after trusted mkcert.
-settle_local_stack() {
-  require_sudo
-  local reason="${1:-local stack}"
-  local rc=0
-
-  echo
-  log "Settling stack after ${reason} (FLUSHDB redis_cache + ERPNext restart)"
-  echo "Required so the host browser matches VM probes (replaces guest reboot)."
-
-  if declare -F clear_bench_assets_json_cache >/dev/null 2>&1; then
-    clear_bench_assets_json_cache || \
-      warn "Could not clear site/assets_json cache; continuing with redis FLUSHDB"
-  fi
-
-  # Reboot-equivalent: wipe the whole redis_cache DB (not queue/socketio).
-  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
-    if flush_bench_redis_cache; then
-      ok "redis_cache FLUSHDB completed"
-    else
-      warn "redis_cache FLUSHDB failed; ghost CSS hashes may persist until reboot"
-      rc=1
-    fi
-  fi
-
-  _soft_restart_erpnext_runtime || rc=1
-
-  if systemctl list-unit-files nginx.service >/dev/null 2>&1 || \
-     systemctl is-active --quiet nginx 2>/dev/null; then
-    log "Restarting nginx"
-    if $SUDO systemctl restart nginx; then
-      ok "nginx restarted"
-    else
-      warn "nginx restart failed; check: systemctl status nginx"
-      rc=1
-    fi
-  fi
-
-  if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
-    wait_for_erpnext_ready || rc=1
-  fi
-
-  LOCAL_STACK_SETTLED=1
-  export LOCAL_STACK_SETTLED
-  if [[ "$rc" -eq 0 ]]; then
-    ok "Stack settled after ${reason} (ready for host browser)."
-  else
-    warn "Settle after ${reason} did not fully succeed; check $(toolkit_cmd status)"
-  fi
-  return "$rc"
-}
-
-# After core install / before guided HTTPS: mandatory settle (not skippable).
-settle_stack_after_install() {
-  settle_local_stack "install" || return 1
-  LOCAL_INSTALL_STACK_SETTLED=1
-  export LOCAL_INSTALL_STACK_SETTLED
-  return 0
-}
-
-# After local HTTPS nginx is written: settle again, then print browser URLs.
-# Sets LOCAL_HTTPS_STACK_SETTLED=1 so the guided checkpoint can skip a duplicate.
-settle_stack_after_local_https() {
-  settle_local_stack "local HTTPS" || {
-    LOCAL_HTTPS_STACK_SETTLED=1
-    export LOCAL_HTTPS_STACK_SETTLED
-    return 1
-  }
-  LOCAL_HTTPS_STACK_SETTLED=1
-  export LOCAL_HTTPS_STACK_SETTLED
-  return 0
-}
-
 show_erpnext_service_status() {
   require_sudo
 
@@ -997,14 +886,14 @@ show_service_menu() {
     menu_read_choice service_choice
 
     case "$service_choice" in
-      1) enable_autostart_service ;;
-      2) disable_autostart_service ;;
-      3) start_erpnext_service ;;
-      4) stop_erpnext_service ;;
-      5) restart_erpnext_service ;;
-      6) show_erpnext_service_status ;;
-      7) show_erpnext_service_logs ;;
-      8) follow_erpnext_service_logs ;;
+      1) enable_autostart_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
+      2) disable_autostart_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
+      3) start_erpnext_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
+      4) stop_erpnext_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
+      5) restart_erpnext_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
+      6) show_erpnext_service_status; pause_after_screen "Press Enter to return to Service Manager..." ;;
+      7) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Service Manager..." ;;
+      8) follow_erpnext_service_logs; pause_after_screen "Press Enter to return to Service Manager..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;

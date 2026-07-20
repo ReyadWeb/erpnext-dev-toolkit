@@ -821,9 +821,9 @@ run_uninstall_menu() {
   menu_read_choice choice
 
   case "$choice" in
-    1) soft_uninstall ;;
-    2) remove_bench_files ;;
-    3) full_purge ;;
+    1) soft_uninstall; pause_after_screen "Press Enter to return to Uninstall / Reset..." ;;
+    2) remove_bench_files; pause_after_screen "Press Enter to return to Uninstall / Reset..." ;;
+    3) full_purge; pause_after_screen "Press Enter to return to Uninstall / Reset..." ;;
     b|B|"") return 0 ;;
     q|Q) exit 0 ;;
     *) warn "Invalid option" ;;
@@ -1019,37 +1019,13 @@ run_guided_setup() {
   else
     ok "ERPNext installation workflow finished successfully."
   fi
-
-  # Local installs: FLUSHDB redis_cache + restart before any browser/HTTPS step.
-  # Field (v1.19.13): disk/assets.json were correct; HTML still served ghost CSS
-  # until redis_cache FLUSHDB + erpnext-dev restart (selective DEL was not enough).
-  local settle_ok=1
-  if ! is_public_vm_workflow && declare -F settle_stack_after_install >/dev/null 2>&1 && \
-     { port_listens 443 || port_listens 8000; }; then
-    if settle_stack_after_install; then
-      ok "Post-install settle complete — open http://${SITE_NAME}:8000/login (styled Sign In)."
-    else
-      settle_ok=0
-      err "Post-install settle failed — login CSS/JS may still 404 on the host."
-      echo "  Fix before HTTPS:"
-      echo "  $(toolkit_cmd repair-frontend-assets)"
-      echo "  $(toolkit_cmd wait-ready)"
-      echo "  Or: redis-cli -h 127.0.0.1 -p 13000 FLUSHDB && sudo systemctl restart ${ERPNEXT_SERVICE_NAME:-erpnext-dev}"
-    fi
-  fi
-
   echo "Verifying access state..."
   verify_access
   post_core_install_checkpoint
   show_next_step
   if ! is_public_vm_workflow; then
     show_local_host_mapping_checkpoint
-    if [[ "$settle_ok" -eq 1 ]]; then
-      local_guided_followups
-    else
-      warn "Skipping guided HTTPS/follow-ups until frontend assets settle cleanly."
-      echo "  After repair: $(toolkit_cmd local-ssl-wizard) · $(toolkit_cmd credentials-show)"
-    fi
+    local_guided_followups
   fi
   prompt_open_main_menu_after_install
 }
@@ -1098,33 +1074,44 @@ local_guided_stable_ip_checkpoint() {
   fi
 }
 
-# Confirm settle ran (install and/or post-HTTPS). Those paths are mandatory and
-# already clear assets_json + restart + wait-ready — do not offer a skippable
-# second bounce that operators can dismiss while the browser is still wrong.
+# Confirm the install by bouncing ERPNext (+ nginx when HTTPS is active).
+# Field reports: a VM reboot after static IP often cleared post-install flakiness;
+# a targeted service restart is the same settle step without rebooting the guest.
 local_guided_service_settle_checkpoint() {
   [[ -t 0 ]] || return 0
   [[ "$ASSUME_YES" -eq 1 ]] && return 0
 
-  if [[ "${LOCAL_HTTPS_STACK_SETTLED:-0}" == "1" ]] || \
-     [[ "${LOCAL_INSTALL_STACK_SETTLED:-0}" == "1" ]] || \
-     [[ "${LOCAL_STACK_SETTLED:-0}" == "1" ]]; then
-    echo
-    ok "Stack already settled (assets_json cleared + ERPNext restart + wait-ready)."
-    echo "Host check: http://${SITE_NAME}:8000/login (styled Sign In). Optional: $(toolkit_cmd restart)"
+  local reply
+  echo
+  ui_box_start "Local setup: confirm install (service restart)"
+  echo "Restart ERPNext (and nginx if local HTTPS is active) to settle the stack."
+  echo "This is the guided equivalent of rebooting services after a fresh install."
+  ui_box_end
+  echo
+  read -r -p "Restart ERPNext services now to confirm the install? [Y/n]: " reply
+  reply="${reply:-Y}"
+  if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+    echo "Skipped. Restart later with: $(toolkit_cmd restart)"
     return 0
   fi
 
-  # Should not happen after run_guided_setup; recover without a skippable prompt.
-  echo
-  ui_box_start "Local setup: settling stack"
-  echo "Clearing assets_json and restarting ERPNext (reboot workaround)."
-  ui_box_end
-  if declare -F settle_stack_after_install >/dev/null 2>&1; then
-    settle_stack_after_install || warn "Settle did not fully succeed; check $(toolkit_cmd status)"
-  elif declare -F settle_local_stack >/dev/null 2>&1; then
-    settle_local_stack "guided recover" || warn "Settle did not fully succeed; check $(toolkit_cmd status)"
+  if declare -F restart_erpnext_service >/dev/null 2>&1; then
+    restart_erpnext_service || warn "ERPNext restart did not fully succeed; check $(toolkit_cmd status)"
   else
-    warn "Settle helper unavailable; run: $(toolkit_cmd restart) && $(toolkit_cmd wait-ready)"
+    warn "restart helper unavailable; run: $(toolkit_cmd restart)"
+    return 0
+  fi
+
+  if systemctl is-active --quiet nginx 2>/dev/null; then
+    log "Restarting nginx (local HTTPS)"
+    if $SUDO systemctl restart nginx; then
+      ok "nginx restarted"
+      if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
+        wait_for_erpnext_ready || warn "Ready check after nginx restart did not pass yet."
+      fi
+    else
+      warn "nginx restart failed; check: systemctl status nginx"
+    fi
   fi
 }
 
@@ -1140,12 +1127,9 @@ local_guided_followups() {
 
   ui_box_start "Local setup: guided follow-up steps"
   echo "ERPNext is installed. Prefer http://${SITE_NAME}:8000/login (not the raw IP)."
-  echo "Expected first page: Sign In (not the Setup Wizard). Log in as Administrator"
-  echo "to reach the Setup Wizard. Host /etc/hosts must map ${SITE_NAME} first."
-  echo "Before HTTPS: http://${SITE_NAME}:8000/login should already be styled"
-  echo "(post-install settle clears assets_json + restarts ERPNext)."
-  echo "After trusted HTTPS: auto-settle again, then https://${SITE_NAME}/login."
-  echo "Guided order: stable IP → HTTPS (auto-settle) → credentials → security → apps."
+  echo "If the login page looks unstyled, wait until $(toolkit_cmd wait-ready) reports"
+  echo "static assets OK, then hard-refresh the browser."
+  echo "Guided order: stable IP → HTTPS → service restart confirm → credentials → security → apps."
   ui_box_end
 
   local_guided_stable_ip_checkpoint
@@ -1835,16 +1819,16 @@ run_public_vm_quickstart() {
     menu_read_choice choice
 
     case "$choice" in
-      1) show_setup_lifecycle_plan ;;
-      2) prompt_and_save_public_domain ;;
-      3) ensure_public_domain_configured && show_production_domain_plan && show_public_vm_readiness ;;
-      4) ensure_public_domain_configured && run_guided_setup ;;
-      5) public_quickstart_maybe_initial_backup ;;
-      6) ensure_public_domain_configured && production_ssl_wizard ;;
+      1) show_setup_lifecycle_plan; pause_after_screen "Press Enter to return to Production setup..." ;;
+      2) prompt_and_save_public_domain; pause_after_screen "Press Enter to return to Production setup..." ;;
+      3) ensure_public_domain_configured && show_production_domain_plan && show_public_vm_readiness; pause_after_screen "Press Enter to return to Production setup..." ;;
+      4) ensure_public_domain_configured && run_guided_setup; pause_after_screen "Press Enter to return to Production setup..." ;;
+      5) public_quickstart_maybe_initial_backup; pause_after_screen "Press Enter to return to Production setup..." ;;
+      6) ensure_public_domain_configured && production_ssl_wizard; pause_after_screen "Press Enter to return to Production setup..." ;;
       7) security_hardening_wizard ;;
       8) run_app_install_wizard ;;
-      9) public_quickstart_final_status ;;
-      10) show_ssl_mode_status; show_setup_effort_guide ;;
+      9) public_quickstart_final_status; pause_after_screen "Press Enter to return to Production setup..." ;;
+      10) show_ssl_mode_status; show_setup_effort_guide; pause_after_screen "Press Enter to return to Production setup..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *)
@@ -1876,11 +1860,11 @@ run_first_run_wizard() {
     menu_read_choice choice
 
     case "$choice" in
-      1) run_local_dev_quickstart ;;
-      2) run_public_vm_guided_setup ;;
+      1) run_local_dev_quickstart; pause_after_screen "Press Enter to return to Start here..." ;;
+      2) run_public_vm_guided_setup; pause_after_screen "Press Enter to return to Start here..." ;;
       3) show_menu ;;
-      4) show_config_summary ;;
-      5) show_setup_lifecycle_plan; show_setup_effort_guide; show_ssl_mode_guide ;;
+      4) show_config_summary; pause_after_screen "Press Enter to return to Start here..." ;;
+      5) show_setup_lifecycle_plan; show_setup_effort_guide; show_ssl_mode_guide; pause_after_screen "Press Enter to return to Start here..." ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *)

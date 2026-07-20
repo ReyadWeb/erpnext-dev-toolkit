@@ -7,9 +7,9 @@ _ERPNEXT_DEV_MENU_LOADED=1
 
 # number|label
 MAIN_MENU_ITEMS=(
-  "1|Setup wizard"
-  "2|Public VM quickstart"
-  "3|Local VM quickstart"
+  "1|Start here"
+  "2|Production setup"
+  "3|Local VM setup"
   "4|Status"
   "5|Start service"
   "6|Stop service"
@@ -17,13 +17,13 @@ MAIN_MENU_ITEMS=(
   "8|Local HTTPS"
   "9|Local network"
   "10|Production HTTPS"
-  "11|Security profiles"
+  "11|Security"
   "12|Backups"
-  "13|Optional apps"
+  "13|Apps"
   "14|Advanced"
   "15|Final QA"
-  "16|Ops dashboard"
-  "17|Production operations"
+  "16|Dashboard"
+  "17|Production ops"
   "18|Help"
 )
 
@@ -186,41 +186,69 @@ load_menu_status_fast() {
 }
 
 render_main_status_panel() {
-  local width runtime_color
+  local width runtime_color layout
   width="$(ui_panel_width)"
   runtime_color="$(ui_status_color "$MENU_STATUS_RUNTIME")"
+  layout="$(ui_layout_mode)"
 
   ui_box_line top "$width"
 
-  # Line 1: toolkit / site / mode / runtime (padded to box width)
-  ui_row_begin
-  ui_row_add_colored cyan "Toolkit:"
-  ui_row_add " "
-  ui_row_add "$(printf '%-8s' "v${SCRIPT_VERSION:-unknown}")"
-  ui_row_add " "
-  ui_row_add "$UI_DIV"
-  ui_row_add " "
-  ui_row_add_colored cyan "Site:"
-  ui_row_add " "
-  ui_row_add "$(printf '%-20s' "${MENU_STATUS_SITE:0:20}")"
-  ui_row_add " "
-  ui_row_add "$UI_DIV"
-  ui_row_add " "
-  ui_row_add_colored cyan "Mode:"
-  ui_row_add " "
-  ui_row_add "$(printf '%-10s' "${MENU_STATUS_MODE:0:10}")"
-  ui_row_add " "
-  ui_row_add "$UI_DIV"
-  ui_row_add " "
-  ui_row_add_colored cyan "Runtime:"
-  ui_row_add " "
-  ui_row_add_colored "$runtime_color" "$MENU_STATUS_RUNTIME"
-  ui_row_end
+  if [[ "$layout" == "wide" ]]; then
+    # Wide: one-line identity strip.
+    ui_row_begin
+    ui_row_add_colored cyan "Toolkit:"
+    ui_row_add " "
+    ui_row_add "$(printf '%-8s' "v${SCRIPT_VERSION:-unknown}")"
+    ui_row_add " "
+    ui_row_add "$UI_DIV"
+    ui_row_add " "
+    ui_row_add_colored cyan "Site:"
+    ui_row_add " "
+    ui_row_add "$(printf '%-20s' "${MENU_STATUS_SITE:0:20}")"
+    ui_row_add " "
+    ui_row_add "$UI_DIV"
+    ui_row_add " "
+    ui_row_add_colored cyan "Mode:"
+    ui_row_add " "
+    ui_row_add "$(printf '%-10s' "${MENU_STATUS_MODE:0:10}")"
+    ui_row_add " "
+    ui_row_add "$UI_DIV"
+    ui_row_add " "
+    ui_row_add_colored cyan "Runtime:"
+    ui_row_add " "
+    ui_row_add_colored "$runtime_color" "$MENU_STATUS_RUNTIME"
+    ui_row_end
+  else
+    # Ordinary SSH terminals: two calm rows instead of cramming the runtime
+    # against the right border.
+    ui_row_begin
+    ui_row_add_colored cyan "Toolkit:"
+    ui_row_add " "
+    ui_row_add "v${SCRIPT_VERSION:-unknown}"
+    ui_row_add "  "
+    ui_row_add "$UI_DIV"
+    ui_row_add "  "
+    ui_row_add_colored cyan "Site:"
+    ui_row_add " "
+    ui_row_add "${MENU_STATUS_SITE:0:28}"
+    ui_row_end
+    ui_row_begin
+    ui_row_add_colored cyan "Mode:"
+    ui_row_add " "
+    ui_row_add "${MENU_STATUS_MODE:0:16}"
+    ui_row_add "  "
+    ui_row_add "$UI_DIV"
+    ui_row_add "  "
+    ui_row_add_colored cyan "Runtime:"
+    ui_row_add " "
+    ui_row_add_colored "$runtime_color" "$MENU_STATUS_RUNTIME"
+    ui_row_end
+  fi
 
   ui_box_line mid "$width"
 
   # Badge rows: never a single long strip (Go-live was overflowing the border).
-  if [[ "$(ui_layout_mode)" == "compact" ]]; then
+  if [[ "$layout" == "compact" ]]; then
     ui_row_begin
     ui_row_add_badge "Health" "$MENU_STATUS_HEALTH"
     ui_row_add "  "
@@ -277,20 +305,22 @@ render_main_menu_screen() {
 show_menu() {
   local choice
   while true; do
-    if [[ -t 1 && "${MENU_NO_CLEAR:-0}" != "1" ]]; then
-      clear 2>/dev/null || true
-    fi
+    ui_clear_screen
     render_main_menu_screen
     ui_prompt "Choose an option: " choice
 
+    if [[ "$choice" =~ ^[0-9]+$ ]]; then
+      ui_clear_screen
+    fi
+
     case "$choice" in
       1) run_first_run_wizard ;;
-      2) run_public_vm_guided_setup ;;
-      3) run_local_dev_quickstart ;;
+      2) run_public_vm_guided_setup; pause_after_screen "Press Enter to return to Main menu..." ;;
+      3) run_local_dev_quickstart; pause_after_screen "Press Enter to return to Main menu..." ;;
       4) show_status_menu ;;
-      5) run_start ;;
-      6) run_stop ;;
-      7) verify_access ;;
+      5) run_start; pause_after_screen "Press Enter to return to Main menu..." ;;
+      6) run_stop; pause_after_screen "Press Enter to return to Main menu..." ;;
+      7) verify_access; pause_after_screen "Press Enter to return to Main menu..." ;;
       8) show_local_ssl_menu ;;
       9) show_local_ip_menu ;;
       10) show_production_ssl_menu ;;
@@ -299,9 +329,9 @@ show_menu() {
       13) show_app_library_menu ;;
       14) show_advanced_menu ;;
       15) final_qa_wizard ;;
-      16) run_operations_dashboard ;;
+      16) run_operations_dashboard; pause_after_screen "Press Enter to return to Main menu..." ;;
       17) production_ops_wizard ;;
-      18) show_help ;;
+      18) show_help; pause_after_screen "Press Enter to return to Main menu..." ;;
       q|Q) exit 0 ;;
       *)
         warn "Invalid option"

@@ -321,36 +321,6 @@ if ! grep -q 'evict_redis_assets_json_keys' "${ROOT_DIR}/lib/access.sh"; then
 else
   echo "OK: hard redis assets_json eviction helper present"
 fi
-if ! grep -q '^flush_bench_redis_cache()' "${ROOT_DIR}/lib/access.sh"; then
-  echo "FAIL: missing flush_bench_redis_cache (FLUSHDB redis_cache :13000)" >&2
-  fail=$((fail + 1))
-elif ! grep -q 'FLUSHDB' "${ROOT_DIR}/lib/access.sh"; then
-  echo "FAIL: flush_bench_redis_cache must use FLUSHDB" >&2
-  fail=$((fail + 1))
-elif ! grep -q '^settle_local_stack()' "${ROOT_DIR}/lib/service.sh"; then
-  echo "FAIL: missing settle_local_stack (FLUSHDB + restart)" >&2
-  fail=$((fail + 1))
-elif ! grep -q 'flush_bench_redis_cache' "${ROOT_DIR}/lib/service.sh"; then
-  echo "FAIL: settle_local_stack must FLUSHDB redis_cache (field ghost CSS)" >&2
-  fail=$((fail + 1))
-elif ! grep -q '^settle_stack_after_install()' "${ROOT_DIR}/lib/service.sh"; then
-  echo "FAIL: missing settle_stack_after_install (pre-HTTPS settle)" >&2
-  fail=$((fail + 1))
-elif ! grep -q 'settle_stack_after_install' "${ROOT_DIR}/lib/install.sh"; then
-  echo "FAIL: install.sh must call settle_stack_after_install after local install" >&2
-  fail=$((fail + 1))
-elif ! grep -q 'Skipping guided HTTPS/follow-ups' "${ROOT_DIR}/lib/install.sh"; then
-  echo "FAIL: install.sh must skip HTTPS follow-ups when settle fails" >&2
-  fail=$((fail + 1))
-elif ! grep -q '^settle_stack_after_local_https()' "${ROOT_DIR}/lib/service.sh"; then
-  echo "FAIL: missing settle_stack_after_local_https (post-HTTPS reboot workaround)" >&2
-  fail=$((fail + 1))
-elif ! grep -q 'settle_stack_after_local_https' "${ROOT_DIR}/lib/ssl.sh"; then
-  echo "FAIL: ssl.sh must call settle_stack_after_local_https after trusted mkcert" >&2
-  fail=$((fail + 1))
-else
-  echo "OK: post-install settle uses redis_cache FLUSHDB + skips HTTPS on failure"
-fi
 # wait-ready must prefer Frappe local :8000 over :443
 if ! grep -A25 '^bench_static_assets_ready()' "${ROOT_DIR}/lib/service.sh" | grep -q 'port_listens 8000'; then
   echo "FAIL: bench_static_assets_ready must probe :8000" >&2

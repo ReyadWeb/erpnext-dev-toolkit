@@ -354,6 +354,14 @@ menu_read_choice() {
     back) __choice="b" ;;
   esac
 
+  # Interactive page lifecycle: once a numbered action is selected, remove the
+  # menu from the live terminal before rendering the action/result page. This
+  # is intentionally tied to interactive menu input only; direct CLI commands
+  # continue to print normally and exit without clearing the user's terminal.
+  if [[ "$__choice" =~ ^[0-9]+$ ]] && declare -F ui_clear_screen >/dev/null 2>&1; then
+    ui_clear_screen
+  fi
+
   printf -v "$__target" '%s' "$__choice"
 }
 
@@ -499,10 +507,37 @@ confirm() {
 
 pause_after_screen() {
   local prompt="${1:-Press Enter to return...}"
+  local reply="" target="" action_label="Return"
 
-  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+  if { [[ -t 0 ]] || [[ "${MENU_TEST_INTERACTIVE_PAUSE:-0}" == "1" ]]; } && [[ "$ASSUME_YES" -ne 1 ]]; then
     echo
-    read -r -p "$prompt" _
+    if [[ "$prompt" =~ ^Press[[:space:]]+Enter[[:space:]]+to[[:space:]]+return[[:space:]]+to[[:space:]]+(.+)\.\.\.$ ]]; then
+      target="${BASH_REMATCH[1]}"
+      action_label="Back to ${target}"
+    elif [[ "$prompt" =~ ^Press[[:space:]]+Enter[[:space:]]+to[[:space:]]+continue ]]; then
+      action_label="Continue"
+    elif [[ "$prompt" =~ ^Press[[:space:]]+Enter[[:space:]]+to[[:space:]]+return ]]; then
+      action_label="Back"
+    else
+      action_label="$prompt"
+    fi
+
+    if declare -F ui_text >/dev/null 2>&1; then
+      ui_text cyan "[Enter]"
+      printf ' %s    ' "$action_label"
+      ui_text cyan "[q]"
+      printf ' Quit\n'
+      ui_text muted "> "
+      read -r reply || reply="q"
+    else
+      printf '[Enter] %s    [q] Quit\n> ' "$action_label"
+      read -r reply || reply="q"
+    fi
+
+    case "${reply,,}" in
+      q|quit|exit) exit 0 ;;
+      *) return 0 ;;
+    esac
   fi
 }
 

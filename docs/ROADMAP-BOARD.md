@@ -36,11 +36,7 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 | v1.19.8 | [#107](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/107) Browser Asset Consistency Closure |
 | v1.19.9 | Bare HTTP port-80 browser path (follow-on from [#107](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/107) field) |
 | v1.19.10 | Frappe-aligned frontend assets ([FRAPPE-FRONTEND-ASSETS.md](FRAPPE-FRONTEND-ASSETS.md)) |
-| v1.19.11 | Stale `assets_json` Redis :13000 fix + stable release CI gate |
-| v1.19.12 | Post-HTTPS settle before browser URLs (no reboot workaround) |
-| v1.19.13 | Post-install settle before HTTPS (assets_json clear + restart) |
-| v1.19.14 | redis_cache FLUSHDB settle (ghost CSS when assets.json is correct) |
-| v1.19.15 | [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) CLI Page UX Architecture |
+| v1.19.11 | [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) CLI Page UX Architecture |
 | v1.20.0 | [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) External Watchdog Foundation |
 | v1.21.0 | [#63](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/63) CloudPanel / Agent API Foundation |
 | v1.22.0 | [#64](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/64) Real VPS Validation Matrix |
@@ -65,9 +61,9 @@ GitHub **Milestones** `v1.18.0` … `v1.23.0` group epics and child tasks.
 
 **v1.19.1 shipped:** [#61](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/61) Auto-Healing Hardening (**Done**).
 
-**Current focus:** v1.19.14 redis_cache FLUSHDB settle (field: styled Sign In before HTTPS, no reboot).  
-**Next:** [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) — v1.19.15 CLI Page UX.  
-**Deferred:** [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) — v1.20.0 until 1.19.14 + 1.19.15 are field-validated.
+**Current focus:** v1.19.10 Frappe-aligned frontend assets (field validation).  
+**Next:** [#108](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/108) — v1.19.11 CLI Page UX.  
+**Deferred:** [#62](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/62) — v1.20.0 until 1.19.10 + 1.19.11 are field-validated.
 
 ---
 

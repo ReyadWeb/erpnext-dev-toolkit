@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.19.14"
+SCRIPT_VERSION="1.19.11"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -546,55 +546,55 @@ show_advanced_menu() {
     menu_read_choice advanced_choice
 
     case "$advanced_choice" in
-      1) run_install ;;
-      2) run_repair ;;
+      1) run_install; pause_after_screen "Press Enter to return to Advanced..." ;;
+      2) run_repair; pause_after_screen "Press Enter to return to Advanced..." ;;
       3) run_uninstall_menu ;;
       4) show_service_menu ;;
       5) run_backup_maintenance_menu ;;
       6) show_app_library_menu ;;
-      7) run_app_status ;;
-      8) run_full_status ;;
-      9) show_network_status ;;
-      10) show_environment_check ;;
-      11) show_kvm_fixed_ip_guide ;;
-      12) show_multi_environment_guide ;;
+      7) run_app_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      8) run_full_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      9) show_network_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      10) show_environment_check; pause_after_screen "Press Enter to return to Advanced..." ;;
+      11) show_kvm_fixed_ip_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
+      12) show_multi_environment_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
       13) show_local_ssl_menu ;;
-      14) show_ssl_status ;;
-      15) show_local_ssl_guide ;;
+      14) show_ssl_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      15) show_local_ssl_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
       16) run_local_ssl_wizard ;;
-      17) show_mkcert_local_ssl_guide ;;
-      18) show_browser_trust_check_guide ;;
-      19) install_local_ssl_cert ;;
-      20) verify_local_ssl ;;
-      21) create_self_signed_local_cert ;;
-      22) configure_local_ssl ;;
-      23) disable_local_ssl ;;
-      24) verify_ssl_rollback ;;
-      25) show_storage_status ;;
-      26) expand_root_storage ;;
-      27) verify_storage ;;
-      28) show_domain_config ;;
-      29) show_production_readiness ;;
-      30) show_production_domain_guide ;;
-      31) show_production_ssl_guide ;;
-      32) show_public_vm_readiness ;;
-      33) show_production_ssl_plan ;;
-      34) show_production_firewall_plan ;;
-      35) show_firewall_hardening_status ;;
-      36) configure_production_ssl ;;
-      37) show_production_ssl_status ;;
-      38) disable_production_ssl ;;
-      39) run_foreground_start ;;
-      40) show_erpnext_service_logs ;;
+      17) show_mkcert_local_ssl_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
+      18) show_browser_trust_check_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
+      19) install_local_ssl_cert; pause_after_screen "Press Enter to return to Advanced..." ;;
+      20) verify_local_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
+      21) create_self_signed_local_cert; pause_after_screen "Press Enter to return to Advanced..." ;;
+      22) configure_local_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
+      23) disable_local_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
+      24) verify_ssl_rollback; pause_after_screen "Press Enter to return to Advanced..." ;;
+      25) show_storage_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      26) expand_root_storage; pause_after_screen "Press Enter to return to Advanced..." ;;
+      27) verify_storage; pause_after_screen "Press Enter to return to Advanced..." ;;
+      28) show_domain_config; pause_after_screen "Press Enter to return to Advanced..." ;;
+      29) show_production_readiness; pause_after_screen "Press Enter to return to Advanced..." ;;
+      30) show_production_domain_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
+      31) show_production_ssl_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
+      32) show_public_vm_readiness; pause_after_screen "Press Enter to return to Advanced..." ;;
+      33) show_production_ssl_plan; pause_after_screen "Press Enter to return to Advanced..." ;;
+      34) show_production_firewall_plan; pause_after_screen "Press Enter to return to Advanced..." ;;
+      35) show_firewall_hardening_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      36) configure_production_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
+      37) show_production_ssl_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      38) disable_production_ssl; pause_after_screen "Press Enter to return to Advanced..." ;;
+      39) run_foreground_start; pause_after_screen "Press Enter to return to Advanced..." ;;
+      40) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Advanced..." ;;
       41) show_access_menu ;;
-      42) show_next_step ;;
-      43) verify_access ;;
+      42) show_next_step; pause_after_screen "Press Enter to return to Advanced..." ;;
+      43) verify_access; pause_after_screen "Press Enter to return to Advanced..." ;;
       44) run_app_install_wizard ;;
-      45) show_app_rollback_guide ;;
-      46) run_install_preflight ;;
-      47) change_local_domain_wizard ;;
-      48) show_engine_status ;;
-      49) run_set_engine ;;
+      45) show_app_rollback_guide; pause_after_screen "Press Enter to return to Advanced..." ;;
+      46) run_install_preflight; pause_after_screen "Press Enter to return to Advanced..." ;;
+      47) change_local_domain_wizard; pause_after_screen "Press Enter to return to Advanced..." ;;
+      48) show_engine_status; pause_after_screen "Press Enter to return to Advanced..." ;;
+      49) run_set_engine; pause_after_screen "Press Enter to return to Advanced..." ;;
       50) show_credentials_menu ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;

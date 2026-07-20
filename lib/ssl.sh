@@ -2031,20 +2031,10 @@ run_trusted_mkcert_setup() {
   install_local_ssl_cert
   configure_local_ssl
 
-  # Bounce ERPNext + nginx, then wait-ready, BEFORE any "open the browser"
-  # message. Field: VM probes passed while the host still saw a bad page until
-  # a guest reboot when this settle was skipped.
-  if declare -F settle_stack_after_local_https >/dev/null 2>&1; then
-    settle_stack_after_local_https || {
-      warn "HTTPS is configured, but post-HTTPS settle / assets are not ready yet."
-      echo "Run:"
-      echo "  $(toolkit_cmd restart)"
-      echo "  $(toolkit_cmd repair-frontend-assets)"
-      echo "  $(toolkit_cmd wait-frontend-assets)"
-      echo "============================================================"
-      return 1
-    }
-  elif declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
+  # Nginx :443 can listen before CSS/JS are served on the HTTPS origin. Wait for
+  # the same asset gate as wait-ready (includes one automatic asset rebuild when
+  # bundles 404) before telling the operator to open the browser.
+  if declare -F wait_for_erpnext_ready >/dev/null 2>&1; then
     wait_for_erpnext_ready || {
       warn "HTTPS is configured, but login static assets are not ready yet."
       echo "Automatic rebuild during wait-ready did not clear it. Run:"
@@ -2065,8 +2055,8 @@ run_trusted_mkcert_setup() {
   fi
 
   echo
-  ok "Trusted local HTTPS is ready (stack settled; HTTP + static assets OK)."
-  echo "Open from the HOST browser (only recommended URL) — hard refresh once:"
+  ok "Trusted local HTTPS is ready (HTTP + static assets OK)."
+  echo "Open from the HOST browser (only recommended URL):"
   echo "  https://${SITE_NAME}"
   echo "  https://${SITE_NAME}/app"
   echo "  https://${SITE_NAME}/login"
@@ -3118,18 +3108,18 @@ show_production_ssl_menu() {
     menu_read_choice prod_ssl_choice
 
     case "$prod_ssl_choice" in
-      1) production_ssl_wizard ;;
-      2) show_production_ssl_status ;;
-      3) show_production_ssl_plan ;;
-      4) show_production_ssl_guide ;;
-      5) show_production_domain_guide ;;
-      6) show_public_vm_readiness ;;
-      7) configure_production_ssl ;;
-      8) configure_cloudflare_origin_ssl ;;
-      9) show_cloudflare_origin_ssl_status ;;
-      10) show_ssl_mode_status ;;
-      11) show_ssl_mode_guide ;;
-      12) disable_production_ssl ;;
+      1) production_ssl_wizard; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      2) show_production_ssl_status; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      3) show_production_ssl_plan; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      4) show_production_ssl_guide; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      5) show_production_domain_guide; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      6) show_public_vm_readiness; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      7) configure_production_ssl; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      8) configure_cloudflare_origin_ssl; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      9) show_cloudflare_origin_ssl_status; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      10) show_ssl_mode_status; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      11) show_ssl_mode_guide; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
+      12) disable_production_ssl; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
       b|B|"")
         if [[ "$back_target" == "main" ]]; then
           show_menu
@@ -3175,22 +3165,22 @@ show_local_ssl_menu() {
 
     case "$ssl_choice" in
       1) run_local_ssl_wizard ;;
-      2) show_ssl_status ;;
-      3) show_local_ssl_guide ;;
-      4) show_mkcert_local_ssl_guide ;;
-      5) show_browser_trust_check_guide ;;
-      6) install_local_ssl_cert ;;
-      7) verify_local_ssl ;;
-      8) create_self_signed_local_cert ;;
-      9) configure_local_ssl ;;
-      10) disable_local_ssl ;;
-      11) verify_ssl_rollback ;;
-      12) change_local_domain_wizard ;;
-      13) show_local_domain_status ;;
-      14) local_access_doctor ;;
-      15) show_host_hosts_command ;;
-      16) show_ssl_roadmap_guide ;;
-      17) configure_local_vm_firewall ;;
+      2) show_ssl_status; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      3) show_local_ssl_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      4) show_mkcert_local_ssl_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      5) show_browser_trust_check_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      6) install_local_ssl_cert; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      7) verify_local_ssl; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      8) create_self_signed_local_cert; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      9) configure_local_ssl; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      10) disable_local_ssl; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      11) verify_ssl_rollback; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      12) change_local_domain_wizard; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      13) show_local_domain_status; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      14) local_access_doctor; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      15) show_host_hosts_command; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      16) show_ssl_roadmap_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
+      17) configure_local_vm_firewall; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
       b|B|"")
         if [[ "$back_target" == "main" ]]; then
           show_menu
