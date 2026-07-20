@@ -1020,17 +1020,21 @@ run_guided_setup() {
     ok "ERPNext installation workflow finished successfully."
   fi
 
-  # Local installs: clear Redis assets_json + restart before any browser/HTTPS
-  # step. Field (v1.19.12): host :8000 login stayed unstyled until guest reboot
-  # even before HTTPS — reboot wipes redis_cache; wait-ready alone did not.
+  # Local installs: FLUSHDB redis_cache + restart before any browser/HTTPS step.
+  # Field (v1.19.13): disk/assets.json were correct; HTML still served ghost CSS
+  # until redis_cache FLUSHDB + erpnext-dev restart (selective DEL was not enough).
+  local settle_ok=1
   if ! is_public_vm_workflow && declare -F settle_stack_after_install >/dev/null 2>&1 && \
      { port_listens 443 || port_listens 8000; }; then
     if settle_stack_after_install; then
       ok "Post-install settle complete — open http://${SITE_NAME}:8000/login (styled Sign In)."
     else
-      warn "Post-install settle did not fully succeed; fix assets before HTTPS."
+      settle_ok=0
+      err "Post-install settle failed — login CSS/JS may still 404 on the host."
+      echo "  Fix before HTTPS:"
       echo "  $(toolkit_cmd repair-frontend-assets)"
       echo "  $(toolkit_cmd wait-ready)"
+      echo "  Or: redis-cli -h 127.0.0.1 -p 13000 FLUSHDB && sudo systemctl restart ${ERPNEXT_SERVICE_NAME:-erpnext-dev}"
     fi
   fi
 
@@ -1040,7 +1044,12 @@ run_guided_setup() {
   show_next_step
   if ! is_public_vm_workflow; then
     show_local_host_mapping_checkpoint
-    local_guided_followups
+    if [[ "$settle_ok" -eq 1 ]]; then
+      local_guided_followups
+    else
+      warn "Skipping guided HTTPS/follow-ups until frontend assets settle cleanly."
+      echo "  After repair: $(toolkit_cmd local-ssl-wizard) · $(toolkit_cmd credentials-show)"
+    fi
   fi
   prompt_open_main_menu_after_install
 }

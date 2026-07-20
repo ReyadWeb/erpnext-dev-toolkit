@@ -106,7 +106,7 @@ sudo erpnext-dev frappe-asset-checklist
 Classify in order:
 
 1. **Incomplete build** — missing `login.bundle.*.css` / `website.bundle.*.css` on disk; dmesg OOM; log “Assets for Release don’t exist” without a completed yarn build.
-2. **Stale `assets_json`** — HTML references hashes not on disk (or opposite after rebuild without cache clear). Bench cache is **`redis://127.0.0.1:13000`** — `redis-cli` without `-p 13000` is the wrong instance. Also compare `sites/assets/assets.json` to files under `sites/assets/*/dist/`.
+2. **Stale `assets_json`** — HTML references hashes not on disk (or opposite after rebuild without cache clear). Bench cache is **`redis://127.0.0.1:13000`** — `redis-cli` without `-p 13000` is the wrong instance. Also compare `sites/assets/assets.json` to files under `sites/assets/*/dist/`. Field note: `assets.json` can be correct while Redis still serves ghost CSS hashes — selective `DEL` may miss keys; **`FLUSHDB` on `:13000`** + restart ERPNext is the reboot-equivalent (toolkit settle does this).
 3. **Host / DNS** — raw IP or wrong `/etc/hosts`; Host header ≠ site name.
 4. **Permissions** — files exist but not readable by nginx/frappe user.
 5. **Wrong entry URL** — bare `http://SITE` while only `:8000` / HTTPS proxy is valid.
@@ -129,9 +129,10 @@ Do **not** treat “toolkit ready OK” as proof the host browser path is correc
 
 On a clean VM (guided local quickstart):
 
-1. **Before HTTPS:** after install/`wait-ready`, open **`http://SITE:8000/login`** — must be styled.
-2. Accept trusted mkcert when prompted. The toolkit **auto-settles** (ERPNext + nginx restart + `wait-ready`) before printing `https://` URLs — do not treat that bounce as optional.
+1. **Before HTTPS:** after install, the toolkit settles with **`FLUSHDB` on redis_cache `:13000` + ERPNext restart + `wait-ready`**. Open **`http://SITE:8000/login`** — must be styled Sign In (Setup Wizard is after Administrator login).
+2. Accept trusted mkcert when prompted. The toolkit **auto-settles again** before printing `https://` URLs.
 3. **After HTTPS:** open **`https://SITE/login`** (hard refresh). Must match the `:8000` look. A full VM reboot should not be required.
+4. If settle fails, guided HTTPS is skipped until `repair-frontend-assets` / `wait-ready` pass.
 
 ---
 

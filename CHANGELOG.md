@@ -1,3 +1,18 @@
+## v1.19.14 - redis_cache FLUSHDB settle (ghost CSS)
+
+Patch release so post-install settle wipes bench `redis_cache` with `FLUSHDB`
+(not only selective `DEL`), matching the field fix for styled Sign In.
+
+### Fixed
+
+- **Settle uses `FLUSHDB` on redis_cache:** v1.19.13 selective `DEL *assets_json*`
+  left ghost CSS hashes while `assets.json` on disk was already correct (JS 200,
+  CSS 404). Field fix was `redis-cli -p 13000 FLUSHDB` + `systemctl restart
+  erpnext-dev`. `settle_local_stack` now FLUSHDB’s bench `redis_cache` only
+  (refuses if cache URL equals `redis_queue`), then restarts ERPNext. Guided
+  install skips HTTPS follow-ups when settle fails. `repair-frontend-assets`
+  also FLUSHDB’s before restart.
+
 ## v1.19.13 - Post-install settle before HTTPS
 
 Patch release so local guided install clears Redis `assets_json` and restarts

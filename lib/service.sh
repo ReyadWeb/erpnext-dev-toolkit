@@ -504,6 +504,10 @@ repair_frontend_assets() {
   # via the service-aware helper when the stack is up.
   log "Clearing site cache / assets_json"
   maintenance_clear_cache || warn "clear-cache reported an issue; continuing with restart."
+  # Field (v1.19.13): ghost CSS can survive selective DEL; FLUSHDB redis_cache.
+  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
+    flush_bench_redis_cache || warn "redis_cache FLUSHDB failed; continuing with restart"
+  fi
   log "Restarting ERPNext service"
   restart_erpnext_service || fail "Service restart failed after asset rebuild."
   if ssl_is_configured 2>/dev/null && port_listens 443; then
@@ -755,24 +759,33 @@ _soft_restart_erpnext_runtime() {
   return 1
 }
 
-# Clear Redis assets_json + bounce ERPNext (+ nginx if up) + wait-ready.
-# Field: host browser stayed unstyled until a full guest reboot even when
-# wait-ready had passed — reboot wipes redis_cache (:13000); a service-only
-# restart does not. Must run after install (before HTTPS) and again after
-# trusted mkcert. reason= is a short log label only.
+# Clear Redis cache + bounce ERPNext (+ nginx if up) + wait-ready.
+# Field (v1.19.13): assets.json on disk matched real CSS files, but HTML still
+# advertised ghost CSS hashes until `redis-cli -p 13000 FLUSHDB` + restart —
+# selective DEL *assets_json* was not enough (namespaced / worker-held cache).
+# Must run after install (before HTTPS) and again after trusted mkcert.
 settle_local_stack() {
   require_sudo
   local reason="${1:-local stack}"
   local rc=0
 
   echo
-  log "Settling stack after ${reason} (clear assets_json + ERPNext restart)"
+  log "Settling stack after ${reason} (FLUSHDB redis_cache + ERPNext restart)"
   echo "Required so the host browser matches VM probes (replaces guest reboot)."
 
-  # Reboot-equivalent for ghost hashes: DEL assets_json on redis_cache :13000.
   if declare -F clear_bench_assets_json_cache >/dev/null 2>&1; then
     clear_bench_assets_json_cache || \
-      warn "Could not clear assets_json cache; continuing with service restart"
+      warn "Could not clear site/assets_json cache; continuing with redis FLUSHDB"
+  fi
+
+  # Reboot-equivalent: wipe the whole redis_cache DB (not queue/socketio).
+  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
+    if flush_bench_redis_cache; then
+      ok "redis_cache FLUSHDB completed"
+    else
+      warn "redis_cache FLUSHDB failed; ghost CSS hashes may persist until reboot"
+      rc=1
+    fi
   fi
 
   _soft_restart_erpnext_runtime || rc=1
