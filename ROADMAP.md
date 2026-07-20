@@ -1,9 +1,9 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.17 (July 2026)  
+**Current release:** v1.19.18 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.20.0 External Watchdog, after v1.19.17 field validation.  
-**Deferred:** v1.20.0 until v1.19.17 is field-validated.
+**Next up:** v1.20.0 External Watchdog, after v1.19.18 field validation.
+**Deferred:** v1.20.0 until v1.19.18 is field-validated.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -58,7 +58,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 
 ---
 
-## Shipped foundation (through v1.19.17)
+## Shipped foundation (through v1.19.18)
 
 Summary of what the active roadmap builds on. Detailed notes live in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -101,8 +101,9 @@ v1.19.13 Post-install settle before HTTPS
 v1.19.14 redis_cache FLUSHDB settle (ghost CSS)
 v1.19.15 CLI UX + ShellCheck + modular recovery
 v1.19.16 Menu information architecture
-v1.19.17 Frontend asset consistency                 ← current
-v1.20.0  External watchdog foundation              ← deferred until v1.19.17
+v1.19.17 Frontend asset consistency
+v1.19.18 Clean reinstall isolation                  ← current
+v1.20.0  External watchdog foundation              ← deferred until v1.19.18
 v1.21.0  CloudPanel / agent API foundation
 v1.22.0  Real VPS validation matrix (bounded)
 v1.23.0  Documentation and launch polish
@@ -335,9 +336,35 @@ v1.23.0  Documentation and launch polish
 
 ---
 
+### v1.19.18 — Clean Reinstall Isolation (P0)
+
+**Status:** Shipped as **v1.19.18**.
+
+**Goal:** Make archive-and-reinstall safe on VMs that already have a live or partially stale ERPNext/Frappe runtime, without requiring a VM reboot to clear old processes.
+
+**Shipped**
+- Archive is now a hard quiesce boundary: the existing Bench cannot be moved until its runtime is proven stopped.
+- Toolkit systemd service shutdown is verified and can escalate to the service control group when a normal stop stalls.
+- Supervisor cleanup is scoped to programs declared by the active Bench configuration rather than `supervisorctl stop all`.
+- Remaining `frappe`-owned processes are detected by references to the active Bench tree and terminated without broad user-wide `pkill`.
+- Archive-sibling paths such as `frappe-backup-*` are explicitly outside the active Bench match boundary.
+- Ports `6787`, `8000`, `9000`, `11000`, `12000`, and `13000` must be free before the old tree is moved.
+- Archive path collisions are handled with a numeric suffix.
+- Clean reinstalls preserve Supervisor production mode by regenerating its configuration against the new Bench before readiness validation.
+- Ubuntu 24.04 integration performs a real second install over an existing environment without reboot and re-validates frontend assets.
+
+**Acceptance**
+- [x] A stale process referencing the active Bench is terminated before archive.
+- [x] An unrelated same-user process outside the active Bench tree is preserved.
+- [x] A live Bench tree is never moved while runtime ports remain occupied.
+- [x] The same-path clean reinstall is a mandatory Ubuntu 24.04 integration gate.
+- [x] Browser asset readiness is re-verified after the reinstall without reboot.
+
+---
+
 ### v1.20.0 — External Watchdog Foundation
 
-**Status:** Deferred until v1.19.17 is field-validated.
+**Status:** Deferred until v1.19.18 is field-validated.
 
 **Goal:** Contract for Case B — frozen, powered-off, or unreachable VM (cannot self-heal from inside).
 

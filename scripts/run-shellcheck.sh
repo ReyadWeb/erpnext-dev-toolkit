@@ -59,6 +59,7 @@ targets=(
   scripts/test-ui-render.sh
   scripts/test-dashboard-render.sh
   scripts/test-static-asset-probe.sh
+  scripts/test-reinstall-isolation.sh
   scripts/test-health-env-parser.sh
   scripts/test-offvm-host-key.sh
   scripts/test-risky-shell-patterns.sh

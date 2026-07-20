@@ -1235,7 +1235,11 @@ EOF_PROD
     log "Disabling development bench-start service"
     $SUDO systemctl disable --now "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
   fi
-  if id "$FRAPPE_USER" >/dev/null 2>&1; then
+  if declare -F terminate_bench_reference_processes >/dev/null 2>&1; then
+    terminate_bench_reference_processes || warn "Some development Bench processes required forced cleanup before production conversion."
+  elif id "$FRAPPE_USER" >/dev/null 2>&1; then
+    # Compatibility fallback for unusual partial module loads. Normal toolkit
+    # execution uses the path-scoped helper from lib/install.sh.
     $SUDO pkill -u "$FRAPPE_USER" -f "bench start" >/dev/null 2>&1 || true
   fi
 

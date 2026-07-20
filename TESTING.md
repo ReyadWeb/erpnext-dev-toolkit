@@ -1,8 +1,39 @@
 # Testing guide
 
-**Current release:** v1.19.17 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.18 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.19.18 clean reinstall isolation
+
+The stability gate now covers the field condition where an existing native Bench is archived and a fresh Bench is installed at the same path without rebooting the VM.
+
+Hermetic coverage:
+
+```bash
+bash scripts/test-reinstall-isolation.sh
+```
+
+The test verifies:
+
+- process matching is bounded to the active `BENCH_PARENT` and does not match archive siblings such as `frappe-backup-*`;
+- processes can be detected through Bench-relative cwd/command/open-file references;
+- targeted cleanup terminates an active Bench-referencing process while preserving an unrelated same-user process;
+- Supervisor program discovery is scoped to the Bench-owned configuration;
+- the archive helper itself enforces the quiesce boundary before `mv`;
+- broad `pkill -u frappe` cleanup does not return to the install module;
+- the known development runtime ports are covered by the pre-archive collision gate.
+- clean reinstalls preserve a previously configured Supervisor production runtime.
+
+The Ubuntu 24.04 integration job adds a hard real-install regression:
+
+1. install ERPNext and pass browser asset consistency;
+2. inject an orphaned `frappe` process that references the live Bench;
+3. inject an unrelated same-user sentinel under an archive-sibling path;
+4. run a second non-interactive install at the same `BENCH_PARENT` without reboot;
+5. require the stale Bench process to be gone and the sentinel to remain alive;
+6. require an archive of the first environment to exist;
+7. require `wait-ready` and `verify-frontend-assets` to pass for the new site.
 
 ## v1.19.17 frontend asset consistency
 

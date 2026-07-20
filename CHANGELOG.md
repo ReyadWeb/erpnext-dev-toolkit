@@ -1,3 +1,21 @@
+## v1.19.18 - Clean reinstall isolation
+
+### Fixed
+
+- **Existing-environment archive safety:** clean reinstall and soft-uninstall now refuse to move `BENCH_PARENT` until the old runtime is fully quiescent.
+- **Bench-scoped process cleanup:** replaced broad `pkill`-by-user cleanup with path-scoped process discovery using `/proc` metadata, command arguments, and open file descriptors so another Bench owned by the same Linux user is not terminated accidentally.
+- **Systemd shutdown verification:** the toolkit now waits for `erpnext-dev.service` to become inactive and escalates to its service control group only when a normal stop does not complete.
+- **Supervisor isolation:** only Supervisor programs declared by the existing Bench configuration are stopped; unrelated Supervisor workloads are left alone.
+- **Port collision hard gate:** archive/reinstall now refuses to continue while Bench runtime ports remain occupied, preventing a new Bench from starting on top of stale listeners.
+- **Archive collision safety:** timestamp collisions now receive a numeric suffix rather than overwriting an existing archive path.
+- **Production-runtime continuity:** a clean reinstall that started in Supervisor production mode now regenerates the Supervisor configuration against the new Bench and restores production runtime instead of falling back to a stale or broken runtime definition.
+- **Real reinstall CI gate:** Ubuntu 24.04 integration now performs a second same-path clean install without reboot, injects a stale Bench-referencing process, verifies an unrelated same-user process survives, confirms the old tree was archived, and re-runs the frontend asset gate.
+
+### Tests
+
+- Added `scripts/test-reinstall-isolation.sh` for path-boundary matching, process discovery, live targeted termination, Supervisor scoping, archive-sibling preservation, and runtime-port coverage.
+- Added the reinstall-isolation test to release validation, ShellCheck coverage, and the release manifest.
+
 ## v1.19.17 - Frontend asset consistency
 
 - Restored the dedicated `redis_cache` settle lifecycle.

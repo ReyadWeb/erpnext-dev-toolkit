@@ -323,28 +323,326 @@ SQL
   ok "MariaDB admin user ready: ${DB_ADMIN_USER}"
 }
 
+path_is_within_tree() {
+  local candidate="${1:-}" root="${2:-}"
+
+  candidate="${candidate% (deleted)}"
+  root="${root%/}"
+  [[ -n "$candidate" && -n "$root" ]] || return 1
+  [[ "$candidate" == "$root" || "$candidate" == "$root/"* ]]
+}
+
+canonical_bench_parent() {
+  if path_is_dir "$BENCH_PARENT"; then
+    (cd "$BENCH_PARENT" 2>/dev/null && pwd -P) || printf '%s\n' "$BENCH_PARENT"
+  else
+    printf '%s\n' "$BENCH_PARENT"
+  fi
+}
+
+bench_runtime_ports() {
+  # Frappe/Bench development defaults used by this toolkit. 12000 covers the
+  # socket.io Redis process and 6787 covers the file watcher used by bench start.
+  printf '%s\n' 6787 8000 9000 11000 12000 13000
+}
+
+proc_cmdline_references_tree() {
+  local cmdline_file="$1" root="$2" arg value
+
+  [[ -r "$cmdline_file" || -n "${SUDO:-}" ]] || return 1
+  while IFS= read -r -d '' arg; do
+    value="${arg#*=}"
+    if path_is_within_tree "$arg" "$root" || path_is_within_tree "$value" "$root"; then
+      return 0
+    fi
+  done < <($SUDO cat "$cmdline_file" 2>/dev/null || true)
+  return 1
+}
+
+pid_references_bench_parent() {
+  local pid="$1" proc_root="${ERPNEXT_DEV_PROC_ROOT:-/proc}" proc_dir bench_root
+  local link_name target fd
+
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  proc_dir="${proc_root}/${pid}"
+  [[ -d "$proc_dir" ]] || return 1
+  bench_root="$(canonical_bench_parent)"
+
+  for link_name in cwd root exe; do
+    target="$($SUDO readlink "${proc_dir}/${link_name}" 2>/dev/null || true)"
+    if path_is_within_tree "$target" "$bench_root"; then
+      return 0
+    fi
+  done
+
+  if proc_cmdline_references_tree "${proc_dir}/cmdline" "$bench_root"; then
+    return 0
+  fi
+
+  if [[ -d "${proc_dir}/fd" ]]; then
+    while IFS= read -r fd; do
+      target="$($SUDO readlink "$fd" 2>/dev/null || true)"
+      if path_is_within_tree "$target" "$bench_root"; then
+        return 0
+      fi
+    done < <($SUDO find "${proc_dir}/fd" -mindepth 1 -maxdepth 1 -type l -print 2>/dev/null || true)
+  fi
+
+  return 1
+}
+
+bench_reference_process_records() {
+  local proc_root="${ERPNEXT_DEV_PROC_ROOT:-/proc}" proc_dir pid owner
+
+  for proc_dir in "${proc_root}"/[0-9]*; do
+    [[ -d "$proc_dir" ]] || continue
+    pid="${proc_dir##*/}"
+    [[ "$pid" != "$$" && "$pid" != "$PPID" ]] || continue
+
+    owner="$($SUDO stat -c '%U' "$proc_dir" 2>/dev/null || true)"
+    [[ -n "$owner" ]] || continue
+
+    if pid_references_bench_parent "$pid"; then
+      printf '%s|%s\n' "$pid" "$owner"
+    fi
+  done | LC_ALL=C sort -t'|' -k1,1n -u
+}
+
+bench_reference_pids() {
+  bench_reference_process_records \
+    | awk -F'|' -v owner="$FRAPPE_USER" '$2 == owner {print $1}'
+}
+
+foreign_bench_reference_records() {
+  bench_reference_process_records \
+    | awk -F'|' -v owner="$FRAPPE_USER" '$2 != owner {print $0}'
+}
+
+bench_supervisor_config_targets_environment() {
+  local conf target bench_root
+
+  declare -F supervisor_conf_link >/dev/null 2>&1 || return 1
+  conf="$(supervisor_conf_link)"
+  [[ -e "$conf" || -L "$conf" ]] || return 1
+  bench_root="$(canonical_bench_parent)"
+
+  if [[ -L "$conf" ]]; then
+    target="$($SUDO readlink -f "$conf" 2>/dev/null || true)"
+    if path_is_within_tree "$target" "$bench_root"; then
+      return 0
+    fi
+  fi
+
+  $SUDO grep -Fq -- "$bench_root" "$conf" 2>/dev/null
+}
+
+bench_supervisor_programs() {
+  local conf
+
+  declare -F supervisor_conf_link >/dev/null 2>&1 || return 0
+  conf="$(supervisor_conf_link)"
+  [[ -e "$conf" || -L "$conf" ]] || return 0
+
+  $SUDO awk -F'[][]' '/^\[program:[^]]+\]$/ {
+    name=$2
+    sub(/^program:/, "", name)
+    print name
+  }' "$conf" 2>/dev/null || true
+}
+
+stop_bench_supervisor_programs() {
+  local supervisorctl program
+  local -a programs=()
+
+  bench_supervisor_config_targets_environment || return 0
+  declare -F supervisorctl_bin >/dev/null 2>&1 || return 0
+  supervisorctl="$(supervisorctl_bin)"
+  mapfile -t programs < <(bench_supervisor_programs)
+  ((${#programs[@]} > 0)) || return 0
+
+  log "Stopping Supervisor programs that belong to the existing Bench"
+  for program in "${programs[@]}"; do
+    $SUDO "$supervisorctl" stop "$program" >/dev/null 2>&1 || true
+  done
+}
+
+stop_toolkit_dev_service_for_archive() {
+  local timeout="${BENCH_SERVICE_STOP_TIMEOUT:-15}" elapsed=0
+
+  service_exists || return 0
+  log "Stopping toolkit-managed ERPNext development service"
+  $SUDO systemctl stop "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
+
+  while $SUDO systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; do
+    if ((elapsed >= timeout)); then
+      warn "${ERPNEXT_SERVICE_NAME} did not stop after ${timeout}s; terminating its control group."
+      $SUDO systemctl kill --kill-who=all "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
+      $SUDO systemctl stop "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
+      break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  if $SUDO systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; then
+    err "${ERPNEXT_SERVICE_NAME} is still active; clean reinstall cannot continue safely."
+    return 1
+  fi
+  return 0
+}
+
+runtime_port_listener_pids() {
+  local port="$1"
+
+  command -v ss >/dev/null 2>&1 || return 0
+  $SUDO ss -H -ltnp "sport = :${port}" 2>/dev/null \
+    | grep -oE 'pid=[0-9]+' \
+    | cut -d= -f2 \
+    | LC_ALL=C sort -n -u || true
+}
+
+runtime_port_is_listening() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    $SUDO ss -H -ltn "sport = :${port}" 2>/dev/null | grep -q .
+    return
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    nc -z 127.0.0.1 "$port" >/dev/null 2>&1
+    return
+  fi
+  return 2
+}
+
+terminate_bench_reference_processes() {
+  local timeout="${BENCH_QUIESCE_TIMEOUT:-20}" elapsed=0
+  local -a pids=() remaining=()
+
+  mapfile -t pids < <(bench_reference_pids)
+  if ((${#pids[@]} == 0)); then
+    return 0
+  fi
+
+  log "Stopping ${#pids[@]} process(es) still attached to the existing Bench"
+  $SUDO kill -TERM "${pids[@]}" >/dev/null 2>&1 || true
+
+  while ((elapsed < timeout)); do
+    mapfile -t remaining < <(bench_reference_pids)
+    ((${#remaining[@]} == 0)) && return 0
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  mapfile -t remaining < <(bench_reference_pids)
+  if ((${#remaining[@]} > 0)); then
+    warn "Bench processes did not stop after ${timeout}s; terminating the remaining Bench-owned processes."
+    $SUDO kill -KILL "${remaining[@]}" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+
+  mapfile -t remaining < <(bench_reference_pids)
+  ((${#remaining[@]} == 0))
+}
+
+verify_existing_environment_quiescent() {
+  local port probe_rc
+  local -a pids=() foreign=() listeners=()
+
+  mapfile -t pids < <(bench_reference_pids)
+  if ((${#pids[@]} > 0)); then
+    err "Existing Bench processes are still using ${BENCH_PARENT}: ${pids[*]}"
+    return 1
+  fi
+
+  mapfile -t foreign < <(foreign_bench_reference_records)
+  if ((${#foreign[@]} > 0)); then
+    err "Processes owned by another user still reference ${BENCH_PARENT}: ${foreign[*]}"
+    err "Stop those processes manually before retrying the clean reinstall."
+    return 1
+  fi
+
+  if ! command -v ss >/dev/null 2>&1 && ! command -v nc >/dev/null 2>&1; then
+    err "Cannot verify runtime ports because neither ss nor nc is available."
+    return 1
+  fi
+
+  while IFS= read -r port; do
+    set +e
+    runtime_port_is_listening "$port"
+    probe_rc=$?
+    set -e
+
+    if [[ "$probe_rc" -eq 2 ]]; then
+      err "Could not verify whether runtime port ${port} is free."
+      return 1
+    fi
+    if [[ "$probe_rc" -eq 0 ]]; then
+      mapfile -t listeners < <(runtime_port_listener_pids "$port")
+      if ((${#listeners[@]} > 0)); then
+        err "Runtime port ${port} is still occupied by PID(s): ${listeners[*]}"
+      else
+        err "Runtime port ${port} is still occupied and its owner could not be identified."
+      fi
+      return 1
+    fi
+  done < <(bench_runtime_ports)
+
+  return 0
+}
+
 stop_bench_processes() {
-  log "Stopping existing Bench processes"
+  log "Quiescing existing ERPNext/Frappe environment"
 
-  if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    $SUDO systemctl stop "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
+  # Stop the toolkit-managed development service first. KillMode=control-group
+  # should remove its complete bench-start process tree on normal installations.
+  if ! stop_toolkit_dev_service_for_archive; then
+    return 1
   fi
 
-  if id "$FRAPPE_USER" >/dev/null 2>&1; then
-    $SUDO pkill -u "$FRAPPE_USER" -f "bench start" >/dev/null 2>&1 || true
-    $SUDO pkill -u "$FRAPPE_USER" -f "frappe.utils.bench_helper" >/dev/null 2>&1 || true
-    $SUDO pkill -u "$FRAPPE_USER" -f "redis.*11000|redis.*13000|node.*socketio|esbuild" >/dev/null 2>&1 || true
+  # A prior production conversion may have Bench programs under Supervisor.
+  # Stop only programs declared by this Bench config; never stop Supervisor's
+  # unrelated workloads globally.
+  stop_bench_supervisor_programs
+
+  # Catch orphaned processes left by interrupted installs, old bench-start
+  # sessions, or stale process managers. Detection is path-based so another
+  # Bench owned by the same Linux user is not killed accidentally.
+  if ! terminate_bench_reference_processes; then
+    err "Could not stop every process attached to ${BENCH_PARENT}."
+    return 1
   fi
 
-  sleep 2
-  ok "Bench process cleanup completed"
+  if ! verify_existing_environment_quiescent; then
+    err "Existing environment is not fully quiescent; refusing to archive it."
+    return 1
+  fi
+
+  ok "Existing environment is fully stopped and isolated"
+}
+
+next_bench_archive_path() {
+  local base candidate suffix=0
+  base="${BENCH_PARENT}-backup-$(date +%Y%m%d-%H%M%S)"
+  candidate="$base"
+  while [[ -e "$candidate" ]]; do
+    suffix=$((suffix + 1))
+    candidate="${base}-${suffix}"
+  done
+  printf '%s\n' "$candidate"
 }
 
 archive_existing_bench_parent() {
   if path_is_dir "$BENCH_PARENT"; then
     local archive_path
-    archive_path="${BENCH_PARENT}-backup-$(date +%Y%m%d-%H%M%S)"
 
+    # Archive is a hard safety boundary. Every caller (clean reinstall and soft
+    # uninstall) must prove the old runtime is stopped before the directory can
+    # move. This prevents old workers/Redis processes from surviving against an
+    # archived tree while a new Bench appears at the same path.
+    stop_bench_processes || fail "Existing ERPNext environment could not be isolated safely. Archive cancelled."
+
+    archive_path="$(next_bench_archive_path)"
     log "Archiving existing ERPNext environment"
     $SUDO mv "$BENCH_PARENT" "$archive_path"
     ok "Existing environment archived to: $archive_path"
@@ -662,6 +960,9 @@ run_repair() {
 }
 
 run_install() {
+  local reinstall_runtime_mode="" production_runtime_restored=0
+  local enable_boot start_now
+
   require_sudo
 
   # Choose the deployment engine once (native VM or Docker). Native keeps the
@@ -680,9 +981,9 @@ run_install() {
   prompt_for_site_name_if_needed
 
   if path_is_dir "$BENCH_PARENT"; then
+    reinstall_runtime_mode="$(runtime_mode)"
     warn "Existing environment detected at: $BENCH_PARENT"
     if confirm "Archive existing environment and perform clean install?"; then
-      stop_bench_processes
       archive_existing_bench_parent
     else
       fail "Install cancelled."
@@ -702,12 +1003,29 @@ run_install() {
     warn "Install completed, but the ERPNext service could not be configured automatically."
     warn "You can still start manually with: sudo -iu ${FRAPPE_USER}; cd $(active_bench_dir); bench start"
   fi
+
+  # A clean reinstall of an environment that was already running under the
+  # Supervisor production runtime must not leave a broken supervisor symlink or
+  # silently fall back to the development bench-start service. Regenerate the
+  # production config against the newly installed Bench before normal start/
+  # autostart handling.
+  if [[ "$reinstall_runtime_mode" == "production" ]]; then
+    log "Restoring Supervisor production runtime after clean reinstall"
+    if ! setup_production_runtime; then
+      fail "Could not restore the previous production runtime after reinstall."
+    fi
+    if ! wait_for_erpnext_ready; then
+      fail "Production runtime was restored but did not become ready after reinstall."
+    fi
+    production_runtime_restored=1
+  fi
+
   print_summary
   prompt_production_credential_handoff_if_needed
 
-  local enable_boot start_now
-
-  if [[ "${ENABLE_AUTOSTART}" == "true" || "$ASSUME_YES" -eq 1 ]]; then
+  if [[ "$production_runtime_restored" -eq 1 ]]; then
+    ok "Production runtime and Supervisor autostart restored from the previous environment."
+  elif [[ "${ENABLE_AUTOSTART}" == "true" || "$ASSUME_YES" -eq 1 ]]; then
     if ! enable_autostart_service; then
       warn "Install completed, but autostart could not be enabled automatically."
     fi
@@ -724,7 +1042,9 @@ run_install() {
     fi
   fi
 
-  if [[ "${AUTO_START}" == "true" || "$ASSUME_YES" -eq 1 ]]; then
+  if [[ "$production_runtime_restored" -eq 1 ]]; then
+    ok "ERPNext is already running under the restored production runtime."
+  elif [[ "${AUTO_START}" == "true" || "$ASSUME_YES" -eq 1 ]]; then
     if ! start_erpnext_service; then
       warn "Install completed, but ERPNext could not be started automatically."
       warn "Run this later: $(toolkit_cmd start)"
@@ -774,7 +1094,6 @@ run_install() {
 
 soft_uninstall() {
   require_sudo
-  stop_bench_processes
   archive_existing_bench_parent
   ok "Soft uninstall completed. System packages and Linux user were kept."
 }
