@@ -2,7 +2,7 @@ name: Release validation
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, beta ]
   pull_request:
     branches: [ main ]
   # Callable from release.yml so a release is GATED on the same lint/validate/

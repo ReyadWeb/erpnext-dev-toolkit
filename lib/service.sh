@@ -47,6 +47,49 @@ service_exists() {
   [[ -f "$(erpnext_service_path)" ]]
 }
 
+# Toolkit-managed development runtime deliberately excludes the Frappe asset
+# watcher. `bench watch` is useful for active frontend development, but running
+# it continuously inside the systemd service can race with explicit `bench build`
+# operations and rotate hashed bundles while readiness probes are reading /login.
+toolkit_runtime_procfile_path() {
+  local bench_dir="${1:-}"
+  [[ -n "$bench_dir" ]] || bench_dir="$(require_bench_dir)" || return 1
+  printf '%s/Procfile.toolkit\n' "$bench_dir"
+}
+
+ensure_toolkit_runtime_procfile() {
+  local bench_dir="${1:-}" source_file target_file tmp
+  [[ -n "$bench_dir" ]] || bench_dir="$(require_bench_dir)" || return 1
+  source_file="${bench_dir}/Procfile"
+  target_file="$(toolkit_runtime_procfile_path "$bench_dir")" || return 1
+  [[ -f "$source_file" ]] || { err "Bench Procfile not found: ${source_file}"; return 1; }
+
+  tmp="${target_file}.tmp.$$"
+  awk '!/^[[:space:]]*watch[[:space:]]*:/' "$source_file" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$target_file" || return 1
+  chown "$FRAPPE_USER:$FRAPPE_USER" "$target_file" 2>/dev/null || true
+  chmod 0644 "$target_file" 2>/dev/null || true
+  return 0
+}
+
+erpnext_service_uses_toolkit_procfile() {
+  service_exists && grep -Fq 'bench start --procfile Procfile.toolkit' "$(erpnext_service_path)"
+}
+
+# Existing v1.19.18 and older units used plain `bench start`, which starts the
+# asset watcher. Rewrite those units before any managed start/restart so beta can
+# repair an already-installed VM without requiring reinstall or reboot.
+ensure_erpnext_service_definition() {
+  local bench_dir
+  bench_dir="$(require_bench_dir)" || return 1
+  ensure_toolkit_runtime_procfile "$bench_dir" || return 1
+  if ! erpnext_service_uses_toolkit_procfile; then
+    log "Updating ERPNext systemd service to watcher-free managed runtime"
+    create_erpnext_service || return 1
+  fi
+  return 0
+}
+
 
 port_listens() {
   local port="$1"
@@ -55,6 +98,27 @@ port_listens() {
 
 bench_ports_ready() {
   port_listens 8000 && port_listens 9000 && port_listens 11000 && port_listens 13000
+}
+
+# Wait only for the runtime substrate required by frontend verification. This is
+# intentionally asset-agnostic so repair-frontend-assets can wait for Redis/web
+# after a restart without recursively depending on the asset gate it is fixing.
+wait_for_core_runtime_ready() {
+  local timeout="${1:-60}"
+  local interval="${2:-2}"
+  local elapsed=0
+
+  [[ "$timeout" =~ ^[0-9]+$ ]] || timeout=60
+  [[ "$interval" =~ ^[0-9]+$ ]] && ((interval >= 1)) || interval=2
+
+  while ((elapsed <= timeout)); do
+    if bench_ports_ready && bench_http_ready; then
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+  done
+  return 1
 }
 
 bench_ready_count() {
@@ -171,7 +235,7 @@ bench_static_assets_ready_stable() {
 
 # Capture failing assets (for diagnostics) before a rebuild. Best-effort.
 record_frontend_asset_failures() {
-  local url host port line
+  local url host port line tmp probe_rc=0 fail_count=0
   # Prefer :8000 (Frappe local contract) so diagnostics match wait-ready.
   if port_listens 8000; then
     url="http://${SITE_NAME}:8000/login"
@@ -182,16 +246,33 @@ record_frontend_asset_failures() {
     host="$SITE_NAME"
     port=443
   else
+    echo "Frontend probe unavailable: neither :8000 nor :443 is listening yet."
     return 1
   fi
+
+  tmp="$(mktemp /tmp/erpnext-dev-asset-failures.XXXXXX)"
+  set +e
+  probe_login_frontend_assets_all "$url" "$host" "$port" "127.0.0.1" >"$tmp"
+  probe_rc=$?
+  set -e
 
   echo "Missing / failed required assets:"
   while IFS= read -r line; do
     [[ "$line" == FAIL\|* ]] || continue
+    fail_count=$((fail_count + 1))
     # FAIL|path|code|bytes|ctype|class
     printf '  %s\n' "$(printf '%s' "$line" | awk -F'|' '{printf "%s  HTTP %s  (%s)", $2, $3, $6}')"
-  done < <(probe_login_frontend_assets_all "$url" "$host" "$port" "127.0.0.1" 2>/dev/null || true)
-  return 0
+  done <"$tmp"
+  rm -f "$tmp"
+
+  if ((fail_count == 0)); then
+    case "$probe_rc" in
+      0) echo "  No individual asset failure was returned by the probe." ;;
+      2) echo "  Probe could not discover a complete CSS+JavaScript manifest from ${url}." ;;
+      *) echo "  Frontend probe failed before it could identify an individual asset (rc=${probe_rc})." ;;
+    esac
+  fi
+  return "$probe_rc"
 }
 
 # Rebuild missing login CSS/JS once without nesting wait_for_erpnext_ready
@@ -246,9 +327,6 @@ wait_for_erpnext_ready() {
   local interval="${2:-$READY_INTERVAL}"
   local elapsed=0
   local http_state assets_state
-  local auto_repaired=0
-  # Seconds of http-OK / assets-wait before one automatic rebuild (0 disables).
-  local repair_after="${ASSET_AUTO_REPAIR_AFTER:-30}"
   local asset_stable_streak=0
   local need_stable="${ASSET_READY_STABLE_CHECKS:-3}"
   local gap_stable="${ASSET_READY_STABLE_GAP:-2}"
@@ -257,6 +335,7 @@ wait_for_erpnext_ready() {
   echo
   echo "Waiting for ERPNext services to become ready..."
   echo "Requires ports, HTTP ping, and a stable login asset manifest (CSS/JS)."
+  echo "Read-only check: wait-ready never rebuilds assets or changes the runtime."
   echo "This can take up to ${timeout}s after start/restart (READY_TIMEOUT)."
   echo
 
@@ -315,21 +394,6 @@ wait_for_erpnext_ready() {
     if [[ "$http_state" == "OK" && "$assets_state" == "OK" ]] && ((asset_stable_streak < need_stable)); then
       sleep "$gap_stable"
       elapsed=$((elapsed + gap_stable))
-      continue
-    fi
-
-    # Do not burn the full READY_TIMEOUT polling 404s — rebuild once, then continue.
-    if [[ "$http_state" == "OK" && "$assets_state" != "OK" ]] && \
-       [[ "${AUTO_REPAIR_ASSETS:-1}" != "0" ]] && \
-       [[ "$repair_after" =~ ^[0-9]+$ ]] && ((repair_after > 0)) && \
-       ((elapsed >= repair_after && auto_repaired == 0)); then
-      auto_repaired=1
-      try_rebuild_frontend_assets_once || true
-      asset_stable_streak=0
-      previous_asset_fingerprint=""
-      # Service just bounced; give ports a moment before the next probe.
-      sleep "$interval"
-      elapsed=$((elapsed + interval))
       continue
     fi
 
@@ -542,7 +606,63 @@ wait_frontend_assets() {
   wait_for_erpnext_ready "$@"
 }
 
-# Rebuild assets, clear cache, restart, and re-verify the complete login asset gate.
+# Stop/start the managed runtime around an explicit asset build. Building while
+# the Frappe watcher is active can race hashed bundle deletion/creation. These
+# helpers intentionally do not run readiness checks; the repair transaction does
+# one read-only verification after the runtime is back.
+_asset_build_runtime_stop() {
+  if deployment_engine_is_docker; then
+    docker_compose stop || return 1
+    return 0
+  fi
+  if runtime_is_production && production_runtime_configured; then
+    $SUDO "$(supervisorctl_bin)" stop all >/dev/null 2>&1 || true
+    return 0
+  fi
+  if service_exists; then
+    $SUDO systemctl stop "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || return 1
+  fi
+  return 0
+}
+
+_asset_build_runtime_start() {
+  if deployment_engine_is_docker; then
+    docker_compose start || return 1
+    return 0
+  fi
+  if runtime_is_production && production_runtime_configured; then
+    $SUDO "$(supervisorctl_bin)" start all >/dev/null 2>&1 || return 1
+    return 0
+  fi
+  ensure_erpnext_service_definition || return 1
+  $SUDO systemctl start "${ERPNEXT_SERVICE_NAME}" || return 1
+  return 0
+}
+
+# Prepare a watcher-free runtime before an explicit build while keeping Redis
+# available. Frappe's build step updates assets_json through redis_cache; stopping
+# the entire Bench service makes that update fail (observed in beta.1 as
+# "Cannot connect to redis_cache to update assets_json"). The isolation boundary
+# we need is watcher-vs-build, not Redis-vs-build.
+_prepare_asset_build_runtime() {
+  if deployment_engine_is_docker; then
+    docker_compose start >/dev/null 2>&1 || true
+    return 0
+  fi
+  if runtime_is_production && production_runtime_configured; then
+    return 0
+  fi
+
+  ensure_erpnext_service_definition || return 1
+  # Restart once so an older plain `bench start` control group (with watch) is
+  # replaced by Procfile.toolkit before bench build runs.
+  $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
+  wait_for_core_runtime_ready 60 2 || return 1
+  return 0
+}
+
+# Rebuild assets as an isolated watcher-free transaction. Redis and the core
+# runtime stay available during bench build; verification remains read-only.
 repair_frontend_assets() {
   require_sudo
   require_site_environment >/dev/null || fail "Site/bench environment is required before repairing frontend assets."
@@ -550,28 +670,42 @@ repair_frontend_assets() {
   ui_box_start "Repair frontend assets"
   status_line "Site" "INFO" "${SITE_NAME}"
   echo
-  echo "Pre-repair failures:"
+  echo "Pre-repair frontend probe:"
   record_frontend_asset_failures || true
   echo
-  log "Building assets (bench build)"
-  maintenance_build || fail "bench build failed; fix the build error, then retry $(toolkit_cmd repair-frontend-assets)."
-  # maintenance_build already ran clear_bench_assets_json_cache; refresh once more
-  # via the service-aware helper when the stack is up.
-  log "Clearing site cache / assets_json"
-  maintenance_clear_cache || warn "clear-cache reported an issue; continuing with restart."
-  # Field (v1.19.13/v1.19.14): ghost CSS hashes can survive selective
-  # assets_json eviction. Flush only the dedicated redis_cache DB before the
-  # restart; the helper refuses to touch a shared redis_queue endpoint.
-  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
-    flush_bench_redis_cache || warn "redis_cache FLUSHDB failed; continuing with restart"
+
+  log "Preparing watcher-free ERPNext runtime (Redis remains available)"
+  _prepare_asset_build_runtime || \
+    fail "Could not establish a watcher-free runtime with Redis/web ready before rebuilding assets."
+
+  log "Building assets once with the watcher disabled"
+  if ! maintenance_build; then
+    fail "bench build failed; fix the build error, then retry $(toolkit_cmd repair-frontend-assets)."
   fi
-  log "Restarting ERPNext service"
-  restart_erpnext_service || fail "Service restart failed after asset rebuild."
+
+  log "Clearing site cache / assets_json after isolated build"
+  clear_bench_assets_json_cache || warn "cache cleanup reported an issue; continuing with verification."
+  if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
+    flush_bench_redis_cache || warn "redis_cache FLUSHDB failed; continuing with verification"
+  fi
+
+  _soft_restart_erpnext_runtime || fail "Runtime restart failed after isolated asset rebuild."
+
+  log "Waiting for ERPNext core runtime before frontend verification"
+  if ! wait_for_core_runtime_ready 90 2; then
+    status_line "Runtime" "FAIL" "web/Redis did not become ready after rebuild"
+    err "Asset build completed, but the core runtime did not recover in time."
+    record_frontend_asset_failures || true
+    ui_box_end
+    return 1
+  fi
+
   if ssl_is_configured 2>/dev/null && port_listens 443; then
     log "Rewriting local SSL nginx (/assets from disk + HTTP→HTTPS)"
     write_local_ssl_nginx_config || true
     ensure_local_http_redirects_to_https || true
   fi
+
   echo
   if bench_static_assets_ready_stable; then
     status_line "Static assets" "OK" "stable login asset manifest (${ASSET_READY_STABLE_CHECKS:-3} checks)"
@@ -584,8 +718,9 @@ repair_frontend_assets() {
     ui_box_end
     return 0
   fi
+
   status_line "Static assets" "FAIL" "complete probe still failing after rebuild"
-  err "Assets still failing after build/clear-cache/restart."
+  err "Assets still failing after build/cache clear/runtime restart."
   record_frontend_asset_failures || true
   echo "Check: $(toolkit_cmd logs) · $(toolkit_cmd verify-frontend-assets) · $(toolkit_cmd verify-local-ssl)"
   ui_box_end
@@ -643,6 +778,7 @@ create_erpnext_service() {
   fi
 
   log "Creating ERPNext development systemd service"
+  ensure_toolkit_runtime_procfile "$bench_dir" || return 1
 
   $SUDO tee "$(erpnext_service_path)" >/dev/null <<EOF_SERVICE
 [Unit]
@@ -656,7 +792,7 @@ User=${FRAPPE_USER}
 Group=${FRAPPE_USER}
 WorkingDirectory=${bench_dir}
 Environment=HOME=${FRAPPE_HOME}
-ExecStart=/bin/bash -lc 'export NVM_DIR="\$HOME/.nvm"; [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null 2>&1 || true; export PATH="\$HOME/.local/bin:\$PATH"; cd "${bench_dir}" && bench start'
+ExecStart=/bin/bash -lc 'export NVM_DIR="\$HOME/.nvm"; [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null 2>&1 || true; export PATH="\$HOME/.local/bin:\$PATH"; cd "${bench_dir}" && bench start --procfile Procfile.toolkit'
 Restart=on-failure
 RestartSec=10
 KillMode=control-group
@@ -710,9 +846,7 @@ start_erpnext_service() {
     return
   fi
 
-  if ! service_exists; then
-    create_erpnext_service || return 1
-  fi
+  ensure_erpnext_service_definition || return 1
 
   log "Starting ERPNext service"
   if $SUDO systemctl start "${ERPNEXT_SERVICE_NAME}"; then
@@ -768,9 +902,7 @@ restart_erpnext_service() {
     return
   fi
 
-  if ! service_exists; then
-    create_erpnext_service || return 1
-  fi
+  ensure_erpnext_service_definition || return 1
 
   log "Restarting ERPNext service"
   if $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}"; then
@@ -803,13 +935,9 @@ _soft_restart_erpnext_runtime() {
     $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || return 1
     return 0
   fi
-  if service_exists; then
+  if declare -F ensure_erpnext_service_definition >/dev/null 2>&1; then
+    ensure_erpnext_service_definition || return 1
     log "Restarting ERPNext service"
-    $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
-    return 0
-  fi
-  if declare -F create_erpnext_service >/dev/null 2>&1; then
-    create_erpnext_service || true
     $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
     return 0
   fi

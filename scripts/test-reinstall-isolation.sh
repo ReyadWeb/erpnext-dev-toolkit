@@ -161,6 +161,7 @@ else
   fail_test "archive must enforce stop_bench_processes before mv"
 fi
 
+# shellcheck disable=SC2016
 if grep -q 'pkill -u "\$FRAPPE_USER"' "${ROOT_DIR}/lib/install.sh"; then
   fail_test "install module still contains broad pkill-by-user cleanup"
 else
@@ -168,6 +169,7 @@ else
 fi
 
 run_install_body="$(sed -n '/^run_install()/,/^}/p' "${ROOT_DIR}/lib/install.sh")"
+# shellcheck disable=SC2016
 if grep -Fq 'reinstall_runtime_mode="$(runtime_mode)"' <<<"$run_install_body" \
   && grep -Fq 'setup_production_runtime' <<<"$run_install_body" \
   && grep -Fq 'production_runtime_restored=1' <<<"$run_install_body"; then

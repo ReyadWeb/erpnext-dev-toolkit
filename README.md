@@ -18,7 +18,18 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.18 · **Readiness:** ~9.5/10 for single-admin local/public VM
+**Current release:** v1.19.19 · **Readiness:** beta validation in progress; latest stable is v1.19.18.
+
+### Beta testing channel
+
+The persistent `beta` branch is the mandatory real-VM proving ground before a stable release. Beta is mutable and unsigned, so use it only on disposable/local test VMs:
+
+```bash
+TOOLKIT_UPDATE_CHANNEL=beta TOOLKIT_UPDATE_SLOT=beta sudo -E erpnext-dev update-toolkit
+```
+
+Every push to `beta` runs both fast release validation and the real Ubuntu 24.04 install/integration workflow. Stable releases continue to come only from reviewed, signed tags.
+
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
 engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
@@ -157,7 +168,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.18"
+VERSION="v1.19.19"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
