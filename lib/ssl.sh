@@ -1827,21 +1827,13 @@ EOF_FF_NSS
 }
 
 show_mkcert_local_ssl_guide() {
-  local vm_ip cert_path key_path vm_ssh_user cmd_install cmd_configure cmd_verify cmd_disable cmd_env
-  local host_label mkcert_deps host_dns_cmds host_dns_tests
+  local vm_ip vm_ssh_user cmd_disable cmd_env host_label mkcert_deps
   vm_ip="$(get_vm_ip)"
-  cert_path="$(ssl_cert_path)"
-  key_path="$(ssl_key_path)"
   vm_ssh_user="$(suggested_vm_ssh_user)"
-  cmd_install="${INSTALLER_CANONICAL_PATH} install-local-ssl-cert"
-  cmd_configure="${INSTALLER_CANONICAL_PATH} configure-local-ssl"
-  cmd_verify="${INSTALLER_CANONICAL_PATH} verify-local-ssl"
   cmd_disable="${INSTALLER_CANONICAL_PATH} disable-local-ssl"
   cmd_env="${INSTALLER_CANONICAL_PATH} environment-check"
   host_label="$(host_os_label)"
   mkcert_deps="$(host_mkcert_install_hint)"
-  host_dns_cmds="$(print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip")"
-  host_dns_tests="$(print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip")"
 
   cat <<EOF_MKCERT
 
@@ -1852,76 +1844,54 @@ Trusted Local SSL with mkcert
 Goal:
   Use https://${SITE_NAME} without browser warnings on the HOST machine.
 
-Important:
-  - Run mkcert on the HOST where the browser runs.
-  - Run toolkit SSL commands inside the ERPNext VM.
-  - The reusable toolkit path inside the VM is: ${INSTALLER_CANONICAL_PATH}
-  - If unsure which machine you are on, run: ${cmd_env}
-  - Host OS: ${host_label} (change with ${INSTALLER_CANONICAL_PATH} set-host-os)
+Before HTTPS:
+  Confirm plain HTTP works first:
+    http://${SITE_NAME}:8000/login
 
-Checklist:
+  Need the hostname mapping command again?
+    ${INSTALLER_CANONICAL_PATH} hosts-command
 
-1) On the ${host_label} HOST, install mkcert dependencies (one time):
+1) On the ${host_label} HOST, install mkcert once if needed:
 
 ${mkcert_deps}
 
-2) On the HOST, trust the CA, generate the cert/key, and copy into the VM:
+2) On the HOST, trust the CA, generate the certificate, and copy it to the VM:
 
-  Copy and run this entire command on the ${host_label} HOST:
-  $(print_host_mkcert_trust_copy_one_liner "$SITE_NAME" "$vm_ip" "$(suggested_vm_ssh_user)")
+  $(print_host_mkcert_trust_copy_one_liner "$SITE_NAME" "$vm_ip" "$vm_ssh_user")
 
-  If your VM uses a different SSH user, replace '$(suggested_vm_ssh_user)' in the scp target.
+  If the VM SSH user is not '${vm_ssh_user}', replace it in the scp target.
 
-3) Inside the VM, install the cert/key safely:
+3) Back inside the VM, run one command:
 
-  ${cmd_install}
+  ${INSTALLER_CANONICAL_PATH} trusted-mkcert-setup
 
-  This copies from:
-    /tmp/${SITE_NAME}.crt
-    /tmp/${SITE_NAME}.key
-
-  To:
-    ${cert_path}
-    ${key_path}
-
-  Existing cert/key files are backed up first, and permissions are enforced.
-
-4) Inside the VM, enable/reload the HTTPS reverse proxy:
-
-  ${cmd_configure}
-  ${cmd_verify}
-
-5) On the ${host_label} HOST, confirm DNS/hosts and HTTPS:
-
-${host_dns_cmds}
-
-  Then test:
-${host_dns_tests}
+  After you confirm the HOST step is complete, the toolkit automatically:
+    - validates and installs the certificate/key
+    - configures and reloads the HTTPS reverse proxy
+    - settles the ERPNext runtime
+    - verifies HTTPS and frontend assets
 
 Expected:
   http://${SITE_NAME}       -> 301 redirect to https://${SITE_NAME}/
-  https://${SITE_NAME}      -> 200 OK without using curl -k
-  http://${SITE_NAME}:8000  -> direct Bench fallback still works
+  https://${SITE_NAME}      -> 200 OK
+  http://${SITE_NAME}:8000  -> direct Bench fallback
 
-Rollback:
-  ${cmd_disable}
-  ${INSTALLER_CANONICAL_PATH} ssl-rollback-guide
-
+Useful:
+  Environment check: ${cmd_env}
+  Rollback:          ${cmd_disable}
+  Detailed rollback: ${INSTALLER_CANONICAL_PATH} ssl-rollback-guide
 ============================================================
 EOF_MKCERT
 }
 
-
 run_trusted_mkcert_setup() {
   require_erpnext_vm_context "trusted-mkcert-setup" || return 1
 
-  local vm_ip src_cert src_key reply ssh_user host_label host_os
+  local vm_ip src_cert src_key ssh_user
   vm_ip="$(get_vm_ip)"
   src_cert="${LOCAL_SSL_CERT_SOURCE:-/tmp/${SITE_NAME}.crt}"
   src_key="${LOCAL_SSL_KEY_SOURCE:-/tmp/${SITE_NAME}.key}"
   ssh_user="$(suggested_vm_ssh_user)"
-  host_os="$(effective_host_os)"
-  host_label="$(host_os_label)"
 
   echo
   echo "============================================================"
@@ -1967,66 +1937,41 @@ run_trusted_mkcert_setup() {
   echo "------------------------------------------------------------"
   print_host_mkcert_trust_copy_commands "$SITE_NAME" "$vm_ip" "$ssh_user"
   echo
-  echo "Stay in this wizard. After scp finishes, press Enter here to continue."
+  echo "Stay in this wizard. After the HOST command finishes, return here and confirm the handoff."
   echo "Detailed guide: $(toolkit_cmd mkcert-guide)"
 
-  # Step 2: wait/recheck for /tmp certs instead of forcing a menu exit.
-  while true; do
-    if [[ -f "$src_cert" && -f "$src_key" ]]; then
-      status_line "Copied certificate" "OK" "$src_cert"
-      status_line "Copied private key" "OK" "$src_key"
-      break
-    fi
-    if [[ -f "$src_cert" ]]; then
-      status_line "Copied certificate" "OK" "$src_cert"
-    else
-      status_line "Copied certificate" "WARN" "not found yet: ${src_cert}"
-    fi
-    if [[ -f "$src_key" ]]; then
-      status_line "Copied private key" "OK" "$src_key"
-    else
-      status_line "Copied private key" "WARN" "not found yet: ${src_key}"
-    fi
-    echo
-    if [[ ! -t 0 || "${ASSUME_YES:-0}" -eq 1 ]]; then
-      warn "Cert/key not in /tmp yet. Non-interactive session cannot wait."
-      echo "Copy the files, then re-run: $(toolkit_cmd trusted-mkcert-setup)"
-      echo "============================================================"
-      return 0
-    fi
-    read -r -p "Press Enter after scp (or type skip / guide): " reply || reply="skip"
-    reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
-    case "$reply" in
-      skip|s|q|quit)
-        warn "Leaving without installing. Re-run when the files are in /tmp:"
-        echo "  $(toolkit_cmd trusted-mkcert-setup)"
-        echo "============================================================"
-        return 0
-        ;;
-      guide|g|help|h)
-        show_mkcert_local_ssl_guide || true
-        ;;
-      *)
-        ;;
-    esac
-  done
-
-  # Step 3: install + configure + verify inside the VM.
+  # Step 2: explicit HOST handoff confirmation. Once the operator confirms the
+  # one HOST command completed, the toolkit validates the copied files and
+  # automatically finishes certificate install + Nginx configuration + verify.
   echo
-  echo "------------------------------------------------------------"
-  echo "Step 2 — VM: install cert, enable Nginx HTTPS, verify"
-  echo "------------------------------------------------------------"
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    if ! confirm "Install the copied mkcert certificate and enable local HTTPS now?"; then
-      warn "mkcert files found, but install was skipped."
-      echo "Run later:"
-      echo "  $(toolkit_cmd install-local-ssl-cert)"
-      echo "  $(toolkit_cmd configure-local-ssl)"
-      echo "  $(toolkit_cmd verify-local-ssl)"
+    if ! confirm "Have you completed the HOST mkcert command and copied both certificate files to this VM?"; then
+      warn "HOST mkcert handoff not confirmed. Nothing was changed in the VM."
+      echo "Re-run when ready: $(toolkit_cmd trusted-mkcert-setup)"
       echo "============================================================"
       return 0
     fi
   fi
+
+  if [[ ! -f "$src_cert" || ! -f "$src_key" ]]; then
+    warn "The HOST handoff was confirmed, but the expected files are not present yet."
+    status_line "Expected certificate" "WARN" "$src_cert"
+    status_line "Expected private key" "WARN" "$src_key"
+    echo
+    echo "Re-run the HOST copy command, then retry:"
+    echo "  $(toolkit_cmd trusted-mkcert-setup)"
+    echo "============================================================"
+    return 1
+  fi
+
+  status_line "Copied certificate" "OK" "$src_cert"
+  status_line "Copied private key" "OK" "$src_key"
+
+  echo
+  echo "------------------------------------------------------------"
+  echo "Step 2 — VM: automatic install, HTTPS configuration, and verification"
+  echo "------------------------------------------------------------"
+  echo "The HOST handoff is complete. The toolkit will now finish the VM steps automatically."
 
   install_local_ssl_cert
   configure_local_ssl

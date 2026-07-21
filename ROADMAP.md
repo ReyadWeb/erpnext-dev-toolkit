@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.19-beta.2 (July 2026)
+**Current release:** v1.19.19-beta.3 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
 **Next up:** v1.20.0 External Watchdog, after v1.19.19 field validation.
 **Deferred:** v1.20.0 until v1.19.19 is field-validated.
@@ -365,7 +365,7 @@ v1.23.0  Documentation and launch polish
 
 ### v1.19.19 — Asset Build Isolation (P0)
 
-**Status:** Beta validation (`v1.19.19-beta.2`) with mandatory install → repair → independent frontend verification before stable release.
+**Status:** Beta validation (`v1.19.19-beta.3`) with mandatory install → repair → independent frontend verification before stable release.
 
 - Make `wait-ready` strictly read-only.
 - Remove `bench watch` from toolkit-managed background runtime.

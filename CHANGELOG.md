@@ -1,3 +1,17 @@
+## v1.19.19-beta.3 - Guided local hostname and mkcert workflow beta
+
+### Fixed
+
+- **DHCP no longer skips hostname setup:** declining the optional static-IP step now continues with the current DHCP address, warns that the HOST mapping may need refresh after an IP change, and always runs the friendly-hostname checkpoint before HTTPS is offered.
+- **HTTP-before-HTTPS checkpoint:** the guided local flow now requires the operator to confirm `http://<site>:8000/login` works from the HOST before continuing to trusted HTTPS. If the checkpoint is skipped, guided HTTPS is skipped instead of silently continuing.
+- **Single mkcert HOST handoff:** trusted mkcert setup now asks once whether the HOST-side generate/copy command completed; after confirmation, the toolkit automatically validates and installs the certificate, configures Nginx HTTPS, settles the runtime, and verifies HTTPS/frontend assets.
+- **Condensed mkcert guide:** removed the redundant manual VM install/configure steps and the repeated full hosts-file block from the normal guide. The standalone SSL wizard and Start Here guided flow use the same `trusted-mkcert-setup` transaction.
+
+### Validation target
+
+- Fresh local VM with DHCP: decline static IP → apply HOST mapping → confirm HTTP hostname → complete mkcert HTTPS without leaving the guided flow.
+- Re-enter through Local HTTPS → Trusted mkcert setup and verify the same HOST-handoff/automatic-VM workflow.
+
 ## v1.19.19-beta.2 - Frontend repair runtime synchronization beta
 
 ### Fixed

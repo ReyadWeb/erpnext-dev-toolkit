@@ -1,10 +1,19 @@
 # Testing guide
 
-**Current release:** v1.19.19-beta.2 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.19-beta.3 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
-## v1.19.19-beta.2 frontend repair synchronization beta
+## v1.19.19-beta.3 guided local hostname + mkcert workflow beta
+
+Mandatory acceptance path before stable promotion:
+
+1. Fresh local VM on DHCP; answer **No** to the static-IP prompt.
+2. Confirm the wizard still presents the HOST mapping checkpoint.
+3. Verify `http://<site>:8000/login` from the HOST before HTTPS is offered.
+4. Choose trusted mkcert HTTPS, run the one HOST generate/copy command, confirm the handoff once, and let the toolkit automatically install/configure/verify the VM side.
+5. Repeat the trusted mkcert path from the standalone Local HTTPS menu to prove both entry points use the same transaction.
+
 
 Beta.2 adds a mandatory real repair transaction to integration testing. The gate must prove: watcher-free runtime, Redis available during `bench build`, core-runtime recovery after restart, stable `wait-ready`, and an independent `verify-frontend-assets` pass. On pushes to `beta`, Ubuntu 24.04 and Ubuntu 26.04 are both blocking integration legs.
 

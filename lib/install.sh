@@ -1368,8 +1368,14 @@ run_guided_setup() {
   post_core_install_checkpoint
   show_next_step
   if ! is_public_vm_workflow; then
-    show_local_host_mapping_checkpoint
-    local_guided_followups
+    # Interactive local installs own the hostname checkpoint inside the guided
+    # follow-up chain so it can be confirmed before HTTPS is offered. Keep the
+    # printable checkpoint for non-interactive installs and CI.
+    if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+      local_guided_followups
+    else
+      show_local_host_mapping_checkpoint
+    fi
   fi
   prompt_open_main_menu_after_install
 }
@@ -1418,6 +1424,65 @@ local_guided_stable_ip_checkpoint() {
   fi
 }
 
+# Required friendly-hostname checkpoint for interactive local installs.
+# A static guest IP is recommended but not required: DHCP users can continue
+# with the current address and are warned to refresh the HOST mapping if it
+# changes later. HTTPS is only offered after the operator confirms plain HTTP
+# works through the friendly hostname.
+local_guided_host_mapping_checkpoint() {
+  [[ -t 0 ]] || return 0
+  [[ "${ASSUME_YES:-0}" -eq 1 ]] && return 0
+
+  local vm_ip method reply
+  vm_ip="$(get_vm_ip)"
+  method="$(local_ip_detect_method 2>/dev/null || echo unknown)"
+
+  echo
+  ui_box_start "Local setup: connect the hostname from the HOST"
+  echo "Before HTTPS, make sure the friendly hostname works over plain HTTP."
+  echo
+  status_line "Local domain" "INFO" "${SITE_NAME}"
+  status_line "Current VM IP" "$([[ "$vm_ip" != unknown ]] && echo OK || echo WARN)" "$vm_ip"
+  if [[ "$method" == "static" ]]; then
+    status_line "Guest addressing" "OK" "static"
+  else
+    status_line "Guest addressing" "WARN" "DHCP/current IP; update the HOST mapping if this IP changes"
+  fi
+  echo
+  echo "Expected HTTP URL before HTTPS:"
+  echo "  http://${SITE_NAME}:8000/login"
+  ui_box_end
+
+  show_local_host_mapping_checkpoint
+
+  while true; do
+    echo
+    if confirm "Have you applied the HOST mapping and confirmed http://${SITE_NAME}:8000/login works?"; then
+      ok "Friendly hostname HTTP checkpoint confirmed."
+      return 0
+    fi
+
+    echo
+    echo "HTTPS will not be offered until the hostname HTTP checkpoint is confirmed."
+    echo "Run the HOST command above, then test:"
+    echo "  getent hosts ${SITE_NAME}"
+    echo "  curl -I http://${SITE_NAME}:8000/login"
+    echo
+    read -r -p "Press Enter to check again, or type skip to continue without HTTPS: " reply || reply="skip"
+    reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
+    case "$reply" in
+      skip|s|q|quit)
+        warn "Hostname HTTP checkpoint was not confirmed; skipping guided HTTPS setup."
+        echo "Complete it later with: $(toolkit_cmd local-host-checkpoint)"
+        return 1
+        ;;
+      *)
+        show_local_host_mapping_checkpoint
+        ;;
+    esac
+  done
+}
+
 # Confirm the install by bouncing ERPNext (+ nginx when HTTPS is active).
 # Field reports: a VM reboot after static IP often cleared post-install flakiness;
 # a targeted service restart is the same settle step without rebooting the guest.
@@ -1462,22 +1527,32 @@ local_guided_followups() {
   echo "ERPNext is installed. Prefer http://${SITE_NAME}:8000/login (not the raw IP)."
   echo "If the login page looks unstyled, wait until $(toolkit_cmd wait-ready) reports"
   echo "static assets OK, then hard-refresh the browser."
-  echo "Guided order: stable IP → HTTPS → service restart confirm → credentials → security → apps."
+  echo "Guided order: stable IP → host mapping → HTTP verification → HTTPS → credentials → security → apps."
   ui_box_end
 
   local_guided_stable_ip_checkpoint
 
-  echo
-  echo "Trusted local HTTPS uses mkcert so ${SITE_NAME} opens without browser warnings."
-  echo "For other options (self-signed, status, disable), use: $(toolkit_cmd local-ssl-wizard)"
-  if confirm "Set up trusted local HTTPS (mkcert) now?"; then
-    # Run the recommended trusted-HTTPS path directly rather than opening the full
-    # SSL sub-menu. In a guided flow the operator should not have to find "Back"
-    # to continue: when mkcert finishes, control returns here and the chain moves
-    # on to credentials -> security -> apps automatically.
-    run_trusted_mkcert_setup || true
+  local hostname_http_confirmed=0
+  if local_guided_host_mapping_checkpoint; then
+    hostname_http_confirmed=1
+  fi
+
+  if [[ "$hostname_http_confirmed" -eq 1 ]]; then
+    echo
+    echo "Trusted local HTTPS uses mkcert so ${SITE_NAME} opens without browser warnings."
+    echo "For other options (self-signed, status, disable), use: $(toolkit_cmd local-ssl-wizard)"
+    if confirm "Set up trusted local HTTPS (mkcert) now?"; then
+      # Use the same guided mkcert transaction as the standalone SSL wizard.
+      # The operator performs only the HOST handoff; the toolkit then installs,
+      # configures, settles, and verifies HTTPS automatically inside the VM.
+      run_trusted_mkcert_setup || true
+    else
+      echo "Skipped. Run later with: $(toolkit_cmd trusted-mkcert-setup)"
+    fi
   else
-    echo "Skipped. Run later with: $(toolkit_cmd local-ssl-wizard)"
+    echo
+    warn "Guided HTTPS skipped because friendly-hostname HTTP was not confirmed."
+    echo "Later: $(toolkit_cmd local-host-checkpoint) → $(toolkit_cmd trusted-mkcert-setup)"
   fi
 
   local_guided_service_settle_checkpoint
