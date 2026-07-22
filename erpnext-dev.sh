@@ -11,7 +11,7 @@ IFS=$'\n\t'
 # ============================================================
 
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.19.19-beta.3"
+SCRIPT_VERSION="1.19.20-beta.1"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -1211,7 +1211,7 @@ Local VM HTTPS / SSL:
   docker-object-config     Docker: configure object-storage backups (rclone remote)
   docker-object-backup     Docker: upload durable host artifacts to object storage
   docker-object-status     Docker: show object-storage backup status
-  docker-https-wizard      Docker: choose production HTTPS (Let's Encrypt or Cloudflare Origin CA)
+  docker-https-wizard      Docker HTTPS: local trusted HTTPS or production Traefik TLS
   docker-enable-letsencrypt Docker: enable Traefik + Let's Encrypt HTTPS on 80/443
   docker-configure-cloudflare-origin Docker: enable Traefik + Cloudflare Origin CA HTTPS
   docker-https-status      Docker: show production HTTPS mode, proxy, and certificate
@@ -1257,9 +1257,9 @@ Runtime (how ERPNext is served):
 Security:
   security-hardening-wizard  Environment-aware UFW + Fail2Ban workflow
   security-mode-status       Show local vs production hardening context
-  local-firewall-profile     Apply local VM profile; keeps 8000/9000 reachable privately
+  local-firewall-profile     Apply engine-aware local VM profile (Docker 8080; native 8000/9000)
   production-firewall-profile Apply production profile; blocks backend ports
-  repair-local-access        Restore local erp.test / port 8000 access after over-hardening
+  repair-local-access        Restore local direct access for the active deployment engine
   firewall-rollback-snapshots Show saved UFW rule snapshots
   firewall-hardening-status  Cloud firewall + backend-port guidance
   vm-firewall-status         UFW status
@@ -1567,8 +1567,8 @@ main() {
     install-india-compliance|install-gst|install-india-gst) install_app_profile india_compliance ;;
     install-custom-app) install_custom_app_interactive ;;
     repair-app-registry) repair_app_registry ;;
-    backup) create_site_backup false ;;
-    backup-files) create_site_backup true ;;
+    backup) engine_backup false ;;
+    backup-files) engine_backup true ;;
     backup-status) show_backup_status ;;
     backup-verify|verify-backups) verify_latest_backup_set ;;
     off-vm-backup-guide) show_off_vm_backup_guide ;;
@@ -1708,11 +1708,11 @@ main() {
     engine-rollback) engine_rollback ;;
     engine-diagnostics) engine_diagnostics "$DOCTOR_FORMAT" ;;
     docker-production-setup|docker-prod-setup|docker-production) run_docker_production_setup ;;
-    docker-backup) create_site_backup false ;;
-    docker-backup-files) create_site_backup true ;;
-    docker-backup-verify) verify_latest_backup_set ;;
-    docker-restore|docker-restore-full) restore_site_full ;;
-    docker-restore-db) restore_site_database ;;
+    docker-backup) docker_backup false ;;
+    docker-backup-files) docker_backup true ;;
+    docker-backup-verify) docker_backup_verify ;;
+    docker-restore|docker-restore-full) docker_restore full ;;
+    docker-restore-db) docker_restore db ;;
     docker-restore-rehearsal) docker_restore_rehearsal ;;
     docker-restore-evidence) docker_show_restore_evidence ;;
     docker-offvm-backup) run_off_vm_backup_rsync run ;;

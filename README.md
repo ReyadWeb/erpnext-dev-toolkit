@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.19-beta.3 · **Readiness:** beta validation in progress; latest stable is v1.19.18.
+**Current release:** v1.19.20-beta.1 · **Readiness:** Docker access/HTTPS beta validation; latest stable is v1.19.19.
 
 ### Beta testing channel
 
@@ -28,7 +28,7 @@ The persistent `beta` branch is the mandatory real-VM proving ground before a st
 TOOLKIT_UPDATE_CHANNEL=beta TOOLKIT_UPDATE_SLOT=beta sudo -E erpnext-dev update-toolkit
 ```
 
-Every push to `beta` runs fast release validation plus blocking Ubuntu 24.04 and Ubuntu 26.04 native install/integration workflows. Stable releases continue to come only from reviewed, signed tags.
+Every push to `beta` runs both fast release validation and the real Ubuntu 24.04 install/integration workflow. Stable releases continue to come only from reviewed, signed tags.
 
 (after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
 platform: choose a **native** VM install (default, unchanged) or a **Docker**
@@ -57,7 +57,7 @@ one; the choice is saved and every lifecycle command (`start`, `stop`, `status`,
 | Engine | What it does | Best for |
 | --- | --- | --- |
 | **Native** (default) | Installs ERPNext/Frappe directly on the VM (systemd, bench, host MariaDB/Redis/Nginx). Ubuntu 24.04/26.04, Debian 13. | Maximum host-level control and simplicity. |
-| **Docker** | Containerized stack wrapping the official `frappe_docker` (`pwd.yml`), published on a local port. Ubuntu 24.04/26.04, Debian 11/12/13. | Isolation, portability, upstream production alignment. |
+| **Docker** | Containerized stack wrapping the official `frappe_docker`: quick/local `pwd.yml` with a host frontend port (`8080` by default), or production `compose.yaml` with Traefik on 80/443. | Isolation, portability, upstream production alignment. |
 
 ```bash
 sudo erpnext-dev set-engine       # choose native or docker for a fresh setup
@@ -81,13 +81,15 @@ Debian-family install path and is **field-validated** (GitHub has no Debian
 runner). Ubuntu **26.04** is exercised as a weekly/manual CI canary (not on tag
 releases) until its browser-asset gate is stable enough to hard-gate.
 
-The guided Docker install finishes with the same post-install flow as native:
-verify access, host-mapping checkpoint, optional apps / first backup, then the
-main menu. Access output shows three URLs — a **Local URL**
-(`http://localhost:PORT`), a **Network URL** (`http://VM_IP:PORT`), and a
-**Friendly URL** (`http://SITE:PORT` after host mapping). If the published port
-is already in use, the toolkit prompts for a free one (or auto-picks under
-`-y`), persists it, and reuses it for `status` / `logs` / `verify-access`.
+Docker access follows the engine's real port model instead of native Bench assumptions:
+
+- **Local / quick Docker:** the frontend is published on `8080` by default (or the saved `DOCKER_PUBLISH_PORT`). Use `http://VM_IP:8080` directly or `http://SITE:8080` after host mapping. Native Bench ports `8000/9000` are not Docker browser entrypoints.
+- **Local trusted HTTPS:** the guided Docker flow can use the same mkcert experience as native. Host Nginx serves `https://SITE` and proxies to the Docker published frontend port.
+- **Public Docker:** the Public VM guided wizard provisions the production Compose stack directly, or promotes an existing quick/dev Docker stack before HTTPS. Before TLS, the direct frontend binds only to `127.0.0.1:8080` (or the saved port). After TLS is enabled, Traefik owns public `80/443` and the direct frontend port is no longer publicly published.
+
+`sudo erpnext-dev docker-https-wizard` is context-aware: local Docker opens the trusted local-HTTPS workflow, while public Docker performs/requests production promotion and then offers Let's Encrypt or Cloudflare Origin CA.
+
+Docker firewall note: Docker-published ports can bypass normal UFW `INPUT` rules. For a local Docker VM, `local-firewall-profile` therefore installs a persistent `DOCKER-USER` forwarding filter that limits the published frontend port to private IPv4 networks and mirrors the policy for Docker IPv6 forwarding when active. If the Docker firewall backend does not expose `DOCKER-USER`, the toolkit warns instead of claiming UFW protected the port; restrict the port at the VM/hypervisor or cloud edge.
 
 ---
 
@@ -168,7 +170,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.19-beta.3"
+VERSION="v1.19.20-beta.1"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
@@ -922,16 +924,20 @@ bench access.
 sudo erpnext-dev security-hardening-wizard
 sudo erpnext-dev local-firewall-profile        # local VM
 sudo erpnext-dev production-firewall-profile    # production, after domain + HTTPS verified
-sudo erpnext-dev repair-local-access            # if hardening blocked erp.test / :8000
+sudo erpnext-dev repair-local-access            # restore engine-aware local access (native :8000/:9000 or Docker :8080)
 sudo erpnext-dev firewall-rollback-snapshots
 sudo erpnext-dev configure-fail2ban
 sudo erpnext-dev fail2ban-status
 ```
 
 Recommended public exposure: `22/tcp` restricted to your admin IP at the cloud
-firewall, `80`/`443` public (or CDN/proxy ranges), and `8000`/`9000` (plus
-`11000`/`13000`) blocked publicly. UFW keeps SSH open to reduce lockout risk;
-restrict SSH at the cloud firewall layer first.
+firewall and `80`/`443` public (or CDN/proxy ranges). For the native engine,
+`8000`/`9000` plus Redis/database ports stay blocked publicly. For Docker
+production, `8000`/`9000` stay container-internal; the temporary direct frontend
+port (`8080` by default) is loopback-only before HTTPS and unpublished once
+Traefik serves `80/443`. Do not rely on UFW alone to block a Docker-published
+port; the toolkit checks Compose bindings and uses `DOCKER-USER` for local Docker
+forwarding policy. Restrict SSH at the cloud firewall layer first.
 
 ---
 

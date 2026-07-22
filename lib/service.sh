@@ -955,6 +955,26 @@ settle_local_stack() {
   local rc=0
 
   echo
+  if deployment_engine_is_docker; then
+    log "Settling Docker stack after ${reason} (container restart + readiness)"
+    _soft_restart_erpnext_runtime || rc=1
+    if systemctl list-unit-files nginx.service >/dev/null 2>&1 || systemctl is-active --quiet nginx 2>/dev/null; then
+      log "Restarting nginx"
+      $SUDO systemctl restart nginx || rc=1
+    fi
+    if declare -F docker_ready >/dev/null 2>&1; then
+      docker_ready || rc=1
+    fi
+    LOCAL_STACK_SETTLED=1
+    export LOCAL_STACK_SETTLED
+    if [[ "$rc" -eq 0 ]]; then
+      ok "Docker stack settled after ${reason}."
+    else
+      warn "Docker settle after ${reason} did not fully succeed; check $(toolkit_cmd status)"
+    fi
+    return "$rc"
+  fi
+
   log "Settling stack after ${reason} (FLUSHDB redis_cache + ERPNext restart)"
   echo "Required so the host browser matches VM probes (replaces guest reboot)."
 
@@ -963,7 +983,6 @@ settle_local_stack() {
       warn "Could not clear site/assets_json cache; continuing with redis FLUSHDB"
   fi
 
-  # Reboot-equivalent: wipe the whole redis_cache DB (not queue/socketio).
   if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
     if flush_bench_redis_cache; then
       ok "redis_cache FLUSHDB completed"
@@ -1076,6 +1095,18 @@ follow_erpnext_service_logs() {
 
 install_state() {
   local bench_dir
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    # Preserve the long-standing install_state contract: callers and health
+    # snapshots expect the exact string "Installed". Runtime state is reported
+    # separately by runtime_state(), so a stopped Docker stack is still installed.
+    if [[ -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/pwd.yml" || \
+          -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/compose.yaml" ]]; then
+      echo "Installed"
+    else
+      echo "Not installed"
+    fi
+    return
+  fi
   bench_dir="$(active_bench_dir)"
 
   if path_is_dir "${bench_dir}" && path_is_dir "${bench_dir}/apps/frappe" && path_is_dir "${bench_dir}/apps/erpnext" && path_is_dir "${bench_dir}/sites/${SITE_NAME}"; then
@@ -1092,7 +1123,25 @@ install_state() {
 }
 
 runtime_state() {
-  local ready_count
+  local ready_count cid state
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    if declare -F docker_compose >/dev/null 2>&1; then
+      cid="$(docker_compose ps -q frontend 2>/dev/null | tail -n1 || true)"
+      if [[ -n "$cid" ]]; then
+        state="$(${SUDO:-} docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo unknown)"
+        if [[ "$state" == "running" ]]; then
+          echo "Running via Docker ($(docker_mode_label 2>/dev/null || echo stack))"
+        else
+          echo "Stopped (Docker; frontend ${state})"
+        fi
+      else
+        echo "Stopped (Docker)"
+      fi
+    else
+      echo "Stopped (Docker; Compose unavailable)"
+    fi
+    return
+  fi
   ready_count="$(bench_ready_count)"
 
   if runtime_is_production; then

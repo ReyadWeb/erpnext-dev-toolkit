@@ -78,6 +78,17 @@ erpnext_vm_context_detected() {
   [[ -x "${FRAPPE_HOME}/start-erpnext-dev.sh" ]] && return 0
   [[ -f "${FRAPPE_HOME}/erpnext-dev-credentials.txt" ]] && return 0
 
+  # Docker installations intentionally have no host Bench directory or native
+  # systemd service. Treat a provisioned toolkit-owned Docker stack as a valid
+  # ERPNext VM context so shared VM-only helpers (notably local mkcert/Nginx
+  # HTTPS) work for the Docker engine too.
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    if [[ -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/pwd.yml" || \
+          -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/compose.yaml" ]]; then
+      return 0
+    fi
+  fi
+
   return 1
 }
 

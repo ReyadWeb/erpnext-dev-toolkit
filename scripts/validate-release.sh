@@ -66,7 +66,7 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -271,6 +271,14 @@ scripts/test-engine-select.sh >/tmp/erpnext-dev-engine-select.$$ 2>&1 || {
 }
 rm -f /tmp/erpnext-dev-engine-select.$$
 pass "deployment-engine selection passed"
+
+scripts/test-docker-access-routing.sh >/tmp/erpnext-dev-docker-routing.$$ 2>&1 || {
+  cat /tmp/erpnext-dev-docker-routing.$$
+  rm -f /tmp/erpnext-dev-docker-routing.$$
+  fail "test-docker-access-routing.sh failed"
+}
+rm -f /tmp/erpnext-dev-docker-routing.$$
+pass "Docker access / HTTPS routing passed"
 
 scripts/test-health-snapshot.sh >/tmp/erpnext-dev-health-snapshot.$$ 2>&1 || {
   cat /tmp/erpnext-dev-health-snapshot.$$

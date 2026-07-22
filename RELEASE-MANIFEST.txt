@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit Release Manifest v1.19.19-beta.3
+# ERPNext Developer Toolkit Release Manifest v1.19.20-beta.1
 # One repository-relative path per line. Blank lines and # comments are ignored.
 # validate-release.sh verifies every listed path exists before a tag is published.
 
@@ -62,6 +62,7 @@ lib/menu.sh
 lib/security.sh
 lib/update.sh
 scripts/test-legacy-modular-bootstrap.sh
+scripts/test-docker-access-routing.sh
 scripts/test-ui-render.sh
 scripts/test-dashboard-render.sh
 scripts/test-static-asset-probe.sh

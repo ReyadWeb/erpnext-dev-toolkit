@@ -202,86 +202,47 @@ production_http_status() {
 }
 
 show_public_vm_readiness() {
-  local vm_ip domain dns_ip install_quick runtime service auto nginx_state ssl_pair ssl_status ssl_detail backup_count
-  local http_ip http_domain public_note dns_status dns_detail active_provider domain_pair
-
+  local vm_ip domain dns_ip installed runtime
   require_sudo
-
   vm_ip="$(get_vm_ip)"
   domain="${PRODUCTION_DOMAIN:-$SITE_NAME}"
-  dns_ip=""
-  dns_status="WARN"
-  dns_detail="set PRODUCTION_DOMAIN or SITE_NAME to the public hostname"
-  public_note="private/NAT IP detected; this does not look like a public VM"
-
-  if ! is_private_ipv4 "$vm_ip"; then
-    public_note="public-looking IPv4 detected; confirm this is the intended cloud VM IP"
-  fi
-
-  active_provider="$(production_ssl_provider_from_cert_path "$(production_nginx_active_cert_path 2>/dev/null || true)")"
-  if validate_production_domain_value "$domain" >/dev/null 2>&1; then
-    dns_ip="$(resolve_ipv4_first "$domain")"
-    domain_pair="$(production_domain_status_for_provider "$domain" "$vm_ip" "$dns_ip" "$active_provider")"
-    dns_status="${domain_pair%%|*}"
-    dns_detail="${domain_pair#*|}"
-  fi
-
-  install_quick="$(production_quick_install_state)"
-  runtime="$(runtime_state 2>/dev/null || echo unknown)"
-  service="$(service_state 2>/dev/null || echo unknown)"
-  auto="$(autostart_state 2>/dev/null || echo unknown)"
-  nginx_state="not installed"
-  command -v nginx >/dev/null 2>&1 && nginx_state="installed"
-  ssl_pair="$(production_ssl_readiness_detail)"
-  ssl_status="${ssl_pair%%|*}"
-  ssl_detail="${ssl_pair#*|}"
-  backup_count="$(production_backup_count)"
-  http_ip="$(production_http_status "http://${vm_ip}:8000")"
-  http_domain="$(production_http_status "http://${domain}:8000")"
+  dns_ip="$(resolve_ipv4_first "$domain")"
+  installed="$(install_state 2>/dev/null || echo 'Not installed')"
+  runtime="$(runtime_state 2>/dev/null || echo 'Stopped')"
 
   echo
   echo "============================================================"
   echo "Public VM Readiness"
   echo "============================================================"
-  status_line "Mode" "INFO" "planning/check only; no firewall or SSL changes are applied"
-  status_line "VM IP" "INFO" "${vm_ip}"
-  status_line "Network" "INFO" "$public_note"
-  status_line "Domain" "$dns_status" "$dns_detail"
-  status_line "Install state" "$([[ "$install_quick" == Installed* ]] && echo OK || echo WARN)" "$install_quick"
+  status_line "VM IP" "INFO" "$vm_ip"
+  status_line "Domain" "$([[ -n "$dns_ip" ]] && echo INFO || echo WARN)" "${domain}; DNS=${dns_ip:-unresolved}"
+  status_line "Engine" "INFO" "$(deployment_engine_label)"
+  status_line "Install state" "$([[ "$installed" == Installed* ]] && echo OK || echo WARN)" "$installed"
   status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
-  status_line "Service" "INFO" "${service}; autostart=${auto}"
-  status_line "Nginx" "$([[ "$nginx_state" == installed ]] && echo OK || echo WARN)" "$nginx_state"
-  status_line "Production SSL" "$ssl_status" "$ssl_detail"
-  if [[ "$backup_count" =~ ^[0-9]+$ && "$backup_count" -gt 0 ]]; then
-    status_line "Backup readiness" "OK" "${backup_count} local backup file(s); off-VM copy still required"
+
+  if deployment_engine_is_docker; then
+    status_line "Direct Docker HTTP" "INFO" "port ${DOCKER_PUBLISH_PORT} before HTTPS"
+    if docker_is_production && docker_https_enabled; then
+      status_line "Production HTTPS" "OK" "https://$(docker_public_domain) via Traefik"
+    else
+      status_line "Production HTTPS" "WARN" "not configured; guided setup will run $(toolkit_cmd docker-https-wizard)"
+    fi
+    echo
+    echo "Docker port model:"
+    echo "  - ${DOCKER_PUBLISH_PORT}: direct host frontend for local/pre-HTTPS access"
+    echo "  - 80/443: production Traefik entrypoints after HTTPS"
+    echo "  - 8000/9000: container-internal Frappe ports; do not expose them on the host"
+    echo
+    ui_next "$(toolkit_cmd docker-https-wizard)" "$(toolkit_cmd docker-production-exposure)"
   else
-    status_line "Backup readiness" "WARN" "no local backup files detected"
+    local ssl_pair ssl_status ssl_detail
+    ssl_pair="$(production_ssl_readiness_detail)"
+    ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
+    status_line "Production SSL" "$ssl_status" "$ssl_detail"
+    echo
+    echo "Native port model: 80/443 public; 8000/9000 blocked publicly after HTTPS."
+    ui_next "$(toolkit_cmd production-ssl-wizard)" "$(toolkit_cmd production-firewall-plan)"
   fi
-
-  echo
-  echo "HTTP checks:"
-  status_line "Public IP :8000" "$([[ "$http_ip" == HTTP/* ]] && echo OK || echo WARN)" "${http_ip:-no response}"
-  status_line "Domain :8000" "$([[ "$http_domain" == HTTP/* ]] && echo OK || echo WARN)" "${http_domain:-no response}"
-
-  echo
-  echo "Listener summary:"
-  for port in 22 80 443 8000 9000 11000 13000; do
-    status_line "Port ${port}" "INFO" "$(production_listener_detail "$port")"
-  done
-
-  echo
-  echo "Recommended next commands:"
-  echo "  $(toolkit_cmd backup-files)"
-  echo "  $(toolkit_cmd production-ssl-plan)"
-  echo "  $(toolkit_cmd production-ssl-wizard)"
-  echo "  $(toolkit_cmd ssl-mode-status)"
-  echo "  $(toolkit_cmd setup-effort-guide)"
-  echo "  $(toolkit_cmd configure-production-ssl)"
-  echo "  $(toolkit_cmd configure-cloudflare-origin-ssl)"
-  echo "  $(toolkit_cmd production-ssl-status)"
-  echo "  $(toolkit_cmd production-firewall-plan)"
-  echo "  $(toolkit_cmd firewall-hardening-status)"
-  echo "  $(toolkit_cmd support-bundle)"
   echo "============================================================"
 }
 
@@ -1645,10 +1606,19 @@ ssl_nginx_enabled_path() {
 
 show_local_ssl_guide() {
   local vm_ip cert_path key_path vm_ssh_user cmd_self cmd_mkcert cmd_configure cmd_status cmd_verify cmd_disable
+  local direct_port engine_label upstream_label
   vm_ip="$(get_vm_ip)"
   cert_path="$(ssl_cert_path)"
   key_path="$(ssl_key_path)"
   vm_ssh_user="$(suggested_vm_ssh_user)"
+  direct_port="$(local_entry_http_port)"
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    engine_label="Docker frontend"
+    upstream_label="Docker frontend on 127.0.0.1:${direct_port}"
+  else
+    engine_label="Bench"
+    upstream_label="Bench web on 127.0.0.1:${direct_port} + Socket.io on 127.0.0.1:9000"
+  fi
   cmd_self="${INSTALLER_CANONICAL_PATH} create-self-signed-local-cert"
   cmd_mkcert="${INSTALLER_CANONICAL_PATH} mkcert-guide"
   cmd_configure="${INSTALLER_CANONICAL_PATH} configure-local-ssl"
@@ -1669,12 +1639,11 @@ The local SSL feature uses Nginx inside the VM as a reverse proxy:
 
   Browser HTTPS :443
     -> Nginx inside the VM
-      -> Bench web on 127.0.0.1:8000
-      -> Socket.io on 127.0.0.1:9000
+      -> ${upstream_label}
 
-Direct Bench access remains available:
-  http://${SITE_NAME}:8000
-  http://${vm_ip}:8000
+Direct ${engine_label} access remains available:
+  http://${SITE_NAME}:${direct_port}
+  http://${vm_ip}:${direct_port}
 
 Reusable toolkit path inside the VM:
   ${INSTALLER_CANONICAL_PATH}
@@ -1727,15 +1696,14 @@ $(print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip")
 
 Host tests:
   getent hosts ${SITE_NAME}
-  curl -I http://${vm_ip}:8000
-  curl -I http://${SITE_NAME}:8000
+  curl -I http://${vm_ip}:${direct_port}
+  curl -I http://${SITE_NAME}:${direct_port}
   curl -kI https://${SITE_NAME}
-  curl -I http://${SITE_NAME}:8000
 
 Expected behavior after local SSL is configured:
-  http://${SITE_NAME}       -> 301 redirect to https://${SITE_NAME}/
-  https://${SITE_NAME}      -> ERPNext login page through Nginx
-  http://${SITE_NAME}:8000  -> direct Bench fallback still works
+  http://${SITE_NAME}              -> 301 redirect to https://${SITE_NAME}/
+  https://${SITE_NAME}             -> ERPNext login page through Nginx
+  http://${SITE_NAME}:${direct_port} -> direct ${engine_label} fallback still works
 
 Rollback:
   ${cmd_disable}
@@ -1827,13 +1795,21 @@ EOF_FF_NSS
 }
 
 show_mkcert_local_ssl_guide() {
-  local vm_ip vm_ssh_user cmd_disable cmd_env host_label mkcert_deps
+  local vm_ip cert_path key_path vm_ssh_user cmd_install cmd_configure cmd_verify cmd_disable cmd_env
+  local host_label mkcert_deps host_dns_cmds host_dns_tests
   vm_ip="$(get_vm_ip)"
+  cert_path="$(ssl_cert_path)"
+  key_path="$(ssl_key_path)"
   vm_ssh_user="$(suggested_vm_ssh_user)"
+  cmd_install="${INSTALLER_CANONICAL_PATH} install-local-ssl-cert"
+  cmd_configure="${INSTALLER_CANONICAL_PATH} configure-local-ssl"
+  cmd_verify="${INSTALLER_CANONICAL_PATH} verify-local-ssl"
   cmd_disable="${INSTALLER_CANONICAL_PATH} disable-local-ssl"
   cmd_env="${INSTALLER_CANONICAL_PATH} environment-check"
   host_label="$(host_os_label)"
   mkcert_deps="$(host_mkcert_install_hint)"
+  host_dns_cmds="$(print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip")"
+  host_dns_tests="$(print_host_dns_tests_for_site "$SITE_NAME" "$vm_ip")"
 
   cat <<EOF_MKCERT
 
@@ -1844,54 +1820,76 @@ Trusted Local SSL with mkcert
 Goal:
   Use https://${SITE_NAME} without browser warnings on the HOST machine.
 
-Before HTTPS:
-  Confirm plain HTTP works first:
-    http://${SITE_NAME}:8000/login
+Important:
+  - Run mkcert on the HOST where the browser runs.
+  - Run toolkit SSL commands inside the ERPNext VM.
+  - The reusable toolkit path inside the VM is: ${INSTALLER_CANONICAL_PATH}
+  - If unsure which machine you are on, run: ${cmd_env}
+  - Host OS: ${host_label} (change with ${INSTALLER_CANONICAL_PATH} set-host-os)
 
-  Need the hostname mapping command again?
-    ${INSTALLER_CANONICAL_PATH} hosts-command
+Checklist:
 
-1) On the ${host_label} HOST, install mkcert once if needed:
+1) On the ${host_label} HOST, install mkcert dependencies (one time):
 
 ${mkcert_deps}
 
-2) On the HOST, trust the CA, generate the certificate, and copy it to the VM:
+2) On the HOST, trust the CA, generate the cert/key, and copy into the VM:
 
-  $(print_host_mkcert_trust_copy_one_liner "$SITE_NAME" "$vm_ip" "$vm_ssh_user")
+  Copy and run this entire command on the ${host_label} HOST:
+  $(print_host_mkcert_trust_copy_one_liner "$SITE_NAME" "$vm_ip" "$(suggested_vm_ssh_user)")
 
-  If the VM SSH user is not '${vm_ssh_user}', replace it in the scp target.
+  If your VM uses a different SSH user, replace '$(suggested_vm_ssh_user)' in the scp target.
 
-3) Back inside the VM, run one command:
+3) Inside the VM, install the cert/key safely:
 
-  ${INSTALLER_CANONICAL_PATH} trusted-mkcert-setup
+  ${cmd_install}
 
-  After you confirm the HOST step is complete, the toolkit automatically:
-    - validates and installs the certificate/key
-    - configures and reloads the HTTPS reverse proxy
-    - settles the ERPNext runtime
-    - verifies HTTPS and frontend assets
+  This copies from:
+    /tmp/${SITE_NAME}.crt
+    /tmp/${SITE_NAME}.key
+
+  To:
+    ${cert_path}
+    ${key_path}
+
+  Existing cert/key files are backed up first, and permissions are enforced.
+
+4) Inside the VM, enable/reload the HTTPS reverse proxy:
+
+  ${cmd_configure}
+  ${cmd_verify}
+
+5) On the ${host_label} HOST, confirm DNS/hosts and HTTPS:
+
+${host_dns_cmds}
+
+  Then test:
+${host_dns_tests}
 
 Expected:
-  http://${SITE_NAME}       -> 301 redirect to https://${SITE_NAME}/
-  https://${SITE_NAME}      -> 200 OK
-  http://${SITE_NAME}:8000  -> direct Bench fallback
+  http://${SITE_NAME}                         -> 301 redirect to https://${SITE_NAME}/
+  https://${SITE_NAME}                        -> 200 OK without using curl -k
+  http://${SITE_NAME}:$(local_entry_http_port) -> direct engine fallback still works
 
-Useful:
-  Environment check: ${cmd_env}
-  Rollback:          ${cmd_disable}
-  Detailed rollback: ${INSTALLER_CANONICAL_PATH} ssl-rollback-guide
+Rollback:
+  ${cmd_disable}
+  ${INSTALLER_CANONICAL_PATH} ssl-rollback-guide
+
 ============================================================
 EOF_MKCERT
 }
 
+
 run_trusted_mkcert_setup() {
   require_erpnext_vm_context "trusted-mkcert-setup" || return 1
 
-  local vm_ip src_cert src_key ssh_user
+  local vm_ip src_cert src_key reply ssh_user host_label host_os
   vm_ip="$(get_vm_ip)"
   src_cert="${LOCAL_SSL_CERT_SOURCE:-/tmp/${SITE_NAME}.crt}"
   src_key="${LOCAL_SSL_KEY_SOURCE:-/tmp/${SITE_NAME}.key}"
   ssh_user="$(suggested_vm_ssh_user)"
+  host_os="$(effective_host_os)"
+  host_label="$(host_os_label)"
 
   echo
   echo "============================================================"
@@ -1918,8 +1916,8 @@ run_trusted_mkcert_setup() {
   print_host_dns_commands_for_site "$SITE_NAME" "$vm_ip"
   echo
   echo "Then test from the HOST:"
-  echo "  curl -I http://${SITE_NAME}:8000"
-  echo "  # Prefer http://${SITE_NAME}:8000 — raw IP often shows an unstyled page."
+  echo "  curl -I http://${SITE_NAME}:$(local_entry_http_port)"
+  echo "  # Confirm the engine's direct HTTP endpoint works before enabling HTTPS."
   echo
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
     if ! confirm "HOST /etc/hosts already maps ${SITE_NAME} to ${vm_ip}?"; then
@@ -1937,41 +1935,66 @@ run_trusted_mkcert_setup() {
   echo "------------------------------------------------------------"
   print_host_mkcert_trust_copy_commands "$SITE_NAME" "$vm_ip" "$ssh_user"
   echo
-  echo "Stay in this wizard. After the HOST command finishes, return here and confirm the handoff."
+  echo "Stay in this wizard. After scp finishes, press Enter here to continue."
   echo "Detailed guide: $(toolkit_cmd mkcert-guide)"
 
-  # Step 2: explicit HOST handoff confirmation. Once the operator confirms the
-  # one HOST command completed, the toolkit validates the copied files and
-  # automatically finishes certificate install + Nginx configuration + verify.
+  # Step 2: wait/recheck for /tmp certs instead of forcing a menu exit.
+  while true; do
+    if [[ -f "$src_cert" && -f "$src_key" ]]; then
+      status_line "Copied certificate" "OK" "$src_cert"
+      status_line "Copied private key" "OK" "$src_key"
+      break
+    fi
+    if [[ -f "$src_cert" ]]; then
+      status_line "Copied certificate" "OK" "$src_cert"
+    else
+      status_line "Copied certificate" "WARN" "not found yet: ${src_cert}"
+    fi
+    if [[ -f "$src_key" ]]; then
+      status_line "Copied private key" "OK" "$src_key"
+    else
+      status_line "Copied private key" "WARN" "not found yet: ${src_key}"
+    fi
+    echo
+    if [[ ! -t 0 || "${ASSUME_YES:-0}" -eq 1 ]]; then
+      warn "Cert/key not in /tmp yet. Non-interactive session cannot wait."
+      echo "Copy the files, then re-run: $(toolkit_cmd trusted-mkcert-setup)"
+      echo "============================================================"
+      return 0
+    fi
+    read -r -p "Press Enter after scp (or type skip / guide): " reply || reply="skip"
+    reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
+    case "$reply" in
+      skip|s|q|quit)
+        warn "Leaving without installing. Re-run when the files are in /tmp:"
+        echo "  $(toolkit_cmd trusted-mkcert-setup)"
+        echo "============================================================"
+        return 0
+        ;;
+      guide|g|help|h)
+        show_mkcert_local_ssl_guide || true
+        ;;
+      *)
+        ;;
+    esac
+  done
+
+  # Step 3: install + configure + verify inside the VM.
   echo
+  echo "------------------------------------------------------------"
+  echo "Step 2 — VM: install cert, enable Nginx HTTPS, verify"
+  echo "------------------------------------------------------------"
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    if ! confirm "Have you completed the HOST mkcert command and copied both certificate files to this VM?"; then
-      warn "HOST mkcert handoff not confirmed. Nothing was changed in the VM."
-      echo "Re-run when ready: $(toolkit_cmd trusted-mkcert-setup)"
+    if ! confirm "Install the copied mkcert certificate and enable local HTTPS now?"; then
+      warn "mkcert files found, but install was skipped."
+      echo "Run later:"
+      echo "  $(toolkit_cmd install-local-ssl-cert)"
+      echo "  $(toolkit_cmd configure-local-ssl)"
+      echo "  $(toolkit_cmd verify-local-ssl)"
       echo "============================================================"
       return 0
     fi
   fi
-
-  if [[ ! -f "$src_cert" || ! -f "$src_key" ]]; then
-    warn "The HOST handoff was confirmed, but the expected files are not present yet."
-    status_line "Expected certificate" "WARN" "$src_cert"
-    status_line "Expected private key" "WARN" "$src_key"
-    echo
-    echo "Re-run the HOST copy command, then retry:"
-    echo "  $(toolkit_cmd trusted-mkcert-setup)"
-    echo "============================================================"
-    return 1
-  fi
-
-  status_line "Copied certificate" "OK" "$src_cert"
-  status_line "Copied private key" "OK" "$src_key"
-
-  echo
-  echo "------------------------------------------------------------"
-  echo "Step 2 — VM: automatic install, HTTPS configuration, and verification"
-  echo "------------------------------------------------------------"
-  echo "The HOST handoff is complete. The toolkit will now finish the VM steps automatically."
 
   install_local_ssl_cert
   configure_local_ssl
@@ -2097,14 +2120,116 @@ create_self_signed_local_cert() {
 }
 
 write_local_ssl_nginx_config() {
-  local available_path cert_path key_path sites_dir assets_block
+  local available_path cert_path key_path sites_dir assets_block backend_port
   available_path="$(ssl_nginx_available_path)"
   cert_path="$(ssl_cert_path)"
   key_path="$(ssl_key_path)"
-  sites_dir="$(bench_sites_dir)"
-  assets_block="$(frappe_nginx_assets_location_block "$sites_dir")"
+  backend_port="$(local_entry_http_port)"
 
   $SUDO mkdir -p "${SSL_NGINX_CONF_DIR}/sites-available" "${SSL_NGINX_CONF_DIR}/sites-enabled"
+
+  # Docker already has its own frontend Nginx container on the published host
+  # port (8080 by default). For local HTTPS, host Nginx should proxy the whole
+  # request stream to that frontend rather than trying to reach container-only
+  # backend/socket ports or serve Bench assets from a host path that does not
+  # exist. This gives Docker the same https://SITE experience as native installs.
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    if [[ "$SSL_REDIRECT_HTTP" == "true" ]]; then
+      $SUDO tee "$available_path" >/dev/null <<EOF_DOCKER_LOCAL_NGINX
+# Managed by ERPNext Developer Toolkit.
+# Local Docker HTTPS reverse proxy for ${SITE_NAME}.
+# Docker frontend: 127.0.0.1:${backend_port}
+
+server {
+    listen 80;
+    server_name ${SITE_NAME};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${SITE_NAME};
+
+    ssl_certificate     ${cert_path};
+    ssl_certificate_key ${key_path};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 100m;
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+
+    location / {
+        proxy_pass http://127.0.0.1:${backend_port};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;
+    }
+}
+EOF_DOCKER_LOCAL_NGINX
+    else
+      $SUDO tee "$available_path" >/dev/null <<EOF_DOCKER_LOCAL_NGINX
+# Managed by ERPNext Developer Toolkit.
+# Local Docker HTTP/HTTPS reverse proxy for ${SITE_NAME}.
+# Docker frontend: 127.0.0.1:${backend_port}
+
+server {
+    listen 80;
+    server_name ${SITE_NAME};
+
+    location / {
+        proxy_pass http://127.0.0.1:${backend_port};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${SITE_NAME};
+
+    ssl_certificate     ${cert_path};
+    ssl_certificate_key ${key_path};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 100m;
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+
+    location / {
+        proxy_pass http://127.0.0.1:${backend_port};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_redirect off;
+    }
+}
+EOF_DOCKER_LOCAL_NGINX
+    fi
+    return 0
+  fi
+
+  sites_dir="$(bench_sites_dir)"
+  assets_block="$(frappe_nginx_assets_location_block "$sites_dir")"
 
   # Port 80 is what browsers open for http://SITE (no port). Default: redirect
   # to HTTPS. /assets is served from disk (Frappe bench setup nginx contract);
@@ -2308,8 +2433,13 @@ local_vm_firewall_profile_is_active() {
   ufw_port_has_allow 22 || return 1
   ufw_port_has_allow 80 || return 1
   ufw_port_has_allow 443 || return 1
-  ufw_port_has_allow 8000 || return 1
-  ufw_port_has_allow 9000 || return 1
+
+  if deployment_engine_is_docker; then
+    ufw_port_has_allow "${DOCKER_PUBLISH_PORT:-8080}" || return 1
+  else
+    ufw_port_has_allow 8000 || return 1
+    ufw_port_has_allow 9000 || return 1
+  fi
 
   return 0
 }
@@ -2368,7 +2498,11 @@ configure_local_ssl() {
   echo "Configure Local SSL / HTTPS"
   echo "============================================================"
   echo "This configures Nginx as a local HTTPS reverse proxy."
-  echo "It does not replace the ERPNext dev service and does not remove :8000 access."
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    echo "It proxies to the Docker frontend on :$(local_entry_http_port); that direct port remains available."
+  else
+    echo "It does not replace the ERPNext dev service and does not remove :8000 access."
+  fi
   echo
   echo "Expected certificate: ${cert_path}"
   echo "Expected key:         ${key_path}"
@@ -2407,7 +2541,7 @@ configure_local_ssl() {
   if ! $SUDO nginx -t; then
     err "Nginx configuration test failed. Disabling the new SSL site."
     $SUDO rm -f "$enabled_path"
-    fail "Local SSL configuration failed. Existing ERPNext :8000 access was not changed."
+    fail "Local SSL configuration failed. Existing direct ERPNext access on :$(local_entry_http_port) was not changed."
   fi
 
   log "Starting/reloading Nginx"
@@ -2427,9 +2561,9 @@ configure_local_ssl() {
   echo "  curl -kI https://${SITE_NAME}"
   echo "  curl -I http://${SITE_NAME}   # expect 301 to https://"
   echo
-  echo "Direct Bench access still works:"
-  echo "  http://${SITE_NAME}:8000"
-  echo "  http://${vm_ip}:8000"
+  echo "Direct engine access still works:"
+  echo "  http://${SITE_NAME}:$(local_entry_http_port)"
+  echo "  http://${vm_ip}:$(local_entry_http_port)"
   echo "============================================================"
 }
 
@@ -2467,7 +2601,11 @@ disable_local_ssl() {
 
   echo
   echo "Saved config: ${available_path}"
-  echo "Direct Bench access remains available on :8000."
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    echo "Direct Docker access remains available on :$(local_entry_http_port)."
+  else
+    echo "Direct Bench access remains available on :$(local_entry_http_port)."
+  fi
   echo "============================================================"
 }
 
@@ -2532,6 +2670,7 @@ ssl_cert_is_self_signed() {
 
 show_ssl_status() {
   local cert_path key_path available_path enabled_path vm_ip https_head direct_head issuer subject dates nginx_state cert_state key_state site_state port443_state cert_type
+  local direct_port direct_url direct_label
   cert_path="$(ssl_cert_path)"
   key_path="$(ssl_key_path)"
   available_path="$(ssl_nginx_available_path)"
@@ -2593,11 +2732,20 @@ show_ssl_status() {
     status_line "Port 443" "INFO" "$port443_state"
   fi
 
-  direct_head="$(curl_head_status "http://127.0.0.1:8000/" "" "" "" || true)"
-  if [[ "$direct_head" == HTTP/* ]]; then
-    status_line "Bench fallback" "OK" "http://127.0.0.1:8000 -> ${direct_head}"
+  direct_port="$(local_entry_http_port)"
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    direct_url="http://${SITE_NAME}:${direct_port}/"
+    direct_label="Docker frontend"
+    direct_head="$(curl_head_status "$direct_url" "$SITE_NAME" "$direct_port" "127.0.0.1" || true)"
   else
-    status_line "Bench fallback" "WARN" "no direct Bench response on 127.0.0.1:8000"
+    direct_url="http://127.0.0.1:${direct_port}/"
+    direct_label="Bench fallback"
+    direct_head="$(curl_head_status "$direct_url" "" "" "" || true)"
+  fi
+  if [[ "$direct_head" == HTTP/* ]]; then
+    status_line "$direct_label" "OK" "port ${direct_port} -> ${direct_head}"
+  else
+    status_line "$direct_label" "WARN" "no direct response on port ${direct_port}"
   fi
 
   if [[ -f "$cert_path" ]]; then
@@ -2623,7 +2771,7 @@ show_ssl_status() {
   echo
   echo "Host tests:"
   echo "  curl -kI https://${SITE_NAME}"
-  echo "  curl -I http://${SITE_NAME}:8000"
+  echo "  curl -I http://${SITE_NAME}:$(local_entry_http_port)"
   echo "============================================================"
 }
 
@@ -2723,13 +2871,17 @@ verify_local_ssl() {
     failed=1
   fi
 
-  direct_head="$(curl_head_status "http://127.0.0.1:8000/" "" "" "" || true)"
-  if http_status_ok "$direct_head"; then
-    status_line "Bench backend" "OK" "$direct_head"
-  elif [[ "$direct_head" == HTTP/* ]]; then
-    status_line "Bench backend" "WARN" "unexpected status: $direct_head"
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    direct_head="$(curl_head_status "http://${SITE_NAME}:$(local_entry_http_port)/" "$SITE_NAME" "$(local_entry_http_port)" "127.0.0.1" || true)"
   else
-    status_line "Bench backend" "WARN" "no response on 127.0.0.1:8000"
+    direct_head="$(curl_head_status "http://127.0.0.1:$(local_entry_http_port)/" "" "" "" || true)"
+  fi
+  if http_status_ok "$direct_head"; then
+    status_line "Engine backend" "OK" "port $(local_entry_http_port): ${direct_head}"
+  elif [[ "$direct_head" == HTTP/* ]]; then
+    status_line "Engine backend" "WARN" "unexpected status on :$(local_entry_http_port): $direct_head"
+  else
+    status_line "Engine backend" "WARN" "no response on 127.0.0.1:$(local_entry_http_port)"
   fi
 
   http_head="$(curl_head_status "http://${SITE_NAME}/" "$SITE_NAME" 80 "127.0.0.1" || true)"
@@ -2884,6 +3036,14 @@ EOF_BROWSER_TRUST
 }
 
 show_ssl_rollback_guide() {
+  local direct_port engine_label
+  direct_port="$(local_entry_http_port)"
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    engine_label="Docker frontend"
+  else
+    engine_label="Bench"
+  fi
+
   cat <<EOF_SSL_ROLLBACK
 
 ============================================================
@@ -2891,7 +3051,7 @@ Local SSL Rollback Guide
 ============================================================
 
 Local SSL rollback is safe because the toolkit uses Nginx as a reverse proxy.
-It does not remove the ERPNext bench service and does not remove direct :8000 access.
+It does not remove the ERPNext runtime and does not remove direct ${engine_label} access on :${direct_port}.
 
 Recommended rollback:
   $(toolkit_cmd disable-local-ssl)
@@ -2900,11 +3060,11 @@ Recommended rollback:
 What rollback does:
   - Removes/disables the local Nginx site symlink.
   - Keeps certificate files for reuse.
-  - Keeps direct Bench access on port 8000.
+  - Keeps direct ${engine_label} access on port ${direct_port}.
 
 After rollback, use:
-  http://${SITE_NAME}:8000
-  http://$(get_vm_ip):8000
+  http://${SITE_NAME}:${direct_port}
+  http://$(get_vm_ip):${direct_port}
 
 If Nginx still listens on 443 because another site uses it, that is not necessarily an ERPNext local SSL issue.
 Check enabled Nginx sites:
@@ -2915,8 +3075,9 @@ EOF_SSL_ROLLBACK
 }
 
 verify_ssl_rollback() {
-  local enabled_path direct_head failed=0
+  local enabled_path direct_head direct_port direct_label failed=0
   enabled_path="$(ssl_nginx_enabled_path)"
+  direct_port="$(local_entry_http_port)"
 
   echo
   echo "============================================================"
@@ -2931,11 +3092,17 @@ verify_ssl_rollback() {
     status_line "Local SSL site" "OK" "disabled"
   fi
 
-  direct_head="$(curl_head_status "http://127.0.0.1:8000/" "" "" "" || true)"
-  if [[ "$direct_head" == HTTP/* ]]; then
-    status_line "Bench fallback" "OK" "$direct_head"
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    direct_label="Docker frontend"
+    direct_head="$(curl_head_status "http://${SITE_NAME}:${direct_port}/" "$SITE_NAME" "$direct_port" "127.0.0.1" || true)"
   else
-    status_line "Bench fallback" "WARN" "no direct Bench response on 127.0.0.1:8000"
+    direct_label="Bench fallback"
+    direct_head="$(curl_head_status "http://127.0.0.1:${direct_port}/" "" "" "" || true)"
+  fi
+  if [[ "$direct_head" == HTTP/* ]]; then
+    status_line "$direct_label" "OK" "port ${direct_port}: ${direct_head}"
+  else
+    status_line "$direct_label" "WARN" "no direct response on port ${direct_port}"
   fi
 
   if command -v nginx >/dev/null 2>&1; then
@@ -2948,8 +3115,8 @@ verify_ssl_rollback() {
 
   echo
   echo "Use after rollback:"
-  echo "  http://${SITE_NAME}:8000"
-  echo "  http://$(get_vm_ip):8000"
+  echo "  http://${SITE_NAME}:${direct_port}"
+  echo "  http://$(get_vm_ip):${direct_port}"
   echo "============================================================"
   return "$failed"
 }

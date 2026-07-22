@@ -1,19 +1,43 @@
 # Testing guide
 
-**Current release:** v1.19.19-beta.3 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.20-beta.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
 
-## v1.19.19-beta.3 guided local hostname + mkcert workflow beta
+## v1.19.20-beta.1 Docker access and HTTPS parity
 
-Mandatory acceptance path before stable promotion:
+This beta closes the gap between native and Docker setup flows. The direct Docker frontend is `DOCKER_PUBLISH_PORT` (`8080` by default); native `8000/9000` assumptions must not leak into Docker access or firewall guidance.
 
-1. Fresh local VM on DHCP; answer **No** to the static-IP prompt.
-2. Confirm the wizard still presents the HOST mapping checkpoint.
-3. Verify `http://<site>:8000/login` from the HOST before HTTPS is offered.
-4. Choose trusted mkcert HTTPS, run the one HOST generate/copy command, confirm the handoff once, and let the toolkit automatically install/configure/verify the VM side.
-5. Repeat the trusted mkcert path from the standalone Local HTTPS menu to prove both entry points use the same transaction.
+Hermetic regression coverage:
 
+```bash
+bash scripts/test-docker-access-routing.sh
+bash scripts/test-engine-select.sh
+bash scripts/validate-release.sh
+```
+
+Required **local Docker VM** acceptance:
+
+1. Fresh Docker install completes through the normal guided path.
+2. `http://VM_IP:8080` responds; `http://VM_IP:8000` is not required and should not be advertised as the Docker frontend.
+3. After HOST mapping, `http://SITE:8080` responds with the correct ERPNext login frontend.
+4. The guided follow-up offers trusted local HTTPS; `https://SITE` works after mkcert/Nginx setup while direct `:8080` remains available for local troubleshooting.
+5. The Local VM firewall profile keeps host `22/80/443` in UFW, installs a `DOCKER-USER` forwarding filter for the saved Docker frontend port, and does not pretend host `8000/9000` are Docker entrypoints. `sudo erpnext-dev local-firewall-status` must report the Docker forwarding filter as active; test both IPv4 and IPv6 exposure when the host publishes both families.
+
+Required **public Docker VPS** acceptance:
+
+1. Start from a clean VPS or an existing v1.19.19 Docker quick/dev installation.
+2. Run `sudo erpnext-dev public-vm-guided-setup`; select Docker before the firewall/install steps.
+3. A fresh install uses Docker production Compose directly. An existing quick/dev stack is backed up and promoted without changing its database password.
+4. Step 7 runs the Docker HTTPS wizard inside the guided sequence; the operator is not told to manually run `docker-production-setup` first.
+5. `https://PRODUCTION_DOMAIN` responds after Let's Encrypt or Cloudflare Origin CA setup.
+6. Before HTTPS, `sudo erpnext-dev docker-production-exposure` confirms the temporary frontend is bound only to `127.0.0.1:8080` (or the saved port), not `0.0.0.0`/`[::]`. After HTTPS, only Traefik `80/443` are public and the direct Docker port is not published; `8000/9000` remain container-internal.
+7. `sudo erpnext-dev backup` creates/verifies a durable Docker backup artifact.
+8. `sudo erpnext-dev docker-production-exposure` reports only the intended public web ports, and an external scan from another host confirms the direct Docker port is unreachable.
+
+Do not promote this beta to stable until both local and public Docker acceptance paths pass on real machines.
+
+## v1.19.19 frontend repair synchronization beta
 
 Beta.2 adds a mandatory real repair transaction to integration testing. The gate must prove: watcher-free runtime, Redis available during `bench build`, core-runtime recovery after restart, stable `wait-ready`, and an independent `verify-frontend-assets` pass. On pushes to `beta`, Ubuntu 24.04 and Ubuntu 26.04 are both blocking integration legs.
 

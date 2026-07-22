@@ -84,6 +84,25 @@ docker_prod_image_override_file() { printf '%s/erpnext-dev.prod.image.yml\n' "$D
 # toolkit SITE_NAME (e.g. erp.test) so local host mapping stays consistent.
 docker_site_name() { printf '%s\n' "${DOCKER_SITE_NAME:-${SITE_NAME:-erp.test}}"; }
 
+# Public routing domain can differ from the internal Frappe site name. Traefik
+# must match the real production hostname, while FRAPPE_SITE_NAME_HEADER can
+# still force requests into a differently named site.
+docker_public_domain() {
+  if [[ -n "${PRODUCTION_DOMAIN:-}" ]]; then
+    printf '%s\n' "$PRODUCTION_DOMAIN"
+  else
+    docker_site_name
+  fi
+}
+
+# Direct host-published HTTP endpoint. The official quick/demo and noproxy
+# production layouts expose the frontend container's 8080 through the selected
+# host DOCKER_PUBLISH_PORT (8080 by default).
+docker_direct_http_url() {
+  local host="${1:-localhost}"
+  printf 'http://%s:%s\n' "$host" "${DOCKER_PUBLISH_PORT:-8080}"
+}
+
 # ------------------------------------------------------------
 # Deployment mode (development pwd.yml vs production compose.yaml)
 # ------------------------------------------------------------
@@ -774,32 +793,66 @@ docker_runtime_logs() {
 
 # Poll published HTTP until ping + login static assets answer (or timeout).
 docker_ready() {
-  local url deadline now site probe_rc=1
+  local url deadline now site route_host route_port route_ip probe_rc=1 curl_code
   site="$(docker_site_name 2>/dev/null || echo localhost)"
-  url="http://localhost:${DOCKER_PUBLISH_PORT}/api/method/ping"
   deadline=$(( $(date +%s) + DOCKER_READY_TIMEOUT ))
-  log "Waiting for ERPNext ping + static assets on http://localhost:${DOCKER_PUBLISH_PORT}"
+
+  if docker_is_production && docker_https_enabled; then
+    route_host="$(docker_public_domain)"
+    route_port=443
+    route_ip=127.0.0.1
+    url="https://${route_host}/api/method/ping"
+    log "Waiting for ERPNext ping + static assets on https://${route_host}"
+  else
+    route_host="$site"
+    route_port="${DOCKER_PUBLISH_PORT:-8080}"
+    route_ip=127.0.0.1
+    url="http://${site}:${route_port}/api/method/ping"
+    log "Waiting for ERPNext ping + static assets on http://localhost:${route_port}"
+  fi
+
   while :; do
-    if curl -fsS -o /dev/null --max-time 5 -H "Host: ${site}" "$url" 2>/dev/null; then
+    if [[ "$url" == https://* ]]; then
+      curl_code="$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+        --resolve "${route_host}:${route_port}:${route_ip}" "$url" 2>/dev/null || true)"
+    else
+      curl_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+        -H "Host: ${site}" "http://127.0.0.1:${route_port}/api/method/ping" 2>/dev/null || true)"
+    fi
+
+    if [[ "$curl_code" =~ ^(200|401|403)$ ]]; then
       set +e
-      probe_login_frontend_assets \
-        "http://${site}:${DOCKER_PUBLISH_PORT}/login" \
-        "$site" \
-        "${DOCKER_PUBLISH_PORT}" \
-        "127.0.0.1" >/dev/null
+      if [[ "$url" == https://* ]]; then
+        probe_login_frontend_assets_all \
+          "https://${route_host}/login" \
+          "$route_host" \
+          "$route_port" \
+          "$route_ip" >/dev/null
+      else
+        probe_login_frontend_assets_all \
+          "http://${site}:${route_port}/login" \
+          "$site" \
+          "$route_port" \
+          "$route_ip" >/dev/null
+      fi
       probe_rc=$?
       set -e
       if [[ "$probe_rc" -eq 0 ]]; then
-        ok "ERPNext is responding on port ${DOCKER_PUBLISH_PORT} (HTTP + CSS/JS assets)."
+        if [[ "$url" == https://* ]]; then
+          ok "ERPNext is responding through Docker HTTPS (HTTP + CSS/JS assets)."
+        else
+          ok "ERPNext is responding on port ${route_port} (HTTP + CSS/JS assets)."
+        fi
         return 0
       fi
     fi
+
     now="$(date +%s)"
     if [[ "$now" -ge "$deadline" ]]; then
       warn "ERPNext did not become fully ready within ${DOCKER_READY_TIMEOUT}s."
       echo "Next steps:"
       echo "  Status:       $(toolkit_cmd engine-status)"
-      echo "  Assets:       $(toolkit_cmd verify-frontend-assets)"
+      echo "  Access:       $(toolkit_cmd verify-access)"
       echo "  Logs:         $(toolkit_cmd logs)"
       echo "  Diagnostics:  $(toolkit_cmd doctor)"
       echo "  Cold start?   Increase DOCKER_READY_TIMEOUT (current ${DOCKER_READY_TIMEOUT}s) and retry."
@@ -1732,7 +1785,7 @@ docker_https_enabled() { [[ "$(docker_https_mode)" != "http" ]]; }
 # Traefik Host(...) router rule for the configured production site.
 docker_https_sites_rule() {
   local domain
-  domain="$(docker_site_name)"
+  domain="$(docker_public_domain)"
   printf 'Host(`%s`)\n' "$domain"
 }
 
@@ -1755,7 +1808,7 @@ EOF_DOCKER_HTTPS_STATE
 # explicit and surfaced everywhere; never clobbers an existing state.
 docker_write_https_state_if_absent() {
   $SUDO test -f "$DOCKER_HTTPS_STATE_FILE" && return 0
-  docker_https_write_state http "$(docker_site_name)" ""
+  docker_https_write_state http "$(docker_public_domain)" ""
 }
 
 # Set (update or append) a KEY=value in the production env file without touching
@@ -1932,9 +1985,9 @@ docker_https_apply() {
 
 docker_enable_letsencrypt() {
   require_sudo
-  docker_is_production || fail "HTTPS applies to the production stack. Run $(toolkit_cmd docker-production-setup) first."
+  docker_is_production || fail "Production Let's Encrypt requires the Docker production stack. Run $(toolkit_cmd docker-https-wizard) to promote this installation safely."
   local domain email
-  domain="$(docker_site_name)"
+  domain="$(docker_public_domain)"
   email="${LETSENCRYPT_EMAIL:-$(docker_env_value "$DOCKER_HTTPS_STATE_FILE" DOCKER_HTTPS_EMAIL)}"
   if [[ -z "$email" && -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
     read -r -p "Let's Encrypt contact email: " email
@@ -1956,15 +2009,15 @@ docker_enable_letsencrypt() {
 
   log "Applying Let's Encrypt HTTPS (Traefik will request a certificate for ${domain})"
   docker_https_apply || fail "docker compose up failed. Inspect with: $(toolkit_cmd logs)"
-  ok "HTTPS (Let's Encrypt) applied. First issuance can take up to ~1 minute."
+  ok "HTTPS (Let's Encrypt) applied. Certificate issuance can take a short time."
   docker_https_status
 }
 
 docker_configure_cloudflare_origin() {
   require_sudo
-  docker_is_production || fail "HTTPS applies to the production stack. Run $(toolkit_cmd docker-production-setup) first."
+  docker_is_production || fail "Cloudflare Origin HTTPS requires the Docker production stack. Run $(toolkit_cmd docker-https-wizard) to promote this installation safely."
   local domain
-  domain="$(docker_site_name)"
+  domain="$(docker_public_domain)"
 
   docker_install_cloudflare_origin_material
   docker_write_prod_https_cf_override
@@ -1987,43 +2040,59 @@ docker_configure_cloudflare_origin() {
   docker_https_status
 }
 
-# Revert to plain HTTP on the published port (removes the Traefik proxy).
+# Revert to loopback-only HTTP on the host (removes the Traefik proxy).
 docker_https_rollback() {
   require_sudo
-  docker_is_production || fail "HTTPS applies to the production stack."
+  docker_is_production || fail "Production HTTPS rollback applies only to the Docker production stack."
   local domain
-  domain="$(docker_site_name)"
+  domain="$(docker_public_domain)"
   if [[ "$(docker_https_mode)" == "http" ]]; then
     warn "HTTPS is already disabled (mode: http)."
   fi
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    confirm "Roll back to HTTP on port ${DOCKER_PUBLISH_PORT} and remove the Traefik proxy?" || { warn "Cancelled."; return 0; }
+    confirm "Roll back to loopback-only HTTP on 127.0.0.1:${DOCKER_PUBLISH_PORT} and remove the Traefik proxy?" || { warn "Cancelled."; return 0; }
   fi
-  docker_prod_env_set HTTP_PUBLISH_PORT "$DOCKER_PUBLISH_PORT"
+  docker_prod_env_set HTTP_PUBLISH_PORT "127.0.0.1:${DOCKER_PUBLISH_PORT}"
   docker_https_write_state http "$domain" ""
   DOCKER_HTTPS_MODE="http"
   log "Rolling back to HTTP (noproxy)"
   docker_https_apply || fail "docker compose up failed. Inspect with: $(toolkit_cmd logs)"
-  ok "Rolled back to HTTP on port ${DOCKER_PUBLISH_PORT}."
+  ok "Rolled back to loopback-only HTTP on 127.0.0.1:${DOCKER_PUBLISH_PORT}."
   docker_https_status
 }
 
 docker_https_status() {
   require_sudo
+  if ! docker_is_production; then
+    ui_box_start "Docker Local HTTPS Status"
+    status_line "Engine mode" "INFO" "Docker development"
+    status_line "Direct HTTP" "INFO" "$(docker_direct_http_url localhost)"
+    if declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+      status_line "Friendly HTTPS" "OK" "https://$(docker_site_name)"
+      echo "Local Docker HTTPS is terminated by host Nginx and proxies to port ${DOCKER_PUBLISH_PORT}."
+    else
+      status_line "Friendly HTTPS" "WARN" "not configured"
+      echo "Configure trusted local HTTPS with: $(toolkit_cmd local-ssl-wizard)"
+    fi
+    ui_box_end
+    return 0
+  fi
+
   local mode domain email proxy_state cert_line issuer dates redirect
   mode="$(docker_https_mode)"
   domain="$(docker_env_value "$DOCKER_HTTPS_STATE_FILE" DOCKER_HTTPS_DOMAIN)"
-  [[ -n "$domain" ]] || domain="$(docker_site_name)"
+  [[ -n "$domain" ]] || domain="$(docker_public_domain)"
   email="$(docker_env_value "$DOCKER_HTTPS_STATE_FILE" DOCKER_HTTPS_EMAIL)"
 
   ui_box_start "Docker Production HTTPS Status"
-  status_line "Engine mode" "$(docker_is_production && echo OK || echo WARN)" "Docker $(docker_mode_label)"
+  status_line "Engine mode" "OK" "Docker production"
   case "$mode" in
     letsencrypt) status_line "HTTPS mode" "OK" "Traefik + Let's Encrypt" ;;
     cloudflare-origin) status_line "HTTPS mode" "OK" "Traefik + Cloudflare Origin CA" ;;
-    *) status_line "HTTPS mode" "WARN" "disabled (HTTP on port ${DOCKER_PUBLISH_PORT})" ;;
+    *) status_line "HTTPS mode" "WARN" "disabled (loopback HTTP on 127.0.0.1:${DOCKER_PUBLISH_PORT})" ;;
   esac
-  status_line "Domain" "INFO" "$domain"
+  status_line "Public domain" "INFO" "$domain"
+  status_line "Internal site" "INFO" "$(docker_site_name)"
   [[ "$mode" == "letsencrypt" && -n "$email" ]] && status_line "ACME email" "INFO" "$email"
 
   if [[ "$mode" == "http" ]]; then
@@ -2041,7 +2110,6 @@ docker_https_status() {
     status_line "Traefik proxy" "WARN" "not running (try: $(toolkit_cmd start))"
   fi
 
-  # Inspect the live certificate presented on 443 for the site's SNI.
   if command -v openssl >/dev/null 2>&1; then
     cert_line="$(echo | ${SUDO:-} openssl s_client -connect 127.0.0.1:443 -servername "$domain" 2>/dev/null | openssl x509 -noout -issuer -dates 2>/dev/null || true)"
     if [[ -n "$cert_line" ]]; then
@@ -2050,11 +2118,10 @@ docker_https_status() {
       status_line "Certificate issuer" "OK" "${issuer:-unknown}"
       status_line "Certificate validity" "INFO" "${dates:-unknown}"
     else
-      status_line "Certificate" "WARN" "no TLS answer on 127.0.0.1:443 yet (issuance may be pending)"
+      status_line "Certificate" "WARN" "no TLS answer on 127.0.0.1:443 yet"
     fi
   fi
 
-  # HTTP should redirect to HTTPS.
   redirect="$(curl -s -o /dev/null -w '%{http_code}' --max-time 6 -H "Host: ${domain}" "http://127.0.0.1:80/" 2>/dev/null || true)"
   case "$redirect" in
     30[0-9]) status_line "HTTP->HTTPS redirect" "OK" "HTTP ${redirect}" ;;
@@ -2063,22 +2130,87 @@ docker_https_status() {
   esac
 
   echo
-  echo "From the internet, browse: https://${domain}"
+  echo "Public URL: https://${domain}"
   ui_next "$(toolkit_cmd docker-production-exposure)" "$(toolkit_cmd docker-https-rollback)"
   ui_box_end
 }
 
+# Promote an existing quick/dev Docker installation to the durable production
+# Compose layout without changing the project name or persistent volumes.
+docker_promote_to_production() {
+  require_sudo
+  docker_is_production && return 0
+
+  local domain
+  domain="$(docker_public_domain)"
+  [[ -n "${PRODUCTION_DOMAIN:-}" ]] || fail "Set a real production domain first: $(toolkit_cmd set-domain)"
+  validate_production_domain_value "$domain" >/dev/null 2>&1 || fail "Invalid production domain: ${domain}"
+
+  ui_box_start "Promote Docker Stack to Production"
+  status_line "Current stack" "INFO" "Docker development / pwd.yml"
+  status_line "Target stack" "INFO" "Docker production / compose.yaml"
+  status_line "Internal site" "INFO" "$(docker_site_name)"
+  status_line "Public domain" "INFO" "$domain"
+  echo "The Compose project and persistent volumes are retained."
+  echo "A durable backup is attempted before the stack is recreated."
+  ui_box_end
+
+  if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+    confirm "Promote this Docker installation to the production stack now?" || return 1
+  fi
+
+  docker_backup true || warn "Pre-promotion backup did not complete; the current stack remains unchanged until recreation begins."
+
+  DOCKER_MODE="production"
+  DOCKER_MODE_ENV_PROVIDED=1
+  DEPLOYMENT_ENGINE="docker"
+  DEPLOYMENT_ENGINE_ENV_PROVIDED=1
+  DEPLOYMENT_MODE="public-vm"
+  SITE_NAME="$(docker_site_name)"
+
+  # Re-check the pinned upstream checkout in production mode so all required
+  # compose.yaml overrides exist before switching the running project.
+  docker_provision_workdir
+  docker_write_prod_env
+  docker_write_prod_image_override
+  docker_write_https_state_if_absent
+  write_dev_config_file
+
+  log "Recreating the Docker project with the production Compose layout"
+  docker_compose up -d --remove-orphans || fail "Production compose startup failed. The pre-promotion backup remains under ${DOCKER_BACKUP_DIR}."
+  docker_prod_create_site || fail "The production stack started but site verification/creation failed. Inspect: $(toolkit_cmd logs)"
+  docker_ready || warn "Production stack is running but readiness has not passed yet."
+  docker_write_pins || warn "Could not refresh immutable pin metadata."
+  ok "Docker stack promoted to production mode."
+}
+
 docker_https_wizard() {
   require_sudo
-  docker_is_production || fail "HTTPS applies to the production stack. Run $(toolkit_cmd docker-production-setup) first."
+
+  if ! docker_is_production && ! is_public_vm_workflow; then
+    ui_box_start "Docker Local HTTPS"
+    status_line "Direct HTTP" "OK" "$(docker_direct_http_url localhost)"
+    status_line "Friendly domain" "INFO" "$(docker_site_name)"
+    echo "Local Docker HTTPS uses the same trusted local SSL workflow as native installs."
+    echo "Nginx proxies https://$(docker_site_name) to Docker port ${DOCKER_PUBLISH_PORT}."
+    ui_box_end
+    run_local_ssl_wizard main
+    return
+  fi
+
+  if ! docker_is_production; then
+    docker_promote_to_production || return 1
+  fi
+
   local choice
   ui_box_start "Docker Production HTTPS"
-  status_line "Site" "INFO" "$(docker_site_name)"
+  status_line "Public domain" "INFO" "$(docker_public_domain)"
+  status_line "Internal site" "INFO" "$(docker_site_name)"
   status_line "Current mode" "INFO" "$(docker_https_mode)"
-  echo "Choose how the production stack terminates TLS (Traefik reverse proxy):"
-  echo "  1) Let's Encrypt (automatic, public DNS + ports 80/443 must reach this host)"
-  echo "  2) Cloudflare Origin CA (you provide the origin cert; Cloudflare proxies DNS)"
-  echo "  3) Disable HTTPS (roll back to HTTP)"
+  echo "Choose how the production stack terminates TLS with Traefik:"
+  echo "  1) Let's Encrypt (automatic; public DNS and ports 80/443 must reach this host)"
+  echo "  2) Cloudflare Origin CA (provide origin certificate; Cloudflare proxies DNS)"
+  echo "  3) Disable HTTPS (roll back to loopback-only HTTP on 127.0.0.1:${DOCKER_PUBLISH_PORT})"
   echo "  b) Back"
   ui_box_end
   if [[ ! -t 0 || "${ASSUME_YES:-0}" -eq 1 ]]; then
@@ -2100,12 +2232,11 @@ docker_https_wizard() {
 # backend/data ports are NOT publicly exposed. A production-exposure guardrail.
 docker_production_exposure() {
   require_sudo
-  local ports_raw domain problems=0
-  domain="$(docker_site_name)"
+  local ports_raw problems=0 public_ports all_bindings p bad="" pp
 
   ui_box_start "Docker Production Exposure Check"
   status_line "Engine mode" "$(docker_is_production && echo OK || echo WARN)" "Docker $(docker_mode_label)"
-  status_line "HTTPS mode" "$([[ "$(docker_https_mode)" != http ]] && echo OK || echo WARN)" "$(docker_https_mode)"
+  status_line "HTTPS mode" "$([[ "$(docker_https_mode)" != http ]] && echo OK || echo INFO)" "$(docker_https_mode)"
 
   ports_raw="$(${SUDO:-} docker ps --filter "label=com.docker.compose.project=${DOCKER_PROJECT_NAME}" --format '{{.Names}} {{.Ports}}' 2>/dev/null || true)"
   if [[ -z "$ports_raw" ]]; then
@@ -2114,50 +2245,51 @@ docker_production_exposure() {
     return 1
   fi
 
-  # Host-published ports (host:container) that listen on all interfaces.
-  local published
-  published="$(printf '%s\n' "$ports_raw" | grep -oE '0\.0\.0\.0:[0-9]+|\[::\]:[0-9]+|:::[0-9]+' | grep -oE '[0-9]+$' | sort -un | tr '\n' ' ')"
-  status_line "Public host ports" "INFO" "${published:-none}"
+  all_bindings="$(printf '%s\n' "$ports_raw" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]+|\[::\]:[0-9]+|:::[0-9]+' | sort -u | tr '\n' ' ' || true)"
+  public_ports="$(printf '%s\n' "$ports_raw" | grep -oE '0\.0\.0\.0:[0-9]+|\[::\]:[0-9]+|:::[0-9]+' | grep -oE '[0-9]+$' | sort -un | tr '\n' ' ' || true)"
+  status_line "Host bindings" "INFO" "${all_bindings:-none}"
+  status_line "Public host ports" "INFO" "${public_ports:-none}"
 
-  # Data/backend ports must never be published publicly.
-  local p bad=""
-  for p in 3306 5432 6379 8000 9000 11000 13000; do
-    if printf ' %s ' "$published" | grep -q " ${p} "; then
+  for p in 3306 5432 6379 8000 9000 11000 12000 13000; do
+    if printf ' %s ' "$public_ports" | grep -q " ${p} "; then
       bad="${bad}${p} "
-      problems=$((problems+1))
+      problems=$((problems + 1))
     fi
   done
   if [[ -n "$bad" ]]; then
     status_line "Backend/data ports" "FAIL" "publicly published: ${bad}(must be internal only)"
   else
-    status_line "Backend/data ports" "OK" "no database/redis/gunicorn ports published"
+    status_line "Backend/data ports" "OK" "container-internal only"
   fi
 
   if docker_https_enabled; then
-    local pp
     for pp in 80 443; do
-      if printf ' %s ' "$published" | grep -q " ${pp} "; then
-        status_line "Web port ${pp}" "OK" "published"
+      if printf ' %s ' "$public_ports" | grep -q " ${pp} "; then
+        status_line "Web port ${pp}" "OK" "published by Traefik"
       else
-        status_line "Web port ${pp}" "WARN" "not published (proxy may be down)"
-        problems=$((problems+1))
+        status_line "Web port ${pp}" "WARN" "not publicly published (proxy may be down)"
+        problems=$((problems + 1))
       fi
     done
-  else
-    if printf ' %s ' "$published" | grep -q " ${DOCKER_PUBLISH_PORT} "; then
-      status_line "Web port ${DOCKER_PUBLISH_PORT}" "OK" "published (HTTP)"
+    if printf ' %s ' "$public_ports" | grep -q " ${DOCKER_PUBLISH_PORT} "; then
+      status_line "Direct Docker port" "FAIL" "${DOCKER_PUBLISH_PORT} is still publicly published after HTTPS"
+      problems=$((problems + 1))
+    else
+      status_line "Direct Docker port" "OK" "${DOCKER_PUBLISH_PORT} is not publicly published after HTTPS"
     fi
-    status_line "HTTPS" "WARN" "disabled; enable before production ($(toolkit_cmd docker-https-wizard))"
+  else
+    if printf '%s\n' "$ports_raw" | grep -qE "127\\.0\\.0\\.1:${DOCKER_PUBLISH_PORT}->8080|127\\.0\\.0\\.1:${DOCKER_PUBLISH_PORT}-[0-9]+->8080"; then
+      status_line "Temporary HTTP" "OK" "127.0.0.1:${DOCKER_PUBLISH_PORT} only; not public"
+    elif printf ' %s ' "$public_ports" | grep -q " ${DOCKER_PUBLISH_PORT} "; then
+      status_line "Temporary HTTP" "FAIL" "${DOCKER_PUBLISH_PORT} is publicly published before HTTPS"
+      problems=$((problems + 1))
+    else
+      status_line "Temporary HTTP" "WARN" "loopback binding not detected"
+      problems=$((problems + 1))
+    fi
+    status_line "HTTPS" "INFO" "not enabled yet; run $(toolkit_cmd docker-https-wizard)"
   fi
 
-  echo
-  if [[ "$problems" -eq 0 ]] && docker_https_enabled; then
-    status_line "Exposure" "OK" "only web ports are public; backend ports are internal"
-  else
-    status_line "Exposure" "WARN" "${problems} issue(s); review above before exposing to the internet"
-  fi
-  echo "Also confirm your cloud/provider firewall allows 80/443 and blocks everything else."
-  ui_next "$(toolkit_cmd docker-https-status)" "$(toolkit_cmd production-checklist)"
   ui_box_end
   [[ "$problems" -eq 0 ]]
 }
@@ -2469,35 +2601,70 @@ docker_install_app() {
 }
 
 docker_print_access() {
-  local site vm_ip
+  local site domain vm_ip
   site="$(docker_site_name)"
+  domain="$(docker_public_domain)"
   vm_ip="$(get_vm_ip 2>/dev/null || echo unknown)"
+
   ui_box_start "ERPNext (Docker) Access"
-  status_line "Site" "OK" "$site"
-  status_line "Local URL" "INFO" "http://localhost:${DOCKER_PUBLISH_PORT}"
-  if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
-    status_line "Network URL" "INFO" "http://${vm_ip}:${DOCKER_PUBLISH_PORT}"
+  status_line "Internal site" "OK" "$site"
+  if docker_is_production && docker_https_enabled; then
+    status_line "Preferred URL" "OK" "https://${domain}"
+    status_line "Public ports" "INFO" "80/443 via Traefik"
+    status_line "Direct Docker port" "INFO" "${DOCKER_PUBLISH_PORT} not published in HTTPS mode"
+  elif docker_is_production; then
+    status_line "Temporary local HTTP" "INFO" "$(docker_direct_http_url localhost)"
+    status_line "Public domain" "INFO" "${domain} (HTTPS pending)"
+    status_line "Direct Docker port" "WARN" "${DOCKER_PUBLISH_PORT} is temporary; do not expose it publicly"
+  else
+    status_line "Local URL" "INFO" "$(docker_direct_http_url localhost)"
+    if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
+      status_line "Network URL" "INFO" "$(docker_direct_http_url "$vm_ip")"
+    fi
+    status_line "Friendly HTTP" "INFO" "http://${site}:${DOCKER_PUBLISH_PORT}"
+    if declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+      status_line "Preferred HTTPS" "OK" "https://${site}"
+    fi
   fi
-  status_line "Friendly URL" "INFO" "http://${site}:${DOCKER_PUBLISH_PORT}"
   status_line "Login" "INFO" "Administrator"
   status_line "Credentials" "INFO" "$DOCKER_CREDENTIALS_FILE"
   status_line "Compose project" "INFO" "$DOCKER_PROJECT_NAME"
   ui_box_end
-  echo "Local URL works on this machine. Network URL works from your host / LAN."
-  echo "The Friendly URL (${site}) works only after your HOST maps it to this machine:"
+
+  if docker_is_production; then
+    if docker_https_enabled; then
+      echo "Open: https://${domain}"
+    else
+      echo "Temporary pre-HTTPS access uses Docker port ${DOCKER_PUBLISH_PORT}."
+      echo "Next: $(toolkit_cmd docker-https-wizard)"
+    fi
+    return 0
+  fi
+
+  echo "Docker publishes its frontend on host port ${DOCKER_PUBLISH_PORT} (8080 by default), not native Bench port 8000."
+  echo "For the friendly hostname, map ${site} to this machine's IP on the HOST:"
   print_host_dns_commands_for_site "$site" "$vm_ip"
   echo "Then open: http://${site}:${DOCKER_PUBLISH_PORT}"
+  echo "Trusted local HTTPS: $(toolkit_cmd local-ssl-wizard)"
 }
 
 # Single programmatic URL (doctor / engine_site_url). Prefer the network IP so
 # it is reachable from the host; fall back to loopback when the IP is unknown.
 docker_site_url() {
   local vm_ip
+  if docker_is_production && docker_https_enabled; then
+    printf 'https://%s\n' "$(docker_public_domain)"
+    return
+  fi
+  if ! docker_is_production && declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+    printf 'https://%s\n' "$(docker_site_name)"
+    return
+  fi
   vm_ip="$(get_vm_ip 2>/dev/null || echo unknown)"
   if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
-    printf 'http://%s:%s\n' "$vm_ip" "$DOCKER_PUBLISH_PORT"
+    docker_direct_http_url "$vm_ip"
   else
-    printf 'http://localhost:%s\n' "$DOCKER_PUBLISH_PORT"
+    docker_direct_http_url localhost
   fi
 }
 
@@ -2506,6 +2673,12 @@ docker_site_url() {
 # guidance for the Docker published port rather than the native 8000.
 docker_host_mapping_checkpoint() {
   require_sudo
+  if docker_is_production || is_public_vm_workflow; then
+    echo "Production Docker uses public DNS for $(docker_public_domain), not a HOST-file mapping."
+    echo "Verify DNS with: getent hosts $(docker_public_domain)"
+    return 0
+  fi
+
   local site vm_ip
   site="$(docker_site_name)"
   vm_ip="$(get_vm_ip 2>/dev/null || echo unknown)"
@@ -2514,32 +2687,63 @@ docker_host_mapping_checkpoint() {
   echo "Host Mapping Checkpoint (friendly domain)"
   echo "============================================================"
   echo
-  echo "To open ERPNext as ${site} in a browser, your HOST machine must map the"
-  echo "domain to this machine. The Docker stack serves HTTP on port ${DOCKER_PUBLISH_PORT}."
-  echo
+  echo "Docker serves direct HTTP on host port ${DOCKER_PUBLISH_PORT}."
   status_line "Local domain" "INFO" "$site"
-  status_line "Detected host IP" "$([[ "$vm_ip" != unknown ]] && echo OK || echo WARN)" "$vm_ip"
+  status_line "Detected VM IP" "$([[ "$vm_ip" != unknown ]] && echo OK || echo WARN)" "$vm_ip"
   status_line "Host OS" "INFO" "$(host_os_label)"
-  if host_os_is_unset; then
-    echo
-    echo "Host OS not chosen yet; showing $(host_os_label) commands by default."
-    echo "If your host is macOS or Windows, run: $(toolkit_cmd set-host-os)"
-  fi
   echo
-  echo "Run this on your $(host_os_label) HOST machine (not inside the VM)."
-  echo "It is safe to repeat; it backs up the hosts file and refreshes the mapping:"
+  echo "Run this on your $(host_os_label) HOST machine (not inside the VM):"
   print_host_dns_commands_for_site "$site" "$vm_ip"
   echo
   echo "Then open: http://${site}:${DOCKER_PUBLISH_PORT}"
+  echo "For trusted HTTPS, run: $(toolkit_cmd local-ssl-wizard)"
   echo "============================================================"
+}
+
+# Interactive checkpoint used by the local Docker guided flow. HTTPS is offered
+# only after the operator confirms the friendly hostname works over direct HTTP,
+# matching the native local setup contract while using Docker's published port.
+docker_guided_host_mapping_checkpoint() {
+  [[ -t 0 ]] || return 0
+  [[ "${ASSUME_YES:-0}" -eq 1 ]] && return 0
+  docker_is_production && return 0
+  is_public_vm_workflow && return 0
+
+  local site reply
+  site="$(docker_site_name)"
+  docker_host_mapping_checkpoint
+
+  while true; do
+    echo
+    if confirm "Have you applied the HOST mapping and confirmed http://${site}:${DOCKER_PUBLISH_PORT}/login works?"; then
+      ok "Docker friendly-hostname HTTP checkpoint confirmed."
+      return 0
+    fi
+
+    echo
+    echo "Trusted HTTPS will not be offered until the friendly hostname works over HTTP."
+    echo "Test from the HOST browser: http://${site}:${DOCKER_PUBLISH_PORT}/login"
+    echo "Toolkit verification: $(toolkit_cmd verify-access)"
+    echo
+    read -r -p "Press Enter to show the HOST mapping again, or type skip to continue without HTTPS: " reply || reply="skip"
+    reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
+    case "$reply" in
+      skip|s|q|quit)
+        warn "Friendly hostname was not confirmed; skipping guided local HTTPS."
+        echo "Complete it later with: $(toolkit_cmd access)"
+        return 1
+        ;;
+      *) docker_host_mapping_checkpoint ;;
+    esac
+  done
 }
 
 # Docker engine access verification (parity with native verify_access).
 docker_verify_access() {
   require_sudo
-  local site code url probe_rc=1
+  local site domain code url probe_rc=1
   site="$(docker_site_name)"
-  url="http://localhost:${DOCKER_PUBLISH_PORT}/api/method/ping"
+  domain="$(docker_public_domain)"
 
   echo
   echo "============================================================"
@@ -2552,27 +2756,45 @@ docker_verify_access() {
     status_line "Containers" "WARN" "no running services (try: $(toolkit_cmd start))"
   fi
 
-  # Send the site Host header so Frappe resolves the target site.
-  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: ${site}" "$url" 2>/dev/null || true)"
-  case "$code" in
-    200|401|403) status_line "Published port" "OK" "http://localhost:${DOCKER_PUBLISH_PORT} (HTTP ${code})" ;;
-    "") status_line "Published port" "WARN" "no response on http://localhost:${DOCKER_PUBLISH_PORT}" ;;
-    *) status_line "Published port" "WARN" "HTTP ${code} on http://localhost:${DOCKER_PUBLISH_PORT}" ;;
-  esac
+  if docker_is_production && docker_https_enabled; then
+    url="https://${domain}/api/method/ping"
+    code="$(curl -k -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${domain}:443:127.0.0.1" "$url" 2>/dev/null || true)"
+    case "$code" in
+      200|401|403) status_line "Production HTTPS" "OK" "https://${domain} (HTTP ${code})" ;;
+      "") status_line "Production HTTPS" "WARN" "no response on local Traefik port 443" ;;
+      *) status_line "Production HTTPS" "WARN" "HTTP ${code} from https://${domain}" ;;
+    esac
+  else
+    url="$(docker_direct_http_url localhost)/api/method/ping"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: ${site}" "$url" 2>/dev/null || true)"
+    case "$code" in
+      200|401|403) status_line "Docker frontend" "OK" "$(docker_direct_http_url localhost) (HTTP ${code})" ;;
+      "") status_line "Docker frontend" "WARN" "no response on $(docker_direct_http_url localhost)" ;;
+      *) status_line "Docker frontend" "WARN" "HTTP ${code} on $(docker_direct_http_url localhost)" ;;
+    esac
 
-  set +e
-  probe_login_frontend_assets \
-    "http://${site}:${DOCKER_PUBLISH_PORT}/login" \
-    "$site" \
-    "${DOCKER_PUBLISH_PORT}" \
-    "127.0.0.1" >/dev/null
-  probe_rc=$?
-  set -e
-  case "$probe_rc" in
-    0) status_line "Static assets" "OK" "login CSS+JS probe passed" ;;
-    2) status_line "Static assets" "WARN" "login missing CSS and/or JS Link preload — try $(toolkit_cmd repair-frontend-assets)" ;;
-    *) status_line "Static assets" "WARN" "login CSS+JS not ready — try $(toolkit_cmd repair-frontend-assets)" ;;
-  esac
+    set +e
+    probe_login_frontend_assets \
+      "http://${site}:${DOCKER_PUBLISH_PORT}/login" \
+      "$site" \
+      "${DOCKER_PUBLISH_PORT}" \
+      "127.0.0.1" >/dev/null
+    probe_rc=$?
+    set -e
+    case "$probe_rc" in
+      0) status_line "Static assets" "OK" "login CSS+JS probe passed on port ${DOCKER_PUBLISH_PORT}" ;;
+      2) status_line "Static assets" "WARN" "login missing CSS/JS preload — try $(toolkit_cmd repair-frontend-assets)" ;;
+      *) status_line "Static assets" "WARN" "login CSS+JS not ready — try $(toolkit_cmd repair-frontend-assets)" ;;
+    esac
+  fi
+
+  if ! docker_is_production && declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+    code="$(curl -k -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${site}:443:127.0.0.1" "https://${site}/login" 2>/dev/null || true)"
+    case "$code" in
+      200|30[0-9]|401|403) status_line "Friendly HTTPS" "OK" "https://${site} (HTTP ${code})" ;;
+      *) status_line "Friendly HTTPS" "WARN" "https://${site} not ready locally (HTTP ${code:-none})" ;;
+    esac
+  fi
 
   docker_print_access
 }
@@ -2583,22 +2805,29 @@ docker_show_next_steps() {
   echo "============================================================"
   echo "Docker Engine - Next Steps"
   echo "============================================================"
-  echo "  Open ERPNext:        http://localhost:${DOCKER_PUBLISH_PORT}  (Administrator)"
-  echo "  Friendly domain:     see the host mapping checkpoint above"
+  if docker_is_production; then
+    if docker_https_enabled; then
+      echo "  Open ERPNext:        https://$(docker_public_domain)"
+    else
+      echo "  Temporary local HTTP: $(docker_direct_http_url localhost)"
+      echo "  Public domain:        $(docker_public_domain) (HTTPS pending)"
+      echo "  Configure HTTPS:      $(toolkit_cmd docker-https-wizard)"
+    fi
+  else
+    echo "  Direct HTTP:         $(docker_direct_http_url localhost)"
+    echo "  Network/friendly:    port ${DOCKER_PUBLISH_PORT} (8080 by default)"
+    echo "  Trusted local HTTPS: $(toolkit_cmd local-ssl-wizard)"
+  fi
   echo "  Verify access:       $(toolkit_cmd verify-access)"
   echo "  Start / stop:        $(toolkit_cmd start) / $(toolkit_cmd stop)"
   echo "  Status / logs:       $(toolkit_cmd status) / $(toolkit_cmd logs)"
-  echo "  Backups:             $(toolkit_cmd backup) / $(toolkit_cmd list-backups)"
+  echo "  Backups:             $(toolkit_cmd backup)"
   echo "  Optional apps:       $(toolkit_cmd app-install-wizard)"
   echo "  Engine status:       $(toolkit_cmd engine-status)"
-  echo
-  echo "Production HTTPS (Traefik + Let's Encrypt or Cloudflare Origin CA):"
-  echo "  Guided setup:   $(toolkit_cmd docker-https-wizard)"
-  echo "  Status:         $(toolkit_cmd docker-https-status)"
-  echo "  Exposure check: $(toolkit_cmd docker-production-exposure)"
-  echo
-  echo "Help & contributing: SUPPORT.md / CONTRIBUTING.md"
-  echo "  https://github.com/ReyadWeb/erpnext-dev-toolkit/blob/main/SUPPORT.md"
+  if docker_is_production; then
+    echo "  HTTPS status:        $(toolkit_cmd docker-https-status)"
+    echo "  Exposure check:      $(toolkit_cmd docker-production-exposure)"
+  fi
   echo "============================================================"
 }
 
@@ -2662,19 +2891,55 @@ docker_prompt_open_main_menu() {
 # CI stay non-interactive.
 docker_guided_followups() {
   docker_verify_access
-  docker_host_mapping_checkpoint
+
+  # The outer Public VM guided wizard owns backup -> HTTPS -> security -> apps.
+  # Do not inject the generic Docker post-install prompts into the middle of it.
+  if [[ "${DOCKER_PUBLIC_GUIDED_ACTIVE:-0}" -eq 1 ]]; then
+    return 0
+  fi
+
+  if ! docker_is_production && ! is_public_vm_workflow; then
+    local hostname_http_confirmed=0
+    if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+      if docker_guided_host_mapping_checkpoint; then
+        hostname_http_confirmed=1
+      fi
+      if [[ "$hostname_http_confirmed" -eq 1 ]]; then
+        if confirm "Set up trusted local HTTPS for https://$(docker_site_name) now?"; then
+          run_trusted_mkcert_setup || warn "Local HTTPS did not complete. Retry with: $(toolkit_cmd local-ssl-wizard)"
+        else
+          echo "Skipped. Configure later with: $(toolkit_cmd local-ssl-wizard)"
+        fi
+      fi
+
+      echo
+      if confirm "Apply the local security profile / firewall now?"; then
+        configure_local_vm_firewall || warn "Local firewall profile did not complete. Retry with: $(toolkit_cmd local-firewall-profile)"
+      else
+        echo "Skipped. Run later with: $(toolkit_cmd local-firewall-profile)"
+      fi
+    else
+      docker_host_mapping_checkpoint
+    fi
+  elif docker_is_production && [[ "${DOCKER_PUBLIC_GUIDED_ACTIVE:-0}" -ne 1 ]] && ! docker_https_enabled; then
+    if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]] && confirm "Configure production HTTPS now?"; then
+      docker_https_wizard || warn "Production HTTPS did not complete."
+    fi
+  fi
 
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
     if confirm "Install optional Frappe apps now?"; then
       docker_app_install_wizard
     fi
-    if confirm "Take an initial database backup now?"; then
-      docker_backup false || warn "Backup did not complete."
+    if confirm "Take an initial durable Docker backup now?"; then
+      docker_backup true || warn "Backup did not complete."
     fi
   fi
 
   docker_show_next_steps
-  docker_prompt_open_main_menu
+  if [[ "${DOCKER_PUBLIC_GUIDED_ACTIVE:-0}" -ne 1 ]]; then
+    docker_prompt_open_main_menu
+  fi
 }
 
 # doctor rows for the Docker engine.
@@ -2703,11 +2968,17 @@ docker_doctor_detail() {
 # frontend to resolve the single configured site by host header.
 docker_write_prod_env() {
   require_sudo
-  local envf site admin_pw db_pw tag
+  local envf site admin_pw db_pw tag existing_admin existing_db
   envf="$(docker_prod_env_file)"
   site="$(docker_site_name)"
-  admin_pw="${DOCKER_ADMIN_PASSWORD:-$(random_password)}"
-  db_pw="${DOCKER_DB_ROOT_PASSWORD:-$(random_password)}"
+
+  existing_admin="$(docker_env_value "$(docker_env_file)" DOCKER_ADMIN_PASSWORD)"
+  existing_db="$(docker_env_value "$(docker_env_file)" DOCKER_DB_ROOT_PASSWORD)"
+  if [[ -f "$envf" && -z "$existing_db" ]]; then
+    existing_db="$(docker_env_value "$envf" DB_PASSWORD)"
+  fi
+  admin_pw="${DOCKER_ADMIN_PASSWORD:-${existing_admin:-$(random_password)}}"
+  db_pw="${DOCKER_DB_ROOT_PASSWORD:-${existing_db:-$(random_password)}}"
   DOCKER_ADMIN_PASSWORD="$admin_pw"
   DOCKER_DB_ROOT_PASSWORD="$db_pw"
   tag="$(docker_image_tag)"
@@ -2717,7 +2988,7 @@ docker_write_prod_env() {
 # ERPNext Developer Toolkit - Docker production env (compose.yaml interpolation)
 ERPNEXT_VERSION=${tag}
 DB_PASSWORD=${db_pw}
-HTTP_PUBLISH_PORT=${DOCKER_PUBLISH_PORT}
+HTTP_PUBLISH_PORT=127.0.0.1:${DOCKER_PUBLISH_PORT}
 FRAPPE_SITE_NAME_HEADER=${site}
 EOF_DOCKER_PROD_ENV
   $SUDO chown root:root "$envf" 2>/dev/null || true
@@ -2725,9 +2996,8 @@ EOF_DOCKER_PROD_ENV
 
   $SUDO tee "$DOCKER_CREDENTIALS_FILE" >/dev/null <<EOF_DOCKER_PROD_CREDS
 # ERPNext Developer Toolkit - Docker engine credentials (production)
-# Site:      ${site}
-# Local URL: http://localhost:${DOCKER_PUBLISH_PORT}
-# Friendly:  http://${site}:${DOCKER_PUBLISH_PORT} (after host/DNS mapping)
+# Internal site: ${site}
+# Public domain: $(docker_public_domain)
 Administrator password: ${admin_pw}
 MariaDB root password:  ${db_pw}
 EOF_DOCKER_PROD_CREDS
@@ -2868,7 +3138,7 @@ docker_prod_guided_install() {
   SITE_NAME="$(docker_site_name)"
   write_dev_config_file
 
-  docker_compose_up || fail "docker compose up failed. Inspect with: $(toolkit_cmd logs)"
+  docker_compose up -d --remove-orphans || fail "docker compose up failed. Inspect with: $(toolkit_cmd logs)"
   docker_prod_create_site || fail "Site creation failed. See the logs above, or run: $(toolkit_cmd logs)"
   docker_ready || warn "Stack started but readiness check timed out; it may still be initializing."
   docker_write_pins || warn "Could not record immutable pins."

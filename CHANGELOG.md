@@ -1,18 +1,22 @@
-## v1.19.19-beta.3 - Guided local hostname and mkcert workflow beta
+## v1.19.20-beta.1 - Docker access and guided HTTPS parity
 
 ### Fixed
 
-- **DHCP no longer skips hostname setup:** declining the optional static-IP step now continues with the current DHCP address, warns that the HOST mapping may need refresh after an IP change, and always runs the friendly-hostname checkpoint before HTTPS is offered.
-- **HTTP-before-HTTPS checkpoint:** the guided local flow now requires the operator to confirm `http://<site>:8000/login` works from the HOST before continuing to trusted HTTPS. If the checkpoint is skipped, guided HTTPS is skipped instead of silently continuing.
-- **Single mkcert HOST handoff:** trusted mkcert setup now asks once whether the HOST-side generate/copy command completed; after confirmation, the toolkit automatically validates and installs the certificate, configures Nginx HTTPS, settles the runtime, and verifies HTTPS/frontend assets.
-- **Condensed mkcert guide:** removed the redundant manual VM install/configure steps and the repeated full hosts-file block from the normal guide. The standalone SSL wizard and Start Here guided flow use the same `trusted-mkcert-setup` transaction.
+- **Correct Docker access port:** Docker quick/local stacks now consistently use the configured host-published frontend port (`8080` by default) instead of presenting native Bench port `8000` as a Docker browser endpoint.
+- **Friendly local domain:** Docker access, host-mapping, verification, and local firewall guidance now share the same published-port model; trusted local HTTPS can proxy the Docker frontend through the toolkit-managed Nginx/mkcert workflow.
+- **Guided production Docker:** the Public VM guided wizard chooses the deployment engine before firewall/install planning, provisions fresh Docker installs directly as production Compose, and safely promotes an existing quick/dev Docker stack before production HTTPS.
+- **Docker HTTPS workflow:** `docker-https-wizard` no longer dead-ends on a quick/dev installation. Local Docker routes to the local trusted-HTTPS workflow; public Docker offers production promotion and then Traefik TLS (Let's Encrypt or Cloudflare Origin CA).
+- **Public domain routing:** Docker Traefik uses `PRODUCTION_DOMAIN` for the public router while preserving the configured internal Frappe site name through `FRAPPE_SITE_NAME_HEADER`.
+- **Promotion credential continuity:** production promotion reuses the existing Docker database/admin credentials so retained Compose volumes are not paired with a newly generated MariaDB root password.
+- **Engine-aware hardening:** local Docker no longer relies on UFW to control a published container port. The local profile installs a persistent `DOCKER-USER` forwarding filter (IPv4 plus IPv6 when Docker IPv6 forwarding is active) for the saved frontend port. Public production keeps the temporary direct port loopback-only before HTTPS and removes it from public exposure after Traefik takes over `80/443`; `8000/9000` remain container-internal.
+- **Engine-native backups:** generic `backup` / `backup-files` and Docker backup/restore aliases now route to the Docker backup/restore implementation when Docker is active.
 
-### Validation target
+### Validation
 
-- Fresh local VM with DHCP: decline static IP → apply HOST mapping → confirm HTTP hostname → complete mkcert HTTPS without leaving the guided flow.
-- Re-enter through Local HTTPS → Trusted mkcert setup and verify the same HOST-handoff/automatic-VM workflow.
+- Added `scripts/test-docker-access-routing.sh` covering Docker `8080` routing, native `8000/9000` preservation, public-domain Traefik rules, credential reuse during promotion, HTTPS wizard routing, guided-workflow wiring, loopback-only production pre-HTTPS exposure, and Docker `DOCKER-USER` forwarding-filter generation.
+- Real VM/VPS acceptance remains required before promotion to stable v1.19.20: local Docker direct/friendly/HTTPS access and public Docker guided production HTTPS must both pass end to end.
 
-## v1.19.19-beta.2 - Frontend repair runtime synchronization beta
+## v1.19.19 - Frontend repair runtime synchronization beta
 
 ### Fixed
 

@@ -5,7 +5,28 @@
 [[ -n "${_ERPNEXT_DEV_ACCESS_LOADED:-}" ]] && return 0
 _ERPNEXT_DEV_ACCESS_LOADED=1
 
+# Engine-aware direct HTTP port for local/browser access. Native Bench exposes
+# port 8000; the official frappe_docker frontend publishes container port 8080
+# on DOCKER_PUBLISH_PORT (8080 by default). Keep this helper dependency-light so
+# access, SSL, and firewall modules can share one source of truth.
+local_entry_http_port() {
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    printf '%s\n' "${DOCKER_PUBLISH_PORT:-8080}"
+  else
+    printf '8000\n'
+  fi
+}
+
+local_entry_http_url() {
+  local host="${1:-${SITE_NAME}}"
+  printf 'http://%s:%s\n' "$host" "$(local_entry_http_port)"
+}
+
 show_ready_summary() {
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    docker_print_access
+    return
+  fi
   local vm_ip
   vm_ip="$(get_vm_ip)"
 
@@ -777,19 +798,20 @@ print_host_dns_commands_for_site() {
 # tailored to the host OS (getent/dscacheutil/Resolve-DnsName differ).
 print_host_dns_tests_for_site() {
   local site="${1:-$SITE_NAME}" vm_ip="${2:-}"
-  local host_os map_ip
+  local host_os map_ip port
   vm_ip="${vm_ip:-$(get_vm_ip)}"
   host_os="$(effective_host_os)"
   map_ip="$(host_mapping_ip "$vm_ip")"
+  port="$(local_entry_http_port)"
 
   case "$host_os" in
     windows|windows-wsl)
       echo "  Resolve-DnsName ${site}    # or: nslookup ${site}"
-      echo "  curl.exe -I http://${site}:8000    # or: Invoke-WebRequest http://${site}:8000"
+      echo "  curl.exe -I http://${site}:${port}    # or: Invoke-WebRequest http://${site}:${port}"
       if [[ "$host_os" == "windows-wsl" ]]; then
-        echo "  curl.exe -I http://127.0.0.1:8000   # troubleshooting only"
+        echo "  curl.exe -I http://127.0.0.1:${port}   # troubleshooting only"
       elif [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
-        echo "  curl.exe -I http://${vm_ip}:8000   # troubleshooting only"
+        echo "  curl.exe -I http://${vm_ip}:${port}   # troubleshooting only"
       fi
       if port_listens 443; then
         echo "  curl.exe -kI https://${site}"
@@ -797,11 +819,11 @@ print_host_dns_tests_for_site() {
       ;;
     macos)
       echo "  dscacheutil -q host -a name ${site}"
-      echo "  curl -I http://${site}:8000"
+      echo "  curl -I http://${site}:${port}"
       if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
-        echo "  curl -I http://${vm_ip}:8000   # troubleshooting only"
+        echo "  curl -I http://${vm_ip}:${port}   # troubleshooting only"
       else
-        echo "  curl -I http://\${VM_IP}:8000   # troubleshooting only"
+        echo "  curl -I http://\${VM_IP}:${port}   # troubleshooting only"
       fi
       if port_listens 443; then
         echo "  curl -kI https://${site}"
@@ -809,11 +831,11 @@ print_host_dns_tests_for_site() {
       ;;
     *)
       echo "  getent hosts ${site}"
-      echo "  curl -I http://${site}:8000"
+      echo "  curl -I http://${site}:${port}"
       if [[ "$vm_ip" != "unknown" && -n "$vm_ip" ]]; then
-        echo "  curl -I http://${vm_ip}:8000   # troubleshooting only"
+        echo "  curl -I http://${vm_ip}:${port}   # troubleshooting only"
       else
-        echo "  curl -I http://\${VM_IP}:8000   # troubleshooting only"
+        echo "  curl -I http://\${VM_IP}:${port}   # troubleshooting only"
       fi
       if port_listens 443; then
         echo "  curl -kI https://${site}"
@@ -847,8 +869,8 @@ show_local_domain_status() {
   status_line "Host OS" "INFO" "$(host_os_label)"
   status_line "Network type" "INFO" "$detected_network"
   status_line "Bench" "INFO" "$bench_dir"
-  status_line "Direct URL" "INFO" "http://${vm_ip}:8000"
-  status_line "Friendly URL" "INFO" "http://${SITE_NAME}:8000"
+  status_line "Direct URL" "INFO" "http://${vm_ip}:$(local_entry_http_port)"
+  status_line "Friendly URL" "INFO" "http://${SITE_NAME}:$(local_entry_http_port)"
   echo
   echo "Important: ${SITE_NAME} is a local-only name. It is not public DNS."
   echo "Your HOST machine must map ${SITE_NAME} to the current VM IP."
@@ -906,6 +928,12 @@ show_local_host_mapping_checkpoint() {
 
 local_access_doctor() {
   require_sudo
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    docker_verify_access
+    echo
+    docker_host_mapping_checkpoint
+    return
+  fi
   local vm_ip direct_head site_head ip_head gateway
   vm_ip="$(get_vm_ip)"
   gateway="$(get_default_gateway 2>/dev/null || true)"
@@ -960,6 +988,10 @@ local_access_doctor() {
 }
 
 show_access_instructions() {
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    docker_print_access
+    return
+  fi
   local vm_ip escaped_site bench_dir
   vm_ip="$(get_vm_ip)"
   bench_dir="$(active_bench_dir)"
