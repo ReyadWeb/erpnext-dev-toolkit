@@ -1953,11 +1953,12 @@ public_vm_guided_install_core() {
     if [[ "$installed" == Installed* ]] && ! docker_is_production; then
       docker_promote_to_production || return 1
     elif [[ "$installed" != Installed* ]]; then
-      DOCKER_MODE="production" \
-      DOCKER_MODE_ENV_PROVIDED=1 \
-      DEPLOYMENT_MODE="public-vm" \
-      DOCKER_PUBLIC_GUIDED_ACTIVE=1 \
-      run_install || return 1
+      DOCKER_MODE="production"
+      DOCKER_MODE_ENV_PROVIDED=1
+      DEPLOYMENT_MODE="public-vm"
+      DOCKER_PUBLIC_GUIDED_ACTIVE=1
+      run_install || { DOCKER_PUBLIC_GUIDED_ACTIVE=0; return 1; }
+      DOCKER_PUBLIC_GUIDED_ACTIVE=0
     elif [[ "$runtime" != Running* ]]; then
       docker_runtime_start || return 1
     else
@@ -2090,6 +2091,12 @@ public_vm_guided_configure_https() {
   show_production_ssl_status || true
 }
 
+public_vm_guided_credentials_checkpoint() {
+  deployment_engine_is_docker || return 0
+  public_vm_guided_step "7b" "Login credentials"
+  docker_guided_credentials_checkpoint || true
+}
+
 public_vm_guided_security_profile() {
   public_vm_guided_step "8" "Production security profile"
   echo "This applies the engine-aware production firewall/exposure profile and then configures Fail2Ban for sshd."
@@ -2158,7 +2165,7 @@ run_public_vm_guided_setup() {
   install_self_for_reuse
 
   ui_box_start "Public VM Guided Setup"
-  echo "Guided order: domain -> engine -> DNS -> firewall/snapshot -> install -> backup -> HTTPS -> security -> operations -> QA."
+  echo "Guided order: domain -> engine -> DNS -> firewall/snapshot -> install -> backup -> HTTPS -> credentials -> security -> operations -> QA."
   status_line "VM IPv4" "INFO" "$(get_vm_ip 2>/dev/null || echo unknown)"
   status_line "Production domain" "$([[ -n "${PRODUCTION_DOMAIN:-}" ]] && echo OK || echo WARN)" "${PRODUCTION_DOMAIN:-not set}"
   status_line "Current engine" "INFO" "$(deployment_engine_label)"
@@ -2186,6 +2193,7 @@ run_public_vm_guided_setup() {
   public_vm_guided_production_runtime || return 1
   public_vm_guided_backup_checkpoint || true
   public_vm_guided_configure_https || return 1
+  public_vm_guided_credentials_checkpoint || true
   public_vm_guided_security_profile || return 1
   public_vm_guided_backups_and_operations || true
   public_vm_guided_optional_apps || true

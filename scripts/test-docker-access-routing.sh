@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regression tests for Docker access / HTTPS / firewall routing (v1.19.20-beta.1).
+# Regression tests for Docker access / HTTPS / credentials / firewall routing (v1.19.20-beta.2).
 # Hermetic: no Docker daemon, sudo, network, nginx, or UFW changes.
 set -Eeuo pipefail
 
@@ -83,6 +83,7 @@ source "${ROOT_DIR}/lib/ssl.sh"
 require_sudo() { :; }
 log() { :; }
 warn() { echo "WARN: $*" >/dev/null; }
+path_is_file() { [[ -f "$1" ]]; }
 
 mkdir -p "$DOCKER_WORKDIR"
 
@@ -135,6 +136,35 @@ assert_eq "production pre-HTTPS port is loopback-only" "127.0.0.1:8080" "$(docke
 creds="$(cat "$DOCKER_CREDENTIALS_FILE")"
 assert_contains "Administrator password reused" "$creds" "existing-admin-secret"
 assert_contains "MariaDB password reused" "$creds" "existing-db-secret"
+
+assert_eq "Docker credentials menu uses engine-native file" "$DOCKER_CREDENTIALS_FILE" "$(credentials_file_path)"
+assert_contains "Docker credentials record has shared Login section" "$creds" "Login:"
+assert_contains "Docker credentials record has Administrator username" "$creds" "Username: Administrator"
+assert_contains "Docker credentials record has MariaDB Root section" "$creds" "MariaDB Root:"
+
+# Password reset state should refresh an existing Docker credential record, but an
+# intentional credentials-delete must stay deleted rather than being recreated.
+DOCKER_MODE="development"
+cat >"$(docker_env_file)" <<'ENV_RESET'
+DOCKER_ADMIN_PASSWORD=old-admin-secret
+DOCKER_DB_ROOT_PASSWORD=existing-db-secret
+ENV_RESET
+docker_write_credentials_record "old-admin-secret" "existing-db-secret" "development"
+docker_update_credentials_admin_password "new-admin-secret"
+assert_eq "Docker reset updates dev env Administrator state" "new-admin-secret" "$(docker_env_value "$(docker_env_file)" DOCKER_ADMIN_PASSWORD)"
+updated_creds="$(cat "$DOCKER_CREDENTIALS_FILE")"
+assert_contains "Docker reset refreshes existing credential record" "$updated_creds" "new-admin-secret"
+rm -f "$DOCKER_CREDENTIALS_FILE"
+docker_update_credentials_admin_password "newer-admin-secret"
+if [[ -f "$DOCKER_CREDENTIALS_FILE" ]]; then
+  fail_case "Docker reset recreated an intentionally deleted credential record"
+else
+  pass "Docker reset respects intentionally deleted credential record"
+fi
+
+# Restore production state for the remaining routing tests.
+DOCKER_MODE="production"
+docker_write_prod_env >/dev/null
 
 # 5. Local Docker HTTPS must route into the native-parity local SSL workflow,
 # rather than fail with 'run docker-production-setup first'.
@@ -194,7 +224,43 @@ else
   fail_case "local Docker guided flow missing firewall hardening step"
 fi
 
-# 8. Docker-published ports bypass normal UFW INPUT handling. The local profile
+if grep -q 'docker_guided_credentials_checkpoint' lib/docker.sh \
+  && grep -q 'Reveal the generated Administrator password now' lib/docker.sh; then
+  pass "Docker guided flow offers credentials reveal checkpoint"
+else
+  fail_case "Docker guided flow missing credentials reveal checkpoint"
+fi
+if grep -q 'public_vm_guided_credentials_checkpoint' lib/install.sh \
+  && grep -q 'public_vm_guided_configure_https || return 1' lib/install.sh \
+  && grep -q 'public_vm_guided_credentials_checkpoint || true' lib/install.sh; then
+  pass "public Docker guided flow includes credentials between HTTPS and hardening"
+else
+  fail_case "public Docker guided flow missing credentials checkpoint"
+fi
+if grep -q 'docker_bench --site "$site" set-admin-password "$new_password"' lib/access.sh; then
+  pass "shared reset-admin-password routes to Docker bench"
+else
+  fail_case "Docker Administrator password reset is not engine-aware"
+fi
+
+# 8. Native optional-app UX should keep the safety checks that matter without
+# repeatedly rendering the full compatibility matrix or doing duplicate remote
+# branch probes before bench get-app performs the real fetch.
+echo "== native optional-app fast path =="
+preflight_calls="$(awk '/^run_app_install_wizard\(\)/,/^}/' lib/apps.sh | grep -c 'app_wizard_preflight' || true)"
+assert_eq "native app wizard runs general preflight once" "1" "$preflight_calls"
+if awk '/^install_frappe_app\(\)/,/^}/' lib/apps.sh | grep -q 'branch_available'; then
+  fail_case "native app install still performs duplicate branch_available network precheck"
+else
+  pass "native app install lets bench get-app perform the single remote branch validation"
+fi
+if grep -q 'show_app_compatibility_card .* "false"' lib/apps.sh; then
+  pass "selected native app keeps local compatibility guidance without remote pre-probe"
+else
+  fail_case "selected native app compatibility path still performs remote pre-probe"
+fi
+
+# 9. Docker-published ports bypass normal UFW INPUT handling. The local profile
 # therefore writes a persistent DOCKER-USER filter, including an IPv6 mirror
 # when Docker's IPv6 forwarding backend is active.
 echo "== Docker-aware local firewall filter =="
@@ -223,7 +289,7 @@ ufw_calls="$(cat "$UFW_LOG")"
 assert_contains "Native local profile still grants UFW 8000" "$ufw_calls" '8000'
 DEPLOYMENT_ENGINE="docker"
 
-# 9. Production HTTP is safe before TLS: the direct frontend port must bind to
+# 10. Production HTTP is safe before TLS: the direct frontend port must bind to
 # loopback only. Once HTTPS is enabled, only Traefik's 80/443 may be public.
 echo "== production exposure bindings =="
 DOCKER_MODE="production"

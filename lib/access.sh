@@ -1850,6 +1850,36 @@ show_access_menu() {
   done
 }
 
+credentials_engine_is_docker() {
+  if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
+    return 0
+  fi
+  [[ "${DEPLOYMENT_ENGINE:-}" == "docker" ]]
+}
+
+credentials_file_path() {
+  if credentials_engine_is_docker; then
+    printf '%s\n' "${DOCKER_CREDENTIALS_FILE:-${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/erpnext-dev-docker-credentials.txt}"
+  else
+    printf '%s\n' "${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  fi
+}
+
+credentials_display_site() {
+  if credentials_engine_is_docker; then
+    if declare -F docker_is_production >/dev/null 2>&1 && docker_is_production && [[ -n "${PRODUCTION_DOMAIN:-}" ]]; then
+      printf '%s\n' "$PRODUCTION_DOMAIN"
+    elif declare -F docker_site_name >/dev/null 2>&1; then
+      docker_site_name
+    else
+      printf '%s\n' "${SITE_NAME}"
+    fi
+  else
+    printf '%s\n' "${PRODUCTION_DOMAIN:-${SITE_NAME}}"
+  fi
+}
+
+
 show_credentials_menu() {
   while true; do
     ui_submenu_header "Credentials / Login" "Private console required to reveal passwords"
@@ -1882,8 +1912,8 @@ show_credentials_info() {
   require_sudo
 
   local cred_file current_site
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
-  current_site="${PRODUCTION_DOMAIN:-${SITE_NAME}}"
+  cred_file="$(credentials_file_path)"
+  current_site="$(credentials_display_site)"
 
   ui_box_start "ERPNext Login"
   status_line "Username" "INFO" "Administrator"
@@ -1911,7 +1941,7 @@ show_credentials_file_status() {
   require_sudo
 
   local cred_file owner group mode size modified status perm_status
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
 
   echo
   echo "============================================================"
@@ -1960,7 +1990,7 @@ credentials_secure() {
   require_sudo
 
   local cred_file
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
 
   if ! path_is_file "$cred_file"; then
     warn "Credentials file is missing: $cred_file"
@@ -1978,7 +2008,7 @@ credentials_show() {
   require_sudo
 
   local cred_file reply
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
 
   echo
   echo "============================================================"
@@ -2023,8 +2053,20 @@ credentials_show() {
       echo "============================================================"
       $SUDO awk '
         /^Login:/ { section="login"; next }
-        /^MariaDB Bench Admin:/ { section="db"; next }
+        /^MariaDB (Bench Admin|Root):/ { section="db"; next }
         /^Start ERPNext:/ { exit }
+        /^Administrator password:/ {
+          value=$0; sub(/^Administrator password:[[:space:]]*/, "", value);
+          print "ERPNext Username: Administrator";
+          print "ERPNext Password: " value;
+          next
+        }
+        /^MariaDB root password:/ {
+          value=$0; sub(/^MariaDB root password:[[:space:]]*/, "", value);
+          print "MariaDB User: root";
+          print "MariaDB Password: " value;
+          next
+        }
         section == "login" && /^[[:space:]]+Username:/ { sub(/^[[:space:]]+/, ""); print "ERPNext " $0; next }
         section == "login" && /^[[:space:]]+Password:/ { sub(/^[[:space:]]+/, ""); print "ERPNext " $0; next }
         section == "db" && /^[[:space:]]+User:/ { sub(/^[[:space:]]+/, ""); print "MariaDB " $0; next }
@@ -2047,7 +2089,7 @@ credentials_delete() {
   require_sudo
 
   local cred_file reply
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
 
   echo
   echo "============================================================"
@@ -2087,18 +2129,27 @@ reset_admin_password() {
   require_sudo
 
   local bench_dir site new_password confirm_password pw_quoted site_quoted
-  bench_dir="$(active_bench_dir 2>/dev/null || printf '%s' "${BENCH_DIR}")"
-  site="${SITE_NAME}"
+  if credentials_engine_is_docker; then
+    site="$(docker_site_name)"
+    bench_dir="Docker backend container"
+  else
+    bench_dir="$(active_bench_dir 2>/dev/null || printf '%s' "${BENCH_DIR}")"
+    site="${SITE_NAME}"
+  fi
 
   echo
   echo "============================================================"
   echo "Reset ERPNext Administrator Password"
   echo "============================================================"
   status_line "Site" "INFO" "$site"
-  status_line "Bench" "INFO" "$bench_dir"
+  if credentials_engine_is_docker; then
+    status_line "Runtime" "INFO" "$bench_dir"
+  else
+    status_line "Bench" "INFO" "$bench_dir"
+  fi
   echo
 
-  if [[ ! -d "$bench_dir" ]]; then
+  if ! credentials_engine_is_docker && [[ ! -d "$bench_dir" ]]; then
     fail "Bench folder not found: $bench_dir"
   fi
 
@@ -2118,15 +2169,29 @@ reset_admin_password() {
     fail "Passwords do not match."
   fi
 
-  pw_quoted="$(printf '%q' "$new_password")"
-  site_quoted="$(printf '%q' "$site")"
-
   echo "Updating Administrator password..."
-  run_as_frappe "cd '${bench_dir}' && bench --site ${site_quoted} set-admin-password ${pw_quoted}"
+  if credentials_engine_is_docker; then
+    docker_bench --site "$site" set-admin-password "$new_password"
+    if declare -F docker_update_credentials_admin_password >/dev/null 2>&1; then
+      docker_update_credentials_admin_password "$new_password" || warn "Password changed, but the local Docker credentials record could not be refreshed."
+    fi
+  else
+    pw_quoted="$(printf '%q' "$new_password")"
+    site_quoted="$(printf '%q' "$site")"
+    run_as_frappe "cd '${bench_dir}' && bench --site ${site_quoted} set-admin-password ${pw_quoted}"
+  fi
   ok "Administrator password updated for ${site}"
   echo
   echo "Save the new password in a password manager."
-  echo "If the generated credentials file contains the old password, remove it with:"
-  echo "  $(toolkit_cmd credentials-delete)"
+  if credentials_engine_is_docker; then
+    if path_is_file "$(credentials_file_path)"; then
+      echo "The Docker credentials record was refreshed with the new Administrator password."
+    else
+      echo "No local Docker credentials file is present."
+    fi
+  elif path_is_file "$(credentials_file_path)"; then
+    echo "The generated native credentials file still contains the old password; remove it with:"
+    echo "  $(toolkit_cmd credentials-delete)"
+  fi
   echo "============================================================"
 }

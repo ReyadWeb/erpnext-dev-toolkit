@@ -594,7 +594,7 @@ prompt_production_credential_handoff_if_needed() {
 
   is_public_vm_workflow || return 0
 
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
   path_is_file "$cred_file" || return 0
 
   echo
@@ -651,7 +651,7 @@ run_security_audit() {
   status_line "Mode" "INFO" "read-only checks; no changes applied automatically"
   status_line "Environment" "INFO" "$(security_environment_label 2>/dev/null || echo unknown)"
 
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
   if path_is_file "$cred_file"; then
     status_line "Credentials file" "WARN" "plaintext file still present at ${cred_file}"
     echo "  Recommended: $(toolkit_cmd credentials-delete) after password-manager handoff"

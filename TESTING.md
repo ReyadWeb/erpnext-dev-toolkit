@@ -1,8 +1,36 @@
 # Testing guide
 
-**Current release:** v1.19.20-beta.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.20-beta.2 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.19.20-beta.2 Docker credentials parity and app-flow regression
+
+This beta keeps the beta.1 Docker access/HTTPS model and closes the remaining
+credential lifecycle gap found during real local-VM testing.
+
+Hermetic regression coverage:
+
+```bash
+bash scripts/test-docker-access-routing.sh
+bash scripts/test-engine-select.sh
+bash scripts/validate-release.sh
+```
+
+Required **local Docker VM** acceptance additions:
+
+1. Complete the normal local Docker guided setup and confirm a credentials checkpoint appears before local firewall hardening.
+2. Choose to reveal credentials and verify the private-terminal output shows `Administrator` plus the generated password without writing secrets to the toolkit log.
+3. From **Credentials / Login**, verify Login info, Show password, File status, Secure file, and Delete local file all reference the Docker credential record rather than `/home/frappe/erpnext-dev-credentials.txt`.
+4. Run `reset-admin-password`; confirm the Docker backend password changes and the Docker credential record is refreshed.
+5. Delete the Docker credential record after saving it externally; Credentials / Login should report it missing and must not silently recreate a plaintext credential file.
+
+Required **native optional-app UX** regression:
+
+1. Open `app-install-wizard`; the general preflight should render once, not again after every return to the menu.
+2. Selecting an app should show only that app's compatibility guidance.
+3. The install should not pause for a separate `git ls-remote` branch probe before `bench get-app`; the actual fetch remains the authoritative remote branch validation.
+4. Backup checkpoints, dependency handling, migrate/build/cache maintenance, restart, and post-install validation must remain unchanged.
 
 ## v1.19.20-beta.1 Docker access and HTTPS parity
 
