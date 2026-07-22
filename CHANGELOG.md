@@ -1,3 +1,18 @@
+## v1.19.20-beta.2 - Docker credentials parity and faster native app flow
+
+### Fixed
+
+- **Docker credentials lifecycle parity:** the shared Credentials / Login menu now resolves the active engine credential file instead of always looking for `/home/frappe/erpnext-dev-credentials.txt`. Docker login info, password reveal, file status, secure/delete actions, and Administrator password reset now use the Docker credential record and backend container correctly.
+- **Backward-compatible Docker credential display:** existing beta.1-style Docker credential files remain readable, while new installs write the same structured Login / database sections used by the shared credentials UI.
+- **Guided credentials checkpoint:** local Docker setup now offers the same private-console credential reveal checkpoint as native setup before firewall hardening. Public Docker guided setup adds the checkpoint after HTTPS and before the production security profile.
+- **Credential reset continuity:** `reset-admin-password` routes through `docker_bench` on Docker and refreshes the Docker credential record after a successful reset.
+- **Faster native optional-app wizard:** the general app preflight now runs once when the wizard opens instead of before every menu redraw, the full compatibility matrix is opt-in, and redundant `git ls-remote` branch probes were removed. The selected app still gets compatibility guidance, while `bench get-app` performs the single authoritative remote branch validation during download.
+
+### Validation
+
+- Extended `scripts/test-docker-access-routing.sh` to cover engine-native credential-file routing, structured Docker credential records, Docker password-reset routing, guided credential checkpoints, and the streamlined native optional-app fast path.
+- Local Docker acceptance should re-test: guided credential reveal, all Credentials / Login menu actions, Administrator password reset, and continued access after local HTTPS/hardening.
+
 ## v1.19.20-beta.1 - Docker access and guided HTTPS parity
 
 ### Fixed

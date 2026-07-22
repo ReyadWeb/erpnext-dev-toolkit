@@ -610,6 +610,74 @@ EOF_DOCKER_PINS
   ok "Recorded immutable pins to ${DOCKER_PINS_FILE}"
 }
 
+# Write the Docker credential record in the same structured format used by the
+# native engine so the shared Credentials / Login menu can parse either engine.
+docker_write_credentials_record() {
+  require_sudo
+  local admin_pw="$1" db_pw="$2" mode="${3:-$(docker_mode_label)}" site domain
+  site="$(docker_site_name)"
+  domain="$(docker_public_domain)"
+
+  $SUDO mkdir -p "$DOCKER_WORKDIR"
+  $SUDO tee "$DOCKER_CREDENTIALS_FILE" >/dev/null <<EOF_DOCKER_CREDS
+ERPNext Developer Toolkit - Docker Credentials
+
+Site:
+  ${site}
+
+Deployment:
+  Engine: Docker
+  Mode: ${mode}
+
+Login:
+  Username: Administrator
+  Password: ${admin_pw}
+
+MariaDB Root:
+  User: root
+  Password: ${db_pw}
+
+Browser access:
+  Direct Docker HTTP: $(docker_direct_http_url localhost)
+  Friendly local HTTP: http://${site}:${DOCKER_PUBLISH_PORT}
+  Production domain: ${domain}
+EOF_DOCKER_CREDS
+  $SUDO chown root:root "$DOCKER_CREDENTIALS_FILE" 2>/dev/null || true
+  $SUDO chmod 600 "$DOCKER_CREDENTIALS_FILE" 2>/dev/null || true
+}
+
+# Recreate a missing Docker credentials record from the root-only Compose env
+# files when the secrets are still recoverable there. This repairs beta.1-style
+# installations whose shared Credentials menu looked only at the native path.
+
+# Keep the root-only Docker env record and the human-readable credentials record
+# aligned after an Administrator password reset from the shared credentials menu.
+docker_update_credentials_admin_password() {
+  require_sudo
+  local new_password="$1" envf tmp db_pw had_credentials=0
+  path_is_file "$DOCKER_CREDENTIALS_FILE" && had_credentials=1
+
+  # The development compose env carries the generated Administrator password for
+  # create-site. Keep it aligned if it exists so a later dev->production promotion
+  # does not re-advertise the old password. Production env does not retain this
+  # application login secret after provisioning.
+  envf="$(docker_env_file)"
+  if [[ -f "$envf" ]]; then
+    tmp="$(mktemp /tmp/erpnext-dev-docker-env.XXXXXX)" || return 1
+    $SUDO awk '$0 !~ /^DOCKER_ADMIN_PASSWORD=/' "$envf" >"$tmp" || { rm -f "$tmp"; return 1; }
+    printf 'DOCKER_ADMIN_PASSWORD=%s\n' "$new_password" >>"$tmp"
+    $SUDO install -o root -g root -m 600 "$tmp" "$envf"
+    rm -f "$tmp"
+  fi
+
+  # Respect an intentional credentials-delete handoff. Refresh the record only
+  # when it was present before the password reset.
+  if [[ "$had_credentials" -eq 1 ]]; then
+    db_pw="$(docker_db_root_password)"
+    docker_write_credentials_record "$new_password" "$db_pw" "$(docker_mode_label)"
+  fi
+}
+
 # Generate the env file consumed by compose interpolation. Admin/db passwords are
 # kept here (root-owned, 600) instead of on the compose command line.
 docker_write_env() {
@@ -631,16 +699,7 @@ EOF_DOCKER_ENV
   $SUDO chown root:root "$envf" 2>/dev/null || true
   $SUDO chmod 600 "$envf" 2>/dev/null || true
 
-  $SUDO tee "$DOCKER_CREDENTIALS_FILE" >/dev/null <<EOF_DOCKER_CREDS
-# ERPNext Developer Toolkit - Docker engine credentials
-# Site:      $(docker_site_name)
-# Local URL: http://localhost:${DOCKER_PUBLISH_PORT}
-# Friendly:  http://$(docker_site_name):${DOCKER_PUBLISH_PORT} (after host mapping)
-Administrator password: ${admin_pw}
-MariaDB root password:  ${db_pw}
-EOF_DOCKER_CREDS
-  $SUDO chown root:root "$DOCKER_CREDENTIALS_FILE" 2>/dev/null || true
-  $SUDO chmod 600 "$DOCKER_CREDENTIALS_FILE" 2>/dev/null || true
+  docker_write_credentials_record "$admin_pw" "$db_pw" "development"
 }
 
 # Overlay that pins the image, publishes the chosen port, forces the site header,
@@ -2885,6 +2944,24 @@ docker_prompt_open_main_menu() {
   fi
 }
 
+docker_guided_credentials_checkpoint() {
+  [[ -t 0 ]] || return 0
+  [[ "${ASSUME_YES:-0}" -eq 1 ]] && return 0
+
+  echo
+  ui_box_start "Docker setup: login credentials"
+  echo "Your ERPNext Administrator login is ready. Save it before security hardening."
+  ui_box_end
+  show_credentials_info || true
+
+  echo
+  if confirm "Reveal the generated Administrator password now (private console only)?"; then
+    credentials_show || true
+  else
+    echo "Skipped. Reveal it later with: $(toolkit_cmd credentials-show)"
+  fi
+}
+
 # Post-install continuation for the Docker engine, mirroring the native
 # run_guided_setup tail but engine-appropriate. Interactive steps are skipped
 # under -y / non-TTY (matching native local_guided_followups) so automation and
@@ -2912,6 +2989,8 @@ docker_guided_followups() {
         fi
       fi
 
+      docker_guided_credentials_checkpoint
+
       echo
       if confirm "Apply the local security profile / firewall now?"; then
         configure_local_vm_firewall || warn "Local firewall profile did not complete. Retry with: $(toolkit_cmd local-firewall-profile)"
@@ -2925,6 +3004,10 @@ docker_guided_followups() {
     if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]] && confirm "Configure production HTTPS now?"; then
       docker_https_wizard || warn "Production HTTPS did not complete."
     fi
+  fi
+
+  if docker_is_production && [[ "${DOCKER_PUBLIC_GUIDED_ACTIVE:-0}" -ne 1 ]]; then
+    docker_guided_credentials_checkpoint
   fi
 
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
@@ -2994,15 +3077,7 @@ EOF_DOCKER_PROD_ENV
   $SUDO chown root:root "$envf" 2>/dev/null || true
   $SUDO chmod 600 "$envf" 2>/dev/null || true
 
-  $SUDO tee "$DOCKER_CREDENTIALS_FILE" >/dev/null <<EOF_DOCKER_PROD_CREDS
-# ERPNext Developer Toolkit - Docker engine credentials (production)
-# Internal site: ${site}
-# Public domain: $(docker_public_domain)
-Administrator password: ${admin_pw}
-MariaDB root password:  ${db_pw}
-EOF_DOCKER_PROD_CREDS
-  $SUDO chown root:root "$DOCKER_CREDENTIALS_FILE" 2>/dev/null || true
-  $SUDO chmod 600 "$DOCKER_CREDENTIALS_FILE" 2>/dev/null || true
+  docker_write_credentials_record "$admin_pw" "$db_pw" "production"
 }
 
 # Generated override that pins the ERPNext image across every customizable

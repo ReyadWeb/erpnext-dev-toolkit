@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.20-beta.1 · **Readiness:** Docker access/HTTPS beta validation; latest stable is v1.19.19.
+**Current release:** v1.19.20-beta.2 · **Readiness:** Docker access/HTTPS + credentials beta validation; latest stable is v1.19.19.
 
 ### Beta testing channel
 
@@ -170,7 +170,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.20-beta.1"
+VERSION="v1.19.20-beta.2"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
@@ -582,7 +582,11 @@ sudo erpnext-dev install-cli    # or: repair-cli
 ## Credentials
 
 The toolkit saves the generated ERPNext Administrator password and database
-credentials on the VM. The safe overview does **not** print passwords.
+credentials on the VM. The safe overview does **not** print passwords. The
+Credentials / Login commands are engine-aware: native installs use the native
+credential record, while Docker installs use the root-only Docker credential
+record under the Docker work directory. Guided local Docker setup offers the same
+private-console credential reveal checkpoint as native setup.
 
 From the interactive menu: **Main menu → Advanced → Credentials**, or open that
 submenu directly:
@@ -856,7 +860,10 @@ certificate change.
 ## Optional Frappe apps
 
 Install optional apps only after the core install is healthy, one at a time, with
-a backup/snapshot checkpoint before each:
+a backup/snapshot checkpoint before each. The native wizard performs its general
+preflight once on entry and checks only the selected app during installation; it
+no longer repeats the full compatibility snapshot or duplicate remote branch probe
+before every app action:
 
 ```bash
 sudo erpnext-dev app-library
