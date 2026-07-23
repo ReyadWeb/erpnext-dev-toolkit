@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.21-beta.3 · **Readiness:** Docker production optional-app core-version pinning beta validation; latest stable is v1.19.20.
+**Current release:** v1.19.21 · **Readiness:** production field validated for native and Docker workflows; latest stable is v1.19.21.
 
 ### Beta testing channel
 
@@ -170,7 +170,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.21-beta.3"
+VERSION="v1.19.21"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"

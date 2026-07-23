@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.21-beta.3 (July 2026)
+**Current release:** v1.19.21 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** field-validate v1.19.21-beta.3 by rebuilding the production CRM/Builder custom image while preserving the currently deployed Frappe and ERPNext versions, then complete final production acceptance before promotion to stable v1.19.21.
+**Next up:** monitor the v1.19.21 stable release in real deployments, strengthen Docker custom-image rollback and frontend asset readiness checks, and continue the production operations roadmap.
 **Deferred:** v1.20.0 External Watchdog until v1.19.20 Docker field validation is complete.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  

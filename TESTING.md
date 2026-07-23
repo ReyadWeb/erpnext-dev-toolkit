@@ -1,8 +1,33 @@
 # Testing guide
 
-**Current release:** v1.19.21-beta.3 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.21 · See [`ROADMAP.md`](ROADMAP.md) for validated capabilities and future work.
 
 ---
+
+## v1.19.21 stable production acceptance
+
+The v1.19.21 Docker optional-app architecture completed real production validation on the project's production VPS.
+
+Validated production behavior:
+
+- CRM and Builder are delivered through one cumulative immutable custom image.
+- Backend, frontend, websocket, queue-short, queue-long, and scheduler run the same custom image.
+- Locally built custom images deploy without an unintended registry pull.
+- Frappe remained pinned at `16.28.0` during the final custom-image rebuild.
+- ERPNext remained pinned at `16.29.0` during the final custom-image rebuild.
+- CRM remained installed at `1.79.1`.
+- Builder remained installed at `1.0.0-dev`.
+- ERPNext, CRM, and Builder were verified through the production browser workflow.
+- The final custom image survived a full VPS reboot.
+- All long-running application services returned automatically after reboot.
+- MariaDB returned healthy and Redis, Traefik, queues, scheduler, and websocket remained operational.
+
+The production image accepted during final field validation was:
+
+`erpnext-dev/custom:20260723092757`
+
+The final field test confirmed that optional-app image rebuilds no longer implicitly upgrade the deployed Frappe or ERPNext core versions.
+
 
 ## v1.19.21-beta.1 Docker production optional-app immutable-image lifecycle
 

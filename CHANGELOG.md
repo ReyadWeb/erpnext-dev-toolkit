@@ -1,3 +1,33 @@
+## v1.19.21 - Production Docker optional-app image reliability
+
+### Added
+
+- **Cumulative production custom images:** Docker production optional applications are delivered through one durable immutable image shared by all application-bearing services.
+- **Core-version preservation:** production custom-image builds capture and preserve the exact deployed Frappe and ERPNext release versions.
+- **Immutable source pinning:** Frappe and ERPNext source checkouts use verified release tags instead of silently following moving major-version branches.
+- **Custom-image reconciliation:** installed curated applications can be rediscovered and reconstructed into the cumulative production image.
+- **Core drift verification:** a newly built production image is blocked from deployment when its Frappe or ERPNext versions differ from the captured production baseline.
+
+### Fixed
+
+- Fixed optional applications being installed only into the backend container while frontend, websocket, queues, and scheduler continued running the original ERPNext image.
+- Fixed missing CRM and Builder application code and frontend assets across Docker production services.
+- Fixed Compose attempting to pull locally built `erpnext-dev/custom` images from a registry during deployment.
+- Added `pull_policy: never` for verified locally built production custom images while preserving normal pull behavior for registry-backed images.
+- Fixed optional-app image rebuilds silently advancing Frappe and ERPNext through moving `version-N` branches.
+- Decoupled the Frappe Docker base-image compatibility tag from the exact Frappe source release ref.
+
+### Production validation
+
+- Unified custom image deployed successfully across backend, frontend, websocket, queue-short, queue-long, and scheduler.
+- CRM and Builder application code was present across all required services.
+- Builder JavaScript and CSS assets were served successfully with correct MIME types.
+- ERPNext, CRM, and Builder opened successfully through the production browser workflow.
+- Final pinned rebuild preserved Frappe `16.28.0` and ERPNext `16.29.0`.
+- The accepted production image was `erpnext-dev/custom:20260723092757`.
+- The final stack survived a complete VPS reboot with all long-running application services restored.
+- MariaDB returned healthy and production HTTPS remained operational after reboot.
+
 ## v1.19.21-beta.3 - Docker custom-image core-version pinning
 
 ### Fixed
