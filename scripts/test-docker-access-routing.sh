@@ -144,6 +144,45 @@ assert_contains "Docker credentials record has MariaDB Root section" "$creds" "M
 
 # Password reset state should refresh an existing Docker credential record, but an
 # intentional credentials-delete must stay deleted rather than being recreated.
+#
+# The production function rewrites the Docker env as root:root. This hermetic
+# regression test runs unprivileged, so route privileged commands through a
+# test-only shim that preserves behavior while omitting ownership changes.
+MOCK_SUDO="${TMP_ROOT}/mock-sudo"
+cat >"$MOCK_SUDO" <<'MOCK_SUDO_EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+case "${1:-}" in
+  install)
+    shift
+    args=()
+    while (($#)); do
+      case "$1" in
+        -o|-g)
+          shift 2
+          ;;
+        *)
+          args+=("$1")
+          shift
+          ;;
+      esac
+    done
+    exec install "${args[@]}"
+    ;;
+  chown)
+    exit 0
+    ;;
+  *)
+    exec "$@"
+    ;;
+esac
+MOCK_SUDO_EOF
+chmod +x "$MOCK_SUDO"
+
+ORIGINAL_SUDO="${SUDO:-}"
+SUDO="$MOCK_SUDO"
+
 DOCKER_MODE="development"
 cat >"$(docker_env_file)" <<'ENV_RESET'
 DOCKER_ADMIN_PASSWORD=old-admin-secret
@@ -161,6 +200,8 @@ if [[ -f "$DOCKER_CREDENTIALS_FILE" ]]; then
 else
   pass "Docker reset respects intentionally deleted credential record"
 fi
+
+SUDO="$ORIGINAL_SUDO"
 
 # Restore production state for the remaining routing tests.
 DOCKER_MODE="production"

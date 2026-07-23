@@ -1,3 +1,9 @@
+## v1.19.20-beta.3 - Release validation ShellCheck correction
+
+- Fixed the Docker public guided-install environment scoping that triggered ShellCheck SC2034 in GitHub Release Validation.
+- Restored scoped Docker production-mode variables for the guided public installation path.
+- No functional Docker deployment changes from the successfully validated v1.19.20-beta.2 workflow.
+
 ## v1.19.20-beta.2 - Docker credentials parity and faster native app flow
 
 ### Fixed

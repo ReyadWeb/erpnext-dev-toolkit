@@ -1953,12 +1953,11 @@ public_vm_guided_install_core() {
     if [[ "$installed" == Installed* ]] && ! docker_is_production; then
       docker_promote_to_production || return 1
     elif [[ "$installed" != Installed* ]]; then
-      DOCKER_MODE="production"
-      DOCKER_MODE_ENV_PROVIDED=1
-      DEPLOYMENT_MODE="public-vm"
-      DOCKER_PUBLIC_GUIDED_ACTIVE=1
-      run_install || { DOCKER_PUBLIC_GUIDED_ACTIVE=0; return 1; }
-      DOCKER_PUBLIC_GUIDED_ACTIVE=0
+      DOCKER_MODE="production" \
+      DOCKER_MODE_ENV_PROVIDED=1 \
+      DEPLOYMENT_MODE="public-vm" \
+      DOCKER_PUBLIC_GUIDED_ACTIVE=1 \
+        run_install || return 1
     elif [[ "$runtime" != Running* ]]; then
       docker_runtime_start || return 1
     else
