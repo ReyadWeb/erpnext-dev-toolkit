@@ -1,3 +1,19 @@
+## v1.19.20 - Validated Docker production deployment and credentials parity
+
+- Fixed Docker local access routing and standardized direct Docker access on port 8080.
+- Added guided local Docker domain and trusted HTTPS workflows.
+- Added the complete guided public Docker production deployment path.
+- Integrated production-stack promotion with the Docker HTTPS workflow.
+- Added Cloudflare-aware DNS and HTTPS guidance validated on a real proxied domain.
+- Added Docker-aware firewall hardening and production exposure protections.
+- Added engine-aware Docker credentials storage, display, lifecycle, and password-reset handling.
+- Added credentials checkpoints to guided Docker installation workflows.
+- Streamlined native optional-app compatibility checks while preserving installation safeguards.
+- Added and expanded Docker routing, HTTPS, credentials, hardening, and production regression coverage.
+- Validated the release on local Docker VMs and a real public VPS deployment.
+- Validated Ubuntu 24.04 and Ubuntu 26.04 integration paths.
+- Fixed release-validation ShellCheck scoping and hermetic Docker credentials regression coverage.
+
 ## v1.19.20-beta.3 - Release validation ShellCheck correction
 
 - Fixed the Docker public guided-install environment scoping that triggered ShellCheck SC2034 in GitHub Release Validation.
