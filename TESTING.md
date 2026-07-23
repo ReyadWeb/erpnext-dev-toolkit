@@ -1,8 +1,53 @@
 # Testing guide
 
-**Current release:** v1.19.20 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.21-beta.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.19.21-beta.1 Docker production optional-app immutable-image lifecycle
+
+### Regression addressed
+
+v1.19.20 production Docker optional-app installation could mutate only the running backend container. The site database then reported apps such as CRM and Builder as installed while frontend, scheduler, queue workers, and websocket continued running the original ERPNext-only image. This produced missing app assets, broken icons, blank single-page applications, and inconsistent application code across services.
+
+### Beta behavior
+
+- Production Docker optional apps use a cumulative custom-image workflow instead of backend-only runtime mutation.
+- Existing installed curated apps are rediscovered and preserved when generating the desired image.
+- Selected custom-image profiles persist across separate CLI invocations.
+- Curated dependencies are included in the desired image; Helpdesk includes Telephony.
+- `docker-reconcile-app-image` rebuilds an existing production deployment from the curated apps already installed on the site.
+- The production image override pins configurator, backend, frontend, websocket, queue-short, queue-long, and scheduler to the same image.
+- Custom images are verified before deployment and the running application services are verified after deployment.
+- Docker development mode retains the existing disposable runtime-install workflow.
+
+### Automated validation
+
+`scripts/test-docker-access-routing.sh` now verifies:
+
+- cumulative discovery of installed curated apps;
+- persistent desired-app state;
+- CRM and Builder inclusion in generated `apps.json`;
+- dependency expansion;
+- safe refusal to reconstruct unknown custom apps automatically;
+- production build-and-deploy routing;
+- development runtime-install preservation;
+- identical production image assignment across all seven customizable services;
+- runtime application-code verification across backend, frontend, websocket, workers, and scheduler;
+- frontend asset checks for applications such as CRM and Builder.
+
+### Field validation required before stable promotion
+
+Use the existing production VPS that reproduces the v1.19.20 backend-only CRM and Builder installation:
+
+1. Update the Toolkit to v1.19.21-beta.1.
+2. Run `sudo erpnext-dev docker-reconcile-app-image`.
+3. Confirm the generated image contains CRM and Builder.
+4. Confirm all application services run the same custom image.
+5. Confirm CRM and Builder frontend assets return successfully instead of HTTP 404.
+6. Confirm `/crm` and `/builder` render correctly.
+7. Confirm queues, scheduler, websocket, ERPNext Desk, HTTPS, and credentials remain healthy.
+8. Reboot the VPS and verify the reconciled deployment remains healthy.
 
 ## v1.19.20-beta.2 Docker credentials parity and app-flow regression
 

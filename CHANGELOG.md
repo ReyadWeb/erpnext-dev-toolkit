@@ -1,3 +1,23 @@
+## v1.19.21-beta.1 - Docker production optional-app immutable-image lifecycle
+
+### Fixed
+
+- **Production Docker optional-app consistency:** optional apps no longer mutate only the running backend container. Production installs now build and deploy one cumulative immutable image shared by every application-bearing service.
+- **Existing deployment reconciliation:** added `docker-reconcile-app-image` to reconstruct a custom image from curated apps already installed on the site, including deployments affected by the v1.19.20 backend-only installation behavior.
+- **Persistent desired-app state:** custom-image profile selection is stored on disk so configure, build, deploy, and later reconciliation operations retain the same application set across separate Toolkit invocations.
+- **Cumulative application images:** newly requested apps are combined with existing installed curated apps rather than replacing them in the next image.
+- **Dependency expansion:** curated production-image dependencies are included automatically; Helpdesk brings Telephony into the same image.
+- **Pre-deployment image verification:** custom images are checked for required application code before the production stack is recreated.
+- **Cross-service runtime verification:** backend, frontend, websocket, queue-short, queue-long, and scheduler are checked for consistent optional-app code after deployment.
+- **Frontend asset verification:** applications exposing frontend or public trees are checked for corresponding built assets, directly covering the CRM and Builder 404 failure reproduced on a real production VPS.
+- **Development behavior preserved:** disposable Docker development environments retain the existing runtime `bench get-app` installation path.
+
+### Validation
+
+- Expanded `scripts/test-docker-access-routing.sh` with production optional-app image lifecycle regression coverage.
+- Verified cumulative CRM and Builder discovery, persistent profile state, Helpdesk/Telephony dependency expansion, production build/deploy routing, development-mode isolation, identical image assignment across all seven customizable production services, and cross-container runtime checks.
+- Real VPS acceptance remains required before stable promotion: reconcile the existing broken CRM/Builder production deployment, verify application assets and routes, and confirm persistence after reboot.
+
 ## v1.19.20 - Validated Docker production deployment and credentials parity
 
 - Fixed Docker local access routing and standardized direct Docker access on port 8080.
