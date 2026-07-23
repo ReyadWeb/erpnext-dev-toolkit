@@ -594,7 +594,7 @@ prompt_production_credential_handoff_if_needed() {
 
   is_public_vm_workflow || return 0
 
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
   path_is_file "$cred_file" || return 0
 
   echo
@@ -651,7 +651,7 @@ run_security_audit() {
   status_line "Mode" "INFO" "read-only checks; no changes applied automatically"
   status_line "Environment" "INFO" "$(security_environment_label 2>/dev/null || echo unknown)"
 
-  cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
+  cred_file="$(credentials_file_path)"
   if path_is_file "$cred_file"; then
     status_line "Credentials file" "WARN" "plaintext file still present at ${cred_file}"
     echo "  Recommended: $(toolkit_cmd credentials-delete) after password-manager handoff"
@@ -693,14 +693,28 @@ run_security_audit() {
   if port_listens 22; then
     status_line "SSH port 22" "INFO" "listening (expected for admin access)"
   fi
-  if port_listens 8000; then
-    if is_public_vm_workflow; then
-      status_line "Bench port 8000" "WARN" "listening; should be blocked externally on production"
+  if deployment_engine_is_docker; then
+    if docker_is_production; then
+      if docker_production_exposure >/dev/null 2>&1; then
+        status_line "Docker exposure" "OK" "Compose bindings match the production policy"
+      else
+        status_line "Docker exposure" "WARN" "run $(toolkit_cmd docker-production-exposure)"
+      fi
+    elif docker_local_firewall_filter_status; then
+      status_line "Docker port ${DOCKER_PUBLISH_PORT}" "OK" "private-source DOCKER-USER filter active"
     else
-      status_line "Bench port 8000" "INFO" "listening"
+      status_line "Docker port ${DOCKER_PUBLISH_PORT}" "WARN" "Docker-aware forwarding filter not confirmed"
     fi
   else
-    status_line "Bench port 8000" "INFO" "not listening"
+    if port_listens 8000; then
+      if is_public_vm_workflow; then
+        status_line "Bench port 8000" "WARN" "listening; should be blocked externally on production"
+      else
+        status_line "Bench port 8000" "INFO" "listening"
+      fi
+    else
+      status_line "Bench port 8000" "INFO" "not listening"
+    fi
   fi
   if port_listens 443; then
     status_line "HTTPS port 443" "OK" "listening"
@@ -708,9 +722,25 @@ run_security_audit() {
     status_line "HTTPS port 443" "INFO" "not listening"
   fi
 
-  ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo 'WARN|not configured')"
-  ssl_state="${ssl_pair%%|*}"
-  ssl_detail="${ssl_pair#*|}"
+  if deployment_engine_is_docker; then
+    if docker_is_production && docker_https_enabled; then
+      ssl_state="OK"
+      ssl_detail="Docker $(docker_https_mode) via Traefik for $(docker_public_domain)"
+    elif docker_is_production; then
+      ssl_state="WARN"
+      ssl_detail="Docker production HTTPS not configured"
+    elif declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+      ssl_state="OK"
+      ssl_detail="local Docker HTTPS via host Nginx"
+    else
+      ssl_state="INFO"
+      ssl_detail="local Docker HTTPS not configured"
+    fi
+  else
+    ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo 'WARN|not configured')"
+    ssl_state="${ssl_pair%%|*}"
+    ssl_detail="${ssl_pair#*|}"
+  fi
   status_line "Production HTTPS" "$ssl_state" "$ssl_detail"
 
   if [[ -f /var/run/reboot-required ]]; then
@@ -738,7 +768,12 @@ run_security_audit() {
   echo "Recommended follow-up commands:"
   echo "  $(toolkit_cmd firewall-hardening-status)"
   echo "  $(toolkit_cmd fail2ban-status)"
-  echo "  $(toolkit_cmd production-ssl-status)"
+  if deployment_engine_is_docker; then
+    echo "  $(toolkit_cmd docker-https-status)"
+    echo "  $(toolkit_cmd docker-production-exposure)"
+  else
+    echo "  $(toolkit_cmd production-ssl-status)"
+  fi
   echo "  $(toolkit_cmd credentials-file-status)"
   echo "  $(toolkit_cmd verify-toolkit)"
   echo "  $(toolkit_cmd support-bundle-audit)"

@@ -356,12 +356,32 @@ run_doctor_plain() {
 
   echo
   echo "Access:"
-  echo "  Direct URL:   http://${DOCTOR_VM_IP}:8000"
-  echo "  Friendly URL: http://${SITE_NAME}:8000"
-  if [[ "$DOCTOR_SSL_STATE" == "configured" ]]; then
-    echo "  HTTPS URL:    https://${SITE_NAME}"
+  if deployment_engine_is_docker; then
+    if docker_is_production; then
+      if docker_https_enabled; then
+        echo "  Public URL:   https://$(docker_public_domain)"
+        echo "  Direct port:  not publicly published after HTTPS"
+      else
+        echo "  Public URL:   https://$(docker_public_domain) (HTTPS pending)"
+        echo "  Local HTTP:   http://127.0.0.1:${DOCKER_PUBLISH_PORT}"
+      fi
+      echo "  DNS hostname: $(docker_public_domain)"
+    else
+      echo "  Direct URL:   http://${DOCTOR_VM_IP}:${DOCKER_PUBLISH_PORT}"
+      echo "  Friendly URL: http://$(docker_site_name):${DOCKER_PUBLISH_PORT}"
+      if declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+        echo "  HTTPS URL:    https://$(docker_site_name)"
+      fi
+      echo "  HOST mapping: ${DOCTOR_VM_IP} $(docker_site_name)"
+    fi
+  else
+    echo "  Direct URL:   http://${DOCTOR_VM_IP}:8000"
+    echo "  Friendly URL: http://${SITE_NAME}:8000"
+    if [[ "$DOCTOR_SSL_STATE" == "configured" ]]; then
+      echo "  HTTPS URL:    https://${SITE_NAME}"
+    fi
+    echo "  HOST mapping: ${DOCTOR_VM_IP} ${SITE_NAME}"
   fi
-  echo "  HOST mapping: ${DOCTOR_VM_IP} ${SITE_NAME}"
   echo
   echo "Log file for this run: ${LOG_FILE}"
   echo "============================================================"
@@ -406,12 +426,33 @@ run_doctor_json() {
   done
   printf '\n  ],\n'
   printf '  "access": {\n'
-  printf '    "direct_url": ' ; json_escape "http://${DOCTOR_VM_IP}:8000" ; printf ',\n'
-  printf '    "friendly_url": ' ; json_escape "http://${SITE_NAME}:8000" ; printf ',\n'
-  if [[ "$DOCTOR_SSL_STATE" == "configured" ]]; then
-    printf '    "https_url": ' ; json_escape "https://${SITE_NAME}" ; printf ',\n'
+  if deployment_engine_is_docker; then
+    if docker_is_production; then
+      if docker_https_enabled; then
+        printf '    "direct_url": ' ; json_escape "" ; printf ',\n'
+        printf '    "friendly_url": ' ; json_escape "https://$(docker_public_domain)" ; printf ',\n'
+        printf '    "https_url": ' ; json_escape "https://$(docker_public_domain)" ; printf ',\n'
+      else
+        printf '    "direct_url": ' ; json_escape "http://127.0.0.1:${DOCKER_PUBLISH_PORT}" ; printf ',\n'
+        printf '    "friendly_url": ' ; json_escape "https://$(docker_public_domain)" ; printf ',\n'
+      fi
+      printf '    "host_mapping": ' ; json_escape "public DNS: $(docker_public_domain)" ; printf '\n'
+    else
+      printf '    "direct_url": ' ; json_escape "http://${DOCTOR_VM_IP}:${DOCKER_PUBLISH_PORT}" ; printf ',\n'
+      printf '    "friendly_url": ' ; json_escape "http://$(docker_site_name):${DOCKER_PUBLISH_PORT}" ; printf ',\n'
+      if declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+        printf '    "https_url": ' ; json_escape "https://$(docker_site_name)" ; printf ',\n'
+      fi
+      printf '    "host_mapping": ' ; json_escape "${DOCTOR_VM_IP} $(docker_site_name)" ; printf '\n'
+    fi
+  else
+    printf '    "direct_url": ' ; json_escape "http://${DOCTOR_VM_IP}:8000" ; printf ',\n'
+    printf '    "friendly_url": ' ; json_escape "http://${SITE_NAME}:8000" ; printf ',\n'
+    if [[ "$DOCTOR_SSL_STATE" == "configured" ]]; then
+      printf '    "https_url": ' ; json_escape "https://${SITE_NAME}" ; printf ',\n'
+    fi
+    printf '    "host_mapping": ' ; json_escape "${DOCTOR_VM_IP} ${SITE_NAME}" ; printf '\n'
   fi
-  printf '    "host_mapping": ' ; json_escape "${DOCTOR_VM_IP} ${SITE_NAME}" ; printf '\n'
   printf '  }\n'
   printf '}\n'
 }

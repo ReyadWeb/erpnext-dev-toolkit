@@ -35,6 +35,29 @@ recommended_action() {
 run_status() {
   require_sudo
 
+  if deployment_engine_is_docker; then
+    local installed runtime
+    installed="$(install_state)"
+    runtime="$(runtime_state)"
+    echo
+    echo "============================================================"
+    echo "ERPNext Developer Status (Docker)"
+    echo "============================================================"
+    status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
+    status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
+    status_line "Docker mode" "INFO" "$(docker_mode_label)"
+    status_line "Internal site" "INFO" "$(docker_site_name)"
+    if docker_is_production; then
+      status_line "Public domain" "INFO" "$(docker_public_domain)"
+      status_line "HTTPS mode" "$([[ "$(docker_https_mode)" != http ]] && echo OK || echo WARN)" "$(docker_https_mode)"
+    else
+      status_line "Direct port" "INFO" "${DOCKER_PUBLISH_PORT} (8080 by default)"
+    fi
+    echo "============================================================"
+    docker_print_access
+    return 0
+  fi
+
   local vm_ip installed runtime auto svc bench_dir
   vm_ip="$(get_vm_ip)"
   installed="$(install_state)"
@@ -68,6 +91,20 @@ run_status() {
 
 run_runtime_status() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    echo
+    echo "============================================================"
+    echo "ERPNext Runtime Status (Docker)"
+    echo "============================================================"
+    status_line "Runtime" "INFO" "$(runtime_state)"
+    status_line "Mode" "INFO" "$(docker_mode_label)"
+    status_line "Direct port" "INFO" "${DOCKER_PUBLISH_PORT} (local/pre-HTTPS only)"
+    echo
+    docker_runtime_status
+    echo "============================================================"
+    return 0
+  fi
 
   echo
   echo "============================================================"
@@ -134,6 +171,25 @@ run_runtime_status() {
 run_installation_status() {
   require_sudo
 
+  if deployment_engine_is_docker; then
+    local install_status
+    install_status="$(install_state)"
+    echo
+    echo "============================================================"
+    echo "ERPNext Installation Status (Docker)"
+    echo "============================================================"
+    status_line "Install status" "$([[ "$install_status" == "Installed" ]] && echo OK || echo FAIL)" "$install_status"
+    status_line "Docker mode" "INFO" "$(docker_mode_label)"
+    status_line "Compose project" "INFO" "$DOCKER_PROJECT_NAME"
+    status_line "Internal site" "INFO" "$(docker_site_name)"
+    status_line "frappe_docker" "$([[ -f "$(docker_compose_base_file)" || -f "$(docker_prod_base_file)" ]] && echo OK || echo WARN)" "$(docker_clone_dir)"
+    echo
+    echo "Container status:"
+    docker_runtime_status || true
+    echo "============================================================"
+    return 0
+  fi
+
   local bench_dir
   bench_dir="$(active_bench_dir)"
 
@@ -198,6 +254,26 @@ run_installation_status() {
 
 run_service_summary() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    echo
+    echo "============================================================"
+    echo "ERPNext Service / Autostart Status (Docker)"
+    echo "============================================================"
+    status_line "Runtime model" "INFO" "Docker Compose (no native erpnext-dev.service)"
+    status_line "Runtime" "INFO" "$(runtime_state)"
+    status_line "Compose project" "INFO" "$DOCKER_PROJECT_NAME"
+    echo
+    docker_runtime_status || true
+    echo
+    echo "Lifecycle commands:"
+    echo "  $(toolkit_cmd start)"
+    echo "  $(toolkit_cmd stop)"
+    echo "  $(toolkit_cmd restart)"
+    echo "  $(toolkit_cmd logs)"
+    echo "============================================================"
+    return 0
+  fi
 
   echo
   echo "============================================================"
@@ -269,6 +345,33 @@ show_status_menu() {
 
 run_full_status() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    echo
+    echo "============================================================"
+    echo "ERPNext Developer Full Health Report (Docker)"
+    echo "============================================================"
+    status_line "Install" "INFO" "$(install_state)"
+    status_line "Runtime" "INFO" "$(runtime_state)"
+    status_line "Mode" "INFO" "$(docker_mode_label)"
+    status_line "Site" "INFO" "$(docker_site_name)"
+    if docker_is_production; then
+      status_line "Public domain" "INFO" "$(docker_public_domain)"
+      status_line "HTTPS mode" "INFO" "$(docker_https_mode)"
+    else
+      status_line "Direct port" "INFO" "${DOCKER_PUBLISH_PORT} (8080 by default)"
+    fi
+    echo "============================================================"
+    echo
+    docker_verify_access || true
+    if docker_is_production; then
+      echo
+      docker_https_status || true
+      echo
+      docker_production_exposure || true
+    fi
+    return 0
+  fi
 
   echo
   echo "============================================================"

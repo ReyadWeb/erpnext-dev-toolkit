@@ -1,9 +1,9 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.19 (July 2026)
+**Current release:** v1.19.20 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** v1.20.0 External Watchdog, after v1.19.19 field validation.
-**Deferred:** v1.20.0 until v1.19.19 is field-validated.
+**Next up:** field-validate Docker credentials parity and finish public Docker VPS acceptance, then promote the proven beta to v1.19.20.
+**Deferred:** v1.20.0 External Watchdog until v1.19.20 Docker field validation is complete.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  
 **Milestones / issues:** tracked on GitHub so progress stays visible (see [docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)).
@@ -32,6 +32,7 @@ The toolkit is past “installer” status. It is a **single-node ERPNext/Frappe
 | Repo governance / Scorecard P0 | Shipped (v1.18.2) |
 | Frontend asset verify/wait/repair | Shipped (v1.18.3) |
 | Guarded auto-healing | Shipped (v1.19.0 MVP + v1.19.1 hardening) |
+| Docker access + guided HTTPS + credentials parity | Stable (v1.19.20; local VM and real VPS validation passed) |
 
 ### Maturity (single-admin dedicated VM)
 

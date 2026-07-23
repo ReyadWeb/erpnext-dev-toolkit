@@ -1710,34 +1710,34 @@ run_local_dev_quickstart() {
 }
 
 public_quickstart_status_summary() {
-  local vm_ip installed runtime ssl_pair ssl_status ssl_detail domain_status dns_ip provider
+  local vm_ip installed runtime domain_status dns_ip ssl_status ssl_detail
   vm_ip="$(get_vm_ip 2>/dev/null || echo unknown)"
   installed="$(install_state 2>/dev/null || echo "Not installed")"
   runtime="$(runtime_state 2>/dev/null || echo "Stopped")"
-  provider="$(active_production_ssl_provider 2>/dev/null || echo "none")"
-  ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo "WARN|not configured")"
-  ssl_status="${ssl_pair%%|*}"
-  ssl_detail="${ssl_pair#*|}"
   dns_ip=""
-  domain_status="INFO"
+  domain_status="WARN"
   if [[ -n "${PRODUCTION_DOMAIN:-}" ]]; then
     dns_ip="$(resolve_ipv4_first "$PRODUCTION_DOMAIN")"
-    if [[ -n "$dns_ip" ]]; then
-      if [[ "$dns_ip" == "$vm_ip" || "$provider" == "Cloudflare Origin CA" ]]; then
-        domain_status="OK"
-      else
-        domain_status="WARN"
-      fi
+    [[ -n "$dns_ip" ]] && domain_status="INFO"
+    [[ "$dns_ip" == "$vm_ip" ]] && domain_status="OK"
+  fi
+
+  if deployment_engine_is_docker; then
+    if docker_is_production && docker_https_enabled; then
+      ssl_status="OK"; ssl_detail="Docker Traefik $(docker_https_mode)"
     else
-      domain_status="WARN"
+      ssl_status="WARN"; ssl_detail="Docker HTTPS not configured"
     fi
   else
-    domain_status="WARN"
+    local ssl_pair
+    ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo "WARN|not configured")"
+    ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
   fi
 
   status_line "Domain" "$domain_status" "${PRODUCTION_DOMAIN:-not set}${dns_ip:+; DNS=$dns_ip}; VM=$vm_ip"
+  status_line "Engine" "INFO" "$(deployment_engine_label)"
   status_line "Site" "INFO" "$SITE_NAME"
-  status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
+  status_line "Install" "$([[ "$installed" == Installed* ]] && echo OK || echo WARN)" "$installed"
   status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
   status_line "HTTPS" "$ssl_status" "$ssl_detail"
 }
@@ -1756,6 +1756,21 @@ ensure_public_domain_configured() {
 }
 
 public_quickstart_maybe_initial_backup() {
+  if deployment_engine_is_docker; then
+    if docker_latest_host_dir >/dev/null 2>&1; then
+      status_line "Initial backup" "OK" "durable Docker backup exists"
+      return 0
+    fi
+    status_line "Initial backup" "WARN" "no durable Docker backup yet"
+    if confirm "Create an initial Docker database + files backup now?"; then
+      docker_backup true || return 1
+      docker_backup_verify || true
+    else
+      ui_next "$(toolkit_cmd backup)" "$(toolkit_cmd docker-backup-verify)"
+    fi
+    return 0
+  fi
+
   local latest_lines completeness
   latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
   completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
@@ -1763,7 +1778,6 @@ public_quickstart_maybe_initial_backup() {
     status_line "Initial backup" "OK" "complete backup set exists"
     return 0
   fi
-
   status_line "Initial backup" "WARN" "no complete backup set yet"
   if confirm "Create initial database + files backup now?"; then
     create_site_backup true || return 1
@@ -1774,8 +1788,13 @@ public_quickstart_maybe_initial_backup() {
 }
 
 public_quickstart_final_status() {
-  show_production_readiness
-  show_production_ssl_status
+  show_public_vm_readiness
+  if deployment_engine_is_docker; then
+    docker_https_status || true
+    docker_production_exposure || true
+  else
+    show_production_ssl_status
+  fi
   show_firewall_hardening_status
   public_quickstart_maybe_initial_backup || true
   show_release_readiness
@@ -1889,17 +1908,23 @@ public_vm_guided_external_gate() {
   domain="${PRODUCTION_DOMAIN:-$SITE_NAME}"
 
   public_vm_guided_step "4" "External cloud firewall and snapshot gate"
-  echo "These checks happen outside Ubuntu, so the toolkit cannot safely apply them without provider API credentials."
+  echo "These checks happen outside the VM, so the toolkit cannot apply them without provider API credentials."
   echo
   status_line "Production domain" "INFO" "$domain"
   status_line "VM IPv4" "INFO" "$vm_ip"
+  status_line "Engine" "INFO" "$(deployment_engine_label)"
   echo
-  echo "Confirm your cloud/provider firewall allows only:"
+  echo "Confirm your cloud/provider firewall allows:"
   echo "  22/tcp    from your admin IP only"
   echo "  80/tcp    from anywhere"
   echo "  443/tcp   from anywhere"
-  echo "  8000/tcp  blocked from anywhere"
-  echo "  9000/tcp  blocked from anywhere"
+  if deployment_engine_is_docker; then
+    echo "  ${DOCKER_PUBLISH_PORT}/tcp  do not allow publicly (loopback-only before HTTPS; unpublished after HTTPS)"
+    echo "  8000/9000 must remain container-internal (do not publish them on the host)"
+  else
+    echo "  8000/tcp  blocked from anywhere"
+    echo "  9000/tcp  blocked from anywhere"
+  fi
   echo
   if ! confirm "Cloud firewall baseline is configured as above"; then
     warn "Stop here, configure the cloud firewall, then rerun: $(toolkit_cmd public-vm-guided-setup)"
@@ -1920,17 +1945,34 @@ public_vm_guided_install_core() {
   runtime="$(runtime_state 2>/dev/null || echo "Stopped")"
 
   public_vm_guided_step "5" "Install or repair ERPNext"
+  status_line "Engine" "INFO" "$(deployment_engine_label)"
   status_line "Install" "$([[ "$installed" == Installed* ]] && echo OK || echo WARN)" "$installed"
   status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
 
-  if [[ "$installed" != Installed* ]]; then
-    run_install
-  elif [[ "$runtime" != Running* ]]; then
-    if confirm "ERPNext is installed but not running. Start the service now?"; then
-      start_erpnext_service || return 1
+  if deployment_engine_is_docker; then
+    if [[ "$installed" == Installed* ]] && ! docker_is_production; then
+      docker_promote_to_production || return 1
+    elif [[ "$installed" != Installed* ]]; then
+      DOCKER_MODE="production" \
+      DOCKER_MODE_ENV_PROVIDED=1 \
+      DEPLOYMENT_MODE="public-vm" \
+      DOCKER_PUBLIC_GUIDED_ACTIVE=1 \
+        run_install || return 1
+    elif [[ "$runtime" != Running* ]]; then
+      docker_runtime_start || return 1
+    else
+      ok "Docker production stack is already installed and running."
     fi
   else
-    ok "ERPNext is already installed and running."
+    if [[ "$installed" != Installed* ]]; then
+      run_install
+    elif [[ "$runtime" != Running* ]]; then
+      if confirm "ERPNext is installed but not running. Start the service now?"; then
+        start_erpnext_service || return 1
+      fi
+    else
+      ok "ERPNext is already installed and running."
+    fi
   fi
 
   echo
@@ -1940,42 +1982,66 @@ public_vm_guided_install_core() {
 
 public_vm_guided_production_runtime() {
   public_vm_guided_step "5b" "Production runtime"
-  echo "Production serves ERPNext with gunicorn + background workers + scheduler +"
-  echo "socket.io under supervisor, not the development 'bench start' server"
-  echo "(which runs a debugger and a live-reload watcher)."
-  echo
+  if deployment_engine_is_docker; then
+    if docker_is_production; then
+      status_line "Runtime" "OK" "Docker production Compose services"
+      echo "Workers, scheduler, websocket, frontend, database, and Redis run as isolated Compose services."
+      return 0
+    fi
+    status_line "Runtime" "WARN" "Docker development stack; promote with $(toolkit_cmd docker-https-wizard)"
+    return 1
+  fi
 
+  echo "Production serves ERPNext with gunicorn, workers, scheduler, and socket.io under supervisor."
   if runtime_is_production && production_runtime_configured; then
     ok "Production runtime already configured (supervisor)."
     return 0
   fi
-
   if [[ "$(install_state 2>/dev/null)" != Installed* ]]; then
     warn "ERPNext is not fully installed yet; skipping production runtime setup."
     return 0
   fi
-
   if [[ "$ASSUME_YES" -eq 1 ]] || confirm "Switch this VM to the production runtime now?"; then
     setup_production_runtime || warn "Production runtime setup did not complete; staying on the development runtime."
   else
     warn "Keeping the development bench-start runtime."
-    echo "  Switch later with: $(toolkit_cmd setup-production-runtime)"
+    echo "Switch later with: $(toolkit_cmd setup-production-runtime)"
   fi
 }
 
 public_vm_guided_backup_checkpoint() {
   public_vm_guided_step "6" "Backup checkpoint"
   public_quickstart_maybe_initial_backup || return 1
-  verify_latest_backup_set || true
+  if deployment_engine_is_docker; then
+    docker_backup_verify || true
+  else
+    verify_latest_backup_set || true
+  fi
 }
 
 public_vm_guided_configure_https() {
+  public_vm_guided_step "7" "Production HTTPS"
+
+  if deployment_engine_is_docker; then
+    status_line "Engine" "INFO" "Docker production"
+    status_line "Public domain" "INFO" "$(docker_public_domain)"
+    if docker_is_production && docker_https_enabled; then
+      ok "Docker production HTTPS is already configured."
+      docker_https_status
+      return 0
+    fi
+    docker_https_wizard || return 1
+    if ! docker_is_production || ! docker_https_enabled; then
+      warn "Docker production HTTPS was not completed."
+      return 1
+    fi
+    docker_https_status || true
+    return 0
+  fi
+
   local ssl_pair ssl_status ssl_detail ctx mode detail provider dns_ip vm_ip choice
   ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo 'WARN|not configured for production')"
-  ssl_status="${ssl_pair%%|*}"
-  ssl_detail="${ssl_pair#*|}"
-
-  public_vm_guided_step "7" "Production HTTPS"
+  ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
   status_line "Current HTTPS" "$ssl_status" "$ssl_detail"
   if [[ "$ssl_status" == "OK" ]]; then
     ok "Production HTTPS is already configured."
@@ -1987,9 +2053,7 @@ public_vm_guided_configure_https() {
   mode="${ctx%%|*}"; ctx="${ctx#*|}"
   detail="${ctx%%|*}"; ctx="${ctx#*|}"
   provider="${ctx%%|*}"; ctx="${ctx#*|}"
-  dns_ip="${ctx%%|*}"; ctx="${ctx#*|}"
-  vm_ip="$ctx"
-
+  dns_ip="${ctx%%|*}"; vm_ip="${ctx#*|}"
   status_line "Recommended mode" "INFO" "$mode"
   status_line "Active provider" "INFO" "$provider"
   status_line "DNS / VM" "INFO" "DNS=${dns_ip}; VM=${vm_ip}"
@@ -1998,9 +2062,6 @@ public_vm_guided_configure_https() {
 
   case "$mode" in
     letsencrypt)
-      echo "Recommended guided choice: Let's Encrypt directly on this VM."
-      echo "Alternative available: Cloudflare Origin CA for Cloudflare-proxied Full (strict) deployments."
-      echo
       if [[ "$ASSUME_YES" -eq 1 ]]; then
         configure_production_ssl || return 1
       else
@@ -2013,41 +2074,31 @@ public_vm_guided_configure_https() {
           1|"") configure_production_ssl || return 1 ;;
           2) production_ssl_wizard || return 1 ;;
           3) show_ssl_mode_status; show_ssl_mode_guide; production_ssl_wizard || return 1 ;;
-          b|B) warn "Production HTTPS was not configured. Rerun: $(toolkit_cmd public-vm-guided-setup)"; return 1 ;;
+          b|B) return 1 ;;
           q|Q) exit 0 ;;
           *) warn "Invalid option: ${choice}"; return 1 ;;
         esac
       fi
       ;;
-    cloudflare-origin-ca)
-      warn "DNS does not look like direct origin DNS, or Cloudflare Origin CA is already selected."
-      echo "The guided setup will open the SSL provider wizard so you can choose Cloudflare Origin CA or adjust back to Let's Encrypt."
-      production_ssl_wizard || return 1
-      ;;
-    *)
-      err "Production HTTPS is not ready. Fix DNS/SSL planning first."
-      echo "Helpful commands:"
-      echo "  $(toolkit_cmd production-domain-plan)"
-      echo "  $(toolkit_cmd production-ssl-plan)"
-      return 1
-      ;;
+    cloudflare-origin-ca) production_ssl_wizard || return 1 ;;
+    *) err "Production HTTPS is not ready. Fix DNS/SSL planning first."; return 1 ;;
   esac
 
   ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo 'WARN|not configured for production')"
-  ssl_status="${ssl_pair%%|*}"
-  ssl_detail="${ssl_pair#*|}"
-  if [[ "$ssl_status" != "OK" ]]; then
-    status_line "Production HTTPS" "$ssl_status" "$ssl_detail"
-    warn "Production HTTPS is not fully verified yet. Complete SSL configuration before continuing production setup."
-    return 1
-  fi
-
+  ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
+  [[ "$ssl_status" == "OK" ]] || { status_line "Production HTTPS" "$ssl_status" "$ssl_detail"; return 1; }
   show_production_ssl_status || true
+}
+
+public_vm_guided_credentials_checkpoint() {
+  deployment_engine_is_docker || return 0
+  public_vm_guided_step "7b" "Login credentials"
+  docker_guided_credentials_checkpoint || true
 }
 
 public_vm_guided_security_profile() {
   public_vm_guided_step "8" "Production security profile"
-  echo "This applies the VM UFW production profile and then configures Fail2Ban for sshd."
+  echo "This applies the engine-aware production firewall/exposure profile and then configures Fail2Ban for sshd."
   echo "Provider firewall restrictions still remain your cloud-provider responsibility."
   configure_production_vm_firewall || return 1
   configure_fail2ban || true
@@ -2065,9 +2116,13 @@ public_vm_guided_backups_and_operations() {
 
 public_vm_guided_optional_apps() {
   public_vm_guided_step "10" "Optional apps"
-  echo "Optional Frappe apps should be installed only after core ERPNext, HTTPS, backups, and security are healthy."
+  echo "Install optional apps only after core ERPNext, HTTPS, backups, and security are healthy."
   if confirm "Open the optional app installer now?"; then
-    run_app_install_wizard || true
+    if deployment_engine_is_docker; then
+      docker_app_install_wizard || true
+    else
+      run_app_install_wizard || true
+    fi
   else
     echo "Skipped optional apps. You can run later: $(toolkit_cmd app-install-wizard)"
   fi
@@ -2075,17 +2130,29 @@ public_vm_guided_optional_apps() {
 
 public_vm_guided_final_qa() {
   public_vm_guided_step "11" "Final QA and support bundle"
-  show_production_checklist || true
+  if deployment_engine_is_docker; then
+    docker_verify_access || true
+    docker_https_status || true
+    docker_production_exposure || true
+    docker_backup_verify || true
+  else
+    show_production_checklist || true
+    verify_latest_backup_set || true
+  fi
   show_release_readiness || true
-  verify_latest_backup_set || true
   create_support_bundle || true
   echo
   echo "External validation commands to run from your workstation/admin machine:"
   echo "  curl -I https://${PRODUCTION_DOMAIN:-$SITE_NAME}"
-  echo "  curl -I --connect-timeout 10 http://$(get_vm_ip 2>/dev/null || echo VM_IP):8000"
-  echo "  curl -I --connect-timeout 10 http://$(get_vm_ip 2>/dev/null || echo VM_IP):9000"
-  echo
-  echo "Expected external result: HTTPS responds; 8000 and 9000 are blocked or unreachable."
+  if deployment_engine_is_docker; then
+    echo "  curl -I --connect-timeout 10 http://$(get_vm_ip 2>/dev/null || echo VM_IP):${DOCKER_PUBLISH_PORT}"
+    echo "Expected: HTTPS responds; direct Docker port ${DOCKER_PUBLISH_PORT} is blocked/unreachable after hardening."
+    echo "Ports 8000/9000 are container-internal and must not be host-published."
+  else
+    echo "  curl -I --connect-timeout 10 http://$(get_vm_ip 2>/dev/null || echo VM_IP):8000"
+    echo "  curl -I --connect-timeout 10 http://$(get_vm_ip 2>/dev/null || echo VM_IP):9000"
+    echo "Expected: HTTPS responds; 8000 and 9000 are blocked/unreachable."
+  fi
   echo
   echo "Take a named post-validation provider snapshot now."
   echo "Recommended name: erpnext-toolkit-v${SCRIPT_VERSION}-post-production-validation"
@@ -2097,27 +2164,35 @@ run_public_vm_guided_setup() {
   install_self_for_reuse
 
   ui_box_start "Public VM Guided Setup"
-  echo "This guided path keeps the Public VM menu available, but walks the production VPS flow in order."
-  echo "Flow: domain -> DNS -> external firewall/snapshot gate -> install -> backup -> HTTPS -> security -> scheduled backups -> final QA."
-  echo
+  echo "Guided order: domain -> engine -> DNS -> firewall/snapshot -> install -> backup -> HTTPS -> credentials -> security -> operations -> QA."
   status_line "VM IPv4" "INFO" "$(get_vm_ip 2>/dev/null || echo unknown)"
   status_line "Production domain" "$([[ -n "${PRODUCTION_DOMAIN:-}" ]] && echo OK || echo WARN)" "${PRODUCTION_DOMAIN:-not set}"
-  status_line "Site" "INFO" "$SITE_NAME"
+  status_line "Current engine" "INFO" "$(deployment_engine_label)"
   ui_box_end
 
   public_vm_guided_step "1" "Production domain"
   ensure_public_domain_configured || return 1
 
+  # Choose the engine before planning/firewall instructions so every later step
+  # uses the correct Docker/native ports and HTTPS implementation.
+  choose_deployment_engine_for_setup 0
+  if deployment_engine_is_docker; then
+    DEPLOYMENT_MODE="public-vm"
+    write_dev_config_file >/dev/null || true
+  fi
+
   public_vm_guided_step "2" "Requirements and production plan"
+  status_line "Deployment engine" "OK" "$(deployment_engine_label)"
   show_production_domain_plan
   show_public_vm_readiness
 
   public_vm_guided_require_dns_ready || return 1
   public_vm_guided_external_gate || return 1
   public_vm_guided_install_core || return 1
-  public_vm_guided_production_runtime || true
+  public_vm_guided_production_runtime || return 1
   public_vm_guided_backup_checkpoint || true
   public_vm_guided_configure_https || return 1
+  public_vm_guided_credentials_checkpoint || true
   public_vm_guided_security_profile || return 1
   public_vm_guided_backups_and_operations || true
   public_vm_guided_optional_apps || true
@@ -2155,11 +2230,19 @@ run_public_vm_quickstart() {
       1) show_setup_lifecycle_plan; pause_after_screen "Press Enter to return to Production setup..." ;;
       2) prompt_and_save_public_domain; pause_after_screen "Press Enter to return to Production setup..." ;;
       3) ensure_public_domain_configured && show_production_domain_plan && show_public_vm_readiness; pause_after_screen "Press Enter to return to Production setup..." ;;
-      4) ensure_public_domain_configured && run_guided_setup; pause_after_screen "Press Enter to return to Production setup..." ;;
+      4) ensure_public_domain_configured && choose_deployment_engine_for_setup 0 && public_vm_guided_install_core; pause_after_screen "Press Enter to return to Production setup..." ;;
       5) public_quickstart_maybe_initial_backup; pause_after_screen "Press Enter to return to Production setup..." ;;
-      6) ensure_public_domain_configured && production_ssl_wizard; pause_after_screen "Press Enter to return to Production setup..." ;;
+      6)
+        if ensure_public_domain_configured; then
+          choose_deployment_engine_for_setup 0
+          if deployment_engine_is_docker; then docker_https_wizard; else production_ssl_wizard; fi
+        fi
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
       7) security_hardening_wizard ;;
-      8) run_app_install_wizard ;;
+      8)
+        if deployment_engine_is_docker; then docker_app_install_wizard; else run_app_install_wizard; fi
+        ;;
       9) public_quickstart_final_status; pause_after_screen "Press Enter to return to Production setup..." ;;
       10) show_ssl_mode_status; show_setup_effort_guide; pause_after_screen "Press Enter to return to Production setup..." ;;
       b|B|"") return 0 ;;

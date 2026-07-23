@@ -477,7 +477,11 @@ record_go_live_validation() {
     snapshot_name="${answer:-$snapshot_name}"
     read -r -p "Snapshot created/verified? [y/N]: " answer
     case "$answer" in y|Y|yes|YES) snapshot_confirmed="true" ;; *) snapshot_confirmed="false" ;; esac
-    read -r -p "Cloud firewall confirmed? 22 admin IP, 80/443 open, 8000/9000 blocked [y/N]: " answer
+    if deployment_engine_is_docker; then
+      read -r -p "Cloud firewall confirmed? 22 admin IP, 80/443 open, direct Docker port not public [y/N]: " answer
+    else
+      read -r -p "Cloud firewall confirmed? 22 admin IP, 80/443 open, 8000/9000 blocked [y/N]: " answer
+    fi
     case "$answer" in y|Y|yes|YES) firewall_confirmed="true" ;; *) firewall_confirmed="false" ;; esac
     read -r -p "Cloudflare DNS proxied/orange-cloud confirmed? [y/N]: " answer
     case "$answer" in y|Y|yes|YES) cf_proxy="true" ;; *) cf_proxy="false" ;; esac
@@ -620,7 +624,12 @@ show_production_checklist() {
   if [[ "$go_state" == "OK" ]]; then
     echo "  - Go-live validation recorded; repeat after snapshot, firewall, DNS, or SSL changes."
   else
-    echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
+    if deployment_engine_is_docker; then
+      echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed; direct Docker port not public."
+      echo "  - Confirm $(toolkit_cmd docker-production-exposure) passes."
+    else
+      echo "  - Confirm cloud firewall: 22 admin IP, 80/443 allowed, 8000/9000 blocked."
+    fi
     echo "  - Confirm Cloudflare SSL mode and DNS proxy state."
     echo "  - Create named cloud snapshot after final validation."
     echo "  - Record external go-live validation with go-live-record."
@@ -635,6 +644,7 @@ show_release_readiness() {
 
   local syntax_status syntax_detail installed runtime ssl_pair ssl_status ssl_detail
   local ufw_status fail2ban_status latest_lines completeness release_state rehearsal_pair rehearsal_state rehearsal_detail go_pair go_state go_detail
+  local docker_backup_dir docker_rehearsal_status docker_rehearsal_at
 
   if bash -n "$0" >/dev/null 2>&1; then
     syntax_status="OK"; syntax_detail="bash syntax valid"
@@ -644,9 +654,25 @@ show_release_readiness() {
 
   installed="$(install_state 2>/dev/null || echo "Unknown")"
   runtime="$(runtime_state 2>/dev/null || echo "Unknown")"
-  ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo "WARN|not confirmed")"
-  ssl_status="${ssl_pair%%|*}"
-  ssl_detail="${ssl_pair#*|}"
+  if deployment_engine_is_docker; then
+    if docker_is_production && docker_https_enabled; then
+      ssl_status="OK"
+      ssl_detail="Docker $(docker_https_mode) via Traefik for $(docker_public_domain)"
+    elif docker_is_production; then
+      ssl_status="WARN"
+      ssl_detail="Docker production HTTPS not configured"
+    elif declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
+      ssl_status="OK"
+      ssl_detail="local Docker HTTPS via host Nginx"
+    else
+      ssl_status="INFO"
+      ssl_detail="local Docker HTTPS not configured"
+    fi
+  else
+    ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo "WARN|not confirmed")"
+    ssl_status="${ssl_pair%%|*}"
+    ssl_detail="${ssl_pair#*|}"
+  fi
 
   if ufw_is_active; then
     ufw_status="OK|active"
@@ -660,11 +686,20 @@ show_release_readiness() {
     fail2ban_status="WARN|sshd jail not confirmed"
   fi
 
-  latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
-  if [[ -n "$latest_lines" ]]; then
-    completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
+  if deployment_engine_is_docker; then
+    docker_backup_dir="$(docker_latest_host_dir 2>/dev/null || true)"
+    if [[ -n "$docker_backup_dir" ]] && docker_backup_verify "$docker_backup_dir" >/dev/null 2>&1; then
+      completeness="complete"
+    else
+      completeness="none"
+    fi
   else
-    completeness="none"
+    latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
+    if [[ -n "$latest_lines" ]]; then
+      completeness="$(printf '%s\n' "$latest_lines" | sed -n '6p')"
+    else
+      completeness="none"
+    fi
   fi
 
   release_state="OK"
@@ -684,12 +719,32 @@ show_release_readiness() {
   status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
   status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
   status_line "HTTPS" "$ssl_status" "$ssl_detail"
+  if deployment_engine_is_docker && docker_is_production; then
+    if docker_production_exposure >/dev/null 2>&1; then
+      status_line "Docker exposure" "OK" "production bindings verified"
+    else
+      status_line "Docker exposure" "WARN" "run $(toolkit_cmd docker-production-exposure)"
+      release_state="WARN"
+    fi
+  fi
   status_line "UFW" "${ufw_status%%|*}" "${ufw_status#*|}"
   status_line "Fail2Ban" "${fail2ban_status%%|*}" "${fail2ban_status#*|}"
   status_line "Latest backup" "$([[ "$completeness" == "complete" ]] && echo OK || echo WARN)" "${completeness:-none}"
-  rehearsal_pair="$(restore_rehearsal_summary_pair)"
-  rehearsal_state="${rehearsal_pair%%|*}"
-  rehearsal_detail="${rehearsal_pair#*|}"
+  if deployment_engine_is_docker; then
+    docker_rehearsal_status="$(docker_env_value "$DOCKER_RESTORE_REHEARSAL_FILE" DOCKER_RESTORE_REHEARSAL_STATUS 2>/dev/null || true)"
+    docker_rehearsal_at="$(docker_env_value "$DOCKER_RESTORE_REHEARSAL_FILE" DOCKER_RESTORE_REHEARSAL_RECORDED_AT 2>/dev/null || true)"
+    if [[ "$docker_rehearsal_status" == "OK" ]]; then
+      rehearsal_state="OK"
+      rehearsal_detail="Docker restore rehearsal recorded${docker_rehearsal_at:+ at ${docker_rehearsal_at}}"
+    else
+      rehearsal_state="WARN"
+      rehearsal_detail="Docker restore rehearsal not recorded; run $(toolkit_cmd docker-restore-rehearsal)"
+    fi
+  else
+    rehearsal_pair="$(restore_rehearsal_summary_pair)"
+    rehearsal_state="${rehearsal_pair%%|*}"
+    rehearsal_detail="${rehearsal_pair#*|}"
+  fi
   status_line "Restore rehearsal" "$rehearsal_state" "$rehearsal_detail"
   if [[ "${DEPLOYMENT_MODE:-development}" != "development" && "$rehearsal_state" != "OK" ]]; then
     release_state="WARN"

@@ -1,3 +1,58 @@
+## v1.19.20 - Validated Docker production deployment and credentials parity
+
+- Fixed Docker local access routing and standardized direct Docker access on port 8080.
+- Added guided local Docker domain and trusted HTTPS workflows.
+- Added the complete guided public Docker production deployment path.
+- Integrated production-stack promotion with the Docker HTTPS workflow.
+- Added Cloudflare-aware DNS and HTTPS guidance validated on a real proxied domain.
+- Added Docker-aware firewall hardening and production exposure protections.
+- Added engine-aware Docker credentials storage, display, lifecycle, and password-reset handling.
+- Added credentials checkpoints to guided Docker installation workflows.
+- Streamlined native optional-app compatibility checks while preserving installation safeguards.
+- Added and expanded Docker routing, HTTPS, credentials, hardening, and production regression coverage.
+- Validated the release on local Docker VMs and a real public VPS deployment.
+- Validated Ubuntu 24.04 and Ubuntu 26.04 integration paths.
+- Fixed release-validation ShellCheck scoping and hermetic Docker credentials regression coverage.
+
+## v1.19.20-beta.3 - Release validation ShellCheck correction
+
+- Fixed the Docker public guided-install environment scoping that triggered ShellCheck SC2034 in GitHub Release Validation.
+- Restored scoped Docker production-mode variables for the guided public installation path.
+- No functional Docker deployment changes from the successfully validated v1.19.20-beta.2 workflow.
+
+## v1.19.20-beta.2 - Docker credentials parity and faster native app flow
+
+### Fixed
+
+- **Docker credentials lifecycle parity:** the shared Credentials / Login menu now resolves the active engine credential file instead of always looking for `/home/frappe/erpnext-dev-credentials.txt`. Docker login info, password reveal, file status, secure/delete actions, and Administrator password reset now use the Docker credential record and backend container correctly.
+- **Backward-compatible Docker credential display:** existing beta.1-style Docker credential files remain readable, while new installs write the same structured Login / database sections used by the shared credentials UI.
+- **Guided credentials checkpoint:** local Docker setup now offers the same private-console credential reveal checkpoint as native setup before firewall hardening. Public Docker guided setup adds the checkpoint after HTTPS and before the production security profile.
+- **Credential reset continuity:** `reset-admin-password` routes through `docker_bench` on Docker and refreshes the Docker credential record after a successful reset.
+- **Faster native optional-app wizard:** the general app preflight now runs once when the wizard opens instead of before every menu redraw, the full compatibility matrix is opt-in, and redundant `git ls-remote` branch probes were removed. The selected app still gets compatibility guidance, while `bench get-app` performs the single authoritative remote branch validation during download.
+
+### Validation
+
+- Extended `scripts/test-docker-access-routing.sh` to cover engine-native credential-file routing, structured Docker credential records, Docker password-reset routing, guided credential checkpoints, and the streamlined native optional-app fast path.
+- Local Docker acceptance should re-test: guided credential reveal, all Credentials / Login menu actions, Administrator password reset, and continued access after local HTTPS/hardening.
+
+## v1.19.20-beta.1 - Docker access and guided HTTPS parity
+
+### Fixed
+
+- **Correct Docker access port:** Docker quick/local stacks now consistently use the configured host-published frontend port (`8080` by default) instead of presenting native Bench port `8000` as a Docker browser endpoint.
+- **Friendly local domain:** Docker access, host-mapping, verification, and local firewall guidance now share the same published-port model; trusted local HTTPS can proxy the Docker frontend through the toolkit-managed Nginx/mkcert workflow.
+- **Guided production Docker:** the Public VM guided wizard chooses the deployment engine before firewall/install planning, provisions fresh Docker installs directly as production Compose, and safely promotes an existing quick/dev Docker stack before production HTTPS.
+- **Docker HTTPS workflow:** `docker-https-wizard` no longer dead-ends on a quick/dev installation. Local Docker routes to the local trusted-HTTPS workflow; public Docker offers production promotion and then Traefik TLS (Let's Encrypt or Cloudflare Origin CA).
+- **Public domain routing:** Docker Traefik uses `PRODUCTION_DOMAIN` for the public router while preserving the configured internal Frappe site name through `FRAPPE_SITE_NAME_HEADER`.
+- **Promotion credential continuity:** production promotion reuses the existing Docker database/admin credentials so retained Compose volumes are not paired with a newly generated MariaDB root password.
+- **Engine-aware hardening:** local Docker no longer relies on UFW to control a published container port. The local profile installs a persistent `DOCKER-USER` forwarding filter (IPv4 plus IPv6 when Docker IPv6 forwarding is active) for the saved frontend port. Public production keeps the temporary direct port loopback-only before HTTPS and removes it from public exposure after Traefik takes over `80/443`; `8000/9000` remain container-internal.
+- **Engine-native backups:** generic `backup` / `backup-files` and Docker backup/restore aliases now route to the Docker backup/restore implementation when Docker is active.
+
+### Validation
+
+- Added `scripts/test-docker-access-routing.sh` covering Docker `8080` routing, native `8000/9000` preservation, public-domain Traefik rules, credential reuse during promotion, HTTPS wizard routing, guided-workflow wiring, loopback-only production pre-HTTPS exposure, and Docker `DOCKER-USER` forwarding-filter generation.
+- Real VM/VPS acceptance remains required before promotion to stable v1.19.20: local Docker direct/friendly/HTTPS access and public Docker guided production HTTPS must both pass end to end.
+
 ## v1.19.19 - Frontend repair runtime synchronization beta
 
 ### Fixed

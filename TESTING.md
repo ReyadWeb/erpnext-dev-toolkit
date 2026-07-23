@@ -1,8 +1,69 @@
 # Testing guide
 
-**Current release:** v1.19.19 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
+**Current release:** v1.19.20 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven vs what requires field validation.
 
 ---
+
+## v1.19.20-beta.2 Docker credentials parity and app-flow regression
+
+This beta keeps the beta.1 Docker access/HTTPS model and closes the remaining
+credential lifecycle gap found during real local-VM testing.
+
+Hermetic regression coverage:
+
+```bash
+bash scripts/test-docker-access-routing.sh
+bash scripts/test-engine-select.sh
+bash scripts/validate-release.sh
+```
+
+Required **local Docker VM** acceptance additions:
+
+1. Complete the normal local Docker guided setup and confirm a credentials checkpoint appears before local firewall hardening.
+2. Choose to reveal credentials and verify the private-terminal output shows `Administrator` plus the generated password without writing secrets to the toolkit log.
+3. From **Credentials / Login**, verify Login info, Show password, File status, Secure file, and Delete local file all reference the Docker credential record rather than `/home/frappe/erpnext-dev-credentials.txt`.
+4. Run `reset-admin-password`; confirm the Docker backend password changes and the Docker credential record is refreshed.
+5. Delete the Docker credential record after saving it externally; Credentials / Login should report it missing and must not silently recreate a plaintext credential file.
+
+Required **native optional-app UX** regression:
+
+1. Open `app-install-wizard`; the general preflight should render once, not again after every return to the menu.
+2. Selecting an app should show only that app's compatibility guidance.
+3. The install should not pause for a separate `git ls-remote` branch probe before `bench get-app`; the actual fetch remains the authoritative remote branch validation.
+4. Backup checkpoints, dependency handling, migrate/build/cache maintenance, restart, and post-install validation must remain unchanged.
+
+## v1.19.20-beta.1 Docker access and HTTPS parity
+
+This beta closes the gap between native and Docker setup flows. The direct Docker frontend is `DOCKER_PUBLISH_PORT` (`8080` by default); native `8000/9000` assumptions must not leak into Docker access or firewall guidance.
+
+Hermetic regression coverage:
+
+```bash
+bash scripts/test-docker-access-routing.sh
+bash scripts/test-engine-select.sh
+bash scripts/validate-release.sh
+```
+
+Required **local Docker VM** acceptance:
+
+1. Fresh Docker install completes through the normal guided path.
+2. `http://VM_IP:8080` responds; `http://VM_IP:8000` is not required and should not be advertised as the Docker frontend.
+3. After HOST mapping, `http://SITE:8080` responds with the correct ERPNext login frontend.
+4. The guided follow-up offers trusted local HTTPS; `https://SITE` works after mkcert/Nginx setup while direct `:8080` remains available for local troubleshooting.
+5. The Local VM firewall profile keeps host `22/80/443` in UFW, installs a `DOCKER-USER` forwarding filter for the saved Docker frontend port, and does not pretend host `8000/9000` are Docker entrypoints. `sudo erpnext-dev local-firewall-status` must report the Docker forwarding filter as active; test both IPv4 and IPv6 exposure when the host publishes both families.
+
+Required **public Docker VPS** acceptance:
+
+1. Start from a clean VPS or an existing v1.19.19 Docker quick/dev installation.
+2. Run `sudo erpnext-dev public-vm-guided-setup`; select Docker before the firewall/install steps.
+3. A fresh install uses Docker production Compose directly. An existing quick/dev stack is backed up and promoted without changing its database password.
+4. Step 7 runs the Docker HTTPS wizard inside the guided sequence; the operator is not told to manually run `docker-production-setup` first.
+5. `https://PRODUCTION_DOMAIN` responds after Let's Encrypt or Cloudflare Origin CA setup.
+6. Before HTTPS, `sudo erpnext-dev docker-production-exposure` confirms the temporary frontend is bound only to `127.0.0.1:8080` (or the saved port), not `0.0.0.0`/`[::]`. After HTTPS, only Traefik `80/443` are public and the direct Docker port is not published; `8000/9000` remain container-internal.
+7. `sudo erpnext-dev backup` creates/verifies a durable Docker backup artifact.
+8. `sudo erpnext-dev docker-production-exposure` reports only the intended public web ports, and an external scan from another host confirms the direct Docker port is unreachable.
+
+Do not promote this beta to stable until both local and public Docker acceptance paths pass on real machines.
 
 ## v1.19.19 frontend repair synchronization beta
 

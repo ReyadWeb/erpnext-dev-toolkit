@@ -885,7 +885,7 @@ confirm_app_compatibility_before_install() {
   local branch="$5"
   local notes="$6"
 
-  show_app_compatibility_card "$bench_dir" "$app_name" "$display" "$repo" "$branch" "$notes" "true"
+  show_app_compatibility_card "$bench_dir" "$app_name" "$display" "$repo" "$branch" "$notes" "false"
 
   case "$APP_COMPAT_STATUS" in
     FAIL)
@@ -919,7 +919,7 @@ show_app_compatibility_matrix() {
   echo "Bench: ${bench_dir}"
   echo
   echo "This check is a pre-install guide. It does not guarantee upstream app compatibility."
-  echo "The install command still verifies remote branch availability before downloading."
+  echo "The selected app is checked locally first; bench get-app validates the requested remote branch during the actual download."
   echo
 
   for profile in $(app_profile_list); do
@@ -1009,11 +1009,6 @@ install_app_dependency_telephony() {
       warn "The script will not switch branches automatically. Use Git manually if needed."
     fi
   else
-    log "Verifying branch ${dep_branch} exists for ${dep_repo}"
-    if ! branch_available "$dep_repo" "$dep_branch"; then
-      fail "Branch '${dep_branch}' was not found or GitHub could not be reached for ${dep_repo}. Override TELEPHONY_BRANCH or install manually."
-    fi
-
     repo_q="$(printf '%q' "$dep_repo")"
     branch_q="$(printf '%q' "$dep_branch")"
 
@@ -1249,7 +1244,9 @@ app_wizard_preflight() {
     status_line "Local HTTPS" "INFO" "not configured or not running; optional apps can still install"
   fi
 
-  print_app_compatibility_snapshot "$bench_dir"
+  echo
+  status_line "Compatibility" "INFO" "checked only for the selected app; use menu option 2 for the full matrix"
+  status_line "Remote branch" "INFO" "validated once by bench get-app during download (no duplicate network pre-check)"
 
   echo
   echo "Pre-app backup policy: ${APP_BACKUP_BEFORE_INSTALL}"
@@ -1265,9 +1262,9 @@ run_app_install_wizard() {
   bench_dir="$(require_site_environment)" || return 1
 
   normalize_apps_txt "$bench_dir" "" "true" || warn "Could not normalize sites/apps.txt before app wizard."
+  app_wizard_preflight "$bench_dir"
 
   while true; do
-    app_wizard_preflight "$bench_dir"
     ui_submenu_header "App Wizard" \
       "Choose one app. Status and guide tools are listed first."
     print_two_column_menu \
@@ -1385,13 +1382,6 @@ install_frappe_app() {
       warn "The script will not switch branches automatically. Use Git manually if needed."
     fi
   else
-    if [[ -n "$branch" ]]; then
-      log "Verifying branch ${branch} exists for ${repo}"
-      if ! branch_available "$repo" "$branch"; then
-        fail "Branch '${branch}' was not found or GitHub could not be reached for ${repo}. Override the branch with an environment variable or install manually."
-      fi
-    fi
-
     repo_q="$(printf '%q' "$repo")"
     branch_q="$(printf '%q' "$branch")"
 
