@@ -2807,7 +2807,11 @@ docker_deploy_custom_image() {
   DOCKER_ERPNEXT_IMAGE="$image"
 
   if docker_is_production; then
-    docker_write_prod_image_override
+    # This image was built locally by docker_build_custom_image and may not
+    # exist in any registry. Override the upstream Compose pull policy so every
+    # application service uses the verified local image instead of attempting
+    # a registry pull.
+    docker_write_prod_image_override never
     docker_env_file_set "$(docker_prod_env_file)" ERPNEXT_VERSION "$(docker_image_tag)" || true
   else
     docker_env_file_set "$(docker_env_file)" DOCKER_ERPNEXT_IMAGE "$image" || true
@@ -3431,7 +3435,7 @@ EOF_DOCKER_PROD_ENV
 # pins (the upstream CUSTOM_IMAGE/CUSTOM_TAG split cannot express a digest).
 docker_write_prod_image_override() {
   require_sudo
-  local f svc
+  local f svc pull_policy="${1:-}"
   f="$(docker_prod_image_override_file)"
   $SUDO mkdir -p "$DOCKER_WORKDIR"
   {
@@ -3439,6 +3443,9 @@ docker_write_prod_image_override() {
     for svc in configurator backend frontend websocket queue-short queue-long scheduler; do
       echo "  ${svc}:"
       echo "    image: ${DOCKER_ERPNEXT_IMAGE}"
+      if [[ -n "$pull_policy" ]]; then
+        echo "    pull_policy: ${pull_policy}"
+      fi
     done
   } | $SUDO tee "$f" >/dev/null
   $SUDO chown root:root "$f" 2>/dev/null || true

@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.21-beta.1 (July 2026)
+**Current release:** v1.19.21-beta.2 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
-**Next up:** field-validate the v1.19.21-beta.1 Docker production optional-app immutable-image reconciliation workflow on the existing CRM/Builder VPS reproduction, then promote the proven fix to stable v1.19.21.
+**Next up:** field-validate the v1.19.21-beta.2 Docker production optional-app deployment fix by reusing the already-built CRM/Builder custom image on the existing production VPS, then complete reboot acceptance before promotion to stable v1.19.21.
 **Deferred:** v1.20.0 External Watchdog until v1.19.20 Docker field validation is complete.
 
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3  

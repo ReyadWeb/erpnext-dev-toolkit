@@ -519,8 +519,23 @@ fi
 
 # The production image override must pin every application-bearing service to
 # exactly the same immutable image.
-DOCKER_ERPNEXT_IMAGE="erpnext-dev/custom:test-regression"
+# Normal registry-backed production images must retain the upstream/default
+# pull behavior. pull_policy: never is reserved for Toolkit-built local images.
+DOCKER_ERPNEXT_IMAGE="frappe/erpnext:v16.26.2"
 docker_write_prod_image_override
+
+registry_override="$(cat "$(docker_prod_image_override_file)")"
+
+assert_not_contains \
+  "registry-backed production image is not forced local-only" \
+  "$registry_override" \
+  "pull_policy: never"
+
+# Toolkit-built production images are local artifacts unless explicitly pushed
+# elsewhere. All application-bearing services must use the local image without
+# attempting a registry pull.
+DOCKER_ERPNEXT_IMAGE="erpnext-dev/custom:test-regression"
+docker_write_prod_image_override never
 
 prod_override="$(cat "$(docker_prod_image_override_file)")"
 
@@ -548,6 +563,27 @@ assert_eq \
   "all seven customizable services use the same image" \
   "7" \
   "$override_image_count"
+
+override_never_count="$(
+  grep -c 'pull_policy: never' \
+    "$(docker_prod_image_override_file)" \
+    || true
+)"
+
+assert_eq \
+  "all seven local custom-image services disable registry pulls" \
+  "7" \
+  "$override_never_count"
+
+deploy_function="$(
+  awk '/^docker_deploy_custom_image\(\)/,/^docker_reconcile_app_image\(\)/' \
+    lib/docker.sh
+)"
+
+assert_contains \
+  "custom-image deployment writes a local-only production override" \
+  "$deploy_function" \
+  "docker_write_prod_image_override never"
 
 # Runtime consistency verification must inspect every long-running application
 # service and reject the backend-only deployment shape that caused the original

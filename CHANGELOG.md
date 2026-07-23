@@ -1,3 +1,18 @@
+## v1.19.21-beta.2 - Docker local custom-image deployment pull policy
+
+### Fixed
+
+- **Local custom-image deployment:** production deployment no longer attempts to pull Toolkit-built `erpnext-dev/custom:<tag>` images from a registry. The generated production override now sets `pull_policy: never` for locally built custom images.
+- **Registry behavior preserved:** standard registry-backed production images continue using their normal Compose pull behavior; the local-only policy is scoped specifically to the custom-image deployment workflow.
+- **Seven-service consistency:** configurator, backend, frontend, websocket, queue-short, queue-long, and scheduler all receive the same custom image and local-only pull policy.
+
+### Validation
+
+- Added hermetic regression coverage proving registry-backed images are not forced local-only.
+- Added regression coverage proving all seven customizable services receive `pull_policy: never` for locally built custom images.
+- The first production VPS field test successfully built `erpnext-dev/custom:20260723061909` containing CRM and Builder, then exposed the Compose pull-policy defect before any running production container was replaced.
+- Real VPS acceptance remains required by deploying the already-built image, verifying CRM and Builder frontend behavior and runtime consistency, and completing a reboot test.
+
 ## v1.19.21-beta.1 - Docker production optional-app immutable-image lifecycle
 
 ### Fixed
