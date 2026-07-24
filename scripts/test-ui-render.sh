@@ -575,6 +575,125 @@ grep -q "Rollback snapshots" "$security_narrow_tmp" \
 
 rm -f "$security_narrow_tmp"
 
+# Responsive and aligned Advanced navigation.
+advanced_120_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced-120.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh advanced >"$advanced_120_tmp" 2>/dev/null; then
+  note_fail "Advanced 120-column render failed"
+fi
+
+grep -qE '\[1\].*Installation & repair.*\[6\].*Domains & HTTPS' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing aligned Installation / Domains row"
+
+grep -qE '\[2\].*Deployment engine.*\[7\].*Credentials' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing Deployment / Credentials row"
+
+grep -qE '\[3\].*Services & logs.*\[8\].*Diagnostics' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing Services / Diagnostics row"
+
+grep -qE '\[4\].*Storage.*\[9\].*Developer tools' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing Storage / Developer tools row"
+
+grep -qE '\[5\].*Networking' "$advanced_120_tmp" \
+  || note_fail "Advanced missing Networking routing"
+
+if ! awk '
+  index($0, "Installation & repair") && index($0, "Domains & HTTPS") {
+    found = 1
+
+    if (length($0) != 120 || substr($0, 120, 1) != "|") {
+      bad = 1
+    }
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$advanced_120_tmp"; then
+  note_fail "Advanced right border is not aligned at 120 columns"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$advanced_120_tmp" \
+  || note_fail "Advanced missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$advanced_120_tmp" \
+  || note_fail "Advanced missing canonical Quit footer"
+
+rm -f "$advanced_120_tmp"
+
+advanced_80_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced-80.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=80 \
+  MENU_TERMINAL_COLS=80 \
+  ./erpnext-dev.sh advanced >"$advanced_80_tmp" 2>/dev/null; then
+  note_fail "Advanced 80-column render failed"
+fi
+
+grep -qE '\[1\].*\[6\]' "$advanced_80_tmp" \
+  || note_fail "Advanced did not retain two columns at 80 columns"
+
+if ! awk '
+  index($0, "Installation & repair") && index($0, "Domains & HTTPS") {
+    found = 1
+
+    if (length($0) != 80 || substr($0, 80, 1) != "|") {
+      bad = 1
+    }
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$advanced_80_tmp"; then
+  note_fail "Advanced right border is not aligned at 80 columns"
+fi
+
+rm -f "$advanced_80_tmp"
+
+advanced_70_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced-70.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh advanced >"$advanced_70_tmp" 2>/dev/null; then
+  note_fail "Advanced 70-column render failed"
+fi
+
+if grep -qE '\[1\].*\[6\]' "$advanced_70_tmp"; then
+  note_fail "Advanced did not switch to single-column at 70 columns"
+fi
+
+grep -q "Installation & repair" "$advanced_70_tmp" \
+  || note_fail "narrow Advanced menu missing Installation & repair"
+
+grep -q "Developer tools" "$advanced_70_tmp" \
+  || note_fail "narrow Advanced menu missing Developer tools"
+
+rm -f "$advanced_70_tmp"
+
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2
   echo "----- render output (compact) -----" >&2
