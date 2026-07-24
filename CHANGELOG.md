@@ -1,3 +1,37 @@
+## v1.19.22 - Responsive interface and local reliability
+
+### Added
+
+- Responsive dashboard and categorized terminal navigation.
+- Environment-aware networking, HTTPS, security, backup, application, and operations workflows.
+- Scalable categorized optional-application navigation.
+
+### Fixed
+
+- Main-menu `L` and `l` now display runtime logs and keep the page visible until the user returns.
+- Debian 13 static-IP setup preserves DNS through `resolvconf`.
+- Static-IP rollback preserves and restores resolver configuration.
+- Boxed menu rows remain aligned across wide, compact, and narrow terminals.
+- Submenu navigation and return behaviour are consistent.
+
+### Integrated
+
+- Preserved the stable v1.19.21 Docker optional-application reliability improvements.
+- Synchronized the permanent beta line with stable v1.19.21 before promotion.
+
+### Validation
+
+- Passed Release Validation CI.
+- Passed disposable-VM integration CI.
+- Passed real Debian 13 native installation acceptance.
+- Validated ERPNext and Frappe version-16 runtime.
+- Validated CRM and Print Designer installation.
+- Validated toolkit integrity with 24 of 24 runtime modules matching.
+- Validated service runtime and boot autostart.
+- Validated local HTTP, HTTPS, login assets, and frontend static assets.
+- Validated static IP, default route, and DNS after reboot.
+- Validated backup, restore, security hardening, and runtime Logs navigation.
+
 ## v1.19.22-beta.1 - Stable synchronization and local reliability
 
 ### Integrated
