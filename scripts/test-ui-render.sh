@@ -308,6 +308,141 @@ if grep -q "29) Show host access test guide" "$access_tmp"; then
 fi
 rm -f "$access_tmp"
 
+# Categorized Backup & Recovery hub.
+backup_hub_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-hub.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh backup-menu >"$backup_hub_tmp" 2>/dev/null; then
+  note_fail "Backup & Recovery hub render failed"
+fi
+
+grep -qE '\[1\].*Overview.*\[5\].*Restore' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Overview / Restore routing"
+
+grep -qE '\[2\].*Create backup.*\[6\].*Recovery readiness' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Create backup / Recovery readiness routing"
+
+grep -qE '\[3\].*Verify backups.*\[7\].*Off-VM backups' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Verify / Off-VM routing"
+
+grep -qE '\[4\].*Scheduled backups.*\[8\].*Retention' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Scheduled backups / Retention routing"
+
+grep -qE '\[M\].*Maintenance' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Maintenance routing"
+
+if grep -qE '\[1\].*Database backup' "$backup_hub_tmp"; then
+  note_fail "Backup hub still exposes the legacy flat menu"
+fi
+
+if ! awk '
+  index($0, "Overview") && index($0, "Restore") {
+    found = 1
+    if (length($0) != 120 || substr($0, 120, 1) != "|") {
+      bad = 1
+    }
+  }
+  END {
+    exit !(found && !bad)
+  }
+' "$backup_hub_tmp"; then
+  note_fail "Backup hub right border is not aligned at 120 columns"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing canonical Quit footer"
+
+rm -f "$backup_hub_tmp"
+
+# Create Backup submenu.
+backup_create_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-create.XXXXXX)"
+
+if ! printf '2\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh backup-menu >"$backup_create_tmp" 2>/dev/null; then
+  note_fail "Create Backup submenu render failed"
+fi
+
+grep -q "Create Backup" "$backup_create_tmp" \
+  || note_fail "Create Backup submenu title missing"
+
+grep -q "Database only" "$backup_create_tmp" \
+  || note_fail "Create Backup submenu missing Database only"
+
+grep -q "Database + files" "$backup_create_tmp" \
+  || note_fail "Create Backup submenu missing Database + files"
+
+rm -f "$backup_create_tmp"
+
+# Scheduled Backups submenu.
+backup_schedule_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-schedule.XXXXXX)"
+
+if ! printf '4\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh backup-menu >"$backup_schedule_tmp" 2>/dev/null; then
+  note_fail "Scheduled Backups submenu render failed"
+fi
+
+grep -q "Scheduled Backups" "$backup_schedule_tmp" \
+  || note_fail "Scheduled Backups submenu title missing"
+
+grep -q "Configure schedule" "$backup_schedule_tmp" \
+  || note_fail "Scheduled Backups submenu missing Configure schedule"
+
+grep -q "Disable schedule" "$backup_schedule_tmp" \
+  || note_fail "Scheduled Backups submenu missing Disable schedule"
+
+rm -f "$backup_schedule_tmp"
+
+# Narrow Backup & Recovery layout must remain single-column.
+backup_narrow_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-narrow.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh backup-menu >"$backup_narrow_tmp" 2>/dev/null; then
+  note_fail "narrow Backup & Recovery hub render failed"
+fi
+
+if grep -qE '\[1\].*\[5\]' "$backup_narrow_tmp"; then
+  note_fail "Backup hub did not switch to single-column at 70 columns"
+fi
+
+grep -q "Overview" "$backup_narrow_tmp" \
+  || note_fail "narrow Backup hub missing Overview"
+
+grep -q "Restore" "$backup_narrow_tmp" \
+  || note_fail "narrow Backup hub missing Restore"
+
+rm -f "$backup_narrow_tmp"
+
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2
   echo "----- render output (compact) -----" >&2

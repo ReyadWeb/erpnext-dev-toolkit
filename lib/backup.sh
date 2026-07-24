@@ -3143,90 +3143,415 @@ backup_hardening_wizard() {
   done
 }
 
-run_backup_maintenance_menu() {
-  while true; do
-    ui_submenu_header "Backup & Recovery" "Local backups, restore, schedules, retention, and maintenance"
-    print_two_column_menu \
-      "1) Database backup" \
-      "2) DB + files backup" \
-      "3) Backup status" \
-      "4) Verify latest backup" \
-      "5) Off-VM guide" \
-      "6) Restore rehearsal guide" \
-      "7) List backups" \
-      "8) Restore database" \
-      "9) Restore DB + files" \
-      "10) Schedule status" \
-      "11) Configure schedule" \
-      "12) Disable schedule" \
-      "13) Retention status" \
-      "14) Cleanup dry run" \
-      "15) Maintenance tasks"
-    ui_submenu_footer
-    local backup_choice=""
-    menu_read_choice backup_choice
+backup_recovery_menu_render_option() {
+  local key="$1"
+  local label="$2"
 
-    case "$backup_choice" in
+  ui_row_add_colored cyan "[$key]"
+  ui_row_add " $label"
+}
+
+backup_recovery_menu_render_pair() {
+  local width="$1"
+  local left_key="$2"
+  local left_label="$3"
+  local right_key="${4:-}"
+  local right_label="${5:-}"
+  local content_width left_cell_width left_target
+
+  content_width=$((width - 6))
+  left_cell_width=$((content_width / 2))
+  left_target=$((1 + left_cell_width))
+
+  ui_row_begin
+  backup_recovery_menu_render_option "$left_key" "$left_label"
+
+  if [[ -n "$right_key" ]]; then
+    ui_row_pad_to "$left_target"
+    ui_row_add " "
+    ui_row_add_colored muted "$UI_DIV"
+    ui_row_add " "
+    backup_recovery_menu_render_option "$right_key" "$right_label"
+  fi
+
+  ui_row_end
+}
+
+render_backup_recovery_hub_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    backup_recovery_menu_render_pair \
+      "$width" "1" "Overview" \
+      "5" "Restore"
+
+    backup_recovery_menu_render_pair \
+      "$width" "2" "Create backup" \
+      "6" "Recovery readiness"
+
+    backup_recovery_menu_render_pair \
+      "$width" "3" "Verify backups" \
+      "7" "Off-VM backups"
+
+    backup_recovery_menu_render_pair \
+      "$width" "4" "Scheduled backups" \
+      "8" "Retention"
+  else
+    backup_recovery_menu_render_pair "$width" "1" "Overview"
+    backup_recovery_menu_render_pair "$width" "2" "Create backup"
+    backup_recovery_menu_render_pair "$width" "3" "Verify backups"
+    backup_recovery_menu_render_pair "$width" "4" "Scheduled backups"
+    backup_recovery_menu_render_pair "$width" "5" "Restore"
+    backup_recovery_menu_render_pair "$width" "6" "Recovery readiness"
+    backup_recovery_menu_render_pair "$width" "7" "Off-VM backups"
+    backup_recovery_menu_render_pair "$width" "8" "Retention"
+  fi
+
+  ui_box_line mid "$width"
+  backup_recovery_menu_render_pair "$width" "M" "Maintenance"
+  ui_box_line bot "$width"
+}
+
+backup_recovery_run_action() {
+  local action="$1"
+  local return_to="${2:-Backup & Recovery}"
+
+  case "$action" in
+    database)
+      create_site_backup false
+      ;;
+    complete)
+      create_site_backup true
+      ;;
+    status)
+      show_backup_status
+      ;;
+    verify)
+      verify_latest_backup_set
+      ;;
+    off_vm)
+      show_off_vm_backup_guide
+      ;;
+    rehearsal)
+      show_restore_rehearsal_guide
+      ;;
+    list)
+      list_site_backups
+      ;;
+    restore_database)
+      restore_site_database
+      ;;
+    restore_complete)
+      restore_site_full
+      ;;
+    schedule_status)
+      show_backup_schedule_status
+      ;;
+    schedule_configure)
+      configure_backup_schedule
+      ;;
+    schedule_disable)
+      disable_backup_schedule
+      ;;
+    retention_status)
+      show_backup_retention_status
+      ;;
+    retention_preview)
+      cleanup_old_backups dry-run
+      ;;
+    maintenance)
+      run_maintenance_menu
+      return 0
+      ;;
+    *)
+      warn "Unknown Backup & Recovery action: ${action}"
+      return 1
+      ;;
+  esac
+
+  pause_after_screen "Press Enter to return to ${return_to}..."
+}
+
+backup_recovery_overview_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Backup Overview" \
+      "Inspect backup state and available backup sets."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      backup_recovery_menu_render_pair \
+        "$width" "1" "Backup status" \
+        "2" "List backups"
+    else
+      backup_recovery_menu_render_pair "$width" "1" "Backup status"
+      backup_recovery_menu_render_pair "$width" "2" "List backups"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
       1)
-        create_site_backup false
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_run_action status "Backup Overview"
         ;;
       2)
-        create_site_backup true
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_run_action list "Backup Overview"
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+backup_recovery_create_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Create Backup" \
+      "Create a database-only or complete database-and-files backup."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      backup_recovery_menu_render_pair \
+        "$width" "1" "Database only" \
+        "2" "Database + files"
+    else
+      backup_recovery_menu_render_pair "$width" "1" "Database only"
+      backup_recovery_menu_render_pair "$width" "2" "Database + files"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        backup_recovery_run_action database "Create Backup"
+        ;;
+      2)
+        backup_recovery_run_action complete "Create Backup"
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+backup_recovery_schedule_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Scheduled Backups" \
+      "Inspect, configure, or disable automatic backups."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      backup_recovery_menu_render_pair \
+        "$width" "1" "Schedule status" \
+        "2" "Configure schedule"
+
+      backup_recovery_menu_render_pair \
+        "$width" "3" "Disable schedule"
+    else
+      backup_recovery_menu_render_pair "$width" "1" "Schedule status"
+      backup_recovery_menu_render_pair "$width" "2" "Configure schedule"
+      backup_recovery_menu_render_pair "$width" "3" "Disable schedule"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        backup_recovery_run_action schedule_status "Scheduled Backups"
+        ;;
+      2)
+        backup_recovery_run_action schedule_configure "Scheduled Backups"
         ;;
       3)
-        show_backup_status
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_run_action schedule_disable "Scheduled Backups"
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+backup_recovery_restore_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Restore" \
+      "Restore a database or a complete database-and-files backup."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      backup_recovery_menu_render_pair \
+        "$width" "1" "Restore database" \
+        "2" "Restore DB + files"
+    else
+      backup_recovery_menu_render_pair "$width" "1" "Restore database"
+      backup_recovery_menu_render_pair "$width" "2" "Restore DB + files"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        backup_recovery_run_action restore_database "Restore"
+        ;;
+      2)
+        backup_recovery_run_action restore_complete "Restore"
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+backup_recovery_retention_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Retention" \
+      "Review retention state and preview old-backup cleanup."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      backup_recovery_menu_render_pair \
+        "$width" "1" "Retention status" \
+        "2" "Cleanup dry run"
+    else
+      backup_recovery_menu_render_pair "$width" "1" "Retention status"
+      backup_recovery_menu_render_pair "$width" "2" "Cleanup dry run"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        backup_recovery_run_action retention_status "Retention"
+        ;;
+      2)
+        backup_recovery_run_action retention_preview "Retention"
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+run_backup_maintenance_menu() {
+  while true; do
+    local choice=""
+
+    ui_submenu_header "Backup & Recovery" \
+      "Protect data, verify backups, and prepare for recovery."
+
+    render_backup_recovery_hub_options
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        backup_recovery_overview_menu
+        ;;
+      2)
+        backup_recovery_create_menu
+        ;;
+      3)
+        backup_recovery_run_action verify
         ;;
       4)
-        verify_latest_backup_set
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_schedule_menu
         ;;
       5)
-        show_off_vm_backup_guide
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_restore_menu
         ;;
       6)
-        show_restore_rehearsal_guide
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_run_action rehearsal
         ;;
       7)
-        list_site_backups
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_run_action off_vm
         ;;
       8)
-        restore_site_database
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        backup_recovery_retention_menu
         ;;
-      9)
-        restore_site_full
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+      m | M)
+        backup_recovery_run_action maintenance
         ;;
-      10)
-        show_backup_schedule_status
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+      b | B | "")
+        return 0
         ;;
-      11)
-        configure_backup_schedule
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+      q | Q)
+        exit 0
         ;;
-      12)
-        disable_backup_schedule
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+      *)
+        warn "Invalid option"
         ;;
-      13)
-        show_backup_retention_status
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
-        ;;
-      14)
-        cleanup_old_backups dry-run
-        pause_after_screen "Press Enter to return to Backup / Maintenance..."
-        ;;
-      15) run_maintenance_menu ;;
-      b | B | "") return 0 ;;
-      q | Q) exit 0 ;;
-      *) warn "Invalid option" ;;
     esac
   done
 }
