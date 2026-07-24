@@ -135,6 +135,50 @@ ui_layout_mode() {
   fi
 }
 
+# Main-dashboard layout contract. Keep this separate from ui_layout_mode so the
+# broader submenu system can retain its current fit-based behavior while the
+# dashboard gets explicit wide / compact / narrow breakpoints.
+ui_dashboard_layout_mode() {
+  local cols="${UI_COLS:-100}"
+  if (( cols < 80 )); then
+    printf 'narrow'
+  elif (( cols < 120 )); then
+    printf 'compact'
+  else
+    printf 'wide'
+  fi
+}
+
+# Render a fixed-width percentage bar with Unicode blocks when available and a
+# portable ASCII fallback otherwise. The caller controls any surrounding color.
+ui_percent_bar() {
+  local percent="${1:-0}" length="${2:-10}"
+  local filled empty fill_char empty_char
+
+  [[ "$percent" =~ ^[0-9]+$ ]] || percent=0
+  [[ "$length" =~ ^[0-9]+$ ]] || length=10
+  (( percent < 0 )) && percent=0
+  (( percent > 100 )) && percent=100
+  (( length < 4 )) && length=4
+
+  filled=$(( (percent * length + 50) / 100 ))
+  (( filled > length )) && filled="$length"
+  empty=$(( length - filled ))
+
+  if (( ${UI_UNICODE:-0} == 1 )); then
+    fill_char="█"
+    empty_char="░"
+  else
+    fill_char="#"
+    empty_char="-"
+  fi
+
+  printf '['
+  ui_repeat "$fill_char" "$filled"
+  ui_repeat "$empty_char" "$empty"
+  printf ']'
+}
+
 # Clear only the operator's live terminal, never the captured log stream.
 # This keeps interactive menus page-oriented even after stdout is redirected
 # through tee, while direct/non-interactive CLI commands remain print-and-exit.
@@ -223,11 +267,13 @@ ui_box_line() {
   local width="${2:-$(ui_panel_width)}"
   local inner=$((width - 2))
   (( inner < 10 )) && inner=10
+  ui_c muted
   case "$kind" in
     top) printf '%s%s%s\n' "$UI_TL" "$(ui_repeat "$UI_H" "$inner")" "$UI_TR" ;;
     bot) printf '%s%s%s\n' "$UI_BL" "$(ui_repeat "$UI_H" "$inner")" "$UI_BR" ;;
     mid) printf '%s%s%s\n' "$UI_V" "$(ui_repeat "$UI_H" "$inner")" "$UI_V" ;;
   esac
+  ui_c reset
 }
 
 ui_status_color() {
@@ -462,7 +508,13 @@ ui_box_titled_top() {
   # "─ " + title + " " + fill  == inner
   fill=$((inner - 3 - ${#title}))
   (( fill < 1 )) && fill=1
-  printf '%s%s %s %s%s\n' "$UI_TL" "$UI_H" "$title" "$(ui_repeat "$UI_H" "$fill")" "$UI_TR"
+  ui_c muted
+  printf '%s%s ' "$UI_TL" "$UI_H"
+  ui_c reset
+  ui_text cyan "$title"
+  ui_c muted
+  printf ' %s%s\n' "$(ui_repeat "$UI_H" "$fill")" "$UI_TR"
+  ui_c reset
 }
 
 ui_section_open() {
@@ -478,7 +530,8 @@ ui_section_close() {
 
 # Row builder: track visible (non-ANSI) width so padding stays inside the box.
 ui_row_begin() {
-  printf '%s ' "$UI_V"
+  ui_text muted "$UI_V"
+  printf ' '
   UI_ROW_USED=1
 }
 
@@ -496,13 +549,61 @@ ui_row_add_colored() {
   UI_ROW_USED=$(( ${UI_ROW_USED:-0} + ${#text} ))
 }
 
+# Add a semantic percentage bar without letting ANSI escape sequences affect
+# visible-width accounting. Brackets and the unused segment stay muted while
+# the filled segment inherits the caller's utilization color.
+ui_row_add_percent_bar() {
+  local color="${1:-green}" percent="${2:-0}" length="${3:-10}"
+  local filled empty fill_char empty_char
+
+  [[ "$percent" =~ ^[0-9]+$ ]] || percent=0
+  [[ "$length" =~ ^[0-9]+$ ]] || length=10
+  (( percent < 0 )) && percent=0
+  (( percent > 100 )) && percent=100
+  (( length < 4 )) && length=4
+
+  filled=$(( (percent * length + 50) / 100 ))
+  (( filled > length )) && filled="$length"
+  empty=$(( length - filled ))
+
+  if (( ${UI_UNICODE:-0} == 1 )); then
+    fill_char="█"
+    empty_char="░"
+  else
+    fill_char="#"
+    empty_char="-"
+  fi
+
+  ui_text muted "["
+  ui_c "$color"
+  ui_repeat "$fill_char" "$filled"
+  ui_c reset
+  ui_text muted "$(ui_repeat "$empty_char" "$empty")"
+  ui_text muted "]"
+  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + length + 2 ))
+}
+
+# Pad the current box row to an exact visible column. This keeps internal
+# dividers and the final right border aligned even when labels or menu numbers
+# have different lengths (for example, [7] versus [10]).
+ui_row_pad_to() {
+  local target="${1:-0}" pad
+  [[ "$target" =~ ^[0-9]+$ ]] || return 1
+  pad=$(( target - ${UI_ROW_USED:-0} ))
+  (( pad > 0 )) || return 0
+  printf '%*s' "$pad" ''
+  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + pad ))
+}
+
 ui_row_end() {
   local width inner pad
   width="$(ui_panel_width)"
   inner=$((width - 2))
   pad=$((inner - ${UI_ROW_USED:-0}))
   (( pad < 0 )) && pad=0
-  printf '%*s%s\n' "$pad" "" "$UI_V"
+  printf '%*s' "$pad" ""
+  ui_text muted "$UI_V"
+  printf '\n'
   UI_ROW_USED=0
 }
 

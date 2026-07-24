@@ -37,12 +37,18 @@ fi
 
 grep -q "ERPNext Developer Toolkit" "$tmp" || note_fail "missing toolkit title"
 grep -q "Start here" "$tmp" || note_fail "missing Start here item"
-grep -q "Access & networking" "$tmp" || note_fail "missing Access & networking item"
+grep -q "Network & access" "$tmp" || note_fail "missing Network & access item"
 grep -q "HTTPS & domains" "$tmp" || note_fail "missing HTTPS & domains item"
-grep -q "Backup & recovery" "$tmp" || note_fail "missing Backup & recovery item"
+grep -q "Backups & restore" "$tmp" || note_fail "missing Backups & restore item"
 grep -q "Operations" "$tmp" || note_fail "missing Operations item"
+grep -q "System Overview" "$tmp" || note_fail "missing System Overview"
+grep -q "CPU" "$tmp" || note_fail "missing CPU metric"
+grep -q "RAM" "$tmp" || note_fail "missing RAM metric"
+grep -q "Disk" "$tmp" || note_fail "missing Disk metric"
+grep -qE '\[D\][[:space:]]+Dashboard' "$tmp" || note_fail "missing Dashboard shortcut"
+grep -qE '\[L\][[:space:]]+Logs' "$tmp" || note_fail "missing Logs shortcut"
 grep -q "Choose an option" "$tmp" || note_fail "missing Choose an option prompt"
-grep -qE '\[q\]|q\) Quit' "$tmp" || note_fail "missing quit affordance"
+grep -qE '\[q\]|q\) Quit|Q\. Quit' "$tmp" || note_fail "missing quit affordance"
 
 if grep -q $'\033' "$tmp"; then
   note_fail "ANSI escape codes present with NO_COLOR=1 / TERM=dumb"
@@ -63,10 +69,10 @@ if ! grep -qE '\[1\].*\[7\]' "$tmp2"; then
 else
   pass "two-column menu at COLUMNS=100"
 fi
-grep -q "Go-live:" "$tmp2" || note_fail "wide layout missing Go-live status badge"
-grep -qE 'Go-live:[[:space:]]*Local' "$tmp2" || note_fail "local mode should show Go-live: Local (not Unknown)"
+grep -qE 'Go-live[[:space:]]+[+!x-]' "$tmp" || note_fail "wide layout missing Go-live status indicator"
+grep -qE 'Go-live[[:space:]]+-' "$tmp" || note_fail "local mode should render Go-live as a neutral indicator"
 grep -qE 'HTTPS:[[:space:]]*(None|mkcert|Self-signed|OK)' "$tmp2" \
-  || note_fail "local mode should show HTTPS as None/mkcert/Self-signed/OK (not Unknown)"
+  grep -qE 'HTTPS[[:space:]]+-' "$tmp" || note_fail "local mode without configured HTTPS should render a neutral HTTPS indicator"
 # Status badges must wrap: Go-live must not share a line with HTTPS.
 if grep -E 'HTTPS:.*Go-live:' "$tmp2" >/dev/null 2>&1; then
   note_fail "Go-live still on the same status row as HTTPS (overflow risk)"
@@ -123,6 +129,28 @@ else
   pass "two-column menu at COLUMNS=120"
 fi
 rm -f "$tmp4"
+
+# Responsive dashboard width matrix: every rendered line must stay inside the
+# effective panel width, and the System Overview must remain visible.
+for dashboard_cols in 60 79 80 100 119 120 160; do
+  export COLUMNS="$dashboard_cols" MENU_TERMINAL_COLS="$dashboard_cols"
+  export MENU_FORCE_ONE_COLUMN=false
+  unset MENU_FORCE_TWO_COLUMNS
+  dashboard_tmp="$(mktemp /tmp/erpnext-dev-ui-dashboard-${dashboard_cols}.XXXXXX)"
+  ./erpnext-dev.sh menu-render-test >"$dashboard_tmp" 2>/dev/null \
+    || note_fail "dashboard render failed at width ${dashboard_cols}"
+  effective_width="$dashboard_cols"
+  ((effective_width > 120)) && effective_width=120
+  ((effective_width < 60)) && effective_width=60
+  if ! awk -v max="$effective_width" 'length($0) > max { bad=1 } END { exit bad }' "$dashboard_tmp"; then
+    note_fail "dashboard render exceeded ${effective_width} columns at width ${dashboard_cols}"
+    cat "$dashboard_tmp" >&2 || true
+  fi
+  grep -q "System Overview" "$dashboard_tmp" \
+    || note_fail "System Overview missing at width ${dashboard_cols}"
+  rm -f "$dashboard_tmp"
+done
+pass "responsive dashboard width matrix"
 
 # Fit-based fallback: oversized labels force single-column even at wide width.
 # shellcheck source=lib/ui.sh disable=SC1091

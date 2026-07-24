@@ -10,12 +10,12 @@ MAIN_MENU_ITEMS=(
   "1|Start here"
   "2|Local development"
   "3|Production setup"
-  "4|Status & health"
-  "5|Access & networking"
+  "4|Status"
+  "5|Network & access"
   "6|HTTPS & domains"
-  "7|Applications"
+  "7|Apps"
   "8|Security"
-  "9|Backup & recovery"
+  "9|Backups & restore"
   "10|Operations"
   "11|Advanced"
   "12|Help"
@@ -36,7 +36,7 @@ menu_map_local_https_word() {
   n="$(printf '%s' "$status" | tr '[:lower:]' '[:upper:]')"
   d="$(printf '%s' "$detail" | tr '[:upper:]' '[:lower:]')"
   case "$n" in
-    ""|UNKNOWN|INFO)
+    "" | UNKNOWN | INFO)
       printf 'None'
       return 0
       ;;
@@ -50,9 +50,9 @@ menu_map_local_https_word() {
     return 0
   fi
   case "$n" in
-    HEALTHY|OK) printf 'OK' ;;
-    DEGRADED|WARN) printf 'Warn' ;;
-    CRITICAL|FAIL) printf 'Fail' ;;
+    HEALTHY | OK) printf 'OK' ;;
+    DEGRADED | WARN) printf 'Warn' ;;
+    CRITICAL | FAIL) printf 'Fail' ;;
     *) printf '%s' "$status" ;;
   esac
 }
@@ -63,46 +63,49 @@ menu_map_health_word() {
   local n
   n="$(printf '%s' "$raw" | tr '[:lower:]' '[:upper:]')"
   case "$n" in
-    ""|UNKNOWN|INFO) printf 'Unknown'; return 0 ;;
+    "" | UNKNOWN | INFO)
+      printf 'Unknown'
+      return 0
+      ;;
   esac
   case "$kind" in
     health)
       case "$n" in
-        HEALTHY|OK) printf 'Active' ;;
-        DEGRADED|WARN) printf 'Degraded' ;;
-        CRITICAL|FAIL) printf 'Critical' ;;
+        HEALTHY | OK) printf 'Active' ;;
+        DEGRADED | WARN) printf 'Degraded' ;;
+        CRITICAL | FAIL) printf 'Critical' ;;
         *) printf '%s' "$raw" ;;
       esac
       ;;
-    https|backup)
+    https | backup)
       case "$n" in
-        HEALTHY|OK) printf 'OK' ;;
-        DEGRADED|WARN) printf 'Warn' ;;
-        CRITICAL|FAIL) printf 'Fail' ;;
+        HEALTHY | OK) printf 'OK' ;;
+        DEGRADED | WARN) printf 'Warn' ;;
+        CRITICAL | FAIL) printf 'Fail' ;;
         *) printf '%s' "$raw" ;;
       esac
       ;;
     offvm)
       case "$n" in
-        HEALTHY|OK) printf 'Verified' ;;
-        DEGRADED|WARN) printf 'Warn' ;;
-        CRITICAL|FAIL) printf 'Fail' ;;
+        HEALTHY | OK) printf 'Verified' ;;
+        DEGRADED | WARN) printf 'Warn' ;;
+        CRITICAL | FAIL) printf 'Fail' ;;
         *) printf '%s' "$raw" ;;
       esac
       ;;
     restore)
       case "$n" in
-        HEALTHY|OK) printf 'Rehearsed' ;;
-        DEGRADED|WARN) printf 'Due' ;;
-        CRITICAL|FAIL) printf 'Missing' ;;
+        HEALTHY | OK) printf 'Rehearsed' ;;
+        DEGRADED | WARN) printf 'Due' ;;
+        CRITICAL | FAIL) printf 'Missing' ;;
         *) printf '%s' "$raw" ;;
       esac
       ;;
     runtime)
       case "$n" in
-        RUNNING*|HEALTHY|OK) printf 'Running' ;;
-        STOPPED*|FAIL|CRITICAL) printf 'Stopped' ;;
-        DEGRADED|WARN) printf 'Degraded' ;;
+        RUNNING* | HEALTHY | OK) printf 'Running' ;;
+        STOPPED* | FAIL | CRITICAL) printf 'Stopped' ;;
+        DEGRADED | WARN) printf 'Degraded' ;;
         *) printf '%s' "$raw" ;;
       esac
       ;;
@@ -122,8 +125,20 @@ load_menu_status_fast() {
     MENU_STATUS_MODE="public-vm"
   else
     case "${DEPLOYMENT_MODE:-development}" in
-      production|public|public-vm) MENU_STATUS_MODE="public-vm" ;;
+      production | public | public-vm) MENU_STATUS_MODE="public-vm" ;;
       *) MENU_STATUS_MODE="local" ;;
+    esac
+  fi
+
+  if declare -F effective_deployment_engine >/dev/null 2>&1; then
+    case "$(effective_deployment_engine 2>/dev/null || echo native)" in
+      docker) MENU_STATUS_ENGINE="Docker" ;;
+      *) MENU_STATUS_ENGINE="Native" ;;
+    esac
+  else
+    case "${DEPLOYMENT_ENGINE:-native}" in
+      docker) MENU_STATUS_ENGINE="Docker" ;;
+      *) MENU_STATUS_ENGINE="Native" ;;
     esac
   fi
 
@@ -179,60 +194,361 @@ load_menu_status_fast() {
   fi
 }
 
+menu_metric_percent_color() {
+  local kind="${1:-generic}" pct="${2:-0}" warn_at=70 critical_at=85
+  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+  case "$kind" in
+    disk)
+      warn_at=75
+      critical_at=90
+      ;;
+    cpu | ram)
+      warn_at=70
+      critical_at=85
+      ;;
+  esac
+  if ((pct >= critical_at)); then
+    printf 'red'
+  elif ((pct >= warn_at)); then
+    printf 'orange'
+  else
+    printf 'green'
+  fi
+}
+
+menu_metric_gib() {
+  local kib="${1:-0}"
+  awk -v kib="$kib" 'BEGIN { printf "%.1f", kib / 1024 / 1024 }'
+}
+
+menu_metric_cpu_percent() {
+  local user1 nice1 sys1 idle1 iowait1 irq1 softirq1 steal1
+  local user2 nice2 sys2 idle2 iowait2 irq2 softirq2 steal2
+  local total1 total2 idle_all1 idle_all2 delta_total delta_idle busy
+
+  IFS=$' \t' read -r _ user1 nice1 sys1 idle1 iowait1 irq1 softirq1 steal1 _ </proc/stat 2>/dev/null || {
+    printf '0'
+    return 0
+  }
+  sleep "${MENU_CPU_SAMPLE_SEC:-0.08}"
+  IFS=$' \t' read -r _ user2 nice2 sys2 idle2 iowait2 irq2 softirq2 steal2 _ </proc/stat 2>/dev/null || {
+    printf '0'
+    return 0
+  }
+
+  total1=$((user1 + nice1 + sys1 + idle1 + iowait1 + irq1 + softirq1 + steal1))
+  total2=$((user2 + nice2 + sys2 + idle2 + iowait2 + irq2 + softirq2 + steal2))
+  idle_all1=$((idle1 + iowait1))
+  idle_all2=$((idle2 + iowait2))
+  delta_total=$((total2 - total1))
+  delta_idle=$((idle_all2 - idle_all1))
+  if ((delta_total <= 0)); then
+    printf '0'
+    return 0
+  fi
+  busy=$(((100 * (delta_total - delta_idle)) / delta_total))
+  ((busy < 0)) && busy=0
+  ((busy > 100)) && busy=100
+  printf '%s' "$busy"
+}
+
+menu_metric_uptime_short() {
+  local seconds days hours minutes
+  seconds="$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 0)"
+  [[ "$seconds" =~ ^[0-9]+$ ]] || seconds=0
+  days=$((seconds / 86400))
+  hours=$(((seconds % 86400) / 3600))
+  minutes=$(((seconds % 3600) / 60))
+  if ((days > 0)); then
+    printf '%sd %sh' "$days" "$hours"
+  elif ((hours > 0)); then
+    printf '%sh %sm' "$hours" "$minutes"
+  else
+    printf '%sm' "$minutes"
+  fi
+}
+
+load_menu_system_metrics_fast() {
+  # Lightweight host-only metrics. No Docker, Bench, DNS, HTTP, certificate, or
+  # backup probes are allowed here; the main menu must remain effectively instant.
+  local mem_total mem_available mem_used
+  local disk_used disk_total disk_pct_raw disk_line
+  local load_line tasks
+
+  MENU_METRIC_CPU_PCT="$(menu_metric_cpu_percent)"
+
+  mem_total="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null || echo 0)"
+  mem_available="$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null || echo 0)"
+  [[ "$mem_total" =~ ^[0-9]+$ ]] || mem_total=0
+  [[ "$mem_available" =~ ^[0-9]+$ ]] || mem_available=0
+  mem_used=$((mem_total - mem_available))
+  ((mem_used < 0)) && mem_used=0
+  if ((mem_total > 0)); then
+    MENU_METRIC_RAM_PCT=$(((mem_used * 100) / mem_total))
+  else
+    MENU_METRIC_RAM_PCT=0
+  fi
+  MENU_METRIC_RAM_USED_GIB="$(menu_metric_gib "$mem_used")"
+  MENU_METRIC_RAM_TOTAL_GIB="$(menu_metric_gib "$mem_total")"
+
+  # Root filesystem metrics from the final POSIX df data row. Using the
+  # complete row avoids fragile field filtering and works with long device names.
+  disk_line="$(LC_ALL=C command df -Pk / 2>/dev/null | tail -n 1 || true)"
+  disk_total=0
+  disk_used=0
+  disk_pct_raw=""
+  IFS=$' \t' read -r _ disk_total disk_used _ disk_pct_raw _ <<<"$disk_line" || true
+  [[ "$disk_total" =~ ^[0-9]+$ ]] || disk_total=0
+  [[ "$disk_used" =~ ^[0-9]+$ ]] || disk_used=0
+  if [[ "$disk_pct_raw" =~ ^([0-9]+)%$ ]]; then
+    MENU_METRIC_DISK_PCT="${BASH_REMATCH[1]}"
+  elif ((disk_total > 0)); then
+    MENU_METRIC_DISK_PCT=$(((disk_used * 100) / disk_total))
+  else
+    MENU_METRIC_DISK_PCT=0
+  fi
+  MENU_METRIC_DISK_USED_GIB="$(menu_metric_gib "$disk_used")"
+  MENU_METRIC_DISK_TOTAL_GIB="$(menu_metric_gib "$disk_total")"
+
+  load_line="$(cat /proc/loadavg 2>/dev/null || true)"
+  MENU_METRIC_LOAD_1="$(awk '{print $1}' <<<"$load_line")"
+  MENU_METRIC_LOAD_5="$(awk '{print $2}' <<<"$load_line")"
+  MENU_METRIC_LOAD_15="$(awk '{print $3}' <<<"$load_line")"
+  tasks="$(awk '{print $4}' <<<"$load_line")"
+  MENU_METRIC_TASKS_RUNNING="${tasks%%/*}"
+  MENU_METRIC_TASKS_TOTAL="${tasks##*/}"
+  [[ "$MENU_METRIC_TASKS_RUNNING" =~ ^[0-9]+$ ]] || MENU_METRIC_TASKS_RUNNING=0
+  [[ "$MENU_METRIC_TASKS_TOTAL" =~ ^[0-9]+$ ]] || MENU_METRIC_TASKS_TOTAL=0
+  MENU_METRIC_UPTIME="$(menu_metric_uptime_short)"
+}
+
+render_main_resources_panel() {
+  local width mode cpu_color ram_color disk_color
+  width="$(ui_panel_width)"
+  mode="$(ui_dashboard_layout_mode)"
+  cpu_color="$(menu_metric_percent_color cpu "$MENU_METRIC_CPU_PCT")"
+  ram_color="$(menu_metric_percent_color ram "$MENU_METRIC_RAM_PCT")"
+  disk_color="$(menu_metric_percent_color disk "$MENU_METRIC_DISK_PCT")"
+
+  ui_box_titled_top "System Overview" "$width"
+
+  if [[ "$mode" == "wide" ]]; then
+    ui_row_begin
+    ui_row_add_colored cyan "CPU"
+    ui_row_add "  "
+    ui_row_add_colored "$cpu_color" "${MENU_METRIC_CPU_PCT}%"
+    ui_row_add " "
+    ui_row_add_percent_bar "$cpu_color" "$MENU_METRIC_CPU_PCT" 10
+    ui_row_add "      "
+    ui_row_add_colored cyan "RAM"
+    ui_row_add "  "
+    ui_row_add_colored "$ram_color" "${MENU_METRIC_RAM_PCT}%"
+    ui_row_add " "
+    ui_row_add_percent_bar "$ram_color" "$MENU_METRIC_RAM_PCT" 10
+    ui_row_add " ${MENU_METRIC_RAM_USED_GIB}/${MENU_METRIC_RAM_TOTAL_GIB}G"
+    ui_row_end
+
+    ui_row_begin
+    ui_row_add_colored cyan "Disk"
+    ui_row_add " "
+    ui_row_add_colored "$disk_color" "${MENU_METRIC_DISK_PCT}%"
+    ui_row_add " "
+    ui_row_add_percent_bar "$disk_color" "$MENU_METRIC_DISK_PCT" 10
+    ui_row_add " ${MENU_METRIC_DISK_USED_GIB}/${MENU_METRIC_DISK_TOTAL_GIB}G"
+    ui_row_add "      "
+    ui_row_add_colored cyan "Tasks"
+    ui_row_add " ${MENU_METRIC_TASKS_RUNNING} running / ${MENU_METRIC_TASKS_TOTAL} total"
+    ui_row_end
+
+    ui_row_begin
+    ui_row_add_colored cyan "Load"
+    ui_row_add " ${MENU_METRIC_LOAD_1:-0.00}/${MENU_METRIC_LOAD_5:-0.00}/${MENU_METRIC_LOAD_15:-0.00}"
+    ui_row_add "      "
+    ui_row_add_colored cyan "Up"
+    ui_row_add " ${MENU_METRIC_UPTIME}"
+    ui_row_end
+  elif [[ "$mode" == "compact" ]]; then
+    ui_row_begin
+    ui_row_add_colored cyan "CPU"
+    ui_row_add " "
+    ui_row_add_colored "$cpu_color" "${MENU_METRIC_CPU_PCT}%"
+    ui_row_add "   "
+    ui_row_add_colored cyan "RAM"
+    ui_row_add " "
+    ui_row_add_colored "$ram_color" "${MENU_METRIC_RAM_PCT}%"
+    ui_row_add " ${MENU_METRIC_RAM_USED_GIB}/${MENU_METRIC_RAM_TOTAL_GIB}G"
+    ui_row_add "   "
+    ui_row_add_colored cyan "Disk"
+    ui_row_add " "
+    ui_row_add_colored "$disk_color" "${MENU_METRIC_DISK_PCT}%"
+    ui_row_end
+
+    ui_row_begin
+    ui_row_add_colored cyan "Tasks"
+    ui_row_add " ${MENU_METRIC_TASKS_RUNNING}/${MENU_METRIC_TASKS_TOTAL}"
+    ui_row_add "   "
+    ui_row_add_colored cyan "Load"
+    ui_row_add " ${MENU_METRIC_LOAD_1:-0.00}/${MENU_METRIC_LOAD_5:-0.00}/${MENU_METRIC_LOAD_15:-0.00}"
+    ui_row_add "   "
+    ui_row_add_colored cyan "Up"
+    ui_row_add " ${MENU_METRIC_UPTIME}"
+    ui_row_end
+  else
+    ui_row_begin
+    ui_row_add_colored cyan "CPU"
+    ui_row_add " "
+    ui_row_add_colored "$cpu_color" "${MENU_METRIC_CPU_PCT}%"
+    ui_row_add "   "
+    ui_row_add_colored cyan "RAM"
+    ui_row_add " "
+    ui_row_add_colored "$ram_color" "${MENU_METRIC_RAM_PCT}%"
+    ui_row_add "   "
+    ui_row_add_colored cyan "Disk"
+    ui_row_add " "
+    ui_row_add_colored "$disk_color" "${MENU_METRIC_DISK_PCT}%"
+    ui_row_end
+
+    ui_row_begin
+    ui_row_add_colored cyan "Tasks"
+    ui_row_add " ${MENU_METRIC_TASKS_RUNNING}/${MENU_METRIC_TASKS_TOTAL}"
+    ui_row_add "   "
+    ui_row_add_colored cyan "Up"
+    ui_row_add " ${MENU_METRIC_UPTIME}"
+    ui_row_end
+
+    ui_row_begin
+    ui_row_add_colored cyan "Load"
+    ui_row_add " ${MENU_METRIC_LOAD_1:-0.00}/${MENU_METRIC_LOAD_5:-0.00}/${MENU_METRIC_LOAD_15:-0.00}"
+    ui_row_end
+  fi
+
+  ui_box_line bot "$width"
+}
+
+menu_status_indicator_color() {
+  local value="${1:-unknown}"
+  value="${value,,}"
+
+  case "$value" in
+    *failed* | *failure* | *error* | *critical* | *broken* | *unhealthy*)
+      printf 'red'
+      ;;
+    *warn* | *attention* | *overdue* | *stale* | *degraded* | *partial* | *required*)
+      printf 'orange'
+      ;;
+    unknown | none | local | n/a | na | never | disabled | *not\ set* | *not\ configured* | *not\ applicable*)
+      printf 'muted'
+      ;;
+    *ok* | *active* | *running* | *enabled* | *verified* | *rehearsed* | *recorded* | *ready* | *healthy* | *configured* | *complete* | *trusted*)
+      printf 'green'
+      ;;
+    *)
+      printf 'orange'
+      ;;
+  esac
+}
+
+menu_status_indicator_symbol() {
+  local color="${1:-muted}"
+
+  if [[ -n "${NO_COLOR:-}" || "${FORCE_NO_COLOR:-0}" == "1" ]]; then
+    case "$color" in
+      green) printf '+' ;;
+      orange) printf '!' ;;
+      red) printf 'x' ;;
+      *) printf '-' ;;
+    esac
+    return 0
+  fi
+
+  if ((${UI_UNICODE:-0} == 1)); then
+    case "$color" in
+      muted) printf '○' ;;
+      *) printf '●' ;;
+    esac
+  else
+    case "$color" in
+      green) printf '+' ;;
+      orange) printf '!' ;;
+      red) printf 'x' ;;
+      *) printf '-' ;;
+    esac
+  fi
+}
+
+ui_row_add_status_indicator() {
+  local label="$1" value="$2" color symbol
+  color="$(menu_status_indicator_color "$value")"
+  symbol="$(menu_status_indicator_symbol "$color")"
+
+  ui_row_add_colored cyan "$label"
+  ui_row_add " "
+  ui_row_add_colored "$color" "$symbol"
+}
+
 render_main_status_panel() {
   local width runtime_color layout
   width="$(ui_panel_width)"
   runtime_color="$(ui_status_color "$MENU_STATUS_RUNTIME")"
-  layout="$(ui_layout_mode)"
+  layout="$(ui_dashboard_layout_mode)"
 
   ui_box_line top "$width"
 
   if [[ "$layout" == "wide" ]]; then
-    # Wide: one-line identity strip.
     ui_row_begin
-    ui_row_add_colored cyan "Toolkit:"
-    ui_row_add " "
-    ui_row_add "$(printf '%-8s' "v${SCRIPT_VERSION:-unknown}")"
-    ui_row_add " "
-    ui_row_add "$UI_DIV"
-    ui_row_add " "
     ui_row_add_colored cyan "Site:"
     ui_row_add " "
-    ui_row_add "$(printf '%-20s' "${MENU_STATUS_SITE:0:20}")"
+    ui_row_add "$(printf '%-24s' "${MENU_STATUS_SITE:0:24}")"
     ui_row_add " "
-    ui_row_add "$UI_DIV"
+    ui_row_add_colored muted "$UI_DIV"
     ui_row_add " "
     ui_row_add_colored cyan "Mode:"
+    ui_row_add " ${MENU_STATUS_MODE:0:12}"
     ui_row_add " "
-    ui_row_add "$(printf '%-10s' "${MENU_STATUS_MODE:0:10}")"
+    ui_row_add_colored muted "$UI_DIV"
     ui_row_add " "
-    ui_row_add "$UI_DIV"
+    ui_row_add_colored cyan "Engine:"
+    ui_row_add " ${MENU_STATUS_ENGINE}"
+    ui_row_add " "
+    ui_row_add_colored muted "$UI_DIV"
     ui_row_add " "
     ui_row_add_colored cyan "Runtime:"
     ui_row_add " "
     ui_row_add_colored "$runtime_color" "$MENU_STATUS_RUNTIME"
     ui_row_end
-  else
-    # Ordinary SSH terminals: two calm rows instead of cramming the runtime
-    # against the right border.
+  elif [[ "$layout" == "compact" ]]; then
     ui_row_begin
-    ui_row_add_colored cyan "Toolkit:"
-    ui_row_add " "
-    ui_row_add "v${SCRIPT_VERSION:-unknown}"
-    ui_row_add "  "
-    ui_row_add "$UI_DIV"
-    ui_row_add "  "
     ui_row_add_colored cyan "Site:"
+    ui_row_add " ${MENU_STATUS_SITE:0:32}"
+    ui_row_add "  "
+    ui_row_add_colored muted "$UI_DIV"
+    ui_row_add "  "
+    ui_row_add_colored cyan "Runtime:"
     ui_row_add " "
-    ui_row_add "${MENU_STATUS_SITE:0:28}"
+    ui_row_add_colored "$runtime_color" "$MENU_STATUS_RUNTIME"
     ui_row_end
     ui_row_begin
     ui_row_add_colored cyan "Mode:"
-    ui_row_add " "
-    ui_row_add "${MENU_STATUS_MODE:0:16}"
+    ui_row_add " ${MENU_STATUS_MODE:0:16}"
     ui_row_add "  "
-    ui_row_add "$UI_DIV"
+    ui_row_add_colored muted "$UI_DIV"
     ui_row_add "  "
+    ui_row_add_colored cyan "Engine:"
+    ui_row_add " ${MENU_STATUS_ENGINE}"
+    ui_row_end
+  else
+    ui_row_begin
+    ui_row_add_colored cyan "Site:"
+    ui_row_add " ${MENU_STATUS_SITE:0:40}"
+    ui_row_end
+    ui_row_begin
+    ui_row_add_colored cyan "Mode:"
+    ui_row_add " ${MENU_STATUS_MODE:0:14}"
+    ui_row_add "  "
+    ui_row_add_colored cyan "Engine:"
+    ui_row_add " ${MENU_STATUS_ENGINE}"
+    ui_row_end
+    ui_row_begin
     ui_row_add_colored cyan "Runtime:"
     ui_row_add " "
     ui_row_add_colored "$runtime_color" "$MENU_STATUS_RUNTIME"
@@ -241,29 +557,35 @@ render_main_status_panel() {
 
   ui_box_line mid "$width"
 
-  # Badge rows: never a single long strip (Go-live was overflowing the border).
-  if [[ "$layout" == "compact" ]]; then
+  if ((width < 70)); then
     ui_row_begin
-    ui_row_add_badge "Health" "$MENU_STATUS_HEALTH"
-    ui_row_add "  "
-    ui_row_add_badge "HTTPS" "$MENU_STATUS_HTTPS"
-    ui_row_add "  "
-    ui_row_add_badge "Backups" "$MENU_STATUS_BACKUPS"
+    ui_row_add_status_indicator "HTTPS" "$MENU_STATUS_HTTPS"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Backups" "$MENU_STATUS_BACKUPS"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Off-VM" "$MENU_STATUS_OFFVM"
+    ui_row_end
+
+    ui_row_begin
+    ui_row_add_status_indicator "Restore" "$MENU_STATUS_RESTORE"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Health" "$MENU_STATUS_HEALTH"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Go-live" "$MENU_STATUS_GOLIVE"
     ui_row_end
   else
     ui_row_begin
-    ui_row_add_badge "HTTPS" "$MENU_STATUS_HTTPS"
-    ui_row_add "  "
-    ui_row_add_badge "Backups" "$MENU_STATUS_BACKUPS"
-    ui_row_add "  "
-    ui_row_add_badge "Off-VM" "$MENU_STATUS_OFFVM"
-    ui_row_add "  "
-    ui_row_add_badge "Restore" "$MENU_STATUS_RESTORE"
-    ui_row_end
-    ui_row_begin
-    ui_row_add_badge "Health" "$MENU_STATUS_HEALTH"
-    ui_row_add "  "
-    ui_row_add_badge "Go-live" "$MENU_STATUS_GOLIVE"
+    ui_row_add_status_indicator "HTTPS" "$MENU_STATUS_HTTPS"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Backups" "$MENU_STATUS_BACKUPS"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Off-VM" "$MENU_STATUS_OFFVM"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Restore" "$MENU_STATUS_RESTORE"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Health" "$MENU_STATUS_HEALTH"
+    ui_row_add "   "
+    ui_row_add_status_indicator "Go-live" "$MENU_STATUS_GOLIVE"
     ui_row_end
   fi
 
@@ -271,31 +593,107 @@ render_main_status_panel() {
 }
 
 render_main_menu_options() {
-  ui_render_boxed_menu "${MAIN_MENU_ITEMS[@]}"
+  local width mode total half i left right parsed
+  local ln lt rn rt content_width left_cell_width left_target
+
+  width="$(ui_panel_width)"
+  mode="$(ui_dashboard_layout_mode)"
+  total="${#MAIN_MENU_ITEMS[@]}"
+  half=$(((total + 1) / 2))
+
+  ui_box_line top "$width"
+
+  if [[ "$mode" == "narrow" ]]; then
+    for left in "${MAIN_MENU_ITEMS[@]}"; do
+      parsed="$(ui_menu_item_parts "$left" || true)"
+      ln="${parsed%%|*}"
+      lt="${parsed#*|}"
+      ui_row_begin
+      ui_row_add_colored cyan "[${ln}]"
+      ui_row_add " ${lt}"
+      ui_row_end
+    done
+    ui_box_line mid "$width"
+    ui_row_begin
+    ui_row_add_colored cyan "[D]"
+    ui_row_add " Dashboard"
+    ui_row_end
+    ui_row_begin
+    ui_row_add_colored cyan "[L]"
+    ui_row_add " Logs"
+    ui_row_end
+    ui_box_line bot "$width"
+    return 0
+  fi
+
+  # The row builder owns the outer borders. Split only the remaining content
+  # area into two equal cells around a fixed " divider " segment. Padding to an
+  # exact visible column avoids the previous off-by-one drift caused by [7]
+  # and [10] having different widths.
+  content_width=$((width - 6))
+  left_cell_width=$((content_width / 2))
+  left_target=$((1 + left_cell_width))
+
+  for ((i = 0; i < half; i++)); do
+    left="${MAIN_MENU_ITEMS[$i]:-}"
+    right="${MAIN_MENU_ITEMS[$((i + half))]:-}"
+
+    parsed="$(ui_menu_item_parts "$left" || true)"
+    ln="${parsed%%|*}"
+    lt="${parsed#*|}"
+    parsed="$(ui_menu_item_parts "$right" || true)"
+    rn="${parsed%%|*}"
+    rt="${parsed#*|}"
+
+    ui_row_begin
+    ui_row_add_colored cyan "[${ln}]"
+    ui_row_add " ${lt}"
+    ui_row_pad_to "$left_target"
+    ui_row_add " "
+    ui_row_add_colored muted "$UI_DIV"
+    ui_row_add " "
+    ui_row_add_colored cyan "[${rn}]"
+    ui_row_add " ${rt}"
+    ui_row_end
+  done
+
+  ui_box_line mid "$width"
+  ui_row_begin
+  ui_row_add_colored cyan "[D]"
+  ui_row_add " Dashboard"
+  ui_row_pad_to "$left_target"
+  ui_row_add " "
+  ui_row_add_colored muted "$UI_DIV"
+  ui_row_add " "
+  ui_row_add_colored cyan "[L]"
+  ui_row_add " Logs"
+  ui_row_end
+  ui_box_line bot "$width"
 }
 
 render_main_menu_screen() {
   ui_init
   load_menu_status_fast
+  load_menu_system_metrics_fast
 
   ui_text cyan "${APP_NAME:-ERPNext Developer Toolkit}"
-  printf ' '
+  printf '  '
   ui_text muted "v${SCRIPT_VERSION:-unknown}"
-  if [[ "$(ui_layout_mode)" != "compact" ]]; then
-    printf '    '
-    ui_text muted "Type number + Enter"
+  if [[ "$(ui_dashboard_layout_mode)" != "narrow" ]]; then
+    printf '  '
+    ui_text cyan "Main Menu"
   fi
-  printf '\n\n'
+  printf '\n'
 
   render_main_status_panel
   printf '\n'
   render_main_menu_options
-
   printf '\n'
-  ui_text cyan "[q]"
+  render_main_resources_panel
+  printf '\n'
+  ui_text orange "Q."
   printf ' Quit\n\n'
 }
-
 
 show_local_development_menu() {
   while true; do
@@ -316,17 +714,27 @@ show_local_development_menu() {
     menu_read_choice choice
 
     case "$choice" in
-      1) run_local_dev_quickstart; pause_after_screen "Press Enter to return to Local Development..." ;;
+      1)
+        run_local_dev_quickstart
+        pause_after_screen "Press Enter to return to Local Development..."
+        ;;
       2) show_status_menu ;;
       3) show_service_menu ;;
       4) show_access_menu ;;
       5) show_https_domains_menu ;;
       6) show_app_library_menu ;;
       7) show_credentials_menu ;;
-      8) show_environment_check; pause_after_screen "Press Enter to return to Local Development..." ;;
-      9) show_setup_lifecycle_plan; show_setup_effort_guide; pause_after_screen "Press Enter to return to Local Development..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      8)
+        show_environment_check
+        pause_after_screen "Press Enter to return to Local Development..."
+        ;;
+      9)
+        show_setup_lifecycle_plan
+        show_setup_effort_guide
+        pause_after_screen "Press Enter to return to Local Development..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -351,17 +759,31 @@ show_production_setup_menu() {
     menu_read_choice choice
 
     case "$choice" in
-      1) run_public_vm_guided_setup; pause_after_screen "Press Enter to return to Production Setup..." ;;
+      1)
+        run_public_vm_guided_setup
+        pause_after_screen "Press Enter to return to Production Setup..."
+        ;;
       2) run_public_vm_quickstart ;;
-      3) show_production_readiness; show_public_vm_readiness; pause_after_screen "Press Enter to return to Production Setup..." ;;
+      3)
+        show_production_readiness
+        show_public_vm_readiness
+        pause_after_screen "Press Enter to return to Production Setup..."
+        ;;
       4) show_https_domains_menu ;;
       5) security_hardening_wizard ;;
       6) run_backup_maintenance_menu ;;
       7) production_ops_wizard ;;
-      8) final_qa_wizard; pause_after_screen "Press Enter to return to Production Setup..." ;;
-      9) show_setup_lifecycle_plan; show_setup_effort_guide; pause_after_screen "Press Enter to return to Production Setup..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      8)
+        final_qa_wizard
+        pause_after_screen "Press Enter to return to Production Setup..."
+        ;;
+      9)
+        show_setup_lifecycle_plan
+        show_setup_effort_guide
+        pause_after_screen "Press Enter to return to Production Setup..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -387,14 +809,33 @@ show_https_domains_menu() {
     case "$choice" in
       1) show_local_ssl_menu ;;
       2) show_production_ssl_menu ;;
-      3) show_domain_config; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
-      4) change_local_domain_wizard; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
-      5) show_local_domain_status; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
-      6) show_ssl_roadmap_guide; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
-      7) show_ssl_mode_status; show_ssl_mode_guide; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
-      8) show_production_readiness; pause_after_screen "Press Enter to return to HTTPS & Domains..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      3)
+        show_domain_config
+        pause_after_screen "Press Enter to return to HTTPS & Domains..."
+        ;;
+      4)
+        change_local_domain_wizard
+        pause_after_screen "Press Enter to return to HTTPS & Domains..."
+        ;;
+      5)
+        show_local_domain_status
+        pause_after_screen "Press Enter to return to HTTPS & Domains..."
+        ;;
+      6)
+        show_ssl_roadmap_guide
+        pause_after_screen "Press Enter to return to HTTPS & Domains..."
+        ;;
+      7)
+        show_ssl_mode_status
+        show_ssl_mode_guide
+        pause_after_screen "Press Enter to return to HTTPS & Domains..."
+        ;;
+      8)
+        show_production_readiness
+        pause_after_screen "Press Enter to return to HTTPS & Domains..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -419,17 +860,35 @@ show_operations_menu() {
     menu_read_choice choice
 
     case "$choice" in
-      1) run_operations_dashboard; pause_after_screen "Press Enter to return to Operations..." ;;
+      1)
+        run_operations_dashboard
+        pause_after_screen "Press Enter to return to Operations..."
+        ;;
       2) show_service_menu ;;
       3) run_maintenance_menu ;;
-      4) run_update_preflight; pause_after_screen "Press Enter to return to Operations..." ;;
-      5) run_safe_update_wizard; pause_after_screen "Press Enter to return to Operations..." ;;
+      4)
+        run_update_preflight
+        pause_after_screen "Press Enter to return to Operations..."
+        ;;
+      5)
+        run_safe_update_wizard
+        pause_after_screen "Press Enter to return to Operations..."
+        ;;
       6) production_ops_wizard ;;
-      7) final_qa_wizard; pause_after_screen "Press Enter to return to Operations..." ;;
-      8) show_next_step; pause_after_screen "Press Enter to return to Operations..." ;;
-      9) show_service_recovery_plan; pause_after_screen "Press Enter to return to Operations..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      7)
+        final_qa_wizard
+        pause_after_screen "Press Enter to return to Operations..."
+        ;;
+      8)
+        show_next_step
+        pause_after_screen "Press Enter to return to Operations..."
+        ;;
+      9)
+        show_service_recovery_plan
+        pause_after_screen "Press Enter to return to Operations..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -458,8 +917,16 @@ show_menu() {
       9) run_backup_maintenance_menu ;;
       10) show_operations_menu ;;
       11) show_advanced_menu ;;
-      12) show_help; pause_after_screen "Press Enter to return to Main menu..." ;;
-      q|Q) exit 0 ;;
+      12)
+        show_help
+        pause_after_screen "Press Enter to return to Main menu..."
+        ;;
+      d | D)
+        run_operations_dashboard
+        pause_after_screen "Press Enter to return to Main menu..."
+        ;;
+      l | L) engine_runtime_logs ;;
+      q | Q) exit 0 ;;
       *)
         warn "Invalid option"
         sleep 0.6 2>/dev/null || true
@@ -470,9 +937,13 @@ show_menu() {
 
 # Non-interactive render for CI (no clear, no read).
 menu_render_test() {
-  FORCE_NO_COLOR=1
-  NO_COLOR=1
-  export FORCE_NO_COLOR NO_COLOR
+  if [[ "${MENU_RENDER_TEST_COLOR:-0}" != "1" ]]; then
+    FORCE_NO_COLOR=1
+    NO_COLOR=1
+    export FORCE_NO_COLOR NO_COLOR
+  else
+    unset FORCE_NO_COLOR NO_COLOR
+  fi
   MENU_NO_CLEAR=1
   export MENU_NO_CLEAR
   MENU_FORCE_ONE_COLUMN="${MENU_FORCE_ONE_COLUMN:-false}"
