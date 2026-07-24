@@ -110,7 +110,7 @@ docker_direct_http_url() {
 # ------------------------------------------------------------
 docker_mode() {
   case "$(printf '%s' "${DOCKER_MODE:-development}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
-    prod|production|public|public-vm) printf 'production\n' ;;
+    prod | production | public | public-vm) printf 'production\n' ;;
     *) printf 'development\n' ;;
   esac
 }
@@ -177,8 +177,8 @@ docker_compose_available() {
 
 host_arch_label() {
   case "$(uname -m 2>/dev/null || echo unknown)" in
-    x86_64|amd64) printf 'amd64\n' ;;
-    aarch64|arm64) printf 'arm64\n' ;;
+    x86_64 | amd64) printf 'amd64\n' ;;
+    aarch64 | arm64) printf 'arm64\n' ;;
     *) printf '%s\n' "$(uname -m 2>/dev/null || echo unknown)" ;;
   esac
 }
@@ -220,7 +220,7 @@ docker_ensure_publish_port() {
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
     while :; do
       read -r -p "Choose a different host port for ERPNext [1024-65535]: " reply
-      if [[ ! "$reply" =~ ^[0-9]+$ ]] || (( reply < 1 || reply > 65535 )); then
+      if [[ ! "$reply" =~ ^[0-9]+$ ]] || ((reply < 1 || reply > 65535)); then
         echo "Please enter a valid port number (1-65535)."
         continue
       fi
@@ -234,15 +234,15 @@ docker_ensure_publish_port() {
     done
   fi
   candidate="$port"
-  while (( tries < 200 )); do
-    candidate=$(( candidate + 1 ))
-    (( candidate > 65535 )) && candidate=1024
+  while ((tries < 200)); do
+    candidate=$((candidate + 1))
+    ((candidate > 65535)) && candidate=1024
     if docker_port_available "$candidate"; then
       DOCKER_PUBLISH_PORT="$candidate"
       warn "Auto-selected free host port ${DOCKER_PUBLISH_PORT} (was ${port})."
       return 0
     fi
-    tries=$(( tries + 1 ))
+    tries=$((tries + 1))
   done
   fail "Could not find a free host port near ${port}. Set DOCKER_PUBLISH_PORT to an open port and retry."
 }
@@ -261,8 +261,8 @@ docker_host_os_eval() {
     pretty="${PRETTY_NAME:-unknown}"
   fi
   case "${id}:${ver}" in
-    ubuntu:24.04|ubuntu:26.04) printf 'OK|%s\n' "$pretty" ;;
-    debian:11|debian:12|debian:13) printf 'OK|%s\n' "$pretty" ;;
+    ubuntu:24.04 | ubuntu:26.04) printf 'OK|%s\n' "$pretty" ;;
+    debian:11 | debian:12 | debian:13) printf 'OK|%s\n' "$pretty" ;;
     *) printf 'WARN|%s\n' "$pretty" ;;
   esac
 }
@@ -313,7 +313,10 @@ docker_active_env_file() {
 docker_compose() {
   local envf primary f
   local -a compose_cmd=() file_args=()
-  docker_compose_resolve compose_cmd || { err "Docker Compose is not available."; return 1; }
+  docker_compose_resolve compose_cmd || {
+    err "Docker Compose is not available."
+    return 1
+  }
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
     file_args+=(-f "$f")
@@ -350,7 +353,7 @@ docker_install_engine_apt_repo() {
     codename="${VERSION_CODENAME:-}"
   fi
   case "$id" in
-    ubuntu|debian) ;;
+    ubuntu | debian) ;;
     *) return 1 ;;
   esac
   [[ -n "$codename" ]] || codename="$(lsb_release -cs 2>/dev/null || true)"
@@ -666,7 +669,10 @@ docker_update_credentials_admin_password() {
   envf="$(docker_env_file)"
   if [[ -f "$envf" ]]; then
     tmp="$(mktemp /tmp/erpnext-dev-docker-env.XXXXXX)" || return 1
-    $SUDO awk '$0 !~ /^DOCKER_ADMIN_PASSWORD=/' "$envf" >"$tmp" || { rm -f "$tmp"; return 1; }
+    $SUDO awk '$0 !~ /^DOCKER_ADMIN_PASSWORD=/' "$envf" >"$tmp" || {
+      rm -f "$tmp"
+      return 1
+    }
     printf 'DOCKER_ADMIN_PASSWORD=%s\n' "$new_password" >>"$tmp"
     $SUDO install -o root -g root -m 600 "$tmp" "$envf"
     rm -f "$tmp"
@@ -797,7 +803,7 @@ docker_compose_up() {
 docker_wait_for_site_creation() {
   require_sudo
   local deadline now cid state code
-  deadline=$(( $(date +%s) + DOCKER_CREATE_SITE_TIMEOUT ))
+  deadline=$(($(date +%s) + DOCKER_CREATE_SITE_TIMEOUT))
   log "Waiting for the create-site job to finish (site: $(docker_site_name))"
   while :; do
     cid="$(docker_compose ps -aq create-site 2>/dev/null | tail -n1)"
@@ -856,7 +862,7 @@ docker_runtime_logs() {
 docker_ready() {
   local url deadline now site route_host route_port route_ip probe_rc=1 curl_code
   site="$(docker_site_name 2>/dev/null || echo localhost)"
-  deadline=$(( $(date +%s) + DOCKER_READY_TIMEOUT ))
+  deadline=$(($(date +%s) + DOCKER_READY_TIMEOUT))
 
   if docker_is_production && docker_https_enabled; then
     route_host="$(docker_public_domain)"
@@ -1009,10 +1015,16 @@ docker_backup() {
 
   if [[ "$include_files" == "true" ]]; then
     log "Creating database + files backup for ${site} (Docker)"
-    docker_bench --site "$site" backup --with-files || { err "bench backup failed."; return 1; }
+    docker_bench --site "$site" backup --with-files || {
+      err "bench backup failed."
+      return 1
+    }
   else
     log "Creating database backup for ${site} (Docker)"
-    docker_bench --site "$site" backup || { err "bench backup failed."; return 1; }
+    docker_bench --site "$site" backup || {
+      err "bench backup failed."
+      return 1
+    }
   fi
 
   # Identify the newest database file inside the container (relative to bench dir).
@@ -1025,16 +1037,19 @@ docker_backup() {
   prefix="${db_base%-database.sql.gz}"
 
   host_dir="$(docker_backup_site_root)/${prefix}"
-  $SUDO mkdir -p "$host_dir" || { err "Could not create host artifact dir ${host_dir}"; return 1; }
+  $SUDO mkdir -p "$host_dir" || {
+    err "Could not create host artifact dir ${host_dir}"
+    return 1
+  }
   log "Exporting backup set ${prefix} to ${host_dir}"
 
   for f in "${prefix}-database.sql.gz" \
-           "${prefix}-site_config_backup.json" \
-           "${prefix}-files.tar" "${prefix}-files.tar.gz" \
-           "${prefix}-private-files.tar" "${prefix}-private-files.tar.gz"; do
+    "${prefix}-site_config_backup.json" \
+    "${prefix}-files.tar" "${prefix}-files.tar.gz" \
+    "${prefix}-private-files.tar" "${prefix}-private-files.tar.gz"; do
     if docker_compose exec -T backend test -f "sites/${site}/private/backups/${f}" >/dev/null 2>&1; then
       if docker_compose cp "backend:${bench}/sites/${site}/private/backups/${f}" "${host_dir}/${f}" >/dev/null 2>&1; then
-        copied=$((copied+1))
+        copied=$((copied + 1))
       else
         warn "Could not copy ${f} out of the container."
       fi
@@ -1071,8 +1086,8 @@ docker_list_backups() {
     $SUDO find "$root" -maxdepth 1 -mindepth 1 -type d -printf '%T@ %p\n' 2>/dev/null \
       | sort -nr | head -20 \
       | while read -r _ts dir; do
-          printf '  %s  (%s)\n' "$(basename "$dir")" "$($SUDO du -sh "$dir" 2>/dev/null | awk '{print $1}')"
-        done
+        printf '  %s  (%s)\n' "$(basename "$dir")" "$($SUDO du -sh "$dir" 2>/dev/null | awk '{print $1}')"
+      done
   else
     echo "  none — create one with: $(toolkit_cmd backup)"
   fi
@@ -1118,7 +1133,7 @@ docker_backup_verify() {
     status_line "Database" "OK" "gzip readable ($($SUDO du -h "${dir}/${prefix}-database.sql.gz" 2>/dev/null | awk '{print $1}'))"
   else
     status_line "Database" "FAIL" "missing or unreadable"
-    fail_count=$((fail_count+1))
+    fail_count=$((fail_count + 1))
   fi
 
   for f in "${prefix}-files.tar" "${prefix}-files.tar.gz"; do
@@ -1127,7 +1142,7 @@ docker_backup_verify() {
         status_line "Public files" "OK" "$f readable"
       else
         status_line "Public files" "FAIL" "$f unreadable"
-        fail_count=$((fail_count+1))
+        fail_count=$((fail_count + 1))
       fi
       break
     fi
@@ -1138,7 +1153,7 @@ docker_backup_verify() {
         status_line "Private files" "OK" "$f readable"
       else
         status_line "Private files" "FAIL" "$f unreadable"
-        fail_count=$((fail_count+1))
+        fail_count=$((fail_count + 1))
       fi
       break
     fi
@@ -1155,7 +1170,7 @@ docker_backup_verify() {
       status_line "Checksums" "OK" "SHA256SUMS verified"
     else
       status_line "Checksums" "FAIL" "SHA256SUMS mismatch"
-      fail_count=$((fail_count+1))
+      fail_count=$((fail_count + 1))
     fi
   else
     status_line "Checksums" "WARN" "no SHA256SUMS in artifact"
@@ -1224,7 +1239,10 @@ docker_restore() {
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
     local answer
     read -r -p "Type the site name (${site}) to confirm restore: " answer
-    [[ "$answer" == "$site" ]] || { err "Confirmation did not match. Restore cancelled."; return 1; }
+    [[ "$answer" == "$site" ]] || {
+      err "Confirmation did not match. Restore cancelled."
+      return 1
+    }
   fi
 
   pw="$(docker_db_root_password)"
@@ -1235,14 +1253,17 @@ docker_restore() {
 
   # Copy the chosen artifact into the container backups dir so bench can read it.
   docker_compose cp "${dir}/${db_base}" "backend:${bench}/sites/${site}/private/backups/${db_base}" >/dev/null 2>&1 \
-    || { err "Could not copy the database backup into the container."; return 1; }
+    || {
+      err "Could not copy the database backup into the container."
+      return 1
+    }
   docker_make_container_readable "${bench}/sites/${site}/private/backups/${db_base}"
 
   # --force is a `restore` subcommand option (not a bench-group option), so it
   # must follow the subcommand; an absolute path avoids any exec-CWD ambiguity.
   local -a restore_args=(--site "$site" restore
-                         --db-root-username root --db-root-password "$pw" --force
-                         "$(docker_container_bench_dir)/sites/${site}/private/backups/${db_base}")
+    --db-root-username root --db-root-password "$pw" --force
+    "$(docker_container_bench_dir)/sites/${site}/private/backups/${db_base}")
 
   if [[ "$kind" == "full" ]]; then
     for f in "${prefix}-files.tar" "${prefix}-files.tar.gz"; do
@@ -1314,7 +1335,11 @@ docker_restore_rehearsal() {
   dir="$(docker_latest_host_dir || true)"
   if [[ -z "$dir" ]]; then
     log "No host backup yet; taking one for the rehearsal"
-    docker_backup false || { status_line "Backup" "FAIL" "could not create a backup to rehearse"; ui_box_end; return 1; }
+    docker_backup false || {
+      status_line "Backup" "FAIL" "could not create a backup to rehearse"
+      ui_box_end
+      return 1
+    }
     dir="$(docker_latest_host_dir || true)"
   fi
   if [[ -z "$dir" ]] || ! $SUDO test -d "$dir"; then
@@ -1347,12 +1372,12 @@ docker_restore_rehearsal() {
 
   log "Creating throwaway site ${temp_site}"
   if ! docker_compose exec -T backend bench new-site \
-      --mariadb-user-host-login-scope='%' \
-      --admin-password "rehearsal-$(date +%s)" \
-      --db-root-username root \
-      --db-root-password "$pw" \
-      --no-mariadb-socket \
-      "$temp_site" >/dev/null 2>&1; then
+    --mariadb-user-host-login-scope='%' \
+    --admin-password "rehearsal-$(date +%s)" \
+    --db-root-username root \
+    --db-root-password "$pw" \
+    --no-mariadb-socket \
+    "$temp_site" >/dev/null 2>&1; then
     # Retry without --no-mariadb-socket for older bench versions.
     docker_compose exec -T backend bench new-site \
       --mariadb-user-host-login-scope='%' \
@@ -1370,8 +1395,8 @@ docker_restore_rehearsal() {
     # --force after the subcommand where the restore command defines it.
     restore_path="${bench}/sites/${site}/private/backups/${db_base}"
     if docker_compose exec -T backend bench --site "$temp_site" restore \
-        --db-root-username root --db-root-password "$pw" --force \
-        "$restore_path" >"${restore_log:-/dev/null}" 2>&1; then
+      --db-root-username root --db-root-password "$pw" --force \
+      "$restore_path" >"${restore_log:-/dev/null}" 2>&1; then
       apps="$(docker_compose exec -T backend bench --site "$temp_site" list-apps 2>/dev/null | tr -d '\r' | tr '\n' ' ' | sed -E 's/ +/ /g; s/^ +| +$//g')"
       if printf '%s' "$apps" | grep -qi 'erpnext'; then
         status_line "Restore into clean site" "OK" "erpnext present after restore"
@@ -1396,7 +1421,7 @@ docker_restore_rehearsal() {
   # Always try to drop the throwaway site so no residue is left behind.
   log "Dropping throwaway site ${temp_site}"
   if docker_compose exec -T backend bench drop-site "$temp_site" \
-      --db-root-username root --db-root-password "$pw" --force --no-backup >/dev/null 2>&1; then
+    --db-root-username root --db-root-password "$pw" --force --no-backup >/dev/null 2>&1; then
     status_line "Cleanup" "OK" "throwaway site dropped"
   else
     status_line "Cleanup" "WARN" "could not drop ${temp_site}; drop it manually"
@@ -1590,9 +1615,11 @@ docker_offvm_status() {
   local target_status target_detail last_status last_run last_detail src set_count
   off_vm_backup_load_config
   if off_vm_backup_configured; then
-    target_status="OK"; target_detail="$OFF_VM_BACKUP_TARGET"
+    target_status="OK"
+    target_detail="$OFF_VM_BACKUP_TARGET"
   else
-    target_status="WARN"; target_detail="not configured"
+    target_status="WARN"
+    target_detail="not configured"
   fi
   last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
   last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
@@ -1626,13 +1653,16 @@ docker_offvm_status() {
 docker_object_backup_load_config() {
   local v
   if [[ -z "${DOCKER_OBJECT_RCLONE_REMOTE:-}" ]]; then
-    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_RCLONE_REMOTE)"; [[ -n "$v" ]] && DOCKER_OBJECT_RCLONE_REMOTE="$v"
+    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_RCLONE_REMOTE)"
+    [[ -n "$v" ]] && DOCKER_OBJECT_RCLONE_REMOTE="$v"
   fi
   if [[ -z "${DOCKER_OBJECT_BUCKET:-}" ]]; then
-    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_BUCKET)"; [[ -n "$v" ]] && DOCKER_OBJECT_BUCKET="$v"
+    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_BUCKET)"
+    [[ -n "$v" ]] && DOCKER_OBJECT_BUCKET="$v"
   fi
   if [[ -z "${DOCKER_OBJECT_PREFIX:-}" ]]; then
-    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_PREFIX)"; [[ -n "$v" ]] && DOCKER_OBJECT_PREFIX="$v"
+    v="$(docker_env_value "$DOCKER_OBJECT_BACKUP_CONFIG_FILE" DOCKER_OBJECT_PREFIX)"
+    [[ -n "$v" ]] && DOCKER_OBJECT_PREFIX="$v"
   fi
 }
 
@@ -1645,7 +1675,8 @@ docker_object_backup_configured() {
 docker_object_dest() {
   docker_object_backup_load_config
   local prefix="${DOCKER_OBJECT_PREFIX:-}"
-  prefix="${prefix#/}"; prefix="${prefix%/}"
+  prefix="${prefix#/}"
+  prefix="${prefix%/}"
   if [[ -n "$prefix" ]]; then
     printf '%s:%s/%s/%s\n' "$DOCKER_OBJECT_RCLONE_REMOTE" "$DOCKER_OBJECT_BUCKET" "$prefix" "$(docker_site_name)"
   else
@@ -1836,8 +1867,8 @@ docker_https_mode() {
   local m="${DOCKER_HTTPS_MODE:-}"
   [[ -n "$m" ]] || m="$(docker_env_value "$DOCKER_HTTPS_STATE_FILE" DOCKER_HTTPS_MODE)"
   case "$(printf '%s' "${m:-http}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
-    letsencrypt|le|lets-encrypt|acme) printf 'letsencrypt\n' ;;
-    cloudflare-origin|cloudflare|cf|origin) printf 'cloudflare-origin\n' ;;
+    letsencrypt | le | lets-encrypt | acme) printf 'letsencrypt\n' ;;
+    cloudflare-origin | cloudflare | cf | origin) printf 'cloudflare-origin\n' ;;
     *) printf 'http\n' ;;
   esac
 }
@@ -1881,8 +1912,8 @@ docker_prod_env_set() {
   envf="$(docker_prod_env_file)"
   $SUDO test -f "$envf" || fail "Production env file not found: ${envf}. Run $(toolkit_cmd docker-production-setup) first."
   tmp="$(mktemp)" || return 1
-  $SUDO grep -v "^${key}=" "$envf" 2>/dev/null > "$tmp" || true
-  printf '%s=%s\n' "$key" "$val" >> "$tmp"
+  $SUDO grep -v "^${key}=" "$envf" 2>/dev/null >"$tmp" || true
+  printf '%s=%s\n' "$key" "$val" >>"$tmp"
   $SUDO cp "$tmp" "$envf"
   rm -f "$tmp"
   $SUDO chown root:root "$envf" 2>/dev/null || true
@@ -1898,20 +1929,23 @@ docker_https_preflight() {
 
   if ! docker_is_production; then
     status_line "Engine mode" "FAIL" "HTTPS applies to the production stack; run $(toolkit_cmd docker-production-setup)"
-    issues=$((issues+1))
+    issues=$((issues + 1))
   fi
 
   case "$domain" in
     *.*)
       case "$domain" in
-        *.test|*.localhost|*.local|localhost)
+        *.test | *.localhost | *.local | localhost)
           status_line "Domain" "WARN" "${domain} is not a public FQDN; Let's Encrypt will fail for it"
-          [[ "$mode" == "letsencrypt" ]] && issues=$((issues+1)) ;;
+          [[ "$mode" == "letsencrypt" ]] && issues=$((issues + 1))
+          ;;
         *) status_line "Public FQDN" "OK" "$domain" ;;
-      esac ;;
+      esac
+      ;;
     *)
       status_line "Domain" "WARN" "${domain} has no dot; not a valid public domain"
-      [[ "$mode" == "letsencrypt" ]] && issues=$((issues+1)) ;;
+      [[ "$mode" == "letsencrypt" ]] && issues=$((issues + 1))
+      ;;
   esac
 
   local p
@@ -2058,7 +2092,10 @@ docker_enable_letsencrypt() {
   docker_https_preflight "$domain" letsencrypt || fail "HTTPS preflight failed. Resolve the issues above and retry."
 
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    confirm "Switch ${domain} to Traefik + Let's Encrypt HTTPS on ports 80/443 now?" || { warn "Cancelled."; return 0; }
+    confirm "Switch ${domain} to Traefik + Let's Encrypt HTTPS on ports 80/443 now?" || {
+      warn "Cancelled."
+      return 0
+    }
   fi
 
   docker_prod_env_set SITES_RULE "$(docker_https_sites_rule)"
@@ -2085,7 +2122,10 @@ docker_configure_cloudflare_origin() {
   docker_https_preflight "$domain" cloudflare-origin || warn "Preflight reported warnings; continuing (Cloudflare fronts the public domain)."
 
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    confirm "Switch ${domain} to Traefik + Cloudflare Origin CA HTTPS on ports 80/443 now?" || { warn "Cancelled."; return 0; }
+    confirm "Switch ${domain} to Traefik + Cloudflare Origin CA HTTPS on ports 80/443 now?" || {
+      warn "Cancelled."
+      return 0
+    }
   fi
 
   docker_prod_env_set SITES_RULE "$(docker_https_sites_rule)"
@@ -2111,7 +2151,10 @@ docker_https_rollback() {
     warn "HTTPS is already disabled (mode: http)."
   fi
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    confirm "Roll back to loopback-only HTTP on 127.0.0.1:${DOCKER_PUBLISH_PORT} and remove the Traefik proxy?" || { warn "Cancelled."; return 0; }
+    confirm "Roll back to loopback-only HTTP on 127.0.0.1:${DOCKER_PUBLISH_PORT} and remove the Traefik proxy?" || {
+      warn "Cancelled."
+      return 0
+    }
   fi
   docker_prod_env_set HTTP_PUBLISH_PORT "127.0.0.1:${DOCKER_PUBLISH_PORT}"
   docker_https_write_state http "$domain" ""
@@ -2283,8 +2326,8 @@ docker_https_wizard() {
     1) docker_enable_letsencrypt ;;
     2) docker_configure_cloudflare_origin ;;
     3) docker_https_rollback ;;
-    b|B|"") return 0 ;;
-    q|Q) exit 0 ;;
+    b | B | "") return 0 ;;
+    q | Q) exit 0 ;;
     *) warn "Invalid option" ;;
   esac
 }
@@ -2362,7 +2405,10 @@ docker_production_exposure() {
 # (v16.x -> version-16); overridable via FRAPPE_BRANCH.
 docker_frappe_branch() {
   local override="${FRAPPE_BRANCH:-}"
-  [[ -n "$override" ]] && { printf '%s\n' "$override"; return 0; }
+  [[ -n "$override" ]] && {
+    printf '%s\n' "$override"
+    return 0
+  }
   local tag major
   tag="$(docker_image_tag)"
   major="$(printf '%s' "$tag" | sed -n 's/^v\([0-9]\{1,\}\).*/\1/p')"
@@ -2381,8 +2427,8 @@ docker_custom_image_site_app_version() {
   site="$(docker_site_name)"
 
   version="$(
-    docker_bench --site "$site" list-apps 2>/dev/null |
-      awk -v wanted="$app" '$1 == wanted {print $2; exit}'
+    docker_bench --site "$site" list-apps 2>/dev/null \
+      | awk -v wanted="$app" '$1 == wanted {print $2; exit}'
   )"
 
   version="${version#v}"
@@ -2576,8 +2622,8 @@ docker_custom_image_image_app_version() {
     --rm \
     --entrypoint sh \
     "$image" \
-    -lc 'cd /home/frappe/frappe-bench && bench version 2>/dev/null' |
-    awk -v wanted="$app" '
+    -lc 'cd /home/frappe/frappe-bench && bench version 2>/dev/null' \
+    | awk -v wanted="$app" '
       $1 == wanted {
         version = $2
         sub(/^v/, "", version)
@@ -2702,7 +2748,7 @@ docker_collect_installed_optional_profiles() {
     [[ -n "$app" ]] || continue
 
     case "$app" in
-      frappe|erpnext)
+      frappe | erpnext)
         continue
         ;;
     esac
@@ -2737,7 +2783,7 @@ docker_collect_desired_app_profiles() {
   while IFS= read -r profile; do
     [[ -n "$profile" ]] || continue
     selected["$profile"]=1
-  done <<< "$installed_profiles"
+  done <<<"$installed_profiles"
 
   if [[ -n "$requested" ]]; then
     while IFS= read -r dependency; do
@@ -2800,12 +2846,12 @@ docker_write_apps_json() {
       [[ -n "$branch" ]] || branch="$(docker_resolve_default_branch "$repo")"
 
       printf ',\n  {"url": "%s", "branch": "%s"}' "$repo" "$branch"
-      printf '%s\n' "$profile" >> "$profiles_tmp"
+      printf '%s\n' "$profile" >>"$profiles_tmp"
 
     done
 
     printf '\n]\n'
-  } > "$tmp"
+  } >"$tmp"
 
   $SUDO mkdir -p "$DOCKER_WORKDIR"
 
@@ -2831,7 +2877,7 @@ docker_custom_image_verify_image() {
   local image="$1" apps="$2" app
   local -a app_list=()
 
-  IFS=' ' read -r -a app_list <<< "$apps"
+  IFS=' ' read -r -a app_list <<<"$apps"
 
   for app in "${app_list[@]}"; do
     [[ -n "$app" ]] || continue
@@ -2861,7 +2907,7 @@ docker_custom_image_verify_runtime() {
     scheduler
   )
 
-  IFS=' ' read -r -a app_list <<< "$apps"
+  IFS=' ' read -r -a app_list <<<"$apps"
 
   for svc in "${services[@]}"; do
     cid="$(docker_compose ps -q "$svc" 2>/dev/null | tail -n1)"
@@ -2926,7 +2972,7 @@ docker_custom_image_config() {
   fi
 
   # shellcheck disable=SC2206  # deliberate word-split of the space-separated reply
-  IFS=' ' read -r -a chosen <<< "$selection"
+  IFS=' ' read -r -a chosen <<<"$selection"
 
   docker_write_apps_json "${chosen[@]}"
   ui_box_start "Custom-App Image Configured"
@@ -3098,8 +3144,8 @@ docker_build_custom_image() {
     ${SUDO:-} docker inspect \
       --format '{{.Id}}' \
       "$image" \
-      2>/dev/null ||
-      echo unknown
+      2>/dev/null \
+      || echo unknown
   )"
 
   apps="$(docker_custom_image_selected_app_names)"
@@ -3139,8 +3185,8 @@ docker_env_file_set() {
   local envf="$1" key="$2" val="$3" tmp
   $SUDO test -f "$envf" || return 1
   tmp="$(mktemp)" || return 1
-  $SUDO grep -v "^${key}=" "$envf" 2>/dev/null > "$tmp" || true
-  printf '%s=%s\n' "$key" "$val" >> "$tmp"
+  $SUDO grep -v "^${key}=" "$envf" 2>/dev/null >"$tmp" || true
+  printf '%s=%s\n' "$key" "$val" >>"$tmp"
   $SUDO cp "$tmp" "$envf"
   rm -f "$tmp"
   $SUDO chown root:root "$envf" 2>/dev/null || true
@@ -3172,7 +3218,7 @@ docker_deploy_custom_image() {
     || fail "No custom image built yet. Run $(toolkit_cmd docker-build-custom-image) first."
 
   site="$(docker_site_name)"
-  IFS=' ' read -r -a app_list <<< "$apps"
+  IFS=' ' read -r -a app_list <<<"$apps"
 
   ui_box_start "Deploy Custom-App Image"
   status_line "Image" "INFO" "$image"
@@ -3276,7 +3322,7 @@ docker_reconcile_app_image() {
     return 0
   fi
 
-  mapfile -t desired_profiles <<< "$profiles"
+  mapfile -t desired_profiles <<<"$profiles"
 
   ui_box_start "Reconcile Docker Optional Apps"
   status_line "Site" "INFO" "$(docker_site_name)"
@@ -3345,7 +3391,7 @@ docker_install_app() {
     profiles="$(docker_collect_desired_app_profiles "$profile")" \
       || fail "Could not safely reconstruct the desired Docker app image."
 
-    mapfile -t desired_profiles <<< "$profiles"
+    mapfile -t desired_profiles <<<"$profiles"
 
     ui_box_start "Install ${display} - Docker Production"
     status_line "Site" "INFO" "$site"
@@ -3526,7 +3572,7 @@ docker_guided_host_mapping_checkpoint() {
     read -r -p "Press Enter to show the HOST mapping again, or type skip to continue without HTTPS: " reply || reply="skip"
     reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
     case "$reply" in
-      skip|s|q|quit)
+      skip | s | q | quit)
         warn "Friendly hostname was not confirmed; skipping guided local HTTPS."
         echo "Complete it later with: $(toolkit_cmd access)"
         return 1
@@ -3558,7 +3604,7 @@ docker_verify_access() {
     url="https://${domain}/api/method/ping"
     code="$(curl -k -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${domain}:443:127.0.0.1" "$url" 2>/dev/null || true)"
     case "$code" in
-      200|401|403) status_line "Production HTTPS" "OK" "https://${domain} (HTTP ${code})" ;;
+      200 | 401 | 403) status_line "Production HTTPS" "OK" "https://${domain} (HTTP ${code})" ;;
       "") status_line "Production HTTPS" "WARN" "no response on local Traefik port 443" ;;
       *) status_line "Production HTTPS" "WARN" "HTTP ${code} from https://${domain}" ;;
     esac
@@ -3566,7 +3612,7 @@ docker_verify_access() {
     url="$(docker_direct_http_url localhost)/api/method/ping"
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: ${site}" "$url" 2>/dev/null || true)"
     case "$code" in
-      200|401|403) status_line "Docker frontend" "OK" "$(docker_direct_http_url localhost) (HTTP ${code})" ;;
+      200 | 401 | 403) status_line "Docker frontend" "OK" "$(docker_direct_http_url localhost) (HTTP ${code})" ;;
       "") status_line "Docker frontend" "WARN" "no response on $(docker_direct_http_url localhost)" ;;
       *) status_line "Docker frontend" "WARN" "HTTP ${code} on $(docker_direct_http_url localhost)" ;;
     esac
@@ -3589,7 +3635,7 @@ docker_verify_access() {
   if ! docker_is_production && declare -F local_ssl_is_configured >/dev/null 2>&1 && local_ssl_is_configured; then
     code="$(curl -k -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${site}:443:127.0.0.1" "https://${site}/login" 2>/dev/null || true)"
     case "$code" in
-      200|30[0-9]|401|403) status_line "Friendly HTTPS" "OK" "https://${site} (HTTP ${code})" ;;
+      200 | 30[0-9] | 401 | 403) status_line "Friendly HTTPS" "OK" "https://${site} (HTTP ${code})" ;;
       *) status_line "Friendly HTTPS" "WARN" "https://${site} not ready locally (HTTP ${code:-none})" ;;
     esac
   fi
@@ -3650,21 +3696,51 @@ docker_app_install_wizard() {
       "8) Insights" \
       "9) Print Designer" \
       "10) Wiki"
-    menu_footer
+    ui_submenu_footer
     menu_read_choice choice
     case "$choice" in
-      1) install_app_profile crm; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      2) install_app_profile hrms; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      3) install_app_profile helpdesk; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      4) install_app_profile payments; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      5) install_app_profile lms; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      6) install_app_profile webshop; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      7) install_app_profile builder; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      8) install_app_profile insights; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      9) install_app_profile print_designer; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      10) install_app_profile wiki; pause_after_screen "Press Enter to return to Docker App Wizard..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        install_app_profile crm
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      2)
+        install_app_profile hrms
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      3)
+        install_app_profile helpdesk
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      4)
+        install_app_profile payments
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      5)
+        install_app_profile lms
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      6)
+        install_app_profile webshop
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      7)
+        install_app_profile builder
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      8)
+        install_app_profile insights
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      9)
+        install_app_profile print_designer
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      10)
+        install_app_profile wiki
+        pause_after_screen "Press Enter to return to Docker App Wizard..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -3844,7 +3920,7 @@ docker_write_prod_image_override() {
 # Wait for a named compose service container to reach "running".
 docker_wait_service_running() {
   local svc="${1:-backend}" timeout="${2:-300}" deadline cid state
-  deadline=$(( $(date +%s) + timeout ))
+  deadline=$(($(date +%s) + timeout))
   while :; do
     cid="$(docker_compose ps -q "$svc" 2>/dev/null | tail -n1)"
     if [[ -n "$cid" ]]; then
@@ -3865,7 +3941,7 @@ docker_prod_create_site() {
   site="$(docker_site_name)"
 
   log "Waiting for the configurator job to complete before creating ${site}"
-  deadline=$(( $(date +%s) + DOCKER_CREATE_SITE_TIMEOUT ))
+  deadline=$(($(date +%s) + DOCKER_CREATE_SITE_TIMEOUT))
   while :; do
     cid="$(docker_compose ps -aq configurator 2>/dev/null | tail -n1)"
     if [[ -n "$cid" ]]; then
@@ -3889,7 +3965,10 @@ docker_prod_create_site() {
     sleep 5
   done
 
-  docker_wait_service_running backend 300 || { err "backend container did not reach running state."; return 1; }
+  docker_wait_service_running backend 300 || {
+    err "backend container did not reach running state."
+    return 1
+  }
 
   if docker_compose exec -T backend test -f "sites/${site}/site_config.json" >/dev/null 2>&1; then
     ok "Site ${site} already exists; skipping create-site."
@@ -3898,12 +3977,12 @@ docker_prod_create_site() {
 
   log "Creating site ${site} (bench new-site inside the backend container)"
   if ! docker_compose exec -T backend bench new-site \
-      --mariadb-user-host-login-scope='%' \
-      --admin-password "$DOCKER_ADMIN_PASSWORD" \
-      --db-root-username root \
-      --db-root-password "$DOCKER_DB_ROOT_PASSWORD" \
-      --install-app erpnext \
-      --set-default "$site"; then
+    --mariadb-user-host-login-scope='%' \
+    --admin-password "$DOCKER_ADMIN_PASSWORD" \
+    --db-root-username root \
+    --db-root-password "$DOCKER_DB_ROOT_PASSWORD" \
+    --install-app erpnext \
+    --set-default "$site"; then
     err "bench new-site failed for ${site}. Inspect with: $(toolkit_cmd logs)"
     return 1
   fi

@@ -1161,15 +1161,24 @@ run_uninstall_menu() {
     "1) Soft uninstall: stop Bench and archive ${BENCH_PARENT}" \
     "2) Remove bench files only" \
     "3) Full purge: remove bench, frappe user, MariaDB/Redis packages"
-  menu_footer
+  ui_submenu_footer
   menu_read_choice choice
 
   case "$choice" in
-    1) soft_uninstall; pause_after_screen "Press Enter to return to Uninstall / Reset..." ;;
-    2) remove_bench_files; pause_after_screen "Press Enter to return to Uninstall / Reset..." ;;
-    3) full_purge; pause_after_screen "Press Enter to return to Uninstall / Reset..." ;;
-    b|B|"") return 0 ;;
-    q|Q) exit 0 ;;
+    1)
+      soft_uninstall
+      pause_after_screen "Press Enter to return to Uninstall / Reset..."
+      ;;
+    2)
+      remove_bench_files
+      pause_after_screen "Press Enter to return to Uninstall / Reset..."
+      ;;
+    3)
+      full_purge
+      pause_after_screen "Press Enter to return to Uninstall / Reset..."
+      ;;
+    b | B | "") return 0 ;;
+    q | Q) exit 0 ;;
     *) warn "Invalid option" ;;
   esac
 }
@@ -1333,7 +1342,6 @@ show_setup_lifecycle_plan() {
   echo "============================================================"
 }
 
-
 run_guided_setup() {
   require_sudo
 
@@ -1350,8 +1358,8 @@ run_guided_setup() {
   echo
   # Final browser gate: discover every CSS/JS from live /login and verify all
   # (with consecutive stability). Disk website.bundle check alone is not enough.
-  if declare -F wait_for_erpnext_ready >/dev/null 2>&1 && \
-     { port_listens 443 || port_listens 8000; }; then
+  if declare -F wait_for_erpnext_ready >/dev/null 2>&1 \
+    && { port_listens 443 || port_listens 8000; }; then
     if wait_for_erpnext_ready; then
       ok "ERPNext installation workflow finished successfully (browser assets verified)."
     else
@@ -1425,9 +1433,9 @@ local_guided_service_settle_checkpoint() {
   [[ -t 0 ]] || return 0
   [[ "$ASSUME_YES" -eq 1 ]] && return 0
 
-  if [[ "${LOCAL_HTTPS_STACK_SETTLED:-0}" == "1" ]] || \
-     [[ "${LOCAL_INSTALL_STACK_SETTLED:-0}" == "1" ]] || \
-     [[ "${LOCAL_STACK_SETTLED:-0}" == "1" ]]; then
+  if [[ "${LOCAL_HTTPS_STACK_SETTLED:-0}" == "1" ]] \
+    || [[ "${LOCAL_INSTALL_STACK_SETTLED:-0}" == "1" ]] \
+    || [[ "${LOCAL_STACK_SETTLED:-0}" == "1" ]]; then
     echo
     ok "Stack already settled (redis_cache flushed + ERPNext restart + stable wait-ready)."
     echo "Host check: http://${SITE_NAME}:8000/login (styled Sign In). Optional: $(toolkit_cmd restart)"
@@ -1524,7 +1532,6 @@ local_guided_credentials_checkpoint() {
     echo "Skipped. Reveal it later with: $(toolkit_cmd credentials-show)"
   fi
 }
-
 
 prompt_open_main_menu_after_install() {
   local reply
@@ -1636,7 +1643,7 @@ prompt_and_save_public_domain() {
 set_local_dev_defaults() {
   require_sudo
 
-  if [[ "$SITE_NAME_ENV_PROVIDED" -eq 0 && ( -z "${SITE_NAME:-}" || "$SITE_NAME" != *.test ) ]]; then
+  if [[ "$SITE_NAME_ENV_PROVIDED" -eq 0 && (-z "${SITE_NAME:-}" || "$SITE_NAME" != *.test) ]]; then
     SITE_NAME="erp.test"
   fi
   SITE_NAME_SOURCE="local quickstart"
@@ -1724,14 +1731,17 @@ public_quickstart_status_summary() {
 
   if deployment_engine_is_docker; then
     if docker_is_production && docker_https_enabled; then
-      ssl_status="OK"; ssl_detail="Docker Traefik $(docker_https_mode)"
+      ssl_status="OK"
+      ssl_detail="Docker Traefik $(docker_https_mode)"
     else
-      ssl_status="WARN"; ssl_detail="Docker HTTPS not configured"
+      ssl_status="WARN"
+      ssl_detail="Docker HTTPS not configured"
     fi
   else
     local ssl_pair
     ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo "WARN|not configured")"
-    ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
+    ssl_status="${ssl_pair%%|*}"
+    ssl_detail="${ssl_pair#*|}"
   fi
 
   status_line "Domain" "$domain_status" "${PRODUCTION_DOMAIN:-not set}${dns_ip:+; DNS=$dns_ip}; VM=$vm_ip"
@@ -1801,7 +1811,6 @@ public_quickstart_final_status() {
   ui_next "$(toolkit_cmd support-bundle)" "Take a cloud snapshot after validation."
 }
 
-
 public_vm_guided_step() {
   local number="$1"
   local title="$2"
@@ -1837,8 +1846,10 @@ public_vm_guided_require_dns_ready() {
   fi
 
   ctx="$(ssl_mode_context)"
-  mode="${ctx%%|*}"; ctx="${ctx#*|}"
-  detail="${ctx%%|*}"; ctx="${ctx#*|}"
+  mode="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  detail="${ctx%%|*}"
+  ctx="${ctx#*|}"
   provider="${ctx%%|*}"
 
   echo
@@ -1866,7 +1877,7 @@ public_vm_guided_require_dns_ready() {
   echo "1) Stop and use DNS-only/gray-cloud for Let's Encrypt (recommended default)"
   echo "2) Continue with Cloudflare proxied / Origin CA path"
   echo "3) Show SSL mode guide/status"
-  menu_footer
+  ui_submenu_footer
   menu_read_choice choice
   case "$choice" in
     2)
@@ -1891,7 +1902,7 @@ public_vm_guided_require_dns_ready() {
       warn "Rerun guided setup after choosing DNS-only Let's Encrypt or Cloudflare Origin CA."
       return 1
       ;;
-    b|B|q|Q|1|"")
+    b | B | q | Q | 1 | "")
       warn "Stop here. Use DNS-only/gray-cloud for Let's Encrypt, or rerun and choose the Cloudflare Origin CA path."
       return 1
       ;;
@@ -1954,9 +1965,9 @@ public_vm_guided_install_core() {
       docker_promote_to_production || return 1
     elif [[ "$installed" != Installed* ]]; then
       DOCKER_MODE="production" \
-      DOCKER_MODE_ENV_PROVIDED=1 \
-      DEPLOYMENT_MODE="public-vm" \
-      DOCKER_PUBLIC_GUIDED_ACTIVE=1 \
+        DOCKER_MODE_ENV_PROVIDED=1 \
+        DEPLOYMENT_MODE="public-vm" \
+        DOCKER_PUBLIC_GUIDED_ACTIVE=1 \
         run_install || return 1
     elif [[ "$runtime" != Running* ]]; then
       docker_runtime_start || return 1
@@ -2041,7 +2052,8 @@ public_vm_guided_configure_https() {
 
   local ssl_pair ssl_status ssl_detail ctx mode detail provider dns_ip vm_ip choice
   ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo 'WARN|not configured for production')"
-  ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
+  ssl_status="${ssl_pair%%|*}"
+  ssl_detail="${ssl_pair#*|}"
   status_line "Current HTTPS" "$ssl_status" "$ssl_detail"
   if [[ "$ssl_status" == "OK" ]]; then
     ok "Production HTTPS is already configured."
@@ -2050,10 +2062,14 @@ public_vm_guided_configure_https() {
   fi
 
   ctx="$(ssl_mode_context)"
-  mode="${ctx%%|*}"; ctx="${ctx#*|}"
-  detail="${ctx%%|*}"; ctx="${ctx#*|}"
-  provider="${ctx%%|*}"; ctx="${ctx#*|}"
-  dns_ip="${ctx%%|*}"; vm_ip="${ctx#*|}"
+  mode="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  detail="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  provider="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  dns_ip="${ctx%%|*}"
+  vm_ip="${ctx#*|}"
   status_line "Recommended mode" "INFO" "$mode"
   status_line "Active provider" "INFO" "$provider"
   status_line "DNS / VM" "INFO" "DNS=${dns_ip}; VM=${vm_ip}"
@@ -2068,25 +2084,39 @@ public_vm_guided_configure_https() {
         echo "1) Use recommended Let's Encrypt directly on this VM (default)"
         echo "2) Choose another SSL provider / advanced SSL wizard"
         echo "3) Show SSL mode guide/status"
-        menu_footer
+        ui_submenu_footer
         menu_read_choice choice
         case "$choice" in
-          1|"") configure_production_ssl || return 1 ;;
+          1 | "") configure_production_ssl || return 1 ;;
           2) production_ssl_wizard || return 1 ;;
-          3) show_ssl_mode_status; show_ssl_mode_guide; production_ssl_wizard || return 1 ;;
-          b|B) return 1 ;;
-          q|Q) exit 0 ;;
-          *) warn "Invalid option: ${choice}"; return 1 ;;
+          3)
+            show_ssl_mode_status
+            show_ssl_mode_guide
+            production_ssl_wizard || return 1
+            ;;
+          b | B) return 1 ;;
+          q | Q) exit 0 ;;
+          *)
+            warn "Invalid option: ${choice}"
+            return 1
+            ;;
         esac
       fi
       ;;
     cloudflare-origin-ca) production_ssl_wizard || return 1 ;;
-    *) err "Production HTTPS is not ready. Fix DNS/SSL planning first."; return 1 ;;
+    *)
+      err "Production HTTPS is not ready. Fix DNS/SSL planning first."
+      return 1
+      ;;
   esac
 
   ssl_pair="$(production_ssl_overall_status 2>/dev/null || echo 'WARN|not configured for production')"
-  ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
-  [[ "$ssl_status" == "OK" ]] || { status_line "Production HTTPS" "$ssl_status" "$ssl_detail"; return 1; }
+  ssl_status="${ssl_pair%%|*}"
+  ssl_detail="${ssl_pair#*|}"
+  [[ "$ssl_status" == "OK" ]] || {
+    status_line "Production HTTPS" "$ssl_status" "$ssl_detail"
+    return 1
+  }
   show_production_ssl_status || true
 }
 
@@ -2223,15 +2253,30 @@ run_public_vm_quickstart() {
       "8) Optional apps" \
       "9) Final status / support bundle" \
       "10) SSL mode guide / setup steps"
-    menu_footer
+    ui_submenu_footer
     menu_read_choice choice
 
     case "$choice" in
-      1) show_setup_lifecycle_plan; pause_after_screen "Press Enter to return to Production setup..." ;;
-      2) prompt_and_save_public_domain; pause_after_screen "Press Enter to return to Production setup..." ;;
-      3) ensure_public_domain_configured && show_production_domain_plan && show_public_vm_readiness; pause_after_screen "Press Enter to return to Production setup..." ;;
-      4) ensure_public_domain_configured && choose_deployment_engine_for_setup 0 && public_vm_guided_install_core; pause_after_screen "Press Enter to return to Production setup..." ;;
-      5) public_quickstart_maybe_initial_backup; pause_after_screen "Press Enter to return to Production setup..." ;;
+      1)
+        show_setup_lifecycle_plan
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
+      2)
+        prompt_and_save_public_domain
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
+      3)
+        ensure_public_domain_configured && show_production_domain_plan && show_public_vm_readiness
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
+      4)
+        ensure_public_domain_configured && choose_deployment_engine_for_setup 0 && public_vm_guided_install_core
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
+      5)
+        public_quickstart_maybe_initial_backup
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
       6)
         if ensure_public_domain_configured; then
           choose_deployment_engine_for_setup 0
@@ -2243,10 +2288,17 @@ run_public_vm_quickstart() {
       8)
         if deployment_engine_is_docker; then docker_app_install_wizard; else run_app_install_wizard; fi
         ;;
-      9) public_quickstart_final_status; pause_after_screen "Press Enter to return to Production setup..." ;;
-      10) show_ssl_mode_status; show_setup_effort_guide; pause_after_screen "Press Enter to return to Production setup..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      9)
+        public_quickstart_final_status
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
+      10)
+        show_ssl_mode_status
+        show_setup_effort_guide
+        pause_after_screen "Press Enter to return to Production setup..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *)
         if menu_invalid_choice "$choice" "type b to go back or q to quit"; then :; else
           [[ $? -eq 2 ]] && return 0
@@ -2272,17 +2324,31 @@ run_first_run_wizard() {
       "3) Existing install / maintenance menu" \
       "4) Show saved config" \
       "5) Setup lifecycle / SSL mode guide"
-    menu_footer
+    ui_submenu_footer
     menu_read_choice choice
 
     case "$choice" in
-      1) run_local_dev_quickstart; pause_after_screen "Press Enter to return to Start here..." ;;
-      2) run_public_vm_guided_setup; pause_after_screen "Press Enter to return to Start here..." ;;
+      1)
+        run_local_dev_quickstart
+        pause_after_screen "Press Enter to return to Start here..."
+        ;;
+      2)
+        run_public_vm_guided_setup
+        pause_after_screen "Press Enter to return to Start here..."
+        ;;
       3) show_menu ;;
-      4) show_config_summary; pause_after_screen "Press Enter to return to Start here..." ;;
-      5) show_setup_lifecycle_plan; show_setup_effort_guide; show_ssl_mode_guide; pause_after_screen "Press Enter to return to Start here..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      4)
+        show_config_summary
+        pause_after_screen "Press Enter to return to Start here..."
+        ;;
+      5)
+        show_setup_lifecycle_plan
+        show_setup_effort_guide
+        show_ssl_mode_guide
+        pause_after_screen "Press Enter to return to Start here..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *)
         if menu_invalid_choice "$choice" "type b to go back or q to quit"; then :; else
           [[ $? -eq 2 ]] && return 0

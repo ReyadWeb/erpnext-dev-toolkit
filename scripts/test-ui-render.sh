@@ -37,12 +37,18 @@ fi
 
 grep -q "ERPNext Developer Toolkit" "$tmp" || note_fail "missing toolkit title"
 grep -q "Start here" "$tmp" || note_fail "missing Start here item"
-grep -q "Access & networking" "$tmp" || note_fail "missing Access & networking item"
+grep -q "Network & access" "$tmp" || note_fail "missing Network & access item"
 grep -q "HTTPS & domains" "$tmp" || note_fail "missing HTTPS & domains item"
-grep -q "Backup & recovery" "$tmp" || note_fail "missing Backup & recovery item"
+grep -q "Backups & restore" "$tmp" || note_fail "missing Backups & restore item"
 grep -q "Operations" "$tmp" || note_fail "missing Operations item"
+grep -q "System Overview" "$tmp" || note_fail "missing System Overview"
+grep -q "CPU" "$tmp" || note_fail "missing CPU metric"
+grep -q "RAM" "$tmp" || note_fail "missing RAM metric"
+grep -q "Disk" "$tmp" || note_fail "missing Disk metric"
+grep -qE '\[D\][[:space:]]+Dashboard' "$tmp" || note_fail "missing Dashboard shortcut"
+grep -qE '\[L\][[:space:]]+Logs' "$tmp" || note_fail "missing Logs shortcut"
 grep -q "Choose an option" "$tmp" || note_fail "missing Choose an option prompt"
-grep -qE '\[q\]|q\) Quit' "$tmp" || note_fail "missing quit affordance"
+grep -qE '\[q\]|q\) Quit|Q\. Quit' "$tmp" || note_fail "missing quit affordance"
 
 if grep -q $'\033' "$tmp"; then
   note_fail "ANSI escape codes present with NO_COLOR=1 / TERM=dumb"
@@ -63,16 +69,14 @@ if ! grep -qE '\[1\].*\[7\]' "$tmp2"; then
 else
   pass "two-column menu at COLUMNS=100"
 fi
-grep -q "Go-live:" "$tmp2" || note_fail "wide layout missing Go-live status badge"
-grep -qE 'Go-live:[[:space:]]*Local' "$tmp2" || note_fail "local mode should show Go-live: Local (not Unknown)"
-grep -qE 'HTTPS:[[:space:]]*(None|mkcert|Self-signed|OK)' "$tmp2" \
-  || note_fail "local mode should show HTTPS as None/mkcert/Self-signed/OK (not Unknown)"
-# Status badges must wrap: Go-live must not share a line with HTTPS.
-if grep -E 'HTTPS:.*Go-live:' "$tmp2" >/dev/null 2>&1; then
-  note_fail "Go-live still on the same status row as HTTPS (overflow risk)"
-  echo "----- wide render -----" >&2
-  cat "$tmp2" >&2 || true
-fi
+grep -qE 'Go-live[[:space:]]+[+!x-]' "$tmp" \
+  || note_fail "layout missing Go-live status indicator"
+grep -qE 'Go-live[[:space:]]+-' "$tmp" \
+  || note_fail "local mode should render Go-live as a neutral indicator"
+grep -qE 'HTTPS[[:space:]]+[+!x-]' "$tmp" \
+  || note_fail "layout missing HTTPS status indicator"
+grep -qE 'HTTPS[[:space:]]+-' "$tmp" \
+  || note_fail "local mode without configured HTTPS should render a neutral HTTPS indicator"
 if grep -q $'\033' "$tmp2"; then
   note_fail "ANSI escape codes in wide layout with NO_COLOR=1"
 fi
@@ -123,6 +127,28 @@ else
   pass "two-column menu at COLUMNS=120"
 fi
 rm -f "$tmp4"
+
+# Responsive dashboard width matrix: every rendered line must stay inside the
+# effective panel width, and the System Overview must remain visible.
+for dashboard_cols in 60 79 80 100 119 120 160; do
+  export COLUMNS="$dashboard_cols" MENU_TERMINAL_COLS="$dashboard_cols"
+  export MENU_FORCE_ONE_COLUMN=false
+  unset MENU_FORCE_TWO_COLUMNS
+  dashboard_tmp="$(mktemp /tmp/erpnext-dev-ui-dashboard-${dashboard_cols}.XXXXXX)"
+  ./erpnext-dev.sh menu-render-test >"$dashboard_tmp" 2>/dev/null \
+    || note_fail "dashboard render failed at width ${dashboard_cols}"
+  effective_width="$dashboard_cols"
+  ((effective_width > 120)) && effective_width=120
+  ((effective_width < 60)) && effective_width=60
+  if ! awk -v max="$effective_width" 'length($0) > max { bad=1 } END { exit bad }' "$dashboard_tmp"; then
+    note_fail "dashboard render exceeded ${effective_width} columns at width ${dashboard_cols}"
+    cat "$dashboard_tmp" >&2 || true
+  fi
+  grep -q "System Overview" "$dashboard_tmp" \
+    || note_fail "System Overview missing at width ${dashboard_cols}"
+  rm -f "$dashboard_tmp"
+done
+pass "responsive dashboard width matrix"
 
 # Fit-based fallback: oversized labels force single-column even at wide width.
 # shellcheck source=lib/ui.sh disable=SC1091
@@ -254,14 +280,604 @@ access_tmp="$(mktemp /tmp/erpnext-dev-ui-access.XXXXXX)"
 if ! printf 'q\n' | ./erpnext-dev.sh access >"$access_tmp" 2>/dev/null; then
   note_fail "access menu render failed"
 fi
-grep -q "Browser access information" "$access_tmp" || note_fail "Access missing browser access information"
-grep -q "Local network & stable IP" "$access_tmp" || note_fail "Access missing local network routing"
-grep -q "Hostname & hosts mapping" "$access_tmp" || note_fail "Access missing hostname / hosts routing"
-grep -q "HTTPS & domains" "$access_tmp" || note_fail "Access missing HTTPS & domains routing"
+grep -q "Access overview" "$access_tmp" \
+  || note_fail "Access missing Access overview routing"
+grep -q "Verify access" "$access_tmp" \
+  || note_fail "Access missing Verify access routing"
+grep -q "Network status" "$access_tmp" \
+  || note_fail "Access missing Network status routing"
+grep -q "Network & IP" "$access_tmp" \
+  || note_fail "Access missing local Network & IP routing"
+grep -q "Hostname & mapping" "$access_tmp" \
+  || note_fail "Access missing local Hostname & mapping routing"
+grep -q "Credentials" "$access_tmp" \
+  || note_fail "Access missing Credentials routing"
+grep -q "Access doctor" "$access_tmp" \
+  || note_fail "Access missing local Access doctor routing"
+grep -q "HTTPS & domains" "$access_tmp" \
+  || note_fail "Access missing HTTPS & domains routing"
+grep -qE 'B\.[[:space:]]+Back' "$access_tmp" \
+  || note_fail "Access missing canonical B. Back footer"
+grep -qE 'Q\.[[:space:]]+Quit' "$access_tmp" \
+  || note_fail "Access missing canonical Q. Quit footer"
+if grep -q "Back to " "$access_tmp"; then
+  note_fail "Access still renders destination-specific Back to wording"
+fi
 if grep -q "29) Show host access test guide" "$access_tmp"; then
   note_fail "Access still exposes the legacy 29-item flat menu"
 fi
 rm -f "$access_tmp"
+
+# Categorized Backup & Recovery hub.
+backup_hub_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-hub.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh backup-menu >"$backup_hub_tmp" 2>/dev/null; then
+  note_fail "Backup & Recovery hub render failed"
+fi
+
+grep -qE '\[1\].*Overview.*\[5\].*Restore' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Overview / Restore routing"
+
+grep -qE '\[2\].*Create backup.*\[6\].*Recovery readiness' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Create backup / Recovery readiness routing"
+
+grep -qE '\[3\].*Verify backups.*\[7\].*Off-VM backups' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Verify / Off-VM routing"
+
+grep -qE '\[4\].*Scheduled backups.*\[8\].*Retention' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Scheduled backups / Retention routing"
+
+grep -qE '\[M\].*Maintenance' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing Maintenance routing"
+
+if grep -qE '\[1\].*Database backup' "$backup_hub_tmp"; then
+  note_fail "Backup hub still exposes the legacy flat menu"
+fi
+
+if ! awk '
+  index($0, "Overview") && index($0, "Restore") {
+    found = 1
+    if (length($0) != 120 || substr($0, 120, 1) != "|") {
+      bad = 1
+    }
+  }
+  END {
+    exit !(found && !bad)
+  }
+' "$backup_hub_tmp"; then
+  note_fail "Backup hub right border is not aligned at 120 columns"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$backup_hub_tmp" \
+  || note_fail "Backup hub missing canonical Quit footer"
+
+rm -f "$backup_hub_tmp"
+
+# Create Backup submenu.
+backup_create_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-create.XXXXXX)"
+
+if ! printf '2\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh backup-menu >"$backup_create_tmp" 2>/dev/null; then
+  note_fail "Create Backup submenu render failed"
+fi
+
+grep -q "Create Backup" "$backup_create_tmp" \
+  || note_fail "Create Backup submenu title missing"
+
+grep -q "Database only" "$backup_create_tmp" \
+  || note_fail "Create Backup submenu missing Database only"
+
+grep -q "Database + files" "$backup_create_tmp" \
+  || note_fail "Create Backup submenu missing Database + files"
+
+rm -f "$backup_create_tmp"
+
+# Scheduled Backups submenu.
+backup_schedule_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-schedule.XXXXXX)"
+
+if ! printf '4\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh backup-menu >"$backup_schedule_tmp" 2>/dev/null; then
+  note_fail "Scheduled Backups submenu render failed"
+fi
+
+grep -q "Scheduled Backups" "$backup_schedule_tmp" \
+  || note_fail "Scheduled Backups submenu title missing"
+
+grep -q "Configure schedule" "$backup_schedule_tmp" \
+  || note_fail "Scheduled Backups submenu missing Configure schedule"
+
+grep -q "Disable schedule" "$backup_schedule_tmp" \
+  || note_fail "Scheduled Backups submenu missing Disable schedule"
+
+rm -f "$backup_schedule_tmp"
+
+# Narrow Backup & Recovery layout must remain single-column.
+backup_narrow_tmp="$(mktemp /tmp/erpnext-dev-ui-backup-narrow.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh backup-menu >"$backup_narrow_tmp" 2>/dev/null; then
+  note_fail "narrow Backup & Recovery hub render failed"
+fi
+
+if grep -qE '\[1\].*\[5\]' "$backup_narrow_tmp"; then
+  note_fail "Backup hub did not switch to single-column at 70 columns"
+fi
+
+grep -q "Overview" "$backup_narrow_tmp" \
+  || note_fail "narrow Backup hub missing Overview"
+
+grep -q "Restore" "$backup_narrow_tmp" \
+  || note_fail "narrow Backup hub missing Restore"
+
+rm -f "$backup_narrow_tmp"
+
+# Environment-aware Security hub.
+security_local_tmp="$(mktemp /tmp/erpnext-dev-ui-security-local.XXXXXX)"
+
+if ! env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  bash -c '
+    source "'"$ROOT_DIR"'/lib/common.sh"
+    source "'"$ROOT_DIR"'/lib/ui.sh"
+    source "'"$ROOT_DIR"'/lib/firewall.sh"
+    ui_init
+    render_local_security_hub_options
+    ui_submenu_footer
+  ' >"$security_local_tmp" 2>/dev/null; then
+  note_fail "local Security hub render failed"
+fi
+
+grep -qE '\[1\].*Overview.*\[5\].*Intrusion protection' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Overview / Intrusion protection"
+
+grep -qE '\[2\].*Hardening.*\[6\].*Credentials' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Hardening / Credentials"
+
+grep -qE '\[3\].*Firewall.*\[7\].*Security audit' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Firewall / Security audit"
+
+grep -qE '\[4\].*Access recovery.*\[8\].*Rollback snapshots' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing recovery routing"
+
+grep -qE '\[S\].*Status.*\[G\].*Guidance' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Status / Guidance"
+
+if grep -q "Cloud guidance" "$security_local_tmp"; then
+  note_fail "local Security hub exposes production Cloud guidance"
+fi
+
+if ! awk '
+  index($0, "Overview") && index($0, "Intrusion protection") {
+    found = 1
+
+    if (length($0) != 120 || substr($0, 120, 1) != "|") {
+      bad = 1
+    }
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$security_local_tmp"; then
+  note_fail "local Security hub right border is not aligned"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$security_local_tmp" \
+  || note_fail "local Security hub missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$security_local_tmp" \
+  || note_fail "local Security hub missing canonical Quit footer"
+
+rm -f "$security_local_tmp"
+
+security_prod_tmp="$(mktemp /tmp/erpnext-dev-ui-security-production.XXXXXX)"
+
+if ! env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  bash -c '
+    source "'"$ROOT_DIR"'/lib/common.sh"
+    source "'"$ROOT_DIR"'/lib/ui.sh"
+    source "'"$ROOT_DIR"'/lib/firewall.sh"
+    ui_init
+    render_production_security_hub_options
+    ui_submenu_footer
+  ' >"$security_prod_tmp" 2>/dev/null; then
+  note_fail "production Security hub render failed"
+fi
+
+grep -qE '\[4\].*Exposure.*\[8\].*Recovery' "$security_prod_tmp" \
+  || note_fail "production Security hub missing Exposure / Recovery"
+
+grep -qE '\[S\].*Status.*\[G\].*Cloud guidance' "$security_prod_tmp" \
+  || note_fail "production Security hub missing Status / Cloud guidance"
+
+if grep -q "Access recovery" "$security_prod_tmp"; then
+  note_fail "production Security hub exposes local Access recovery"
+fi
+
+rm -f "$security_prod_tmp"
+
+security_narrow_tmp="$(mktemp /tmp/erpnext-dev-ui-security-narrow.XXXXXX)"
+
+if ! env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  bash -c '
+    source "'"$ROOT_DIR"'/lib/common.sh"
+    source "'"$ROOT_DIR"'/lib/ui.sh"
+    source "'"$ROOT_DIR"'/lib/firewall.sh"
+    ui_init
+    render_local_security_hub_options
+  ' >"$security_narrow_tmp" 2>/dev/null; then
+  note_fail "narrow Security hub render failed"
+fi
+
+if grep -qE '\[1\].*\[5\]' "$security_narrow_tmp"; then
+  note_fail "Security hub did not switch to single-column at 70 columns"
+fi
+
+grep -q "Overview" "$security_narrow_tmp" \
+  || note_fail "narrow Security hub missing Overview"
+
+grep -q "Rollback snapshots" "$security_narrow_tmp" \
+  || note_fail "narrow Security hub missing Rollback snapshots"
+
+rm -f "$security_narrow_tmp"
+
+# Responsive and aligned Advanced navigation.
+advanced_120_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced-120.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh advanced >"$advanced_120_tmp" 2>/dev/null; then
+  note_fail "Advanced 120-column render failed"
+fi
+
+grep -qE '\[1\].*Installation & repair.*\[6\].*Domains & HTTPS' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing aligned Installation / Domains row"
+
+grep -qE '\[2\].*Deployment engine.*\[7\].*Credentials' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing Deployment / Credentials row"
+
+grep -qE '\[3\].*Services & logs.*\[8\].*Diagnostics' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing Services / Diagnostics row"
+
+grep -qE '\[4\].*Storage.*\[9\].*Developer tools' \
+  "$advanced_120_tmp" \
+  || note_fail "Advanced missing Storage / Developer tools row"
+
+grep -qE '\[5\].*Networking' "$advanced_120_tmp" \
+  || note_fail "Advanced missing Networking routing"
+
+if ! awk '
+  /^\+.*\+$/ {
+    last_border_width = length($0)
+  }
+
+  index($0, "Installation & repair") && index($0, "Domains & HTTPS") {
+    found = 1
+    row_width = length($0)
+
+    if (last_border_width == 0) bad = 1
+    if (row_width != last_border_width) bad = 1
+    if (substr($0, 1, 1) != "|") bad = 1
+    if (substr($0, row_width, 1) != "|") bad = 1
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$advanced_120_tmp"; then
+  note_fail "Advanced right border does not match its frame at 120 columns"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$advanced_120_tmp" \
+  || note_fail "Advanced missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$advanced_120_tmp" \
+  || note_fail "Advanced missing canonical Quit footer"
+
+rm -f "$advanced_120_tmp"
+
+advanced_80_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced-80.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=80 \
+  MENU_TERMINAL_COLS=80 \
+  ./erpnext-dev.sh advanced >"$advanced_80_tmp" 2>/dev/null; then
+  note_fail "Advanced 80-column render failed"
+fi
+
+grep -qE '\[1\].*\[6\]' "$advanced_80_tmp" \
+  || note_fail "Advanced did not retain two columns at 80 columns"
+
+if ! awk '
+  /^\+.*\+$/ {
+    last_border_width = length($0)
+  }
+
+  index($0, "Installation & repair") && index($0, "Domains & HTTPS") {
+    found = 1
+    row_width = length($0)
+
+    if (last_border_width == 0) bad = 1
+    if (row_width != last_border_width) bad = 1
+    if (substr($0, 1, 1) != "|") bad = 1
+    if (substr($0, row_width, 1) != "|") bad = 1
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$advanced_80_tmp"; then
+  note_fail "Advanced right border does not match its frame at 80 columns"
+fi
+
+rm -f "$advanced_80_tmp"
+
+advanced_70_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced-70.XXXXXX)"
+
+if ! printf 'q\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh advanced >"$advanced_70_tmp" 2>/dev/null; then
+  note_fail "Advanced 70-column render failed"
+fi
+
+if grep -qE '\[1\].*\[6\]' "$advanced_70_tmp"; then
+  note_fail "Advanced did not switch to single-column at 70 columns"
+fi
+
+grep -q "Installation & repair" "$advanced_70_tmp" \
+  || note_fail "narrow Advanced menu missing Installation & repair"
+
+grep -q "Developer tools" "$advanced_70_tmp" \
+  || note_fail "narrow Advanced menu missing Developer tools"
+
+rm -f "$advanced_70_tmp"
+
+# Categorized Help hub.
+help_hub_tmp="$(mktemp /tmp/erpnext-dev-ui-help-hub.XXXXXX)"
+
+if ! printf '12\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh menu >"$help_hub_tmp" 2>/dev/null; then
+  note_fail "Help hub render failed"
+fi
+
+grep -qE '\[1\].*Getting started.*\[5\].*Troubleshooting' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Getting started / Troubleshooting"
+
+grep -qE '\[2\].*Command reference.*\[6\].*Support tools' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Command reference / Support tools"
+
+grep -qE '\[3\].*Guides.*\[7\].*Version & install' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Guides / Version & install"
+
+grep -qE '\[4\].*Next recommended step.*\[8\].*Release information' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Next step / Release information"
+
+grep -qE '\[D\].*Doctor.*\[A\].*Command audit' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Doctor / Command audit"
+
+if grep -q "Common environment overrides" "$help_hub_tmp"; then
+  note_fail "main-menu Help still opens the full CLI help directly"
+fi
+
+if ! awk '
+  index($0, "Getting started") && index($0, "Troubleshooting") {
+    found = 1
+
+    if (length($0) != 120 || substr($0, 120, 1) != "|") {
+      bad = 1
+    }
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$help_hub_tmp"; then
+  note_fail "Help hub right border is not aligned at 120 columns"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$help_hub_tmp" \
+  || note_fail "Help hub missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$help_hub_tmp" \
+  || note_fail "Help hub missing canonical Quit footer"
+
+rm -f "$help_hub_tmp"
+
+help_narrow_tmp="$(mktemp /tmp/erpnext-dev-ui-help-narrow.XXXXXX)"
+
+if ! printf '12\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh menu >"$help_narrow_tmp" 2>/dev/null; then
+  note_fail "narrow Help hub render failed"
+fi
+
+if grep -qE '\[1\].*\[5\]' "$help_narrow_tmp"; then
+  note_fail "Help hub did not switch to single-column at 70 columns"
+fi
+
+grep -q "Getting started" "$help_narrow_tmp" \
+  || note_fail "narrow Help hub missing Getting started"
+
+grep -q "Release information" "$help_narrow_tmp" \
+  || note_fail "narrow Help hub missing Release information"
+
+rm -f "$help_narrow_tmp"
+
+# Local Development must use a fully aligned responsive boxed menu.
+for local_cols in 120 80; do
+  local_dev_tmp="$(
+    mktemp "/tmp/erpnext-dev-ui-local-${local_cols}.XXXXXX"
+  )"
+
+  if ! printf '2\nq\n' | env \
+    NO_COLOR=1 \
+    FORCE_NO_COLOR=1 \
+    TERM=dumb \
+    UI_FORCE_ASCII=1 \
+    MENU_NO_CLEAR=1 \
+    COLUMNS="$local_cols" \
+    MENU_TERMINAL_COLS="$local_cols" \
+    ./erpnext-dev.sh menu >"$local_dev_tmp" 2>/dev/null; then
+    note_fail \
+      "Local Development ${local_cols}-column render failed"
+  fi
+
+  grep -qE \
+    '\[1\].*Guided local setup.*\[6\].*Apps' \
+    "$local_dev_tmp" \
+    || note_fail \
+      "Local Development ${local_cols}-column first row is missing"
+
+  grep -qE \
+    '\[5\].*HTTPS & domains' \
+    "$local_dev_tmp" \
+    || note_fail \
+      "Local Development ${local_cols}-column final row is missing"
+
+  if ! awk -v expected="$local_cols" '
+    index($0, "Guided local setup") && index($0, "Apps") {
+      found = 1
+      width = length($0)
+
+      if (width != expected) bad = 1
+      if (substr($0, 1, 1) != "|") bad = 1
+      if (substr($0, width, 1) != "|") bad = 1
+    }
+
+    END {
+      if (found && !bad) exit 0
+      exit 1
+    }
+  ' "$local_dev_tmp"; then
+    note_fail \
+      "Local Development right border is not aligned at ${local_cols} columns"
+  fi
+
+  rm -f "$local_dev_tmp"
+done
+
+local_dev_narrow_tmp="$(
+  mktemp /tmp/erpnext-dev-ui-local-70.XXXXXX
+)"
+
+if ! printf '2\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh menu >"$local_dev_narrow_tmp" 2>/dev/null; then
+  note_fail "Local Development 70-column render failed"
+fi
+
+if grep -qE '\[1\].*\[6\]' "$local_dev_narrow_tmp"; then
+  note_fail \
+    "Local Development did not switch to one column at 70 columns"
+fi
+
+grep -q "Guided local setup" "$local_dev_narrow_tmp" \
+  || note_fail \
+    "narrow Local Development menu missing Guided local setup"
+
+grep -q "Setup lifecycle guide" "$local_dev_narrow_tmp" \
+  || note_fail \
+    "narrow Local Development menu missing Setup lifecycle guide"
+
+rm -f "$local_dev_narrow_tmp"
 
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2

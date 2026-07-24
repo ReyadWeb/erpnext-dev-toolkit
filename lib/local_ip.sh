@@ -157,9 +157,9 @@ local_ip_detect_method() {
     done < <(find "$dir" -maxdepth 1 \( -name '*.yaml' -o -name '*.yml' \) -print0 2>/dev/null || true)
   fi
 
-  if (( found_static == 1 && found_dhcp == 0 )); then
+  if ((found_static == 1 && found_dhcp == 0)); then
     printf 'static\n'
-  elif (( found_dhcp == 1 )); then
+  elif ((found_dhcp == 1)); then
     printf 'dhcp\n'
   else
     printf 'unknown\n'
@@ -168,7 +168,10 @@ local_ip_detect_method() {
 
 local_ip_prefix_for_iface() {
   local iface="${1:-}" cand
-  [[ -n "$iface" ]] || { printf '24\n'; return 0; }
+  [[ -n "$iface" ]] || {
+    printf '24\n'
+    return 0
+  }
   cand="$(ip -o -4 addr show dev "$iface" scope global 2>/dev/null | awk '{print $4; exit}' || true)"
   if [[ "$cand" == */* ]]; then
     printf '%s\n' "${cand##*/}"
@@ -755,7 +758,6 @@ show_local_ip_doc_guide() {
 
 show_local_ip_menu() {
   local back_target="${1:-return}"
-  local back_label="Main menu"
   while true; do
     ui_submenu_header "Local network / Stable IP" \
       "Keep ${SITE_NAME:-erp.test} working when the guest IP changes"
@@ -772,29 +774,59 @@ show_local_ip_menu() {
       "8) Hypervisor guide" \
       "9) KVM identify / reserve" \
       "10) Full docs pointer"
-    menu_footer back "$back_label"
+    ui_submenu_footer
     local choice=""
     menu_read_choice choice
 
     case "$choice" in
-      1) show_local_ip_status; pause_after_screen "Press Enter to return to Local network..." ;;
-      2) show_local_ip_plan; pause_after_screen "Press Enter to return to Local network..." ;;
-      3) run_local_ip_drift_check || true; pause_after_screen "Press Enter to return to Local network..." ;;
-      4) local_ip_save_mapping; pause_after_screen "Press Enter to return to Local network..." ;;
-      5) show_host_hosts_command; pause_after_screen "Press Enter to return to Local network..." ;;
-      6) run_local_static_ip_wizard; pause_after_screen "Press Enter to return to Local network..." ;;
-      7) run_local_static_ip_rollback || true; pause_after_screen "Press Enter to return to Local network..." ;;
-      8) show_local_ip_doc_guide; pause_after_screen "Press Enter to return to Local network..." ;;
-      9) show_kvm_vm_identification_guide; pause_after_screen "Press Enter to return to Local network..." ;;
-      10) show_local_ip_doc_guide "overview"; pause_after_screen "Press Enter to return to Local network..." ;;
-      b|B|"")
+      1)
+        show_local_ip_status
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      2)
+        show_local_ip_plan
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      3)
+        run_local_ip_drift_check || true
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      4)
+        local_ip_save_mapping
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      5)
+        show_host_hosts_command
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      6)
+        run_local_static_ip_wizard
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      7)
+        run_local_static_ip_rollback || true
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      8)
+        show_local_ip_doc_guide
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      9)
+        show_kvm_vm_identification_guide
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      10)
+        show_local_ip_doc_guide "overview"
+        pause_after_screen "Press Enter to return to Local network..."
+        ;;
+      b | B | "")
         if [[ "$back_target" == "main" ]]; then
           show_menu
           return 0
         fi
         return 0
         ;;
-      q|Q) exit 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done

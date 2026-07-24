@@ -34,18 +34,23 @@ systemd_service_active_detail() {
 health_backup_age_hours() {
   local latest_lines db_file now file_epoch
   latest_lines="$(backup_latest_set_paths 2>/dev/null || true)"
-  [[ -n "$latest_lines" ]] || { echo "unknown"; return 0; }
+  [[ -n "$latest_lines" ]] || {
+    echo "unknown"
+    return 0
+  }
   db_file="$(printf '%s\n' "$latest_lines" | sed -n '2p')"
-  [[ -n "$db_file" && -f "$db_file" ]] || { echo "unknown"; return 0; }
+  [[ -n "$db_file" && -f "$db_file" ]] || {
+    echo "unknown"
+    return 0
+  }
   now="$(date +%s)"
   file_epoch="$(stat -c %Y "$db_file" 2>/dev/null || echo 0)"
   if [[ "$file_epoch" =~ ^[0-9]+$ && "$file_epoch" -gt 0 ]]; then
-    echo $(( (now - file_epoch) / 3600 ))
+    echo $(((now - file_epoch) / 3600))
   else
     echo "unknown"
   fi
 }
-
 
 health_state_value() {
   local key="$1"
@@ -56,7 +61,7 @@ health_state_value() {
 health_check_write_state() {
   local overall="$1" installed="$2" runtime="$3" ssl_status="$4" disk_percent="$5" backup_state="$6" backup_age="$7" off_status="$8"
   mkdir -p "$(dirname "$HEALTH_CHECK_STATE_FILE")"
-  cat > "$HEALTH_CHECK_STATE_FILE" <<EOF_HEALTH_STATE
+  cat >"$HEALTH_CHECK_STATE_FILE" <<EOF_HEALTH_STATE
 HEALTH_CHECK_STATUS=${overall}
 HEALTH_CHECK_RECORDED_AT=$(date -Iseconds)
 HEALTH_CHECK_SITE=${SITE_NAME}
@@ -161,7 +166,7 @@ configure_health_check_timer() {
   fi
 
   log "Writing health check systemd units"
-  cat > "$service_file" <<EOF_HEALTH_SERVICE
+  cat >"$service_file" <<EOF_HEALTH_SERVICE
 [Unit]
 Description=ERPNext Developer Toolkit health check
 After=network-online.target
@@ -172,7 +177,7 @@ User=root
 ExecStart=${INSTALLER_CANONICAL_PATH} health-check
 EOF_HEALTH_SERVICE
 
-  cat > "$timer_file" <<EOF_HEALTH_TIMER
+  cat >"$timer_file" <<EOF_HEALTH_TIMER
 [Unit]
 Description=Run ERPNext Developer Toolkit health check periodically
 
@@ -266,19 +271,40 @@ health_monitoring_wizard() {
       "5) Disable health timer" \
       "6) Service recovery plan" \
       "7) Production checklist"
-    menu_footer
+    ui_submenu_footer
     local health_choice=""
     menu_read_choice health_choice
     case "$health_choice" in
-      1) run_health_check; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
-      2) configure_health_check_timer; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
-      3) show_health_check_status; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
-      4) show_health_check_journal; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
-      5) disable_health_check_timer; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
-      6) show_service_recovery_plan; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
-      7) show_production_checklist; pause_after_screen "Press Enter to return to Health Monitoring..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        run_health_check
+        pause_after_screen "Press Enter to return to Health Monitoring..."
+        ;;
+      2)
+        configure_health_check_timer
+        pause_after_screen "Press Enter to return to Health Monitoring..."
+        ;;
+      3)
+        show_health_check_status
+        pause_after_screen "Press Enter to return to Health Monitoring..."
+        ;;
+      4)
+        show_health_check_journal
+        pause_after_screen "Press Enter to return to Health Monitoring..."
+        ;;
+      5)
+        disable_health_check_timer
+        pause_after_screen "Press Enter to return to Health Monitoring..."
+        ;;
+      6)
+        show_service_recovery_plan
+        pause_after_screen "Press Enter to return to Health Monitoring..."
+        ;;
+      7)
+        show_production_checklist
+        pause_after_screen "Press Enter to return to Health Monitoring..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -335,7 +361,7 @@ go_live_bool_true() {
   local key="$1" value
   value="$(go_live_value "$key" 2>/dev/null || true)"
   case "${value,,}" in
-    true|yes|y|1|ok|confirmed) return 0 ;;
+    true | yes | y | 1 | ok | confirmed) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -375,10 +401,10 @@ go_live_summary_pair() {
   detail="recorded"
   [[ -n "$recorded_at" ]] && detail="${detail} ${recorded_at}"
   [[ -n "$snapshot_name" ]] && detail="${detail}; snapshot ${snapshot_name}"
-  case "${firewall,,}" in true|yes|y|1|ok|confirmed) detail="${detail}; cloud firewall confirmed" ;; *) detail="${detail}; cloud firewall not confirmed" ;; esac
-  case "${cf_proxy,,}" in true|yes|y|1|ok|confirmed) detail="${detail}; Cloudflare proxied" ;; *) detail="${detail}; Cloudflare proxy not confirmed" ;; esac
-  case "${cf_strict,,}" in true|yes|y|1|ok|confirmed) detail="${detail}; Full strict confirmed" ;; *) detail="${detail}; Full strict not confirmed" ;; esac
-  case "${cf_origin,,}" in true|yes|y|1|ok|confirmed) detail="${detail}; origin cert confirmed" ;; esac
+  case "${firewall,,}" in true | yes | y | 1 | ok | confirmed) detail="${detail}; cloud firewall confirmed" ;; *) detail="${detail}; cloud firewall not confirmed" ;; esac
+  case "${cf_proxy,,}" in true | yes | y | 1 | ok | confirmed) detail="${detail}; Cloudflare proxied" ;; *) detail="${detail}; Cloudflare proxy not confirmed" ;; esac
+  case "${cf_strict,,}" in true | yes | y | 1 | ok | confirmed) detail="${detail}; Full strict confirmed" ;; *) detail="${detail}; Full strict not confirmed" ;; esac
+  case "${cf_origin,,}" in true | yes | y | 1 | ok | confirmed) detail="${detail}; origin cert confirmed" ;; esac
   if go_live_recorded_ok; then
     printf 'OK|%s\n' "$detail"
   else
@@ -476,19 +502,19 @@ record_go_live_validation() {
     read -r -p "Snapshot name [${snapshot_name}]: " answer
     snapshot_name="${answer:-$snapshot_name}"
     read -r -p "Snapshot created/verified? [y/N]: " answer
-    case "$answer" in y|Y|yes|YES) snapshot_confirmed="true" ;; *) snapshot_confirmed="false" ;; esac
+    case "$answer" in y | Y | yes | YES) snapshot_confirmed="true" ;; *) snapshot_confirmed="false" ;; esac
     if deployment_engine_is_docker; then
       read -r -p "Cloud firewall confirmed? 22 admin IP, 80/443 open, direct Docker port not public [y/N]: " answer
     else
       read -r -p "Cloud firewall confirmed? 22 admin IP, 80/443 open, 8000/9000 blocked [y/N]: " answer
     fi
-    case "$answer" in y|Y|yes|YES) firewall_confirmed="true" ;; *) firewall_confirmed="false" ;; esac
+    case "$answer" in y | Y | yes | YES) firewall_confirmed="true" ;; *) firewall_confirmed="false" ;; esac
     read -r -p "Cloudflare DNS proxied/orange-cloud confirmed? [y/N]: " answer
-    case "$answer" in y|Y|yes|YES) cf_proxy="true" ;; *) cf_proxy="false" ;; esac
+    case "$answer" in y | Y | yes | YES) cf_proxy="true" ;; *) cf_proxy="false" ;; esac
     read -r -p "Cloudflare SSL/TLS Full (strict) confirmed? [y/N]: " answer
-    case "$answer" in y|Y|yes|YES) cf_strict="true" ;; *) cf_strict="false" ;; esac
+    case "$answer" in y | Y | yes | YES) cf_strict="true" ;; *) cf_strict="false" ;; esac
     read -r -p "Cloudflare Origin CA certificate active on Nginx? [Y/n]: " answer
-    case "$answer" in n|N|no|NO) cf_origin="false" ;; *) cf_origin="true" ;; esac
+    case "$answer" in n | N | no | NO) cf_origin="false" ;; *) cf_origin="true" ;; esac
     read -r -p "Notes [${notes}]: " answer
     notes="${answer:-$notes}"
   fi
@@ -499,7 +525,7 @@ record_go_live_validation() {
 
   local status="OK"
   for v in "$snapshot_confirmed" "$firewall_confirmed" "$cf_proxy" "$cf_strict"; do
-    case "${v,,}" in true|yes|y|1|ok|confirmed) : ;; *) status="WARN" ;; esac
+    case "${v,,}" in true | yes | y | 1 | ok | confirmed) : ;; *) status="WARN" ;; esac
   done
 
   config_dir="$(dirname "$GO_LIVE_RECORD_FILE")"
@@ -638,7 +664,6 @@ show_production_checklist() {
   ui_box_end
 }
 
-
 show_release_readiness() {
   require_sudo
 
@@ -647,9 +672,11 @@ show_release_readiness() {
   local docker_backup_dir docker_rehearsal_status docker_rehearsal_at
 
   if bash -n "$0" >/dev/null 2>&1; then
-    syntax_status="OK"; syntax_detail="bash syntax valid"
+    syntax_status="OK"
+    syntax_detail="bash syntax valid"
   else
-    syntax_status="FAIL"; syntax_detail="bash syntax check failed"
+    syntax_status="FAIL"
+    syntax_detail="bash syntax check failed"
   fi
 
   installed="$(install_state 2>/dev/null || echo "Unknown")"
@@ -814,22 +841,49 @@ final_qa_wizard() {
       "7) Restore rehearsal status" \
       "8) Health status" \
       "9) Go-live status"
-    menu_footer
+    ui_submenu_footer
     local choice=""
     menu_read_choice choice
 
     case "$choice" in
-      1) show_release_readiness; pause_after_screen "Press Enter to return to Final QA..." ;;
-      2) show_command_audit; pause_after_screen "Press Enter to return to Final QA..." ;;
-      3) show_production_checklist; pause_after_screen "Press Enter to return to Final QA..." ;;
-      4) verify_latest_backup_set; pause_after_screen "Press Enter to return to Final QA..." ;;
-      5) show_release_notes_guide; pause_after_screen "Press Enter to return to Final QA..." ;;
-      6) create_support_bundle; pause_after_screen "Press Enter to return to Final QA..." ;;
-      7) show_restore_rehearsal_status; pause_after_screen "Press Enter to return to Final QA..." ;;
-      8) show_health_check_status; pause_after_screen "Press Enter to return to Final QA..." ;;
-      9) show_go_live_status; pause_after_screen "Press Enter to return to Final QA..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        show_release_readiness
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      2)
+        show_command_audit
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      3)
+        show_production_checklist
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      4)
+        verify_latest_backup_set
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      5)
+        show_release_notes_guide
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      6)
+        create_support_bundle
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      7)
+        show_restore_rehearsal_status
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      8)
+        show_health_check_status
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      9)
+        show_go_live_status
+        pause_after_screen "Press Enter to return to Final QA..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *)
         if menu_invalid_choice "$choice" "type b to go back or q to quit"; then :; else
           [[ $? -eq 2 ]] && return 0
