@@ -699,16 +699,18 @@ show_local_development_menu() {
   while true; do
     ui_submenu_header "Local Development" \
       "Guided setup and the day-to-day tools for a local ERPNext VM"
-    print_two_column_menu \
-      "1) Guided local setup" \
-      "2) Status & health" \
-      "3) Service controls" \
-      "4) Access & networking" \
-      "5) HTTPS & domains" \
-      "6) Apps" \
-      "7) Credentials" \
-      "8) Environment check" \
-      "9) Setup lifecycle guide"
+
+    ui_render_boxed_menu \
+      "1|Guided local setup" \
+      "2|Status & health" \
+      "3|Service controls" \
+      "4|Access & networking" \
+      "5|HTTPS & domains" \
+      "6|Apps" \
+      "7|Credentials" \
+      "8|Environment check" \
+      "9|Setup lifecycle guide"
+
     ui_submenu_footer
     local choice=""
     menu_read_choice choice

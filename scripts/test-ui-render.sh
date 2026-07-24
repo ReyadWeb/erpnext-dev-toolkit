@@ -795,6 +795,90 @@ grep -q "Release information" "$help_narrow_tmp" \
 
 rm -f "$help_narrow_tmp"
 
+# Local Development must use a fully aligned responsive boxed menu.
+for local_cols in 120 80; do
+  local_dev_tmp="$(
+    mktemp "/tmp/erpnext-dev-ui-local-${local_cols}.XXXXXX"
+  )"
+
+  if ! printf '2\nq\n' | env \
+    NO_COLOR=1 \
+    FORCE_NO_COLOR=1 \
+    TERM=dumb \
+    UI_FORCE_ASCII=1 \
+    MENU_NO_CLEAR=1 \
+    COLUMNS="$local_cols" \
+    MENU_TERMINAL_COLS="$local_cols" \
+    ./erpnext-dev.sh menu >"$local_dev_tmp" 2>/dev/null; then
+    note_fail \
+      "Local Development ${local_cols}-column render failed"
+  fi
+
+  grep -qE \
+    '\[1\].*Guided local setup.*\[6\].*Apps' \
+    "$local_dev_tmp" \
+    || note_fail \
+      "Local Development ${local_cols}-column first row is missing"
+
+  grep -qE \
+    '\[5\].*HTTPS & domains' \
+    "$local_dev_tmp" \
+    || note_fail \
+      "Local Development ${local_cols}-column final row is missing"
+
+  if ! awk -v expected="$local_cols" '
+    index($0, "Guided local setup") && index($0, "Apps") {
+      found = 1
+      width = length($0)
+
+      if (width != expected) bad = 1
+      if (substr($0, 1, 1) != "|") bad = 1
+      if (substr($0, width, 1) != "|") bad = 1
+    }
+
+    END {
+      if (found && !bad) exit 0
+      exit 1
+    }
+  ' "$local_dev_tmp"; then
+    note_fail \
+      "Local Development right border is not aligned at ${local_cols} columns"
+  fi
+
+  rm -f "$local_dev_tmp"
+done
+
+local_dev_narrow_tmp="$(
+  mktemp /tmp/erpnext-dev-ui-local-70.XXXXXX
+)"
+
+if ! printf '2\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh menu >"$local_dev_narrow_tmp" 2>/dev/null; then
+  note_fail "Local Development 70-column render failed"
+fi
+
+if grep -qE '\[1\].*\[6\]' "$local_dev_narrow_tmp"; then
+  note_fail \
+    "Local Development did not switch to one column at 70 columns"
+fi
+
+grep -q "Guided local setup" "$local_dev_narrow_tmp" \
+  || note_fail \
+    "narrow Local Development menu missing Guided local setup"
+
+grep -q "Setup lifecycle guide" "$local_dev_narrow_tmp" \
+  || note_fail \
+    "narrow Local Development menu missing Setup lifecycle guide"
+
+rm -f "$local_dev_narrow_tmp"
+
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2
   echo "----- render output (compact) -----" >&2

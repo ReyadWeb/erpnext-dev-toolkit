@@ -428,7 +428,7 @@ ui_render_boxed_menu() {
       ui_text cyan "[${ln}]"
       printf ' %-*s ' "$((left_width - 5))" "$lt"
     else
-      printf '%-*s ' "$left_width" "$lt"
+      printf '%-*s ' "$((left_width - 1))" "$lt"
     fi
     printf '%s ' "$UI_DIV"
     if [[ -n "$right" ]]; then
@@ -447,10 +447,10 @@ ui_render_boxed_menu() {
         ui_text cyan "[${rn}]"
         printf ' %-*s' "$((right_width - 5))" "$rt"
       else
-        printf '%-*s' "$right_width" "$rt"
+        printf '%-*s' "$((right_width - 1))" "$rt"
       fi
     else
-      printf '%-*s' "$right_width" ""
+      printf '%-*s' "$((right_width - 1))" ""
     fi
     printf ' %s\n' "$UI_V"
   done
