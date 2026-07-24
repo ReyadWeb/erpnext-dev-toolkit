@@ -18,7 +18,7 @@ It supports two setup paths:
 > the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
 > installation, operations, and usage.
 
-**Current release:** v1.19.21-beta.4 · **Readiness:** Debian 13 native/local acceptance passed, including Logs navigation, static-IP DNS persistence, HTTPS, backup/restore, reboot, and autostart. Docker production optional-app validation remains before stable promotion; latest stable is v1.19.20.
+**Current release:** v1.19.22-beta.1 · **Readiness:** Debian 13 native acceptance passed for the responsive UI, Logs navigation, static-IP DNS persistence, HTTPS, backup/restore, reboot, and autostart. Combined beta CI and production regression validation remain pending; latest stable is v1.19.21.
 
 ### Beta testing channel
 
@@ -170,7 +170,7 @@ sha256sum -c SHA256SUMS
 Pin a **specific published** release (only after its Assets exist):
 
 ```bash
-VERSION="v1.19.21-beta.4"
+VERSION="v1.19.22-beta.1"
 REPO="ReyadWeb/erpnext-dev-toolkit"
 BASE="https://github.com/${REPO}/releases/download/${VERSION}"
 curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
