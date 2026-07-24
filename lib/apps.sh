@@ -503,8 +503,82 @@ print_downloaded_app_comparisons() {
   rm -f "$downloaded_tmp" "$installed_tmp" "$registered_tmp" "$diff_tmp"
 }
 
+run_docker_app_status() {
+  require_sudo
+
+  local site profile app label installed_tmp
+
+  site="$(docker_site_name)"
+  installed_tmp="$(mktemp /tmp/erpnext-dev-docker-app-status.XXXXXX)" || return 1
+
+  echo
+  echo "============================================================"
+  echo "App Status - Docker"
+  echo "============================================================"
+  status_line "Site" "INFO" "$site"
+  status_line "Docker mode" "INFO" "$(docker_mode_label)"
+  status_line "Runtime" "INFO" "$(runtime_state)"
+
+  echo
+  echo "Installed on site:"
+
+  if ! docker_bench --site "$site" list-apps >"$installed_tmp" 2>/dev/null; then
+    warn "Could not query installed apps from the Docker environment."
+    echo
+    echo "Check that the Docker stack is running, then run:"
+    echo "  $(toolkit_cmd app-status)"
+    rm -f "$installed_tmp"
+    return 1
+  fi
+
+  if [[ -s "$installed_tmp" ]]; then
+    sed 's/^/  /' "$installed_tmp"
+  else
+    echo "  none reported"
+  fi
+
+  echo
+  echo "Curated optional app status:"
+
+  while IFS= read -r profile; do
+    [[ -n "$profile" ]] || continue
+
+    app_profile_defaults "$profile" || continue
+
+    app="$LIB_APP_NAME"
+    label="$LIB_APP_DISPLAY ($(app_origin_label))"
+
+    if awk -v wanted="$app" '
+      $1 == wanted {
+        found = 1
+      }
+      END {
+        exit !found
+      }
+    ' "$installed_tmp"; then
+      status_line "$label" "OK" "installed on ${site}"
+    else
+      status_line "$label" "INFO" "not installed"
+    fi
+  done < <(app_profile_list)
+
+  rm -f "$installed_tmp"
+
+  echo
+  echo "Useful commands:"
+  echo "  $(toolkit_cmd verify-access)"
+  echo "  $(toolkit_cmd app-status)"
+  echo "  $(toolkit_cmd dashboard)"
+  echo "============================================================"
+}
+
 run_app_status() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    run_docker_app_status
+    return $?
+  fi
 
   local bench_dir bench_q site_q app label
   bench_dir="$(require_site_environment)" || return 1

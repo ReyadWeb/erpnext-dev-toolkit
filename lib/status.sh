@@ -12,7 +12,7 @@ recommended_action() {
   auto="$3"
 
   case "$installed" in
-    "Installed"|"Installed files found; site app not confirmed")
+    "Installed" | "Installed files found; site app not confirmed")
       if [[ "$runtime" == Running* ]]; then
         if [[ "$auto" == "Enabled" ]]; then
           echo "ERPNext is ready. Open the browser URL below."
@@ -312,36 +312,140 @@ run_service_summary() {
   echo "============================================================"
 }
 
+status_menu_render_option() {
+  local key="$1"
+  local label="$2"
+
+  ui_row_add_colored cyan "[$key]"
+  ui_row_add " $label"
+}
+
+status_menu_render_pair() {
+  local width="$1"
+  local left_key="$2"
+  local left_label="$3"
+  local right_key="${4:-}"
+  local right_label="${5:-}"
+  local second_column
+
+  second_column=$((width / 2))
+
+  ui_row_begin
+  status_menu_render_option "$left_key" "$left_label"
+
+  if [[ -n "$right_key" ]]; then
+    ui_row_pad_to "$second_column"
+    status_menu_render_option "$right_key" "$right_label"
+  fi
+
+  ui_row_end
+}
+
+render_status_menu_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    status_menu_render_pair "$width" "1" "Overview" "4" "Services"
+    status_menu_render_pair "$width" "2" "Runtime" "5" "Apps"
+    status_menu_render_pair "$width" "3" "Installation" "6" "Health report"
+
+    ui_box_line mid "$width"
+
+    status_menu_render_pair "$width" "D" "Dashboard" "X" "Doctor"
+    status_menu_render_pair "$width" "R" "Readiness"
+  else
+    status_menu_render_pair "$width" "1" "Overview"
+    status_menu_render_pair "$width" "2" "Runtime"
+    status_menu_render_pair "$width" "3" "Installation"
+    status_menu_render_pair "$width" "4" "Services"
+    status_menu_render_pair "$width" "5" "Apps"
+    status_menu_render_pair "$width" "6" "Health report"
+
+    ui_box_line mid "$width"
+
+    status_menu_render_pair "$width" "D" "Dashboard"
+    status_menu_render_pair "$width" "X" "Doctor"
+    status_menu_render_pair "$width" "R" "Readiness"
+  fi
+
+  ui_box_line bot "$width"
+}
+
+status_menu_footer() {
+  echo
+  ui_text cyan "B."
+  printf ' Back'
+  printf '                        '
+  ui_text orange "Q."
+  printf ' Quit
+'
+}
+
 show_status_menu() {
   while true; do
-    ui_submenu_header "Status & Health" "Runtime, installation, services, apps, and full health views"
-    print_two_column_menu \
-      "1) Status Summary" \
-      "2) Runtime Status" \
-      "3) Installation Status" \
-      "4) Service / Autostart Status" \
-      "5) Optional App Status" \
-      "6) Full Health Report"
-    menu_footer
+    ui_submenu_header "Status" \
+      "Environment, installation, runtime, and health."
+
+    render_status_menu_options
+
+    status_menu_footer
+
     local status_choice=""
     menu_read_choice status_choice
 
     case "$status_choice" in
-      1) run_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      2) run_runtime_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      3) run_installation_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      4) run_service_summary; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      5) run_app_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      6) run_full_status; pause_after_screen "Press Enter to return to Status Menu..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
-      *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
+      1)
+        run_status
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      2)
+        run_runtime_status
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      3)
+        run_installation_status
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      4)
+        run_service_summary
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      5)
+        run_app_status
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      6)
+        run_full_status
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      d | D)
+        run_operations_dashboard
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      x | X)
+        run_doctor_plain
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      r | R)
+        show_release_readiness
+        pause_after_screen "Press Enter to return to Status..."
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
     esac
   done
 }
-
-
-
 
 run_full_status() {
   require_sudo
