@@ -758,7 +758,6 @@ show_local_ip_doc_guide() {
 
 show_local_ip_menu() {
   local back_target="${1:-return}"
-  local back_label="Main menu"
   while true; do
     ui_submenu_header "Local network / Stable IP" \
       "Keep ${SITE_NAME:-erp.test} working when the guest IP changes"

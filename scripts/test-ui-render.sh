@@ -443,6 +443,138 @@ grep -q "Restore" "$backup_narrow_tmp" \
 
 rm -f "$backup_narrow_tmp"
 
+# Environment-aware Security hub.
+security_local_tmp="$(mktemp /tmp/erpnext-dev-ui-security-local.XXXXXX)"
+
+if ! env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  bash -c '
+    source "'"$ROOT_DIR"'/lib/common.sh"
+    source "'"$ROOT_DIR"'/lib/ui.sh"
+    source "'"$ROOT_DIR"'/lib/firewall.sh"
+    ui_init
+    render_local_security_hub_options
+    ui_submenu_footer
+  ' >"$security_local_tmp" 2>/dev/null; then
+  note_fail "local Security hub render failed"
+fi
+
+grep -qE '\[1\].*Overview.*\[5\].*Intrusion protection' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Overview / Intrusion protection"
+
+grep -qE '\[2\].*Hardening.*\[6\].*Credentials' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Hardening / Credentials"
+
+grep -qE '\[3\].*Firewall.*\[7\].*Security audit' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Firewall / Security audit"
+
+grep -qE '\[4\].*Access recovery.*\[8\].*Rollback snapshots' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing recovery routing"
+
+grep -qE '\[S\].*Status.*\[G\].*Guidance' \
+  "$security_local_tmp" \
+  || note_fail "local Security hub missing Status / Guidance"
+
+if grep -q "Cloud guidance" "$security_local_tmp"; then
+  note_fail "local Security hub exposes production Cloud guidance"
+fi
+
+if ! awk '
+  index($0, "Overview") && index($0, "Intrusion protection") {
+    found = 1
+
+    if (length($0) != 120 || substr($0, 120, 1) != "|") {
+      bad = 1
+    }
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$security_local_tmp"; then
+  note_fail "local Security hub right border is not aligned"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$security_local_tmp" \
+  || note_fail "local Security hub missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$security_local_tmp" \
+  || note_fail "local Security hub missing canonical Quit footer"
+
+rm -f "$security_local_tmp"
+
+security_prod_tmp="$(mktemp /tmp/erpnext-dev-ui-security-production.XXXXXX)"
+
+if ! env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  bash -c '
+    source "'"$ROOT_DIR"'/lib/common.sh"
+    source "'"$ROOT_DIR"'/lib/ui.sh"
+    source "'"$ROOT_DIR"'/lib/firewall.sh"
+    ui_init
+    render_production_security_hub_options
+    ui_submenu_footer
+  ' >"$security_prod_tmp" 2>/dev/null; then
+  note_fail "production Security hub render failed"
+fi
+
+grep -qE '\[4\].*Exposure.*\[8\].*Recovery' "$security_prod_tmp" \
+  || note_fail "production Security hub missing Exposure / Recovery"
+
+grep -qE '\[S\].*Status.*\[G\].*Cloud guidance' "$security_prod_tmp" \
+  || note_fail "production Security hub missing Status / Cloud guidance"
+
+if grep -q "Access recovery" "$security_prod_tmp"; then
+  note_fail "production Security hub exposes local Access recovery"
+fi
+
+rm -f "$security_prod_tmp"
+
+security_narrow_tmp="$(mktemp /tmp/erpnext-dev-ui-security-narrow.XXXXXX)"
+
+if ! env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  bash -c '
+    source "'"$ROOT_DIR"'/lib/common.sh"
+    source "'"$ROOT_DIR"'/lib/ui.sh"
+    source "'"$ROOT_DIR"'/lib/firewall.sh"
+    ui_init
+    render_local_security_hub_options
+  ' >"$security_narrow_tmp" 2>/dev/null; then
+  note_fail "narrow Security hub render failed"
+fi
+
+if grep -qE '\[1\].*\[5\]' "$security_narrow_tmp"; then
+  note_fail "Security hub did not switch to single-column at 70 columns"
+fi
+
+grep -q "Overview" "$security_narrow_tmp" \
+  || note_fail "narrow Security hub missing Overview"
+
+grep -q "Rollback snapshots" "$security_narrow_tmp" \
+  || note_fail "narrow Security hub missing Rollback snapshots"
+
+rm -f "$security_narrow_tmp"
+
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2
   echo "----- render output (compact) -----" >&2

@@ -934,77 +934,647 @@ EOF
   ui_next "$(toolkit_cmd fail2ban-status)" "$(toolkit_cmd security-hardening-wizard)"
 }
 
-security_hardening_wizard() {
-  local choice
+security_menu_is_production() {
+  case "${SECURITY_MENU_CONTEXT:-auto}" in
+    production)
+      return 0
+      ;;
+    local)
+      return 1
+      ;;
+  esac
 
-  require_sudo
-  while true; do
-    ui_submenu_header "Security Hardening" \
-      "Local VM profile for erp.test · Production only after domain + HTTPS"
-    security_mode_status
+  if declare -F docker_is_production >/dev/null 2>&1 \
+    && docker_is_production 2>/dev/null; then
+    return 0
+  fi
+
+  if declare -F is_public_vm_workflow >/dev/null 2>&1 \
+    && is_public_vm_workflow 2>/dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+security_menu_render_option() {
+  local key="$1"
+  local label="$2"
+
+  ui_row_add_colored cyan "[$key]"
+  ui_row_add " $label"
+}
+
+security_menu_render_pair() {
+  local width="$1"
+  local left_key="$2"
+  local left_label="$3"
+  local right_key="${4:-}"
+  local right_label="${5:-}"
+  local content_width left_cell_width left_target
+
+  content_width=$((width - 6))
+  left_cell_width=$((content_width / 2))
+  left_target=$((1 + left_cell_width))
+
+  ui_row_begin
+  security_menu_render_option "$left_key" "$left_label"
+
+  if [[ -n "$right_key" ]]; then
+    ui_row_pad_to "$left_target"
+    ui_row_add " "
+    ui_row_add_colored muted "$UI_DIV"
+    ui_row_add " "
+    security_menu_render_option "$right_key" "$right_label"
+  fi
+
+  ui_row_end
+}
+
+render_local_security_hub_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    security_menu_render_pair \
+      "$width" "1" "Overview" \
+      "5" "Intrusion protection"
+
+    security_menu_render_pair \
+      "$width" "2" "Hardening" \
+      "6" "Credentials"
+
+    security_menu_render_pair \
+      "$width" "3" "Firewall" \
+      "7" "Security audit"
+
+    security_menu_render_pair \
+      "$width" "4" "Access recovery" \
+      "8" "Rollback snapshots"
+  else
+    security_menu_render_pair "$width" "1" "Overview"
+    security_menu_render_pair "$width" "2" "Hardening"
+    security_menu_render_pair "$width" "3" "Firewall"
+    security_menu_render_pair "$width" "4" "Access recovery"
+    security_menu_render_pair "$width" "5" "Intrusion protection"
+    security_menu_render_pair "$width" "6" "Credentials"
+    security_menu_render_pair "$width" "7" "Security audit"
+    security_menu_render_pair "$width" "8" "Rollback snapshots"
+  fi
+
+  ui_box_line mid "$width"
+
+  if ((width >= 80)); then
+    security_menu_render_pair \
+      "$width" "S" "Status" \
+      "G" "Guidance"
+  else
+    security_menu_render_pair "$width" "S" "Status"
+    security_menu_render_pair "$width" "G" "Guidance"
+  fi
+
+  ui_box_line bot "$width"
+}
+
+render_production_security_hub_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    security_menu_render_pair \
+      "$width" "1" "Overview" \
+      "5" "Intrusion protection"
+
+    security_menu_render_pair \
+      "$width" "2" "Hardening" \
+      "6" "Credentials"
+
+    security_menu_render_pair \
+      "$width" "3" "Firewall" \
+      "7" "Security audit"
+
+    security_menu_render_pair \
+      "$width" "4" "Exposure" \
+      "8" "Recovery"
+  else
+    security_menu_render_pair "$width" "1" "Overview"
+    security_menu_render_pair "$width" "2" "Hardening"
+    security_menu_render_pair "$width" "3" "Firewall"
+    security_menu_render_pair "$width" "4" "Exposure"
+    security_menu_render_pair "$width" "5" "Intrusion protection"
+    security_menu_render_pair "$width" "6" "Credentials"
+    security_menu_render_pair "$width" "7" "Security audit"
+    security_menu_render_pair "$width" "8" "Recovery"
+  fi
+
+  ui_box_line mid "$width"
+
+  if ((width >= 80)); then
+    security_menu_render_pair \
+      "$width" "S" "Status" \
+      "G" "Cloud guidance"
+  else
+    security_menu_render_pair "$width" "S" "Status"
+    security_menu_render_pair "$width" "G" "Cloud guidance"
+  fi
+
+  ui_box_line bot "$width"
+}
+
+security_menu_summary_state() {
+  local summary="$1"
+  local label="$2"
+  local line stripped rest state
+
+  while IFS= read -r line; do
+    stripped="${line#"${line%%[![:space:]]*}"}"
+
+    if [[ "$stripped" == "$label"* ]]; then
+      rest="${stripped#"$label"}"
+      IFS=$' 	' read -r state _ <<<"$rest"
+      printf '%s' "${state:-INFO}"
+      return 0
+    fi
+  done <<<"$summary"
+
+  printf 'INFO'
+}
+
+security_menu_indicator_color() {
+  case "${1:-INFO}" in
+    OK)
+      printf 'green'
+      ;;
+    WARN)
+      printf 'orange'
+      ;;
+    FAIL | ERROR | CRITICAL)
+      printf 'red'
+      ;;
+    *)
+      printf 'muted'
+      ;;
+  esac
+}
+
+security_menu_indicator_symbol() {
+  local color="${1:-muted}"
+
+  if [[ -n "${NO_COLOR:-}" || "${FORCE_NO_COLOR:-0}" == "1" ]]; then
+    case "$color" in
+      green)
+        printf '+'
+        ;;
+      orange)
+        printf '!'
+        ;;
+      red)
+        printf 'x'
+        ;;
+      *)
+        printf '-'
+        ;;
+    esac
+
+    return 0
+  fi
+
+  if ((${UI_UNICODE:-0} == 1)); then
+    if [[ "$color" == "muted" ]]; then
+      printf '○'
+    else
+      printf '●'
+    fi
+  else
+    case "$color" in
+      green)
+        printf '+'
+        ;;
+      orange)
+        printf '!'
+        ;;
+      red)
+        printf 'x'
+        ;;
+      *)
+        printf '-'
+        ;;
+    esac
+  fi
+}
+
+security_menu_add_indicator() {
+  local label="$1"
+  local state="$2"
+  local color symbol
+
+  color="$(security_menu_indicator_color "$state")"
+  symbol="$(security_menu_indicator_symbol "$color")"
+
+  ui_row_add_colored cyan "$label"
+  ui_row_add " "
+  ui_row_add_colored "$color" "$symbol"
+}
+
+security_menu_firewall_state() {
+  local first_line=""
+
+  if ! command -v ufw >/dev/null 2>&1; then
+    printf 'INFO'
+    return 0
+  fi
+
+  first_line="$(ufw status 2>/dev/null | head -n 1 || true)"
+
+  case "$first_line" in
+    *"Status: active"*)
+      printf 'OK'
+      ;;
+    *"Status: inactive"*)
+      printf 'WARN'
+      ;;
+    *)
+      printf 'INFO'
+      ;;
+  esac
+}
+
+security_menu_fail2ban_state() {
+  if ! command -v fail2ban-client >/dev/null 2>&1; then
+    printf 'INFO'
+  elif systemctl is-active --quiet fail2ban 2>/dev/null; then
+    printf 'OK'
+  else
+    printf 'WARN'
+  fi
+}
+
+security_menu_credentials_state() {
+  local cred_file=""
+
+  if declare -F credentials_file_path >/dev/null 2>&1; then
+    cred_file="$(credentials_file_path 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$cred_file" ]]; then
+    printf 'INFO'
+  elif path_is_file "$cred_file"; then
+    # A plaintext credential record still present requires secure handoff.
+    printf 'WARN'
+  else
+    printf 'OK'
+  fi
+}
+
+render_security_state_strip() {
+  local width summary https_label
+  local profile_state firewall_state https_state
+  local fail2ban_state credentials_state
+
+  width="$(ui_panel_width)"
+  summary="$(
+    NO_COLOR=1 \
+      FORCE_NO_COLOR=1 \
+      security_mode_status 2>/dev/null || true
+  )"
+
+  profile_state="OK"
+  firewall_state="$(security_menu_firewall_state)"
+
+  if security_menu_is_production; then
+    https_label="Production HTTPS"
+  else
+    https_label="Local HTTPS"
+  fi
+
+  https_state="$(
+    security_menu_summary_state "$summary" "$https_label"
+  )"
+
+  fail2ban_state="$(security_menu_fail2ban_state)"
+  credentials_state="$(security_menu_credentials_state)"
+
+  ui_box_titled_top "Current state" "$width"
+
+  if ((width >= 90)); then
+    ui_row_begin
+    security_menu_add_indicator "Profile" "$profile_state"
+    ui_row_add "   "
+    security_menu_add_indicator "Firewall" "$firewall_state"
+    ui_row_add "   "
+    security_menu_add_indicator "HTTPS" "$https_state"
+    ui_row_add "   "
+    security_menu_add_indicator "Fail2Ban" "$fail2ban_state"
+    ui_row_add "   "
+    security_menu_add_indicator "Credentials" "$credentials_state"
+    ui_row_end
+  else
+    ui_row_begin
+    security_menu_add_indicator "Profile" "$profile_state"
+    ui_row_add "   "
+    security_menu_add_indicator "Firewall" "$firewall_state"
+    ui_row_add "   "
+    security_menu_add_indicator "HTTPS" "$https_state"
+    ui_row_end
+
+    ui_row_begin
+    security_menu_add_indicator "Fail2Ban" "$fail2ban_state"
+    ui_row_add "   "
+    security_menu_add_indicator "Credentials" "$credentials_state"
+    ui_row_end
+  fi
+
+  ui_box_line bot "$width"
+}
+
+security_overview_page() {
+  ui_submenu_header "Security Overview" \
+    "Review firewall, intrusion protection, and credential posture."
+
+  show_firewall_hardening_status || true
+
+  echo
+  show_fail2ban_status || true
+
+  if declare -F show_credentials_file_status >/dev/null 2>&1; then
     echo
-    print_two_column_menu \
-      "1) Security mode status" \
-      "2) Local VM firewall profile" \
-      "3) Production firewall profile" \
-      "4) Environment-aware firewall" \
-      "5) Repair local VM access" \
-      "6) UFW status" \
-      "7) Apply Fail2Ban for SSH" \
-      "8) Fail2Ban status" \
-      "9) Public firewall status" \
-      "10) Firewall rollback snapshots" \
-      "11) Advanced: restrict SSH in UFW"
+    show_credentials_file_status || true
+  fi
+}
+
+security_status_page() {
+  ui_submenu_header "Security Status" \
+    "Detailed deployment profile, access mode, HTTPS, and firewall state."
+
+  security_mode_status
+}
+
+security_firewall_menu() {
+  local production_mode=0
+
+  security_menu_is_production && production_mode=1
+
+  while true; do
+    local width choice=""
+
+    if ((production_mode == 1)); then
+      ui_submenu_header "Firewall" \
+        "Inspect or apply the production firewall profile."
+    else
+      ui_submenu_header "Firewall" \
+        "Inspect or apply the local VM firewall profile."
+    fi
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      security_menu_render_pair \
+        "$width" "1" "Firewall status" \
+        "2" "Apply firewall profile"
+
+      security_menu_render_pair \
+        "$width" "3" "Advanced SSH restrictions"
+    else
+      security_menu_render_pair "$width" "1" "Firewall status"
+      security_menu_render_pair "$width" "2" "Apply firewall profile"
+      security_menu_render_pair "$width" "3" "Advanced SSH restrictions"
+    fi
+
+    ui_box_line bot "$width"
     ui_submenu_footer
+
     menu_read_choice choice
+
     case "$choice" in
       1)
-        security_mode_status
-        pause_after_screen "Press Enter to return to Security..."
+        show_vm_firewall_status
+        pause_after_screen "Press Enter to return to Firewall..."
         ;;
       2)
-        configure_local_vm_firewall
-        pause_after_screen "Press Enter to return to Security..."
+        if ((production_mode == 1)); then
+          configure_production_vm_firewall
+        else
+          configure_local_vm_firewall
+        fi
+
+        pause_after_screen "Press Enter to return to Firewall..."
         ;;
       3)
-        configure_production_vm_firewall
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      4)
-        configure_vm_firewall
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      5)
-        repair_local_access
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      6)
-        show_vm_firewall_status
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      7)
-        configure_fail2ban
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      8)
-        show_fail2ban_status
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      9)
-        show_firewall_hardening_status
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      10)
-        show_firewall_rollback_snapshots
-        pause_after_screen "Press Enter to return to Security..."
-        ;;
-      11)
         configure_ufw_ssh_admin_only
-        pause_after_screen "Press Enter to return to Security..."
+        pause_after_screen "Press Enter to return to Firewall..."
         ;;
-      b | B | "") return 0 ;;
-      q | Q) exit 0 ;;
-      *) warn "Invalid option." ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
     esac
+  done
+}
+
+security_intrusion_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Intrusion Protection" \
+      "Inspect or configure Fail2Ban protection for SSH."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      security_menu_render_pair \
+        "$width" "1" "Fail2Ban status" \
+        "2" "Configure Fail2Ban"
+    else
+      security_menu_render_pair "$width" "1" "Fail2Ban status"
+      security_menu_render_pair "$width" "2" "Configure Fail2Ban"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        show_fail2ban_status
+        pause_after_screen "Press Enter to return to Intrusion Protection..."
+        ;;
+      2)
+        configure_fail2ban
+        pause_after_screen "Press Enter to return to Intrusion Protection..."
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+security_guidance_page() {
+  if security_menu_is_production; then
+    show_production_firewall_plan
+
+    if declare -F show_cloud_firewall_checklist >/dev/null 2>&1; then
+      echo
+      show_cloud_firewall_checklist
+    fi
+  elif declare -F vm_firewall_plan >/dev/null 2>&1; then
+    vm_firewall_plan
+  else
+    security_mode_status
+
+    echo
+    echo "Recommended local profile:"
+    echo "  $(toolkit_cmd local-firewall-profile)"
+  fi
+}
+
+security_hardening_wizard() {
+  local production_mode=0
+
+  require_sudo
+  security_menu_is_production && production_mode=1
+
+  while true; do
+    local choice=""
+
+    if ((production_mode == 1)); then
+      ui_submenu_header "Security" \
+        "Protect production access, services, credentials, and exposure."
+    else
+      ui_submenu_header "Security" \
+        "Protect local access, credentials, services, and the VM."
+    fi
+
+    render_security_state_strip
+    echo
+
+    if ((production_mode == 1)); then
+      render_production_security_hub_options
+    else
+      render_local_security_hub_options
+    fi
+
+    ui_submenu_footer
+    menu_read_choice choice
+
+    if ((production_mode == 1)); then
+      case "$choice" in
+        1)
+          security_overview_page
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        2)
+          configure_vm_firewall
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        3)
+          security_firewall_menu
+          ;;
+        4)
+          show_firewall_hardening_status
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        5)
+          security_intrusion_menu
+          ;;
+        6)
+          show_credentials_menu
+          ;;
+        7)
+          run_security_audit
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        8)
+          show_firewall_rollback_snapshots
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        s | S)
+          security_status_page
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        g | G)
+          security_guidance_page
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        b | B | "")
+          return 0
+          ;;
+        q | Q)
+          exit 0
+          ;;
+        *)
+          warn "Invalid option"
+          ;;
+      esac
+    else
+      case "$choice" in
+        1)
+          security_overview_page
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        2)
+          configure_vm_firewall
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        3)
+          security_firewall_menu
+          ;;
+        4)
+          repair_local_access
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        5)
+          security_intrusion_menu
+          ;;
+        6)
+          show_credentials_menu
+          ;;
+        7)
+          run_security_audit
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        8)
+          show_firewall_rollback_snapshots
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        s | S)
+          security_status_page
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        g | G)
+          security_guidance_page
+          pause_after_screen "Press Enter to return to Security..."
+          ;;
+        b | B | "")
+          return 0
+          ;;
+        q | Q)
+          exit 0
+          ;;
+        *)
+          warn "Invalid option"
+          ;;
+      esac
+    fi
   done
 }
