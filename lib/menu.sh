@@ -1758,7 +1758,11 @@ show_menu() {
         run_operations_dashboard
         pause_after_screen "Press Enter to return to Main menu..."
         ;;
-      l | L) engine_runtime_logs ;;
+      l | L)
+        ui_clear_screen
+        engine_runtime_logs
+        pause_after_screen "Press Enter to return to Main menu..."
+        ;;
       q | Q) exit 0 ;;
       *)
         warn "Invalid option"
