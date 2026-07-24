@@ -19,7 +19,7 @@ erpnext_dev_init_terminal_colors() {
   fi
 
   if [[ -n "${NO_COLOR:-}" || "${FORCE_NO_COLOR:-0}" -eq 1 ]] \
-     || [[ "${ERPNEXT_DEV_STDOUT_TTY}" != "1" ]]; then
+    || [[ "${ERPNEXT_DEV_STDOUT_TTY}" != "1" ]]; then
     BOLD=""
     GREEN=""
     YELLOW=""
@@ -76,7 +76,11 @@ log() { echo -e "\n${BLUE}==>${RESET} ${BOLD}$*${RESET}"; }
 ok() { echo -e "${GREEN}OK:${RESET} $*"; }
 warn() { echo -e "${YELLOW}WARN:${RESET} $*"; }
 err() { echo -e "${RED}ERROR:${RESET} $*" >&2; }
-fail() { err "$*"; echo "Log file: $LOG_FILE" >&2; exit 1; }
+fail() {
+  err "$*"
+  echo "Log file: $LOG_FILE" >&2
+  exit 1
+}
 
 # Create a private lock directory owned by this user with mode 0700. Returns 0 if
 # the directory is safe to use (exists, is a real dir, not a symlink, owned by us).
@@ -244,7 +248,7 @@ clear_toolkit_lock() {
 action_requires_lock() {
   local action="${1:-menu}"
   case "$action" in
-    ""|menu|first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|public-vm-guided-setup|public-guided-setup|production-guided-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|guided-setup|setup|install|repair|start|stop|uninstall|advanced|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|restore-rehearsal-status|restore-rehearsal-record|restore-rehearsal-report|go-live-record|go-live-status|cloud-firewall-checklist|cloudflare-checklist|restore-rehearsal-wizard|restore-key-setup|pull-off-vm-backup|backup-server-add-restore-key|backup-server-remove-restore-key|backup-server-list-restore-keys|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|off-vm-backup-guided-setup|generate-off-vm-backup-key|off-vm-backup-keygen|backup-server-setup|prepare-backup-server|off-vm-backup-server-setup|configure-rsync-backup-target|off-vm-trust-host-key|off-vm-verify-host-key|off-vm-strict-host-key-enable|off-vm-strict-host-key-disable|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|credentials-menu|login-menu|reset-admin-password|admin-password-reset|health-check|health-check-run-now|configure-health-check-timer|health-check-status|health-check-journal|disable-health-check-timer|health-monitoring-wizard|production-monitoring-wizard|dashboard|ops-dashboard-v2|health-snapshot|incidents|incident-show|health-history|health-metrics|openmetrics|service-recovery-plan|restore-preflight|production-ops-wizard|production-ops-dashboard|operations-wizard|operations-dashboard|ops-wizard|ops-dashboard|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|verify-frontend-assets|wait-frontend-assets|repair-frontend-assets|frappe-asset-checklist|frappe-frontend-assets|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|disable-production-ssl|configure-vm-firewall|vm-firewall-wizard|security-hardening-wizard|security-mode-status|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|local-access-doctor|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|host-dns-guide|print-hosts-command|local-ip-menu|local-network|local-network-menu|local-ip-status|local-ip-plan|local-ip-drift-check|local-ip-save|local-static-ip-wizard|local-static-ip-rollback|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|firewall-rollback-snapshots|configure-fail2ban|ufw-ssh-admin-only|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|repair-site-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|expand-root-storage|app-library|apps|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-raven|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|repair-app-registry|install-cli|repair-cli|update-toolkit|verify-toolkit|toolkit-verify|verify-install)
+    "" | menu | first-run | start-here | quickstart | setup-wizard | public-vm-quickstart | public-setup | public-vm-guided-setup | public-guided-setup | production-guided-setup | local-dev-quickstart | local-setup | install-preflight | environment-preflight | set-domain | guided-setup | setup | install | repair | start | stop | uninstall | advanced | backup-menu | backup | backup-files | backup-status | backup-verify | verify-backups | off-vm-backup-guide | restore-rehearsal-guide | restore-rehearsal-status | restore-rehearsal-record | restore-rehearsal-report | go-live-record | go-live-status | cloud-firewall-checklist | cloudflare-checklist | restore-rehearsal-wizard | restore-key-setup | pull-off-vm-backup | backup-server-add-restore-key | backup-server-remove-restore-key | backup-server-list-restore-keys | production-checklist | release-readiness | final-qa | final-qa-wizard | command-audit | release-notes-guide | backup-hardening-wizard | backup-wizard | backup-schedule-plan | configure-backup-schedule | backup-schedule-status | scheduled-backup-status | disable-backup-schedule | scheduled-backups | backup-retention-plan | backup-retention-status | cleanup-old-backups | cleanup-old-backups-dry-run | backup-cleanup-dry-run | backup-cleanup | off-vm-backup-plan | off-vm-backup-guided-setup | generate-off-vm-backup-key | off-vm-backup-keygen | backup-server-setup | prepare-backup-server | off-vm-backup-server-setup | configure-rsync-backup-target | off-vm-trust-host-key | off-vm-verify-host-key | off-vm-strict-host-key-enable | off-vm-strict-host-key-disable | off-vm-backup-dry-run | run-off-vm-backup | off-vm-backup-status | disable-off-vm-backup | off-vm-backup-wizard | credentials-info | credentials | login-info | credentials-show | show-credentials | credentials-file-status | credentials-secure | credentials-delete | credentials-menu | login-menu | reset-admin-password | admin-password-reset | health-check | health-check-run-now | configure-health-check-timer | health-check-status | health-check-journal | disable-health-check-timer | health-monitoring-wizard | production-monitoring-wizard | dashboard | ops-dashboard-v2 | health-snapshot | incidents | incident-show | health-history | health-metrics | openmetrics | service-recovery-plan | restore-preflight | production-ops-wizard | production-ops-dashboard | operations-wizard | operations-dashboard | ops-wizard | ops-dashboard | restore-db | restore-full | maintenance | migrate | build | clear-cache | restart | verify-frontend-assets | wait-frontend-assets | repair-frontend-assets | frappe-asset-checklist | frappe-frontend-assets | foreground-start | enable-autostart | disable-autostart | service-start | service-stop | service-restart | install-local-ssl-cert | replace-local-ssl-cert | create-self-signed-local-cert | self-signed-local-cert | configure-local-ssl | disable-local-ssl | production-ssl-menu | production-https | production-https-menu | configure-production-ssl | production-ssl-wizard | ssl-provider-wizard | ssl-mode-status | ssl-mode-guide | ssl-compatibility | setup-effort-guide | setup-step-count | setup-lifecycle-plan | setup-order-plan | configure-cloudflare-origin-ssl | install-cloudflare-origin-cert | switch-to-cloudflare-origin-ssl | disable-production-ssl | configure-vm-firewall | vm-firewall-wizard | security-hardening-wizard | security-mode-status | local-firewall-profile | local-security-profile | production-firewall-profile | production-security-profile | repair-local-access | local-access-doctor | local-domain-status | local-host-checkpoint | host-dns-checkpoint | host-mapping-checkpoint | host-dns-guide | print-hosts-command | local-ip-menu | local-network | local-network-menu | local-ip-status | local-ip-plan | local-ip-drift-check | local-ip-save | local-static-ip-wizard | local-static-ip-rollback | local-fixed-ip-guide | fixed-ip-guide | kvm-fixed-ip-guide | firewall-rollback-snapshots | configure-fail2ban | ufw-ssh-admin-only | local-ssl-menu | local-https | local-vm-ssl | local-ssl-wizard | ssl-wizard | trusted-mkcert-setup | mkcert-setup | repair-site-config | change-local-domain | local-domain-wizard | rename-local-site | change-site-domain | expand-root-storage | app-library | apps | app-install-wizard | app-wizard | app-install-guide | app-rollback-guide | install-crm | install-hrms | install-helpdesk | install-telephony | install-insights | install-payments | install-webshop | install-ecommerce | install-builder | install-lms | install-education | install-wiki | install-print-designer | install-drive | install-raven | advanced-app-tools | app-advanced-tools | custom-app-tools | install-custom-app | repair-app-registry | install-cli | repair-cli | update-toolkit | verify-toolkit | toolkit-verify | verify-install)
       return 0
       ;;
     *)
@@ -300,35 +304,31 @@ menu_location_note() {
 
 menu_footer() {
   local mode="${1:-back}"
-  local back_label="${2:-}"
-  echo
-  if declare -F ui_init >/dev/null 2>&1; then
-    ui_init
-    if [[ "$mode" == "quit-only" ]]; then
-      ui_text cyan "[q]"
-      printf ' Quit\n'
-    elif [[ -n "$back_label" ]]; then
-      ui_text cyan "[b]"
-      printf ' Back to %s\n' "$back_label"
-      ui_text cyan "[q]"
-      printf ' Quit\n'
+
+  # Preserve an explicit quit-only footer for any special non-submenu
+  # workflow that may still use it.
+  if [[ "$mode" == "quit" ]]; then
+    echo
+    if declare -F ui_text >/dev/null 2>&1; then
+      ui_text orange "Q."
+      printf ' Quit
+'
     else
-      ui_text cyan "[b]"
-      printf ' Back    '
-      ui_text cyan "[q]"
-      printf ' Quit\n'
+      printf 'Q. Quit
+'
     fi
-  else
-    if [[ "$mode" == "quit-only" ]]; then
-      printf '[q] Quit\n'
-    elif [[ -n "$back_label" ]]; then
-      printf '[b] Back to %s\n' "$back_label"
-      printf '[q] Quit\n'
-    else
-      printf '[b] Back    [q] Quit\n'
-    fi
+    return 0
   fi
-  echo
+
+  # All normal submenu footers now use one canonical visual language.
+  # Legacy destination labels such as "Main menu" are intentionally ignored.
+  if declare -F ui_submenu_footer >/dev/null 2>&1; then
+    ui_submenu_footer
+  else
+    printf '
+B. Back                         Q. Quit
+'
+  fi
 }
 
 trim_menu_choice() {
@@ -350,7 +350,7 @@ menu_read_choice() {
 
   __choice="$(trim_menu_choice "$__choice")"
   case "${__choice,,}" in
-    quit|exit) __choice="q" ;;
+    quit | exit) __choice="q" ;;
     back) __choice="b" ;;
   esac
 
@@ -535,7 +535,7 @@ pause_after_screen() {
     fi
 
     case "${reply,,}" in
-      q|quit|exit) exit 0 ;;
+      q | quit | exit) exit 0 ;;
       *) return 0 ;;
     esac
   fi

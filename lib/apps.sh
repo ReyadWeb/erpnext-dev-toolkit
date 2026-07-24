@@ -39,7 +39,7 @@ app_profile_branch_overrides() {
 app_origin_label() {
   local origin="${1:-${LIB_APP_ORIGIN:-frappe}}"
   case "$origin" in
-    community|third-party|third_party) printf 'Community / third-party\n' ;;
+    community | third-party | third_party) printf 'Community / third-party\n' ;;
     *) printf 'Frappe (official)\n' ;;
   esac
 }
@@ -64,14 +64,14 @@ app_profile_defaults() {
       LIB_APP_BRANCH="${CRM_BRANCH:-main}"
       LIB_APP_NOTES="Standalone modern CRM app. ERPNext already includes classic CRM features; install this if you want the separate Frappe CRM experience."
       ;;
-    hrms|hr)
+    hrms | hr)
       LIB_APP_DISPLAY="Frappe HR / HRMS"
       LIB_APP_NAME="hrms"
       LIB_APP_REPO="https://github.com/frappe/hrms"
       LIB_APP_BRANCH="${HRMS_BRANCH:-version-16}"
       LIB_APP_NOTES="HR, payroll, attendance, leave, employee lifecycle, and HR operations app for Frappe/ERPNext."
       ;;
-    education|school|school-erp)
+    education | school | school-erp)
       LIB_APP_DISPLAY="Frappe Education"
       LIB_APP_NAME="education"
       LIB_APP_REPO="https://github.com/frappe/education"
@@ -99,70 +99,70 @@ app_profile_defaults() {
       LIB_APP_BRANCH="${INSIGHTS_BRANCH:-main}"
       LIB_APP_NOTES="Business intelligence, reporting, and dashboard app for Frappe sites."
       ;;
-    payments|payment)
+    payments | payment)
       LIB_APP_DISPLAY="Frappe Payments"
       LIB_APP_NAME="payments"
       LIB_APP_REPO="https://github.com/frappe/payments"
       LIB_APP_BRANCH="${PAYMENTS_BRANCH:-}"
       LIB_APP_NOTES="Payment gateway integrations for Frappe apps, including Stripe, PayPal, Razorpay, Braintree, and PayTM. Uses the repository default branch unless PAYMENTS_BRANCH is set."
       ;;
-    webshop|ecommerce|e-commerce)
+    webshop | ecommerce | e-commerce)
       LIB_APP_DISPLAY="Frappe Webshop / E-Commerce"
       LIB_APP_NAME="webshop"
       LIB_APP_REPO="https://github.com/frappe/webshop"
       LIB_APP_BRANCH="${WEBSHOP_BRANCH:-develop}"
       LIB_APP_NOTES="Open-source eCommerce storefront app for ERPNext-backed catalogs and orders. For Frappe/ERPNext v16, upstream guidance currently points to the develop branch."
       ;;
-    builder|frappe-builder)
+    builder | frappe-builder)
       LIB_APP_DISPLAY="Frappe Builder"
       LIB_APP_NAME="builder"
       LIB_APP_REPO="https://github.com/frappe/builder"
       LIB_APP_BRANCH="${BUILDER_BRANCH:-}"
       LIB_APP_NOTES="Low-code website builder for Frappe. Uses the repository default branch unless BUILDER_BRANCH is set."
       ;;
-    lms|learning)
+    lms | learning)
       LIB_APP_DISPLAY="Frappe Learning / LMS"
       LIB_APP_NAME="lms"
       LIB_APP_REPO="https://github.com/frappe/lms"
       LIB_APP_BRANCH="${LMS_BRANCH:-}"
       LIB_APP_NOTES="Learning management app for courses, lessons, batches, and knowledge sharing. Uses the repository default branch unless LMS_BRANCH is set."
       ;;
-    wiki|frappe-wiki)
+    wiki | frappe-wiki)
       LIB_APP_DISPLAY="Frappe Wiki"
       LIB_APP_NAME="wiki"
       LIB_APP_REPO="https://github.com/frappe/wiki"
       LIB_APP_BRANCH="${WIKI_BRANCH:-}"
       LIB_APP_NOTES="Documentation and knowledge-base app for text-heavy content, revisions, and publishing workflows. Uses the repository default branch unless WIKI_BRANCH is set."
       ;;
-    print_designer|print-designer|printdesigner)
+    print_designer | print-designer | printdesigner)
       LIB_APP_DISPLAY="Frappe Print Designer"
       LIB_APP_NAME="print_designer"
       LIB_APP_REPO="https://github.com/frappe/print_designer"
       LIB_APP_BRANCH="${PRINT_DESIGNER_BRANCH:-}"
       LIB_APP_NOTES="Visual print-format designer for ERPNext/Frappe invoices, quotes, delivery notes, and other print formats. Uses the repository default branch unless PRINT_DESIGNER_BRANCH is set."
       ;;
-    drive|frappe-drive)
+    drive | frappe-drive)
       LIB_APP_DISPLAY="Frappe Drive"
       LIB_APP_NAME="drive"
       LIB_APP_REPO="https://github.com/frappe/drive"
       LIB_APP_BRANCH="${DRIVE_BRANCH:-}"
       LIB_APP_NOTES="File storage, sharing, and collaboration app. Treat as advanced for ERPNext stacks and test on a disposable VM snapshot first."
       ;;
-    gameplan|frappe-gameplan)
+    gameplan | frappe-gameplan)
       LIB_APP_DISPLAY="Frappe Gameplan"
       LIB_APP_NAME="gameplan"
       LIB_APP_REPO="https://github.com/frappe/gameplan"
       LIB_APP_BRANCH="${GAMEPLAN_BRANCH:-}"
       LIB_APP_NOTES="Async discussions and project knowledge for remote teams (official Frappe product). Uses the repository default branch unless GAMEPLAN_BRANCH is set."
       ;;
-    lending|frappe-lending)
+    lending | frappe-lending)
       LIB_APP_DISPLAY="Frappe Lending"
       LIB_APP_NAME="lending"
       LIB_APP_REPO="https://github.com/frappe/lending"
       LIB_APP_BRANCH="${LENDING_BRANCH:-version-16}"
       LIB_APP_NOTES="Loan management system for NBFCs and lenders (official Frappe product). Niche compared with CRM/HRMS; defaults to LENDING_BRANCH=version-16."
       ;;
-    raven|chat)
+    raven | chat)
       LIB_APP_DISPLAY="Raven Team Chat"
       LIB_APP_NAME="raven"
       LIB_APP_REPO="https://github.com/The-Commit-Company/raven"
@@ -170,7 +170,7 @@ app_profile_defaults() {
       LIB_APP_ORIGIN="community"
       LIB_APP_NOTES="Community / third-party team messaging (The Commit Company), not a Frappe Technologies product. Open source with ERPNext/FrappeHR integrations. Treat as advanced and test notifications/access paths carefully."
       ;;
-    india_compliance|india-compliance|gst|india-gst)
+    india_compliance | india-compliance | gst | india-gst)
       LIB_APP_DISPLAY="India Compliance (GST)"
       LIB_APP_NAME="india_compliance"
       LIB_APP_REPO="https://github.com/resilient-tech/india-compliance"
@@ -220,7 +220,6 @@ branch_available() {
   branch_q="$(printf '%q' "$branch")"
   git ls-remote --exit-code --heads "$repo" "$branch" >/dev/null 2>&1 || run_as_frappe "git ls-remote --exit-code --heads ${repo_q} ${branch_q} >/dev/null 2>&1"
 }
-
 
 ensure_app_library_node_tools() {
   log "Checking Node/Yarn environment for App Library"
@@ -286,7 +285,6 @@ fi
   ok "Dependencies ready for ${app_name}"
 }
 
-
 normalize_apps_txt() {
   local bench_dir="$1"
   local required_app="${2:-}"
@@ -304,7 +302,7 @@ normalize_apps_txt() {
 
   repair_py="$(mktemp /tmp/erpnext-dev-app-registry.XXXXXX.py)" || return 1
 
-  cat > "$repair_py" <<'PY_APP_REGISTRY'
+  cat >"$repair_py" <<'PY_APP_REGISTRY'
 from pathlib import Path
 import sys
 
@@ -445,34 +443,42 @@ app_in_apps_txt() {
   run_as_frappe "cd ${bench_q} && grep -qxF ${app_q} sites/apps.txt" >/dev/null 2>&1
 }
 
-
 print_downloaded_app_comparisons() {
   local bench_q="$1"
   local site_q="$2"
   local downloaded_tmp installed_tmp registered_tmp diff_tmp
 
   downloaded_tmp="$(mktemp /tmp/erpnext-dev-downloaded-apps.XXXXXX)" || return 1
-  installed_tmp="$(mktemp /tmp/erpnext-dev-installed-apps.XXXXXX)" || { rm -f "$downloaded_tmp"; return 1; }
-  registered_tmp="$(mktemp /tmp/erpnext-dev-registered-apps.XXXXXX)" || { rm -f "$downloaded_tmp" "$installed_tmp"; return 1; }
-  diff_tmp="$(mktemp /tmp/erpnext-dev-app-diff.XXXXXX)" || { rm -f "$downloaded_tmp" "$installed_tmp" "$registered_tmp"; return 1; }
+  installed_tmp="$(mktemp /tmp/erpnext-dev-installed-apps.XXXXXX)" || {
+    rm -f "$downloaded_tmp"
+    return 1
+  }
+  registered_tmp="$(mktemp /tmp/erpnext-dev-registered-apps.XXXXXX)" || {
+    rm -f "$downloaded_tmp" "$installed_tmp"
+    return 1
+  }
+  diff_tmp="$(mktemp /tmp/erpnext-dev-app-diff.XXXXXX)" || {
+    rm -f "$downloaded_tmp" "$installed_tmp" "$registered_tmp"
+    return 1
+  }
 
-  if ! run_as_frappe "cd ${bench_q} && find apps -maxdepth 1 -mindepth 1 -type d -printf '%f\\n' | sort -u" > "$downloaded_tmp"; then
+  if ! run_as_frappe "cd ${bench_q} && find apps -maxdepth 1 -mindepth 1 -type d -printf '%f\\n' | sort -u" >"$downloaded_tmp"; then
     warn "Could not list downloaded app folders for comparison."
-    : > "$downloaded_tmp"
+    : >"$downloaded_tmp"
   fi
 
-  if ! run_as_frappe "cd ${bench_q} && bench --site ${site_q} list-apps 2>/dev/null | awk '{print \$1}' | sort -u" > "$installed_tmp"; then
+  if ! run_as_frappe "cd ${bench_q} && bench --site ${site_q} list-apps 2>/dev/null | awk '{print \$1}' | sort -u" >"$installed_tmp"; then
     warn "Could not list installed site apps for comparison."
-    : > "$installed_tmp"
+    : >"$installed_tmp"
   fi
 
-  if ! run_as_frappe "cd ${bench_q} && { [ -f sites/apps.txt ] && sed '/^[[:space:]]*$/d' sites/apps.txt || true; } | sort -u" > "$registered_tmp"; then
+  if ! run_as_frappe "cd ${bench_q} && { [ -f sites/apps.txt ] && sed '/^[[:space:]]*$/d' sites/apps.txt || true; } | sort -u" >"$registered_tmp"; then
     warn "Could not read sites/apps.txt for comparison."
-    : > "$registered_tmp"
+    : >"$registered_tmp"
   fi
 
   echo "Downloaded but not installed on ${SITE_NAME}:"
-  if comm -23 "$downloaded_tmp" "$installed_tmp" > "$diff_tmp"; then
+  if comm -23 "$downloaded_tmp" "$installed_tmp" >"$diff_tmp"; then
     if [[ -s "$diff_tmp" ]]; then
       sed 's/^/  /' "$diff_tmp"
     else
@@ -484,7 +490,7 @@ print_downloaded_app_comparisons() {
   echo
 
   echo "Downloaded but not registered in sites/apps.txt:"
-  if comm -23 "$downloaded_tmp" "$registered_tmp" > "$diff_tmp"; then
+  if comm -23 "$downloaded_tmp" "$registered_tmp" >"$diff_tmp"; then
     if [[ -s "$diff_tmp" ]]; then
       sed 's/^/  /' "$diff_tmp"
     else
@@ -497,8 +503,82 @@ print_downloaded_app_comparisons() {
   rm -f "$downloaded_tmp" "$installed_tmp" "$registered_tmp" "$diff_tmp"
 }
 
+run_docker_app_status() {
+  require_sudo
+
+  local site profile app label installed_tmp
+
+  site="$(docker_site_name)"
+  installed_tmp="$(mktemp /tmp/erpnext-dev-docker-app-status.XXXXXX)" || return 1
+
+  echo
+  echo "============================================================"
+  echo "App Status - Docker"
+  echo "============================================================"
+  status_line "Site" "INFO" "$site"
+  status_line "Docker mode" "INFO" "$(docker_mode_label)"
+  status_line "Runtime" "INFO" "$(runtime_state)"
+
+  echo
+  echo "Installed on site:"
+
+  if ! docker_bench --site "$site" list-apps >"$installed_tmp" 2>/dev/null; then
+    warn "Could not query installed apps from the Docker environment."
+    echo
+    echo "Check that the Docker stack is running, then run:"
+    echo "  $(toolkit_cmd app-status)"
+    rm -f "$installed_tmp"
+    return 1
+  fi
+
+  if [[ -s "$installed_tmp" ]]; then
+    sed 's/^/  /' "$installed_tmp"
+  else
+    echo "  none reported"
+  fi
+
+  echo
+  echo "Curated optional app status:"
+
+  while IFS= read -r profile; do
+    [[ -n "$profile" ]] || continue
+
+    app_profile_defaults "$profile" || continue
+
+    app="$LIB_APP_NAME"
+    label="$LIB_APP_DISPLAY ($(app_origin_label))"
+
+    if awk -v wanted="$app" '
+      $1 == wanted {
+        found = 1
+      }
+      END {
+        exit !found
+      }
+    ' "$installed_tmp"; then
+      status_line "$label" "OK" "installed on ${site}"
+    else
+      status_line "$label" "INFO" "not installed"
+    fi
+  done < <(app_profile_list)
+
+  rm -f "$installed_tmp"
+
+  echo
+  echo "Useful commands:"
+  echo "  $(toolkit_cmd verify-access)"
+  echo "  $(toolkit_cmd app-status)"
+  echo "  $(toolkit_cmd dashboard)"
+  echo "============================================================"
+}
+
 run_app_status() {
   require_sudo
+
+  if deployment_engine_is_docker; then
+    run_docker_app_status
+    return $?
+  fi
 
   local bench_dir bench_q site_q app label
   bench_dir="$(require_site_environment)" || return 1
@@ -802,7 +882,7 @@ assess_app_compatibility() {
         APP_COMPAT_DETAIL="Frappe Webshop target is ${branch_text}; verify upstream compatibility before use."
       fi
       ;;
-    builder|lms|wiki|print_designer|gameplan)
+    builder | lms | wiki | print_designer | gameplan)
       if [[ -z "$branch" ]]; then
         APP_COMPAT_STATUS="WARN"
         APP_COMPAT_DETAIL="${display} uses the repository default branch, so compatibility can change as upstream moves."
@@ -815,7 +895,7 @@ assess_app_compatibility() {
         APP_COMPAT_DETAIL="${display} target is ${branch_text}; verify upstream compatibility before important data."
       fi
       ;;
-    lending|india_compliance)
+    lending | india_compliance)
       if [[ -n "$target_major" ]]; then
         APP_COMPAT_STATUS="OK"
         APP_COMPAT_DETAIL="Target branch ${branch_text} is version-pinned and matches the detected core major version."
@@ -828,7 +908,7 @@ assess_app_compatibility() {
         APP_COMPAT_DETAIL="${display} target is ${branch_text}; verify upstream compatibility before important data."
       fi
       ;;
-    drive|raven)
+    drive | raven)
       APP_COMPAT_STATUS="WARN"
       if [[ -z "$branch" ]]; then
         APP_COMPAT_DETAIL="${display} is an advanced/collaboration app using the repository default branch. Compatibility and operational requirements may change."
@@ -978,7 +1058,6 @@ print_app_compatibility_snapshot() {
   echo "That is a repeatability warning, not an installation failure."
 }
 
-
 install_app_dependency_telephony() {
   local bench_dir="$1"
   local dep_name="telephony"
@@ -1038,7 +1117,6 @@ install_app_dependencies() {
       ;;
   esac
 }
-
 
 show_app_install_guide() {
   echo
@@ -1105,7 +1183,6 @@ create_app_install_checkpoint() {
     fi
   fi
 }
-
 
 create_post_app_install_checkpoint() {
   local display="$1"
@@ -1294,33 +1371,96 @@ run_app_install_wizard() {
     printf '\n'
     ui_text muted "The wizard will offer a backup checkpoint first."
     printf '\n'
-    menu_footer
+    ui_submenu_footer
     menu_read_choice choice
 
     case "$choice" in
-      1) run_app_status; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      2) show_app_compatibility_matrix; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      3) install_app_profile crm; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      4) install_app_profile hrms; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      5) install_app_profile education; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      6) install_app_profile payments; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      7) install_app_profile webshop; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      8) install_app_profile builder; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      9) install_app_profile lms; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      10) install_app_profile wiki; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      11) install_app_profile print_designer; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      12) install_app_profile drive; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      13) install_app_profile gameplan; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      14) install_app_profile lending; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      15) install_app_profile raven; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      16) install_app_profile insights; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      17) install_app_profile telephony; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      18) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      19) install_app_profile india_compliance; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      20) show_advanced_app_tools_menu; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      21) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Installation Wizard..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        run_app_status
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      2)
+        show_app_compatibility_matrix
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      3)
+        install_app_profile crm
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      4)
+        install_app_profile hrms
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      5)
+        install_app_profile education
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      6)
+        install_app_profile payments
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      7)
+        install_app_profile webshop
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      8)
+        install_app_profile builder
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      9)
+        install_app_profile lms
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      10)
+        install_app_profile wiki
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      11)
+        install_app_profile print_designer
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      12)
+        install_app_profile drive
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      13)
+        install_app_profile gameplan
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      14)
+        install_app_profile lending
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      15)
+        install_app_profile raven
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      16)
+        install_app_profile insights
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      17)
+        install_app_profile telephony
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      18)
+        install_app_profile helpdesk
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      19)
+        install_app_profile india_compliance
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      20)
+        show_advanced_app_tools_menu
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      21)
+        show_app_rollback_guide
+        pause_after_screen "Press Enter to return to App Installation Wizard..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -1481,95 +1621,450 @@ install_custom_app_interactive() {
   install_frappe_app "$app_name" "$display" "$repo" "$branch" "$notes"
 }
 
-
 show_advanced_app_tools_menu() {
   while true; do
     ui_submenu_header "Advanced App Tools" \
       "Troubleshooting and trusted custom apps only."
-    print_two_column_menu       "1) Custom Git app"       "2) Repair app registry"       "3) Rollback guide"       "4) Installed apps"
+    print_two_column_menu "1) Custom Git app" "2) Repair app registry" "3) Rollback guide" "4) Installed apps"
     echo
     warn "Custom Git apps are not curated by this toolkit and may break the site if incompatible."
-    menu_footer
+    ui_submenu_footer
     local advanced_app_choice=""
     menu_read_choice advanced_app_choice
 
     case "$advanced_app_choice" in
-      1) install_custom_app_interactive; pause_after_screen "Press Enter to return to Advanced App Tools..." ;;
-      2) repair_app_registry; pause_after_screen "Press Enter to return to Advanced App Tools..." ;;
-      3) show_app_rollback_guide; pause_after_screen "Press Enter to return to Advanced App Tools..." ;;
-      4) show_installed_apps; pause_after_screen "Press Enter to return to Advanced App Tools..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        install_custom_app_interactive
+        pause_after_screen "Press Enter to return to Advanced App Tools..."
+        ;;
+      2)
+        repair_app_registry
+        pause_after_screen "Press Enter to return to Advanced App Tools..."
+        ;;
+      3)
+        show_app_rollback_guide
+        pause_after_screen "Press Enter to return to Advanced App Tools..."
+        ;;
+      4)
+        show_installed_apps
+        pause_after_screen "Press Enter to return to Advanced App Tools..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
 }
 
+app_profile_menu_label() {
+  case "${1:-}" in
+    crm) printf 'CRM' ;;
+    hrms) printf 'HRMS' ;;
+    payments) printf 'Payments' ;;
+    webshop) printf 'Webshop' ;;
+    builder) printf 'Builder' ;;
+    lms) printf 'Learning' ;;
+    education) printf 'Education' ;;
+    drive) printf 'Drive' ;;
+    raven) printf 'Raven' ;;
+    wiki) printf 'Wiki' ;;
+    helpdesk) printf 'Helpdesk' ;;
+    insights) printf 'Insights' ;;
+    print_designer) printf 'Print Designer' ;;
+    telephony) printf 'Telephony' ;;
+    gameplan) printf 'Gameplan' ;;
+    lending) printf 'Lending' ;;
+    india_compliance) printf 'India Compliance' ;;
+    *) printf '%s' "${1:-Unknown}" ;;
+  esac
+}
+
+app_primary_profile_list() {
+  printf '%s
+' \
+    crm \
+    hrms \
+    payments \
+    webshop \
+    builder \
+    lms \
+    education \
+    drive \
+    raven \
+    wiki \
+    helpdesk \
+    insights \
+    print_designer \
+    telephony
+}
+
+app_category_profile_list() {
+  case "${1:-all}" in
+    all)
+      printf '%s
+' \
+        crm \
+        hrms \
+        payments \
+        webshop \
+        builder \
+        lms \
+        education \
+        drive \
+        raven \
+        wiki \
+        helpdesk \
+        insights \
+        print_designer \
+        telephony \
+        gameplan \
+        lending \
+        india_compliance
+      ;;
+    dev)
+      printf '%s
+' \
+        builder \
+        print_designer
+      ;;
+    solutions)
+      printf '%s
+' \
+        crm \
+        hrms \
+        payments \
+        webshop \
+        lms \
+        education \
+        drive \
+        raven \
+        wiki \
+        helpdesk \
+        insights \
+        telephony \
+        gameplan \
+        lending
+      ;;
+    compliance)
+      printf '%s
+' \
+        india_compliance
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+app_menu_render_option() {
+  local key="$1"
+  local label="$2"
+
+  ui_row_add_colored cyan "[$key]"
+  ui_row_add " $label"
+}
+
+app_menu_render_pair() {
+  local width="$1"
+  local left_key="$2"
+  local left_label="$3"
+  local right_key="${4:-}"
+  local right_label="${5:-}"
+  local second_column
+
+  second_column=$((width / 2))
+
+  ui_row_begin
+  app_menu_render_option "$left_key" "$left_label"
+
+  if [[ -n "$right_key" ]]; then
+    ui_row_pad_to "$second_column"
+    app_menu_render_option "$right_key" "$right_label"
+  fi
+
+  ui_row_end
+}
+
+render_app_library_menu_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    app_menu_render_pair "$width" "1" "CRM" "8" "Drive"
+    app_menu_render_pair "$width" "2" "HRMS" "9" "Raven"
+    app_menu_render_pair "$width" "3" "Payments" "10" "Wiki"
+    app_menu_render_pair "$width" "4" "Webshop" "11" "Helpdesk"
+    app_menu_render_pair "$width" "5" "Builder" "12" "Insights"
+    app_menu_render_pair "$width" "6" "Learning" "13" "Print Designer"
+    app_menu_render_pair "$width" "7" "Education" "14" "Telephony"
+
+    ui_box_line mid "$width"
+
+    app_menu_render_pair "$width" "15" "All" "17" "Solutions"
+    app_menu_render_pair "$width" "16" "Dev" "18" "Compliance"
+
+    ui_box_line mid "$width"
+
+    app_menu_render_pair "$width" "S" "Status" "C" "Compatibility"
+  else
+    app_menu_render_pair "$width" "1" "CRM"
+    app_menu_render_pair "$width" "2" "HRMS"
+    app_menu_render_pair "$width" "3" "Payments"
+    app_menu_render_pair "$width" "4" "Webshop"
+    app_menu_render_pair "$width" "5" "Builder"
+    app_menu_render_pair "$width" "6" "Learning"
+    app_menu_render_pair "$width" "7" "Education"
+    app_menu_render_pair "$width" "8" "Drive"
+    app_menu_render_pair "$width" "9" "Raven"
+    app_menu_render_pair "$width" "10" "Wiki"
+    app_menu_render_pair "$width" "11" "Helpdesk"
+    app_menu_render_pair "$width" "12" "Insights"
+    app_menu_render_pair "$width" "13" "Print Designer"
+    app_menu_render_pair "$width" "14" "Telephony"
+
+    ui_box_line mid "$width"
+
+    app_menu_render_pair "$width" "15" "All"
+    app_menu_render_pair "$width" "16" "Dev"
+    app_menu_render_pair "$width" "17" "Solutions"
+    app_menu_render_pair "$width" "18" "Compliance"
+
+    ui_box_line mid "$width"
+
+    app_menu_render_pair "$width" "S" "Status"
+    app_menu_render_pair "$width" "C" "Compatibility"
+  fi
+
+  ui_box_line bot "$width"
+}
+
+show_app_profile_collection_menu() {
+  local title="$1"
+  local description="$2"
+  local category="$3"
+  local profile choice index
+  local -a profiles=()
+  local -a items=()
+
+  while IFS= read -r profile; do
+    [[ -n "$profile" ]] || continue
+    profiles+=("$profile")
+    items+=("${#profiles[@]}) $(app_profile_menu_label "$profile")")
+  done < <(app_category_profile_list "$category")
+
+  while true; do
+    ui_submenu_header "$title" "$description"
+
+    if ((${#items[@]} > 0)); then
+      print_two_column_menu "${items[@]}"
+    else
+      ui_text muted "No apps are currently listed in this category."
+      printf '
+'
+    fi
+
+    if [[ "$category" == "all" ]]; then
+      echo
+      ui_text cyan "[W]"
+      printf ' Wizard    '
+      ui_text cyan "[I]"
+      printf ' Installed    '
+      ui_text cyan "[G]"
+      printf ' Guide    '
+      ui_text cyan "[R]"
+      printf ' Rollback    '
+      ui_text cyan "[T]"
+      printf ' Tools
+'
+    fi
+
+    echo
+    ui_submenu_footer
+
+    choice=""
+    menu_read_choice choice
+
+    case "$choice" in
+      w | W)
+        if [[ "$category" == "all" ]]; then
+          run_app_install_wizard
+        else
+          warn "Invalid option"
+        fi
+        ;;
+      i | I)
+        if [[ "$category" == "all" ]]; then
+          show_installed_apps
+          pause_after_screen "Press Enter to return to All Apps..."
+        else
+          warn "Invalid option"
+        fi
+        ;;
+      g | G)
+        if [[ "$category" == "all" ]]; then
+          show_app_install_guide
+          pause_after_screen "Press Enter to return to All Apps..."
+        else
+          warn "Invalid option"
+        fi
+        ;;
+      r | R)
+        if [[ "$category" == "all" ]]; then
+          show_app_rollback_guide
+          pause_after_screen "Press Enter to return to All Apps..."
+        else
+          warn "Invalid option"
+        fi
+        ;;
+      t | T)
+        if [[ "$category" == "all" ]]; then
+          show_advanced_app_tools_menu
+        else
+          warn "Invalid option"
+        fi
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        if [[ "$choice" =~ ^[0-9]+$ ]]; then
+          index=$((10#$choice - 1))
+
+          if ((index >= 0 && index < ${#profiles[@]})); then
+            install_app_profile "${profiles[$index]}"
+            pause_after_screen "Press Enter to return to ${title}..."
+          else
+            warn "Invalid option"
+          fi
+        else
+          warn "Invalid option"
+        fi
+        ;;
+    esac
+  done
+}
+
+show_app_all_menu() {
+  show_app_profile_collection_menu \
+    "All Apps" \
+    "Browse the complete optional app library." \
+    "all"
+}
+
+show_app_dev_menu() {
+  show_app_profile_collection_menu \
+    "Dev" \
+    "Developer and platform-building apps." \
+    "dev"
+}
+
+show_app_solutions_menu() {
+  show_app_profile_collection_menu \
+    "Solutions" \
+    "Business, productivity, and industry solutions." \
+    "solutions"
+}
+
+show_app_compliance_menu() {
+  show_app_profile_collection_menu \
+    "Compliance" \
+    "Country and regional compliance apps." \
+    "compliance"
+}
+
 show_app_library_menu() {
   while true; do
-    ui_submenu_header "App Library" \
-      "Install an app, or use status / guide tools."
-    print_two_column_menu \
-      "1) Wizard" \
-      "2) Installed apps" \
-      "3) Compatibility" \
-      "4) Installed apps list" \
-      "5) Guide" \
-      "6) Rollback" \
-      "7) CRM" \
-      "8) HRMS" \
-      "9) Education" \
-      "10) Payments" \
-      "11) Webshop" \
-      "12) Builder" \
-      "13) LMS" \
-      "14) Wiki" \
-      "15) Print Designer" \
-      "16) Drive" \
-      "17) Gameplan" \
-      "18) Lending" \
-      "19) Raven" \
-      "20) Helpdesk" \
-      "21) Telephony" \
-      "22) Insights" \
-      "23) India Compliance" \
-      "24) Advanced tools"
+    ui_submenu_header "Apps" \
+      "Install an app or browse the full library."
+
+    render_app_library_menu_options
+
     echo
-    ui_text muted "Notes: one app at a time; keep a backup checkpoint."
-    printf '\n'
-    ui_text muted "official=Frappe Technologies; community=third-party open source."
-    printf '\n'
-    menu_footer
+    ui_submenu_footer
+
     local app_choice=""
     menu_read_choice app_choice
 
     case "$app_choice" in
-      1) run_app_install_wizard ;;
-      2) run_app_status; pause_after_screen "Press Enter to return to App Library..." ;;
-      3) show_app_compatibility_matrix; pause_after_screen "Press Enter to return to App Library..." ;;
-      4) show_installed_apps; pause_after_screen "Press Enter to return to App Library..." ;;
-      5) show_app_install_guide; pause_after_screen "Press Enter to return to App Library..." ;;
-      6) show_app_rollback_guide; pause_after_screen "Press Enter to return to App Library..." ;;
-      7) install_app_profile crm; pause_after_screen "Press Enter to return to App Library..." ;;
-      8) install_app_profile hrms; pause_after_screen "Press Enter to return to App Library..." ;;
-      9) install_app_profile education; pause_after_screen "Press Enter to return to App Library..." ;;
-      10) install_app_profile payments; pause_after_screen "Press Enter to return to App Library..." ;;
-      11) install_app_profile webshop; pause_after_screen "Press Enter to return to App Library..." ;;
-      12) install_app_profile builder; pause_after_screen "Press Enter to return to App Library..." ;;
-      13) install_app_profile lms; pause_after_screen "Press Enter to return to App Library..." ;;
-      14) install_app_profile wiki; pause_after_screen "Press Enter to return to App Library..." ;;
-      15) install_app_profile print_designer; pause_after_screen "Press Enter to return to App Library..." ;;
-      16) install_app_profile drive; pause_after_screen "Press Enter to return to App Library..." ;;
-      17) install_app_profile gameplan; pause_after_screen "Press Enter to return to App Library..." ;;
-      18) install_app_profile lending; pause_after_screen "Press Enter to return to App Library..." ;;
-      19) install_app_profile raven; pause_after_screen "Press Enter to return to App Library..." ;;
-      20) install_app_profile helpdesk; pause_after_screen "Press Enter to return to App Library..." ;;
-      21) install_app_profile telephony; pause_after_screen "Press Enter to return to App Library..." ;;
-      22) install_app_profile insights; pause_after_screen "Press Enter to return to App Library..." ;;
-      23) install_app_profile india_compliance; pause_after_screen "Press Enter to return to App Library..." ;;
-      24) show_advanced_app_tools_menu; pause_after_screen "Press Enter to return to App Library..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        install_app_profile crm
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      2)
+        install_app_profile hrms
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      3)
+        install_app_profile payments
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      4)
+        install_app_profile webshop
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      5)
+        install_app_profile builder
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      6)
+        install_app_profile lms
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      7)
+        install_app_profile education
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      8)
+        install_app_profile drive
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      9)
+        install_app_profile raven
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      10)
+        install_app_profile wiki
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      11)
+        install_app_profile helpdesk
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      12)
+        install_app_profile insights
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      13)
+        install_app_profile print_designer
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      14)
+        install_app_profile telephony
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+
+      15) show_app_all_menu ;;
+      16) show_app_dev_menu ;;
+      17) show_app_solutions_menu ;;
+      18) show_app_compliance_menu ;;
+
+      s | S)
+        run_app_status
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      c | C)
+        show_app_compatibility_matrix
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done

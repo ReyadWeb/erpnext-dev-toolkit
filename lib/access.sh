@@ -79,10 +79,10 @@ valid_ipv4_address() {
   local ip="$1"
   [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
   local IFS=. a b c d
-  read -r a b c d <<< "$ip"
+  read -r a b c d <<<"$ip"
   for octet in "$a" "$b" "$c" "$d"; do
     [[ "$octet" =~ ^[0-9]+$ ]] || return 1
-    (( octet >= 0 && octet <= 255 )) || return 1
+    ((octet >= 0 && octet <= 255)) || return 1
   done
   return 0
 }
@@ -91,7 +91,7 @@ is_usable_vm_ip() {
   local ip="$1"
   valid_ipv4_address "$ip" || return 1
   case "$ip" in
-    127.*|169.254.*|0.*) return 1 ;;
+    127.* | 169.254.* | 0.*) return 1 ;;
     *) return 0 ;;
   esac
 }
@@ -543,11 +543,11 @@ clear_bench_assets_json_cache() {
   fi
   # If assets.json points at hashes that are not on disk, drop it so the next
   # bench build regenerates a consistent map (HTML 404 ghost-hash failure mode).
-  if [[ -f "$(bench_sites_dir "$bench_dir")/assets/assets.json" ]] && \
-     ! assets_json_login_hashes_on_disk "$bench_dir"; then
+  if [[ -f "$(bench_sites_dir "$bench_dir")/assets/assets.json" ]] \
+    && ! assets_json_login_hashes_on_disk "$bench_dir"; then
     warn "sites/assets/assets.json hashes do not match files on disk — removing stale map"
-    run_as_frappe "rm -f '$(bench_sites_dir "$bench_dir")/assets/assets.json'" || \
-      $SUDO rm -f "$(bench_sites_dir "$bench_dir")/assets/assets.json" 2>/dev/null || true
+    run_as_frappe "rm -f '$(bench_sites_dir "$bench_dir")/assets/assets.json'" \
+      || $SUDO rm -f "$(bench_sites_dir "$bench_dir")/assets/assets.json" 2>/dev/null || true
   fi
   return 0
 }
@@ -601,7 +601,7 @@ probe_one_static_asset() {
     asset_url="http://${host_name}:${port}${asset_path}"
   fi
 
-  curl_args=(-k -sS -L --max-redirs 5 --max-time 15 -o /dev/null \
+  curl_args=(-k -sS -L --max-redirs 5 --max-time 15 -o /dev/null
     -w '%{http_code}|%{size_download}|%{content_type}')
   if [[ -n "$host_name" && -n "$port" && -n "$resolve_ip" ]]; then
     curl_args+=(--resolve "${host_name}:${port}:${resolve_ip}")
@@ -764,7 +764,7 @@ print_host_dns_one_liner_for_site() {
   map_ip="$(host_mapping_ip "$vm_ip")"
 
   case "$host_os" in
-    windows|windows-wsl)
+    windows | windows-wsl)
       echo "\$VM_IP=\"${map_ip}\"; \$LOCAL_DOMAIN=\"${site}\"; \$hosts=\"\$env:SystemRoot\\System32\\drivers\\etc\\hosts\"; Copy-Item \$hosts \"\$hosts.bak.\$(Get-Date -Format yyyyMMdd-HHmmss)\"; \$pattern='\\s+'+[regex]::Escape(\$LOCAL_DOMAIN)+'(\\s|\$)'; (Get-Content \$hosts) -notmatch \$pattern | Set-Content \$hosts; Add-Content \$hosts \"\$VM_IP \$LOCAL_DOMAIN\""
       ;;
     macos)
@@ -784,7 +784,7 @@ print_host_dns_commands_for_site() {
   host_label="$(host_os_label "$host_os")"
 
   case "$host_os" in
-    windows|windows-wsl)
+    windows | windows-wsl)
       echo "  Copy and run this entire command in PowerShell (Administrator):"
       ;;
     *)
@@ -805,7 +805,7 @@ print_host_dns_tests_for_site() {
   port="$(local_entry_http_port)"
 
   case "$host_os" in
-    windows|windows-wsl)
+    windows | windows-wsl)
       echo "  Resolve-DnsName ${site}    # or: nslookup ${site}"
       echo "  curl.exe -I http://${site}:${port}    # or: Invoke-WebRequest http://${site}:${port}"
       if [[ "$host_os" == "windows-wsl" ]]; then
@@ -1032,9 +1032,6 @@ show_access_instructions() {
   echo
   echo "============================================================"
 }
-
-
-
 
 verify_access() {
   require_sudo
@@ -1560,14 +1557,6 @@ show_kvm_vm_identification_guide() {
   echo "============================================================"
 }
 
-
-
-
-
-
-
-
-
 # Universal fallback guidance (print-only). Prefer `local-static-ip-wizard`
 # (Netplan on Ubuntu, ifupdown on Debian) via lib/local_ip.sh.
 print_guest_static_ip_fallback() {
@@ -1647,7 +1636,7 @@ show_local_fixed_ip_guide() {
       echo "============================================================"
       return 0
       ;;
-    windows|windows-wsl)
+    windows | windows-wsl)
       echo
       echo "============================================================"
       echo "Stable Local VM IP Guide (Windows host)"
@@ -1748,7 +1737,7 @@ show_multi_environment_guide() {
   local host_label hosts_path
   host_label="$(host_os_label)"
   case "$(effective_host_os)" in
-    windows|windows-wsl) hosts_path="%SystemRoot%\\System32\\drivers\\etc\\hosts" ;;
+    windows | windows-wsl) hosts_path="%SystemRoot%\\System32\\drivers\\etc\\hosts" ;;
     *) hosts_path="/etc/hosts" ;;
   esac
   cat <<EOF_MULTI
@@ -1800,53 +1789,260 @@ show_hostname_hosts_menu() {
       "5) Stable VM IP guide" \
       "6) Multi-environment naming guide" \
       "7) Host access test guide"
-    menu_footer back "Access & Networking"
+    ui_submenu_footer
     local choice=""
     menu_read_choice choice
 
     case "$choice" in
-      1) show_local_domain_status; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
-      2) show_host_hosts_command; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
-      3) show_local_host_mapping_checkpoint; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
-      4) show_kvm_vm_identification_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
-      5) show_local_fixed_ip_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
-      6) show_multi_environment_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
-      7) show_host_access_test_guide; pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        show_local_domain_status
+        pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..."
+        ;;
+      2)
+        show_host_hosts_command
+        pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..."
+        ;;
+      3)
+        show_local_host_mapping_checkpoint
+        pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..."
+        ;;
+      4)
+        show_kvm_vm_identification_guide
+        pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..."
+        ;;
+      5)
+        show_local_fixed_ip_guide
+        pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..."
+        ;;
+      6)
+        show_multi_environment_guide
+        pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..."
+        ;;
+      7)
+        show_host_access_test_guide
+        pause_after_screen "Press Enter to return to Hostname & Hosts Mapping..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
 }
 
+access_menu_is_production() {
+  if declare -F docker_is_production >/dev/null 2>&1 \
+    && docker_is_production 2>/dev/null; then
+    return 0
+  fi
+
+  if declare -F is_public_vm_workflow >/dev/null 2>&1 \
+    && is_public_vm_workflow 2>/dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+access_menu_render_option() {
+  local key="$1"
+  local label="$2"
+
+  ui_row_add_colored cyan "[$key]"
+  ui_row_add " $label"
+}
+
+access_menu_render_pair() {
+  local width="$1"
+  local left_key="$2"
+  local left_label="$3"
+  local right_key="${4:-}"
+  local right_label="${5:-}"
+  local second_column
+
+  second_column=$((width / 2))
+
+  ui_row_begin
+  access_menu_render_option "$left_key" "$left_label"
+
+  if [[ -n "$right_key" ]]; then
+    ui_row_pad_to "$second_column"
+    access_menu_render_option "$right_key" "$right_label"
+  fi
+
+  ui_row_end
+}
+
+render_local_access_menu_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    access_menu_render_pair "$width" "1" "Access overview" "4" "Network & IP"
+    access_menu_render_pair "$width" "2" "Verify access" "5" "Hostname & mapping"
+    access_menu_render_pair "$width" "3" "Network status" "6" "Credentials"
+
+    ui_box_line mid "$width"
+
+    access_menu_render_pair "$width" "D" "Access doctor" "E" "Environment"
+    access_menu_render_pair "$width" "H" "HTTPS & domains"
+  else
+    access_menu_render_pair "$width" "1" "Access overview"
+    access_menu_render_pair "$width" "2" "Verify access"
+    access_menu_render_pair "$width" "3" "Network status"
+    access_menu_render_pair "$width" "4" "Network & IP"
+    access_menu_render_pair "$width" "5" "Hostname & mapping"
+    access_menu_render_pair "$width" "6" "Credentials"
+
+    ui_box_line mid "$width"
+
+    access_menu_render_pair "$width" "D" "Access doctor"
+    access_menu_render_pair "$width" "E" "Environment"
+    access_menu_render_pair "$width" "H" "HTTPS & domains"
+  fi
+
+  ui_box_line bot "$width"
+}
+
+render_production_access_menu_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    access_menu_render_pair "$width" "1" "Access overview" "4" "Credentials"
+    access_menu_render_pair "$width" "2" "Verify access" "5" "HTTPS & domains"
+    access_menu_render_pair "$width" "3" "Network status" "D" "Diagnostics"
+
+    ui_box_line mid "$width"
+
+    access_menu_render_pair "$width" "E" "Environment"
+  else
+    access_menu_render_pair "$width" "1" "Access overview"
+    access_menu_render_pair "$width" "2" "Verify access"
+    access_menu_render_pair "$width" "3" "Network status"
+    access_menu_render_pair "$width" "4" "Credentials"
+    access_menu_render_pair "$width" "5" "HTTPS & domains"
+
+    ui_box_line mid "$width"
+
+    access_menu_render_pair "$width" "D" "Diagnostics"
+    access_menu_render_pair "$width" "E" "Environment"
+  fi
+
+  ui_box_line bot "$width"
+}
+
 show_access_menu() {
+  local production_mode=0
+
+  access_menu_is_production && production_mode=1
+
   while true; do
-    ui_submenu_header "Access & Networking" \
-      "Browser access, stable IP, host mapping, and routing to HTTPS tools"
-    print_two_column_menu \
-      "1) Browser access information" \
-      "2) Verify browser access" \
-      "3) Local network & stable IP" \
-      "4) Hostname & hosts mapping" \
-      "5) HTTPS & domains" \
-      "6) Local access doctor" \
-      "7) Environment / location check"
-    menu_footer back "Main menu"
+    if ((production_mode == 1)); then
+      ui_submenu_header "Network & Access" \
+        "Inspect production connectivity and access."
+
+      render_production_access_menu_options
+    else
+      ui_submenu_header "Network & Access" \
+        "Connect to ERPNext and manage local networking."
+
+      render_local_access_menu_options
+    fi
+
+    ui_submenu_footer
+
     local access_choice=""
     menu_read_choice access_choice
 
-    case "$access_choice" in
-      1) show_access_instructions; pause_after_screen "Press Enter to return to Access & Networking..." ;;
-      2) verify_access; pause_after_screen "Press Enter to return to Access & Networking..." ;;
-      3) show_local_ip_menu ;;
-      4) show_hostname_hosts_menu ;;
-      5) show_https_domains_menu ;;
-      6) local_access_doctor; pause_after_screen "Press Enter to return to Access & Networking..." ;;
-      7) show_environment_check; pause_after_screen "Press Enter to return to Access & Networking..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
-      *) warn "Invalid option" ;;
-    esac
+    if ((production_mode == 1)); then
+      case "$access_choice" in
+        1)
+          show_access_info
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        2)
+          verify_access
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        3)
+          show_network_status
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        4)
+          show_credentials_menu
+          ;;
+        5 | h | H)
+          show_https_domains_menu
+          ;;
+        d | D)
+          run_doctor_plain
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        e | E)
+          show_environment_check
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        b | B | "")
+          return 0
+          ;;
+        q | Q)
+          exit 0
+          ;;
+        *)
+          warn "Invalid option"
+          ;;
+      esac
+    else
+      case "$access_choice" in
+        1)
+          show_access_info
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        2)
+          verify_access
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        3)
+          show_network_status
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        4)
+          show_local_ip_menu
+          ;;
+        5)
+          show_hostname_hosts_menu
+          ;;
+        6)
+          show_credentials_menu
+          ;;
+        d | D)
+          local_access_doctor
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        e | E)
+          show_environment_check
+          pause_after_screen "Press Enter to return to Network & Access..."
+          ;;
+        h | H)
+          show_https_domains_menu
+          ;;
+        b | B | "")
+          return 0
+          ;;
+        q | Q)
+          exit 0
+          ;;
+        *)
+          warn "Invalid option"
+          ;;
+      esac
+    fi
   done
 }
 
@@ -1879,7 +2075,6 @@ credentials_display_site() {
   fi
 }
 
-
 show_credentials_menu() {
   while true; do
     ui_submenu_header "Credentials / Login" "Private console required to reveal passwords"
@@ -1890,20 +2085,41 @@ show_credentials_menu() {
       "4) Secure file" \
       "5) Delete local file" \
       "6) Reset admin password"
-    menu_footer
+    ui_submenu_footer
     local credentials_choice=""
     menu_read_choice credentials_choice
 
     case "$credentials_choice" in
-      1) show_credentials_info; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
-      2) credentials_show; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
-      3) show_credentials_file_status; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
-      4) credentials_secure; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
-      5) credentials_delete; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
-      6) reset_admin_password; pause_after_screen "Press Enter to return to Credentials / Login..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
-      *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
+      1)
+        show_credentials_info
+        pause_after_screen "Press Enter to return to Credentials / Login..."
+        ;;
+      2)
+        credentials_show
+        pause_after_screen "Press Enter to return to Credentials / Login..."
+        ;;
+      3)
+        show_credentials_file_status
+        pause_after_screen "Press Enter to return to Credentials / Login..."
+        ;;
+      4)
+        credentials_secure
+        pause_after_screen "Press Enter to return to Credentials / Login..."
+        ;;
+      5)
+        credentials_delete
+        pause_after_screen "Press Enter to return to Credentials / Login..."
+        ;;
+      6)
+        reset_admin_password
+        pause_after_screen "Press Enter to return to Credentials / Login..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
+      *)
+        warn "Invalid option"
+        pause_after_screen "Press Enter to continue..."
+        ;;
     esac
   done
 }
@@ -2073,7 +2289,7 @@ credentials_show() {
         section == "db" && /^[[:space:]]+Password:/ { sub(/^[[:space:]]+/, ""); print "MariaDB " $0; next }
       ' "$cred_file"
       echo "============================================================"
-    } > /dev/tty
+    } >/dev/tty
   else
     warn "No private terminal (/dev/tty) available; not writing secrets to the logged output stream."
     echo "Read the file directly on a private console instead:"

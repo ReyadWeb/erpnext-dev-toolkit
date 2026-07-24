@@ -38,7 +38,6 @@ start_erpnext_foreground() {
   "
 }
 
-
 erpnext_service_path() {
   echo "/etc/systemd/system/${ERPNEXT_SERVICE_NAME}"
 }
@@ -62,10 +61,16 @@ ensure_toolkit_runtime_procfile() {
   [[ -n "$bench_dir" ]] || bench_dir="$(require_bench_dir)" || return 1
   source_file="${bench_dir}/Procfile"
   target_file="$(toolkit_runtime_procfile_path "$bench_dir")" || return 1
-  [[ -f "$source_file" ]] || { err "Bench Procfile not found: ${source_file}"; return 1; }
+  [[ -f "$source_file" ]] || {
+    err "Bench Procfile not found: ${source_file}"
+    return 1
+  }
 
   tmp="${target_file}.tmp.$$"
-  awk '!/^[[:space:]]*watch[[:space:]]*:/' "$source_file" > "$tmp" || { rm -f "$tmp"; return 1; }
+  awk '!/^[[:space:]]*watch[[:space:]]*:/' "$source_file" >"$tmp" || {
+    rm -f "$tmp"
+    return 1
+  }
   mv -f "$tmp" "$target_file" || return 1
   chown "$FRAPPE_USER:$FRAPPE_USER" "$target_file" 2>/dev/null || true
   chmod 0644 "$target_file" 2>/dev/null || true
@@ -89,7 +94,6 @@ ensure_erpnext_service_definition() {
   fi
   return 0
 }
-
 
 port_listens() {
   local port="$1"
@@ -298,8 +302,8 @@ try_rebuild_frontend_assets_once() {
   # maintenance_build already clears cache/assets_json; keep a soft second clear
   # without nesting ensure_bench_services → wait_for_erpnext_ready.
   log "Clearing site cache after asset rebuild"
-  clear_bench_assets_json_cache || \
-    run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || true
+  clear_bench_assets_json_cache \
+    || run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' clear-cache" || true
 
   # Soft bounce only — never call restart_* helpers that nest wait_for_erpnext_ready.
   if deployment_engine_is_docker; then
@@ -380,8 +384,8 @@ wait_for_erpnext_ready() {
 
     # Ports alone are not enough: require HTTP plus the same complete asset
     # manifest to pass repeatedly. This rejects rotating stale assets_json views.
-    if bench_ports_ready && [[ "$http_state" == "OK" && "$assets_state" == "OK" ]] && \
-       ((asset_stable_streak >= need_stable)); then
+    if bench_ports_ready && [[ "$http_state" == "OK" && "$assets_state" == "OK" ]] \
+      && ((asset_stable_streak >= need_stable)); then
       if runtime_is_production; then
         ok "ERPNext is ready. Production runtime is serving a stable frontend manifest."
       else
@@ -675,8 +679,8 @@ repair_frontend_assets() {
   echo
 
   log "Preparing watcher-free ERPNext runtime (Redis remains available)"
-  _prepare_asset_build_runtime || \
-    fail "Could not establish a watcher-free runtime with Redis/web ready before rebuilding assets."
+  _prepare_asset_build_runtime \
+    || fail "Could not establish a watcher-free runtime with Redis/web ready before rebuilding assets."
 
   log "Building assets once with the watcher disabled"
   if ! maintenance_build; then
@@ -929,8 +933,8 @@ _soft_restart_erpnext_runtime() {
     fi
     return 1
   fi
-  if declare -F runtime_is_production >/dev/null 2>&1 && runtime_is_production && \
-     declare -F production_runtime_configured >/dev/null 2>&1 && production_runtime_configured; then
+  if declare -F runtime_is_production >/dev/null 2>&1 && runtime_is_production \
+    && declare -F production_runtime_configured >/dev/null 2>&1 && production_runtime_configured; then
     log "Restarting production runtime"
     $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || return 1
     return 0
@@ -979,8 +983,8 @@ settle_local_stack() {
   echo "Required so the host browser matches VM probes (replaces guest reboot)."
 
   if declare -F clear_bench_assets_json_cache >/dev/null 2>&1; then
-    clear_bench_assets_json_cache || \
-      warn "Could not clear site/assets_json cache; continuing with redis FLUSHDB"
+    clear_bench_assets_json_cache \
+      || warn "Could not clear site/assets_json cache; continuing with redis FLUSHDB"
   fi
 
   if declare -F flush_bench_redis_cache >/dev/null 2>&1; then
@@ -997,8 +1001,8 @@ settle_local_stack() {
 
   _soft_restart_erpnext_runtime || rc=1
 
-  if systemctl list-unit-files nginx.service >/dev/null 2>&1 || \
-     systemctl is-active --quiet nginx 2>/dev/null; then
+  if systemctl list-unit-files nginx.service >/dev/null 2>&1 \
+    || systemctl is-active --quiet nginx 2>/dev/null; then
     log "Restarting nginx"
     if $SUDO systemctl restart nginx; then
       ok "nginx restarted"
@@ -1099,8 +1103,8 @@ install_state() {
     # Preserve the long-standing install_state contract: callers and health
     # snapshots expect the exact string "Installed". Runtime state is reported
     # separately by runtime_state(), so a stopped Docker stack is still installed.
-    if [[ -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/pwd.yml" || \
-          -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/compose.yaml" ]]; then
+    if [[ -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/pwd.yml" ||
+      -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/compose.yaml" ]]; then
       echo "Installed"
     else
       echo "Not installed"
@@ -1229,21 +1233,45 @@ show_service_menu() {
       "6) Show service status" \
       "7) Show recent service logs" \
       "8) Follow service logs"
-    menu_footer
+    ui_submenu_footer
     local service_choice=""
     menu_read_choice service_choice
 
     case "$service_choice" in
-      1) enable_autostart_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      2) disable_autostart_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      3) start_erpnext_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      4) stop_erpnext_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      5) restart_erpnext_service; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      6) show_erpnext_service_status; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      7) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      8) follow_erpnext_service_logs; pause_after_screen "Press Enter to return to Service Manager..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        enable_autostart_service
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      2)
+        disable_autostart_service
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      3)
+        start_erpnext_service
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      4)
+        stop_erpnext_service
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      5)
+        restart_erpnext_service
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      6)
+        show_erpnext_service_status
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      7)
+        show_erpnext_service_logs
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      8)
+        follow_erpnext_service_logs
+        pause_after_screen "Press Enter to return to Service Manager..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -1383,7 +1411,7 @@ setup_production_runtime() {
   $SUDO systemctl enable --now supervisor >/dev/null 2>&1 || true
 
   log "Generating supervisor config from bench (bench setup supervisor)"
-  if ! frappe_login_bash <<EOF_PROD
+  if ! frappe_login_bash <<EOF_PROD; then
 set -Eeuo pipefail
 export PATH="\$HOME/.local/bin:\$PATH"
 export NVM_DIR="\$HOME/.nvm"
@@ -1391,7 +1419,6 @@ export NVM_DIR="\$HOME/.nvm"
 cd "${bench_dir}"
 bench setup supervisor --user "${FRAPPE_USER}" --yes
 EOF_PROD
-  then
     err "bench setup supervisor failed. See the output above."
     ui_box_end
     return 1

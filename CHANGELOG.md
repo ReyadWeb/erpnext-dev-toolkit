@@ -1,3 +1,81 @@
+## v1.19.22 - Responsive interface and local reliability
+
+### Added
+
+- Responsive dashboard and categorized terminal navigation.
+- Environment-aware networking, HTTPS, security, backup, application, and operations workflows.
+- Scalable categorized optional-application navigation.
+
+### Fixed
+
+- Main-menu `L` and `l` now display runtime logs and keep the page visible until the user returns.
+- Debian 13 static-IP setup preserves DNS through `resolvconf`.
+- Static-IP rollback preserves and restores resolver configuration.
+- Boxed menu rows remain aligned across wide, compact, and narrow terminals.
+- Submenu navigation and return behaviour are consistent.
+
+### Integrated
+
+- Preserved the stable v1.19.21 Docker optional-application reliability improvements.
+- Synchronized the permanent beta line with stable v1.19.21 before promotion.
+
+### Validation
+
+- Passed Release Validation CI.
+- Passed disposable-VM integration CI.
+- Passed real Debian 13 native installation acceptance.
+- Validated ERPNext and Frappe version-16 runtime.
+- Validated CRM and Print Designer installation.
+- Validated toolkit integrity with 24 of 24 runtime modules matching.
+- Validated service runtime and boot autostart.
+- Validated local HTTP, HTTPS, login assets, and frontend static assets.
+- Validated static IP, default route, and DNS after reboot.
+- Validated backup, restore, security hardening, and runtime Logs navigation.
+
+## v1.19.22-beta.1 - Stable synchronization and local reliability
+
+### Integrated
+
+- Merged the stable v1.19.21 production Docker optional-app reliability release back into the permanent beta development line.
+- Carried forward the responsive system dashboard, categorized menus, environment-aware workflows, standardized submenu navigation, and compact terminal layouts.
+- Carried forward the engine-aware Main-menu Logs shortcut and Debian 13 static-IP DNS persistence fixes.
+
+### Fixed
+
+- **Main-menu Logs:** uppercase and lowercase `L` open the engine-aware runtime Logs page and keep the output visible until the user returns.
+- **Debian static-IP DNS:** ifupdown configuration prepares `resolvconf`, refreshes resolver state, and verifies live DNS before recording success.
+- **Resolver-safe rollback:** network backups preserve and restore the previous resolver configuration.
+
+### Validation
+
+- Real Debian 13 native installation acceptance passed.
+- Local HTTPS, frontend assets, optional apps, security hardening, backup, full restore, reboot, and ERPNext autostart passed.
+- Static IP, default route, public DNS resolution, and HTTPS connectivity passed after reboot.
+- Main-menu Logs passed against the live ERPNext systemd service.
+- Combined v1.19.22-beta.1 CI and production regression testing remain pending.
+
+## v1.19.21-beta.4 - Logs navigation and Debian static-IP DNS
+
+### Fixed
+
+- **Main-menu Logs shortcut:** uppercase and lowercase `L` now open the engine-aware runtime Logs page and keep it visible until the user returns to the Main menu.
+- **Debian static-IP DNS persistence:** Debian 13 ifupdown configurations now prepare `resolvconf` integration before disabling DHCP.
+- **Resolver refresh:** the static-IP workflow refreshes resolver state after reconfiguring the interface.
+- **Live DNS validation:** successful static-IP completion now requires a usable resolver configuration and successful public hostname resolution.
+- **Resolver-safe rollback:** ifupdown backups preserve `/etc/resolv.conf`, and the rollback workflow restores the previous resolver configuration.
+- **Fresh Debian provisioning:** native Debian installations include `resolvconf` so later static-IP configuration does not leave the VM with routing but no DNS.
+
+### Validation
+
+- Passed full repository release validation.
+- Passed hermetic regression coverage for the main-menu Logs shortcut.
+- Passed hermetic Debian ifupdown DNS preparation, refresh, verification, backup, and rollback coverage.
+- Passed real Debian 13 native installation acceptance.
+- Validated Frappe and ERPNext version-16 runtime, optional app installation, local HTTPS, security hardening, frontend assets, and toolkit integrity.
+- Validated backup and full restore workflows.
+- Validated static IP, default route, DNS resolution, ERPNext autostart, and HTTPS after reboot.
+- Validated the Main-menu Logs page against the live ERPNext systemd service.
+
 ## v1.19.21 - Production Docker optional-app image reliability
 
 ### Added

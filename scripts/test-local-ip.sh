@@ -27,11 +27,14 @@ export LOCAL_IP_DETECT_IP="192.168.122.50"
 export LOCAL_IP_DETECT_IFACE="eth0"
 export LOCAL_IP_DETECT_GATEWAY="192.168.122.1"
 export LOCAL_IP_FORCE_BACKEND="netplan"
+export LOCAL_IP_RESOLV_CONF="${tmpdir}/resolv.conf"
+export LOCAL_IP_OS_ID="debian"
 export SITE_NAME="erp.test"
 export SUDO=""
 export APP_NAME="ERPNext Developer Toolkit"
 export SCRIPT_VERSION="test"
 mkdir -p "${LOCAL_IP_NETPLAN_DIR}"
+printf 'nameserver 192.0.2.53\n' >"${LOCAL_IP_RESOLV_CONF}"
 
 # Minimal stubs used by local_ip.sh
 is_usable_vm_ip() {
@@ -133,7 +136,30 @@ export LOCAL_IP_BACKUP_DIR="${tmpdir2}/backups"
 export LOCAL_IP_INTERFACES_FILE="${tmpdir2}/interfaces"
 export LOCAL_IP_IFUPDOWN_DIR="${tmpdir2}/interfaces.d"
 export LOCAL_IP_FORCE_BACKEND="ifupdown"
+export LOCAL_IP_RESOLV_CONF="${tmpdir2}/resolv.conf"
+
 mkdir -p "${LOCAL_IP_NETPLAN_DIR}" "${LOCAL_IP_IFUPDOWN_DIR}"
+printf 'nameserver 192.0.2.53\n' >"${LOCAL_IP_RESOLV_CONF}"
+
+dns_prepare_calls=0
+dns_refresh_calls=0
+dns_verify_calls=0
+
+local_ip_prepare_ifupdown_dns() {
+  dns_prepare_calls=$((dns_prepare_calls + 1))
+  return 0
+}
+
+local_ip_refresh_ifupdown_dns() {
+  dns_refresh_calls=$((dns_refresh_calls + 1))
+  return 0
+}
+
+local_ip_verify_dns_resolution() {
+  dns_verify_calls=$((dns_verify_calls + 1))
+  return 0
+}
+
 cat >"${LOCAL_IP_INTERFACES_FILE}" <<'EOF'
 source-directory /etc/network/interfaces.d
 allow-hotplug eth0
@@ -168,7 +194,26 @@ grep -q 'erpnext-dev:.*iface eth0 inet dhcp' "${LOCAL_IP_INTERFACES_FILE}" || {
   fail=$((fail + 1))
 }
 assert_eq "method after ifupdown wizard" "static" "$(local_ip_detect_method)"
-echo "OK: ifupdown wizard wrote static drop-in and neutralized dhcp"
+assert_eq "resolver preparation called" "1" "$dns_prepare_calls"
+assert_eq "resolver refresh called" "1" "$dns_refresh_calls"
+assert_eq "DNS verification called" "1" "$dns_verify_calls"
+
+ifup_backup="$(local_ip_read_state_key NETPLAN_BACKUP)"
+if [[ ! -e "${ifup_backup}/resolv.conf" && ! -L "${ifup_backup}/resolv.conf" ]]; then
+  echo "FAIL: ifupdown backup did not preserve resolv.conf" >&2
+  fail=$((fail + 1))
+fi
+
+printf 'nameserver 203.0.113.53\n' >"${LOCAL_IP_RESOLV_CONF}"
+run_local_static_ip_rollback >/dev/null
+
+grep -q 'nameserver 192.0.2.53' "${LOCAL_IP_RESOLV_CONF}" || {
+  echo "FAIL: ifupdown rollback did not restore resolv.conf" >&2
+  fail=$((fail + 1))
+}
+
+echo "OK: ifupdown wizard prepared, refreshed, and verified DNS"
+echo "OK: ifupdown rollback restored resolver configuration"
 
 # Missing backend must return (not exit) so guided install can continue
 export LOCAL_IP_FORCE_BACKEND="none"
