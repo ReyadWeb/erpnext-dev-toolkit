@@ -879,6 +879,51 @@ grep -q "Setup lifecycle guide" "$local_dev_narrow_tmp" \
 
 rm -f "$local_dev_narrow_tmp"
 
+# Main-menu L must open Logs as a result page and pause before returning.
+main_logs_tmp="$(
+  mktemp /tmp/erpnext-dev-ui-main-logs.XXXXXX
+)"
+
+if ! printf 'L\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  bash -c '
+    source "'"$ROOT_DIR"'/lib/common.sh"
+    source "'"$ROOT_DIR"'/lib/ui.sh"
+    source "'"$ROOT_DIR"'/lib/menu.sh"
+
+    render_main_menu_screen() {
+      printf "MAIN_MENU_MARKER\n"
+    }
+
+    ui_clear_screen() {
+      :
+    }
+
+    engine_runtime_logs() {
+      printf "LOGS_PAGE_MARKER\n"
+    }
+
+    pause_after_screen() {
+      printf "LOGS_PAUSE_MARKER\n"
+    }
+
+    show_menu
+  ' >"$main_logs_tmp" 2>/dev/null; then
+  note_fail "main-menu Logs shortcut test failed"
+fi
+
+grep -q "LOGS_PAGE_MARKER" "$main_logs_tmp" \
+  || note_fail "uppercase L did not invoke engine_runtime_logs"
+
+grep -q "LOGS_PAUSE_MARKER" "$main_logs_tmp" \
+  || note_fail "main-menu Logs returned without a result-page pause"
+
+rm -f "$main_logs_tmp"
+
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2
   echo "----- render output (compact) -----" >&2

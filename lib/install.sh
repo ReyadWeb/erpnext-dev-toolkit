@@ -239,6 +239,26 @@ install_system_packages() {
     cron netcat-openbsd
   )
 
+  # Debian ifupdown reads dns-nameservers through resolvconf integration.
+  # Install it during initial provisioning so the later static-IP wizard cannot
+  # leave a Debian guest with routing but no usable resolver configuration.
+  local os_id=""
+  if [[ -r /etc/os-release ]]; then
+    os_id="$(
+      awk -F= '
+        $1 == "ID" {
+          gsub(/"/, "", $2)
+          print tolower($2)
+          exit
+        }
+      ' /etc/os-release 2>/dev/null
+    )"
+  fi
+
+  if [[ "$os_id" == "debian" ]]; then
+    packages+=(resolvconf)
+  fi
+
   # Refresh apt metadata before availability probes so Debian/Ubuntu package
   # names resolve against a current index.
   $SUDO apt-get update

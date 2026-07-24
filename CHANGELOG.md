@@ -1,3 +1,25 @@
+## v1.19.21-beta.4 - Logs navigation and Debian static-IP DNS
+
+### Fixed
+
+- **Main-menu Logs shortcut:** uppercase and lowercase `L` now open the engine-aware runtime Logs page and keep it visible until the user returns to the Main menu.
+- **Debian static-IP DNS persistence:** Debian 13 ifupdown configurations now prepare `resolvconf` integration before disabling DHCP.
+- **Resolver refresh:** the static-IP workflow refreshes resolver state after reconfiguring the interface.
+- **Live DNS validation:** successful static-IP completion now requires a usable resolver configuration and successful public hostname resolution.
+- **Resolver-safe rollback:** ifupdown backups preserve `/etc/resolv.conf`, and the rollback workflow restores the previous resolver configuration.
+- **Fresh Debian provisioning:** native Debian installations include `resolvconf` so later static-IP configuration does not leave the VM with routing but no DNS.
+
+### Validation
+
+- Passed full repository release validation.
+- Passed hermetic regression coverage for the main-menu Logs shortcut.
+- Passed hermetic Debian ifupdown DNS preparation, refresh, verification, backup, and rollback coverage.
+- Passed real Debian 13 native installation acceptance.
+- Validated Frappe and ERPNext version-16 runtime, optional app installation, local HTTPS, security hardening, frontend assets, and toolkit integrity.
+- Validated backup and full restore workflows.
+- Validated static IP, default route, DNS resolution, ERPNext autostart, and HTTPS after reboot.
+- Validated the Main-menu Logs page against the live ERPNext systemd service.
+
 ## v1.19.21-beta.3 - Docker custom-image core-version pinning
 
 ### Fixed
