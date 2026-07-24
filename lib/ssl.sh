@@ -101,14 +101,13 @@ Current local SSL remains separate:
 EOF_PROD_SSL
 }
 
-
 is_private_ipv4() {
   local ip="$1"
 
   [[ -n "$ip" ]] || return 1
   case "$ip" in
-    10.*|192.168.*|127.*|169.254.*) return 0 ;;
-    172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*) return 0 ;;
+    10.* | 192.168.* | 127.* | 169.254.*) return 0 ;;
+    172.16.* | 172.17.* | 172.18.* | 172.19.* | 172.20.* | 172.21.* | 172.22.* | 172.23.* | 172.24.* | 172.25.* | 172.26.* | 172.27.* | 172.28.* | 172.29.* | 172.30.* | 172.31.*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -237,7 +236,8 @@ show_public_vm_readiness() {
   else
     local ssl_pair ssl_status ssl_detail
     ssl_pair="$(production_ssl_readiness_detail)"
-    ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
+    ssl_status="${ssl_pair%%|*}"
+    ssl_detail="${ssl_pair#*|}"
     status_line "Production SSL" "$ssl_status" "$ssl_detail"
     echo
     echo "Native port model: 80/443 public; 8000/9000 blocked publicly after HTTPS."
@@ -365,7 +365,6 @@ production_letsencrypt_key_path() {
   echo "$(production_letsencrypt_live_dir)/privkey.pem"
 }
 
-
 cloudflare_origin_dir() {
   echo "$CLOUDFLARE_ORIGIN_DIR"
 }
@@ -400,7 +399,7 @@ production_ssl_provider_from_cert_path() {
   local cert_path="${1:-}"
   case "$cert_path" in
     /etc/letsencrypt/live/*) echo "Let's Encrypt" ;;
-    /etc/ssl/cloudflare-origin/*|*cloudflare-origin*) echo "Cloudflare Origin CA" ;;
+    /etc/ssl/cloudflare-origin/* | *cloudflare-origin*) echo "Cloudflare Origin CA" ;;
     "") echo "not configured" ;;
     *) echo "custom/origin certificate" ;;
   esac
@@ -476,7 +475,7 @@ read_pem_block_to_file() {
   echo "Expected first line: ${begin_hint}"
   echo "Expected ending:     ${end_hint}"
 
-  : > "$output_file"
+  : >"$output_file"
   chmod 600 "$output_file" 2>/dev/null || true
 
   if [[ -t 0 ]]; then
@@ -493,13 +492,13 @@ read_pem_block_to_file() {
         in_block=1
         found_begin=1
         printf '%s
-' "$line" >> "$output_file"
+' "$line" >>"$output_file"
       fi
       continue
     fi
 
     printf '%s
-' "$line" >> "$output_file"
+' "$line" >>"$output_file"
 
     if [[ "$line" =~ $end_regex ]]; then
       found_end=1
@@ -522,7 +521,6 @@ read_pem_block_to_file() {
     fail "Did not detect the ending line of the ${label} PEM block."
   fi
 }
-
 
 production_https_status() {
   local domain="$1"
@@ -579,7 +577,7 @@ production_ssl_runtime_detail() {
   active_key="$(production_nginx_active_key_path 2>/dev/null || true)"
   provider="$(production_ssl_provider_from_cert_path "$active_cert")"
 
-  if [[ -n "$active_cert" && -n "$active_key" && -f "$active_cert" && -f "$active_key" && ( -L "$enabled_path" || -f "$enabled_path" ) ]]; then
+  if [[ -n "$active_cert" && -n "$active_key" && -f "$active_cert" && -f "$active_key" && (-L "$enabled_path" || -f "$enabled_path") ]]; then
     if certificate_file_is_staging "$active_cert"; then
       echo "WARN|${provider} staging certificate is installed; replace with production certificate before trusting HTTPS"
       return 0
@@ -916,7 +914,6 @@ configure_production_ssl() {
   echo "============================================================"
 }
 
-
 show_cloudflare_origin_guide() {
   local domain vm_ip
   vm_ip="$(get_vm_ip)"
@@ -1121,7 +1118,6 @@ show_cloudflare_origin_ssl_status() {
   echo "============================================================"
 }
 
-
 ssl_mode_context() {
   local vm_ip domain dns_ip provider recommendation detail
   vm_ip="$(get_vm_ip 2>/dev/null || echo unknown)"
@@ -1158,10 +1154,14 @@ show_ssl_mode_status() {
   require_sudo
   local ctx mode detail provider dns_ip vm_ip prod_pair prod_status prod_detail local_state
   ctx="$(ssl_mode_context)"
-  mode="${ctx%%|*}"; ctx="${ctx#*|}"
-  detail="${ctx%%|*}"; ctx="${ctx#*|}"
-  provider="${ctx%%|*}"; ctx="${ctx#*|}"
-  dns_ip="${ctx%%|*}"; ctx="${ctx#*|}"
+  mode="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  detail="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  provider="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  dns_ip="${ctx%%|*}"
+  ctx="${ctx#*|}"
   vm_ip="$ctx"
   prod_pair="$(production_ssl_readiness_detail 2>/dev/null || echo 'WARN|not configured')"
   prod_status="${prod_pair%%|*}"
@@ -1233,10 +1233,14 @@ show_setup_effort_guide() {
 production_ssl_wizard() {
   local choice ctx mode detail provider dns_ip vm_ip
   ctx="$(ssl_mode_context)"
-  mode="${ctx%%|*}"; ctx="${ctx#*|}"
-  detail="${ctx%%|*}"; ctx="${ctx#*|}"
-  provider="${ctx%%|*}"; ctx="${ctx#*|}"
-  dns_ip="${ctx%%|*}"; ctx="${ctx#*|}"
+  mode="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  detail="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  provider="${ctx%%|*}"
+  ctx="${ctx#*|}"
+  dns_ip="${ctx%%|*}"
+  ctx="${ctx#*|}"
   vm_ip="$ctx"
   ui_submenu_header "SSL Provider" \
     "Choose how this public ERPNext VM should handle HTTPS"
@@ -1251,17 +1255,23 @@ production_ssl_wizard() {
     "3) Production SSL status" \
     "4) Cloudflare Origin guide" \
     "5) SSL mode guide"
-  menu_footer
+  ui_submenu_footer
   menu_read_choice choice
   case "$choice" in
     1) configure_production_ssl ;;
     2) configure_cloudflare_origin_ssl ;;
     3) show_production_ssl_status ;;
     4) show_cloudflare_origin_guide ;;
-    5) show_ssl_mode_status; show_ssl_mode_guide ;;
-    b|B|"") return 0 ;;
-    q|Q) exit 0 ;;
-    *) warn "Invalid option: ${choice}" ; return 1 ;;
+    5)
+      show_ssl_mode_status
+      show_ssl_mode_guide
+      ;;
+    b | B | "") return 0 ;;
+    q | Q) exit 0 ;;
+    *)
+      warn "Invalid option: ${choice}"
+      return 1
+      ;;
   esac
 }
 
@@ -1723,7 +1733,7 @@ host_mkcert_install_hint() {
     macos)
       echo "  brew install mkcert nss        # nss also adds Firefox trust"
       ;;
-    windows|windows-wsl)
+    windows | windows-wsl)
       echo "  choco install mkcert           # or: scoop bucket add extras; scoop install mkcert"
       ;;
     *)
@@ -1879,7 +1889,6 @@ Rollback:
 EOF_MKCERT
 }
 
-
 run_trusted_mkcert_setup() {
   require_erpnext_vm_context "trusted-mkcert-setup" || return 1
 
@@ -1965,13 +1974,13 @@ run_trusted_mkcert_setup() {
     read -r -p "Press Enter after scp (or type skip / guide): " reply || reply="skip"
     reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
     case "$reply" in
-      skip|s|q|quit)
+      skip | s | q | quit)
         warn "Leaving without installing. Re-run when the files are in /tmp:"
         echo "  $(toolkit_cmd trusted-mkcert-setup)"
         echo "============================================================"
         return 0
         ;;
-      guide|g|help|h)
+      guide | g | help | h)
         show_mkcert_local_ssl_guide || true
         ;;
       *)
@@ -2425,7 +2434,6 @@ ensure_local_http_redirects_to_https() {
   return 1
 }
 
-
 local_vm_firewall_profile_is_active() {
   command -v ufw >/dev/null 2>&1 || return 1
   ufw_is_active || return 1
@@ -2609,7 +2617,6 @@ disable_local_ssl() {
   echo "============================================================"
 }
 
-
 ssl_is_configured() {
   local cert_path key_path enabled_path available_path
   cert_path="$(ssl_cert_path 2>/dev/null || true)"
@@ -2619,7 +2626,7 @@ ssl_is_configured() {
 
   [[ -n "$cert_path" && -f "$cert_path" ]] || return 1
   [[ -n "$key_path" && -f "$key_path" ]] || return 1
-  [[ -n "$enabled_path" && ( -L "$enabled_path" || -f "$enabled_path" ) ]] || return 1
+  [[ -n "$enabled_path" && (-L "$enabled_path" || -f "$enabled_path") ]] || return 1
   [[ -n "$available_path" && -f "$available_path" ]] || return 1
   return 0
 }
@@ -2847,9 +2854,18 @@ verify_local_ssl() {
   echo "============================================================"
   echo
 
-  [[ -f "$cert_path" ]] && status_line "Certificate" "OK" "$cert_path" || { status_line "Certificate" "FAIL" "missing: $cert_path"; failed=1; }
-  [[ -f "$key_path" ]] && status_line "Private key" "OK" "$key_path" || { status_line "Private key" "FAIL" "missing: $key_path"; failed=1; }
-  [[ -L "$enabled_path" || -f "$enabled_path" ]] && status_line "Nginx site enabled" "OK" "$enabled_path" || { status_line "Nginx site enabled" "FAIL" "missing: $enabled_path"; failed=1; }
+  [[ -f "$cert_path" ]] && status_line "Certificate" "OK" "$cert_path" || {
+    status_line "Certificate" "FAIL" "missing: $cert_path"
+    failed=1
+  }
+  [[ -f "$key_path" ]] && status_line "Private key" "OK" "$key_path" || {
+    status_line "Private key" "FAIL" "missing: $key_path"
+    failed=1
+  }
+  [[ -L "$enabled_path" || -f "$enabled_path" ]] && status_line "Nginx site enabled" "OK" "$enabled_path" || {
+    status_line "Nginx site enabled" "FAIL" "missing: $enabled_path"
+    failed=1
+  }
 
   if command -v nginx >/dev/null 2>&1; then
     if sudo -n nginx -t >/dev/null 2>&1; then
@@ -2939,7 +2955,7 @@ verify_local_ssl() {
   echo
   echo "Expected host mapping:"
   echo "  $(host_mapping_ip "$vm_ip") ${SITE_NAME}"
-  if (( failed == 0 )); then
+  if ((failed == 0)); then
     print_local_https_success_next_steps
   fi
   echo "============================================================"
@@ -3148,7 +3164,7 @@ run_local_ssl_wizard() {
       "7) Browser trust guide" \
       "8) Disable local HTTPS" \
       "9) Local security profile"
-    menu_footer back "$back_label"
+    ui_submenu_footer
     local wizard_choice=""
     menu_read_choice wizard_choice
 
@@ -3191,15 +3207,18 @@ run_local_ssl_wizard() {
         configure_local_vm_firewall
         pause_after_screen "Press Enter to return to SSL Wizard..."
         ;;
-      b|B|"")
+      b | B | "")
         if [[ "$back_target" == "main" ]]; then
           show_menu
           return 0
         fi
         return 0
         ;;
-      q|Q) exit 0 ;;
-      *) warn "Invalid option"; pause_after_screen "Press Enter to continue..." ;;
+      q | Q) exit 0 ;;
+      *)
+        warn "Invalid option"
+        pause_after_screen "Press Enter to continue..."
+        ;;
     esac
   done
 }
@@ -3225,31 +3244,67 @@ show_production_ssl_menu() {
       "10) SSL Mode Status" \
       "11) SSL Mode Guide" \
       "12) Disable Production SSL"
-    menu_footer back "$back_label"
+    ui_submenu_footer
     local prod_ssl_choice=""
     menu_read_choice prod_ssl_choice
 
     case "$prod_ssl_choice" in
-      1) production_ssl_wizard; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      2) show_production_ssl_status; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      3) show_production_ssl_plan; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      4) show_production_ssl_guide; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      5) show_production_domain_guide; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      6) show_public_vm_readiness; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      7) configure_production_ssl; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      8) configure_cloudflare_origin_ssl; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      9) show_cloudflare_origin_ssl_status; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      10) show_ssl_mode_status; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      11) show_ssl_mode_guide; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      12) disable_production_ssl; pause_after_screen "Press Enter to return to Production HTTPS..." ;;
-      b|B|"")
+      1)
+        production_ssl_wizard
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      2)
+        show_production_ssl_status
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      3)
+        show_production_ssl_plan
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      4)
+        show_production_ssl_guide
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      5)
+        show_production_domain_guide
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      6)
+        show_public_vm_readiness
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      7)
+        configure_production_ssl
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      8)
+        configure_cloudflare_origin_ssl
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      9)
+        show_cloudflare_origin_ssl_status
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      10)
+        show_ssl_mode_status
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      11)
+        show_ssl_mode_guide
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      12)
+        disable_production_ssl
+        pause_after_screen "Press Enter to return to Production HTTPS..."
+        ;;
+      b | B | "")
         if [[ "$back_target" == "main" ]]; then
           show_menu
           return 0
         fi
         return 0
         ;;
-      q|Q) exit 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -3281,36 +3336,84 @@ show_local_ssl_menu() {
       "15) Hosts Command" \
       "16) SSL/HTTPS Roadmap" \
       "17) Security Profile"
-    menu_footer back "$back_label"
+    ui_submenu_footer
     local ssl_choice=""
     menu_read_choice ssl_choice
 
     case "$ssl_choice" in
       1) run_local_ssl_wizard ;;
-      2) show_ssl_status; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      3) show_local_ssl_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      4) show_mkcert_local_ssl_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      5) show_browser_trust_check_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      6) install_local_ssl_cert; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      7) verify_local_ssl; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      8) create_self_signed_local_cert; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      9) configure_local_ssl; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      10) disable_local_ssl; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      11) verify_ssl_rollback; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      12) change_local_domain_wizard; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      13) show_local_domain_status; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      14) local_access_doctor; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      15) show_host_hosts_command; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      16) show_ssl_roadmap_guide; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      17) configure_local_vm_firewall; pause_after_screen "Press Enter to return to Local HTTPS..." ;;
-      b|B|"")
+      2)
+        show_ssl_status
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      3)
+        show_local_ssl_guide
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      4)
+        show_mkcert_local_ssl_guide
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      5)
+        show_browser_trust_check_guide
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      6)
+        install_local_ssl_cert
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      7)
+        verify_local_ssl
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      8)
+        create_self_signed_local_cert
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      9)
+        configure_local_ssl
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      10)
+        disable_local_ssl
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      11)
+        verify_ssl_rollback
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      12)
+        change_local_domain_wizard
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      13)
+        show_local_domain_status
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      14)
+        local_access_doctor
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      15)
+        show_host_hosts_command
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      16)
+        show_ssl_roadmap_guide
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      17)
+        configure_local_vm_firewall
+        pause_after_screen "Press Enter to return to Local HTTPS..."
+        ;;
+      b | B | "")
         if [[ "$back_target" == "main" ]]; then
           show_menu
           return 0
         fi
         return 0
         ;;
-      q|Q) exit 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done

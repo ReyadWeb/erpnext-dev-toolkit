@@ -88,18 +88,19 @@ show_firewall_hardening_status() {
   echo "Local listeners inside the VM:"
   for port in 22 80 443 8000 9000 11000 13000; do
     pair="$(production_listener_exposure_label "$port")"
-    status="${pair%%|*}"; detail="${pair#*|}"; message="$detail"
+    status="${pair%%|*}"
+    detail="${pair#*|}"
+    message="$detail"
     case "$port" in
       22) [[ "$status" == WARN ]] && status=INFO && message="${detail}; restrict at cloud firewall" ;;
-      80|443) [[ "$status" != FAIL ]] && status=OK ;;
-      8000|9000) [[ "$status" == WARN ]] && status=INFO && message="${detail}; block public access after HTTPS" ;;
-      11000|13000) [[ "$status" == WARN ]] && status=FAIL ;;
+      80 | 443) [[ "$status" != FAIL ]] && status=OK ;;
+      8000 | 9000) [[ "$status" == WARN ]] && status=INFO && message="${detail}; block public access after HTTPS" ;;
+      11000 | 13000) [[ "$status" == WARN ]] && status=FAIL ;;
     esac
     status_line "Port ${port}" "$status" "$message"
   done
   echo "============================================================"
 }
-
 
 security_environment_label() {
   if is_public_vm_workflow; then
@@ -229,7 +230,7 @@ production_block_ports() {
   printf '%s\n' 8000 9000 11000 12000 13000 3306
   if deployment_engine_is_docker; then
     case "${DOCKER_PUBLISH_PORT:-8080}" in
-      80|443) ;;
+      80 | 443) ;;
       *) printf '%s\n' "${DOCKER_PUBLISH_PORT:-8080}" ;;
     esac
   fi
@@ -246,7 +247,6 @@ production_https_firewall_status() {
     production_ssl_overall_status 2>/dev/null || printf 'WARN|not configured\n'
   fi
 }
-
 
 # Docker-published ports are forwarded before normal UFW INPUT rules, so local
 # Docker hardening needs a Docker-aware filter in addition to the host UFW
@@ -364,8 +364,8 @@ docker_local_ipv6_publish_active() {
   command -v docker >/dev/null 2>&1 || return 1
   ${SUDO:-} docker ps \
     --filter "label=com.docker.compose.project=${DOCKER_PROJECT_NAME}" \
-    --format '{{.Ports}}' 2>/dev/null | \
-    grep -qE "(\[::\]|::):${DOCKER_PUBLISH_PORT:-8080}->8080"
+    --format '{{.Ports}}' 2>/dev/null \
+    | grep -qE "(\[::\]|::):${DOCKER_PUBLISH_PORT:-8080}->8080"
 }
 
 docker_local_firewall_filter_status() {
@@ -501,7 +501,8 @@ configure_production_vm_firewall() {
   fi
 
   ssl_pair="$(production_https_firewall_status)"
-  ssl_status="${ssl_pair%%|*}"; ssl_detail="${ssl_pair#*|}"
+  ssl_status="${ssl_pair%%|*}"
+  ssl_detail="${ssl_pair#*|}"
   status_line "Production HTTPS" "$ssl_status" "$ssl_detail"
   if [[ "$ssl_status" != "OK" ]]; then
     warn "HTTPS is not confirmed. Blocking the direct application port may remove the current browser access path."
@@ -622,7 +623,6 @@ repair_local_access() {
   verify_access || true
 }
 
-
 vm_firewall_plan() {
   local vm_ip domain
   require_sudo
@@ -722,7 +722,7 @@ show_vm_firewall_status() {
   while IFS= read -r port; do
     [[ -n "$port" ]] || continue
     case "$port" in
-      22|80|443)
+      22 | 80 | 443)
         if ufw_port_has_allow "$port"; then
           state=OK
           detail="allow rule present"
@@ -934,7 +934,6 @@ EOF
   ui_next "$(toolkit_cmd fail2ban-status)" "$(toolkit_cmd security-hardening-wizard)"
 }
 
-
 security_hardening_wizard() {
   local choice
 
@@ -956,22 +955,55 @@ security_hardening_wizard() {
       "9) Public firewall status" \
       "10) Firewall rollback snapshots" \
       "11) Advanced: restrict SSH in UFW"
-    menu_footer
+    ui_submenu_footer
     menu_read_choice choice
     case "$choice" in
-      1) security_mode_status; pause_after_screen "Press Enter to return to Security..." ;;
-      2) configure_local_vm_firewall; pause_after_screen "Press Enter to return to Security..." ;;
-      3) configure_production_vm_firewall; pause_after_screen "Press Enter to return to Security..." ;;
-      4) configure_vm_firewall; pause_after_screen "Press Enter to return to Security..." ;;
-      5) repair_local_access; pause_after_screen "Press Enter to return to Security..." ;;
-      6) show_vm_firewall_status; pause_after_screen "Press Enter to return to Security..." ;;
-      7) configure_fail2ban; pause_after_screen "Press Enter to return to Security..." ;;
-      8) show_fail2ban_status; pause_after_screen "Press Enter to return to Security..." ;;
-      9) show_firewall_hardening_status; pause_after_screen "Press Enter to return to Security..." ;;
-      10) show_firewall_rollback_snapshots; pause_after_screen "Press Enter to return to Security..." ;;
-      11) configure_ufw_ssh_admin_only; pause_after_screen "Press Enter to return to Security..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        security_mode_status
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      2)
+        configure_local_vm_firewall
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      3)
+        configure_production_vm_firewall
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      4)
+        configure_vm_firewall
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      5)
+        repair_local_access
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      6)
+        show_vm_firewall_status
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      7)
+        configure_fail2ban
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      8)
+        show_fail2ban_status
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      9)
+        show_firewall_hardening_status
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      10)
+        show_firewall_rollback_snapshots
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      11)
+        configure_ufw_ssh_admin_only
+        pause_after_screen "Press Enter to return to Security..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option." ;;
     esac
   done

@@ -296,6 +296,13 @@ grep -q "Access doctor" "$access_tmp" \
   || note_fail "Access missing local Access doctor routing"
 grep -q "HTTPS & domains" "$access_tmp" \
   || note_fail "Access missing HTTPS & domains routing"
+grep -qE 'B\.[[:space:]]+Back' "$access_tmp" \
+  || note_fail "Access missing canonical B. Back footer"
+grep -qE 'Q\.[[:space:]]+Quit' "$access_tmp" \
+  || note_fail "Access missing canonical Q. Quit footer"
+if grep -q "Back to " "$access_tmp"; then
+  note_fail "Access still renders destination-specific Back to wording"
+fi
 if grep -q "29) Show host access test guide" "$access_tmp"; then
   note_fail "Access still exposes the legacy 29-item flat menu"
 fi

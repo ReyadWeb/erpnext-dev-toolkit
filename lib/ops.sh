@@ -78,7 +78,7 @@ production_ops_services_menu() {
       "8) Service logs" \
       "9) Follow service logs" \
       "10) Service recovery plan"
-    menu_footer
+    ui_submenu_footer
     local services_choice=""
     menu_read_choice services_choice
     case "$services_choice" in
@@ -145,7 +145,7 @@ production_ops_backups_menu() {
       "9) Cleanup old backups dry run" \
       "10) Cleanup old backups" \
       "11) Full backup/maintenance menu"
-    menu_footer
+    ui_submenu_footer
     local local_backup_choice=""
     menu_read_choice local_backup_choice
     case "$local_backup_choice" in
@@ -211,7 +211,7 @@ production_ops_restore_menu() {
       "7) List local backups" \
       "8) Restore database only" \
       "9) Restore database + files"
-    menu_footer
+    ui_submenu_footer
     local restore_choice=""
     menu_read_choice restore_choice
     case "$restore_choice" in
@@ -272,7 +272,7 @@ production_ops_security_menu() {
       "7) Fail2Ban status" \
       "8) Security audit" \
       "9) Cloud firewall checklist"
-    menu_footer
+    ui_submenu_footer
     local security_choice=""
     menu_read_choice security_choice
     case "$security_choice" in
@@ -330,7 +330,7 @@ production_ops_https_menu() {
       "4) Cloudflare Origin CA status" \
       "5) Cloudflare checklist" \
       "6) SSL compatibility guide"
-    menu_footer
+    ui_submenu_footer
     local https_choice=""
     menu_read_choice https_choice
     case "$https_choice" in
@@ -381,7 +381,7 @@ production_ops_support_menu() {
       "9) Port status" \
       "10) Verify toolkit integrity" \
       "11) Audit latest support bundle"
-    menu_footer
+    ui_submenu_footer
     local support_choice=""
     menu_read_choice support_choice
     case "$support_choice" in
@@ -462,16 +462,6 @@ production_ops_menu_render_pair() {
   fi
 
   ui_row_end
-}
-
-production_ops_menu_footer() {
-  echo
-  ui_text cyan "B."
-  printf ' Back'
-  printf '                        '
-  ui_text orange "Q."
-  printf ' Quit
-'
 }
 
 production_ops_summary_state() {
@@ -692,7 +682,7 @@ production_ops_backup_hub_menu() {
 
     ui_box_line bot "$width"
 
-    production_ops_menu_footer
+    ui_submenu_footer
 
     local choice=""
     menu_read_choice choice
@@ -730,7 +720,7 @@ production_ops_wizard() {
 
     render_production_ops_menu_options
 
-    production_ops_menu_footer
+    ui_submenu_footer
 
     local ops_choice=""
     menu_read_choice ops_choice

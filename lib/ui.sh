@@ -12,7 +12,7 @@ ui_detect_terminal_cols() {
   local cols=""
 
   cols="${MENU_TERMINAL_COLS:-}"
-  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+  if [[ "$cols" =~ ^[0-9]+$ ]] && ((cols > 0)); then
     printf '%s' "$cols"
     return 0
   fi
@@ -28,19 +28,19 @@ ui_detect_terminal_cols() {
     cols=""
   fi
   cols="$(printf '%s\n' "$cols" | awk '{print $2}')"
-  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+  if [[ "$cols" =~ ^[0-9]+$ ]] && ((cols > 0)); then
     printf '%s' "$cols"
     return 0
   fi
 
   cols="${ERPNEXT_DEV_TTY_COLS:-${COLUMNS:-}}"
-  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+  if [[ "$cols" =~ ^[0-9]+$ ]] && ((cols > 0)); then
     printf '%s' "$cols"
     return 0
   fi
 
   cols="$(tput cols 2>/dev/null || true)"
-  if [[ "$cols" =~ ^[0-9]+$ ]] && (( cols > 0 )); then
+  if [[ "$cols" =~ ^[0-9]+$ ]] && ((cols > 0)); then
     printf '%s' "$cols"
     return 0
   fi
@@ -79,7 +79,7 @@ ui_init() {
   UI_COLORS="$colors"
 
   if [[ -n "${NO_COLOR:-}" || "${FORCE_NO_COLOR:-0}" == "1" || "${TERM:-}" == "dumb" ]] \
-     || (( UI_COLORS < 8 )); then
+    || ((UI_COLORS < 8)); then
     # Still allow color when the operator's original stdout was a TTY (same
     # snapshot used for GREEN/OK status lines after tee).
     if [[ "${ERPNEXT_DEV_STDOUT_TTY:-}" == "1" && -z "${NO_COLOR:-}" && "${FORCE_NO_COLOR:-0}" != "1" && "${TERM:-}" != "dumb" ]]; then
@@ -92,7 +92,7 @@ ui_init() {
   fi
 
   case "${LC_ALL:-${LANG:-}}" in
-    *UTF-8*|*utf8*) UI_UNICODE=1 ;;
+    *UTF-8* | *utf8*) UI_UNICODE=1 ;;
     *) UI_UNICODE=0 ;;
   esac
   # Allow tests / constrained hosts to force ASCII box drawing.
@@ -100,14 +100,26 @@ ui_init() {
     UI_UNICODE=0
   fi
 
-  if (( UI_UNICODE == 1 )); then
-    UI_TL="╭"; UI_TR="╮"; UI_BL="╰"; UI_BR="╯"
-    UI_H="─"; UI_V="│"; UI_DIV="│"
-    UI_DOT="●"; UI_CHECK="✓"
+  if ((UI_UNICODE == 1)); then
+    UI_TL="╭"
+    UI_TR="╮"
+    UI_BL="╰"
+    UI_BR="╯"
+    UI_H="─"
+    UI_V="│"
+    UI_DIV="│"
+    UI_DOT="●"
+    UI_CHECK="✓"
   else
-    UI_TL="+"; UI_TR="+"; UI_BL="+"; UI_BR="+"
-    UI_H="-"; UI_V="|"; UI_DIV="|"
-    UI_DOT="*"; UI_CHECK="OK"
+    UI_TL="+"
+    UI_TR="+"
+    UI_BL="+"
+    UI_BR="+"
+    UI_H="-"
+    UI_V="|"
+    UI_DIV="|"
+    UI_DOT="*"
+    UI_CHECK="OK"
   fi
   # Exported for lib/menu.sh and other renderers.
   export UI_COLS UI_COLOR UI_UNICODE \
@@ -126,9 +138,9 @@ ui_layout_mode() {
   # Keep two columns on ordinary 80-column SSH terminals whenever labels fit.
   # The fit check in ui_render_boxed_menu still falls back to one column for
   # long submenu labels, so compact mode is reserved for genuinely narrow TTYs.
-  if (( ${UI_COLS:-100} < 76 )); then
+  if ((${UI_COLS:-100} < 76)); then
     printf 'compact'
-  elif (( ${UI_COLS:-100} < 100 )); then
+  elif ((${UI_COLS:-100} < 100)); then
     printf 'medium'
   else
     printf 'wide'
@@ -140,9 +152,9 @@ ui_layout_mode() {
 # dashboard gets explicit wide / compact / narrow breakpoints.
 ui_dashboard_layout_mode() {
   local cols="${UI_COLS:-100}"
-  if (( cols < 80 )); then
+  if ((cols < 80)); then
     printf 'narrow'
-  elif (( cols < 120 )); then
+  elif ((cols < 120)); then
     printf 'compact'
   else
     printf 'wide'
@@ -157,15 +169,15 @@ ui_percent_bar() {
 
   [[ "$percent" =~ ^[0-9]+$ ]] || percent=0
   [[ "$length" =~ ^[0-9]+$ ]] || length=10
-  (( percent < 0 )) && percent=0
-  (( percent > 100 )) && percent=100
-  (( length < 4 )) && length=4
+  ((percent < 0)) && percent=0
+  ((percent > 100)) && percent=100
+  ((length < 4)) && length=4
 
-  filled=$(( (percent * length + 50) / 100 ))
-  (( filled > length )) && filled="$length"
-  empty=$(( length - filled ))
+  filled=$(((percent * length + 50) / 100))
+  ((filled > length)) && filled="$length"
+  empty=$((length - filled))
 
-  if (( ${UI_UNICODE:-0} == 1 )); then
+  if ((${UI_UNICODE:-0} == 1)); then
     fill_char="█"
     empty_char="░"
   else
@@ -200,12 +212,12 @@ ui_clear_screen() {
 ui_menu_labels_fit_two_column() {
   local width left_width right_width cell item parsed label
   width="$(ui_panel_width)"
-  left_width=$(( width / 2 - 4 ))
-  right_width=$(( width - left_width - 7 ))
-  (( left_width < 24 )) && left_width=24
-  (( right_width < 24 )) && right_width=24
+  left_width=$((width / 2 - 4))
+  right_width=$((width - left_width - 7))
+  ((left_width < 24)) && left_width=24
+  ((right_width < 24)) && right_width=24
   cell="$left_width"
-  (( right_width < cell )) && cell="$right_width"
+  ((right_width < cell)) && cell="$right_width"
   for item in "$@"; do
     parsed="$(ui_menu_item_parts "$item" || true)"
     if [[ -n "$parsed" ]]; then
@@ -213,7 +225,7 @@ ui_menu_labels_fit_two_column() {
     else
       label="$item"
     fi
-    if (( ${#label} + 6 > cell )); then
+    if ((${#label} + 6 > cell)); then
       return 1
     fi
   done
@@ -221,7 +233,7 @@ ui_menu_labels_fit_two_column() {
 }
 
 ui_c() {
-  (( ${UI_COLOR:-0} == 1 )) || return 0
+  ((${UI_COLOR:-0} == 1)) || return 0
   case "$1" in
     blue) printf '\033[38;5;39m' ;;
     cyan) printf '\033[38;5;45m' ;;
@@ -244,20 +256,20 @@ ui_text() {
 
 ui_repeat() {
   local char="$1" count="${2:-0}"
-  if ! [[ "$count" =~ ^[0-9]+$ ]] || (( count <= 0 )); then
+  if ! [[ "$count" =~ ^[0-9]+$ ]] || ((count <= 0)); then
     return 0
   fi
   # Portable repeat without relying on tr's set length for multi-byte UTF-8.
   local i
-  for (( i = 0; i < count; i++ )); do
+  for ((i = 0; i < count; i++)); do
     printf '%s' "$char"
   done
 }
 
 ui_panel_width() {
   local width="${UI_COLS:-80}"
-  (( width > 120 )) && width=120
-  (( width < 60 )) && width=60
+  ((width > 120)) && width=120
+  ((width < 60)) && width=60
   printf '%s' "$width"
 }
 
@@ -266,7 +278,7 @@ ui_box_line() {
   local kind="$1"
   local width="${2:-$(ui_panel_width)}"
   local inner=$((width - 2))
-  (( inner < 10 )) && inner=10
+  ((inner < 10)) && inner=10
   ui_c muted
   case "$kind" in
     top) printf '%s%s%s\n' "$UI_TL" "$(ui_repeat "$UI_H" "$inner")" "$UI_TR" ;;
@@ -279,16 +291,16 @@ ui_box_line() {
 ui_status_color() {
   local value="$1"
   case "$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" in
-    ok|running|active|verified|rehearsed|recorded|healthy|complete|mkcert|self-signed|selfsigned)
+    ok | running | active | verified | rehearsed | recorded | healthy | complete | mkcert | self-signed | selfsigned)
       printf 'green'
       ;;
-    warn|warning|degraded|attention|unknown|planned)
+    warn | warning | degraded | attention | unknown | planned)
       printf 'orange'
       ;;
-    fail|failed|critical|missing|inactive|error)
+    fail | failed | critical | missing | inactive | error)
       printf 'red'
       ;;
-    local|none|n/a|na|info)
+    local | none | n/a | na | info)
       printf 'muted'
       ;;
     *)
@@ -319,12 +331,12 @@ ui_row_add_badge() {
   printf ' '
   if [[ "$color" == "green" ]]; then
     ui_text green "${UI_DOT} ${value}"
-    vis=$(( ${#label} + 2 + ${#UI_DOT} + 1 + ${#value} ))
+    vis=$((${#label} + 2 + ${#UI_DOT} + 1 + ${#value}))
   else
     ui_text "$color" "$value"
-    vis=$(( ${#label} + 2 + ${#value} ))
+    vis=$((${#label} + 2 + ${#value}))
   fi
-  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + vis ))
+  UI_ROW_USED=$((${UI_ROW_USED:-0} + vis))
 }
 
 # Parse "12|Label" or "12) Label" into num|label on stdout. Returns 1 if unparseable.
@@ -352,8 +364,8 @@ ui_render_boxed_menu() {
 
   ui_init
   total="${#items[@]}"
-  (( total > 0 )) || return 0
-  half=$(( (total + 1) / 2 ))
+  ((total > 0)) || return 0
+  half=$(((total + 1) / 2))
   width="$(ui_panel_width)"
   mode="$(ui_layout_mode)"
 
@@ -381,7 +393,7 @@ ui_render_boxed_menu() {
         ui_row_add_colored cyan "[${ln}]"
         ui_row_add " "
       fi
-      if (( ${#lt} > width - 10 )); then
+      if ((${#lt} > width - 10)); then
         lt="${lt:0:$((width - 13))}..."
       fi
       ui_row_add "$lt"
@@ -391,13 +403,13 @@ ui_render_boxed_menu() {
     return 0
   fi
 
-  left_width=$(( width / 2 - 4 ))
-  right_width=$(( width - left_width - 7 ))
-  (( left_width < 24 )) && left_width=24
-  (( right_width < 24 )) && right_width=24
+  left_width=$((width / 2 - 4))
+  right_width=$((width - left_width - 7))
+  ((left_width < 24)) && left_width=24
+  ((right_width < 24)) && right_width=24
 
   ui_box_line top "$width"
-  for (( i = 0; i < half; i++ )); do
+  for ((i = 0; i < half; i++)); do
     left="${items[$i]:-}"
     right="${items[$((i + half))]:-}"
     parsed="$(ui_menu_item_parts "$left" || true)"
@@ -408,7 +420,7 @@ ui_render_boxed_menu() {
       ln=""
       lt="$left"
     fi
-    if (( ${#lt} > left_width - 5 )); then
+    if ((${#lt} > left_width - 5)); then
       lt="${lt:0:$((left_width - 8))}..."
     fi
     printf '%s ' "$UI_V"
@@ -428,7 +440,7 @@ ui_render_boxed_menu() {
         rn=""
         rt="$right"
       fi
-      if (( ${#rt} > right_width - 5 )); then
+      if ((${#rt} > right_width - 5)); then
         rt="${rt:0:$((right_width - 8))}..."
       fi
       if [[ -n "$rn" ]]; then
@@ -457,7 +469,7 @@ ui_prompt() {
   fi
   __ui_prompt_choice="$(trim_menu_choice "$__ui_prompt_choice" 2>/dev/null || printf '%s' "$__ui_prompt_choice")"
   case "${__ui_prompt_choice,,}" in
-    quit|exit) __ui_prompt_choice="q" ;;
+    quit | exit) __ui_prompt_choice="q" ;;
     back) __ui_prompt_choice="b" ;;
   esac
   if [[ -n "$__target" ]]; then
@@ -468,6 +480,25 @@ ui_prompt() {
 }
 
 # Compact submenu title used by App Wizard / Library and other nested menus.
+
+ui_submenu_footer() {
+  local width gap
+
+  width="$(ui_panel_width)"
+
+  # Keep Back in the left half and Quit aligned with the second
+  # menu column. The visible width of "B. Back" is seven chars.
+  gap=$((width / 2 - 7))
+  ((gap < 4)) && gap=4
+
+  echo
+  ui_text cyan "B."
+  printf ' Back'
+  printf '%*s' "$gap" ''
+  ui_text orange "Q."
+  printf ' Quit\n'
+}
+
 ui_submenu_header() {
   local title="$1"
   local subtitle="${2:-}"
@@ -476,20 +507,20 @@ ui_submenu_header() {
   ui_init
   width="$(ui_panel_width)"
   inner=$((width - 2))
-  (( inner < 10 )) && inner=10
+  ((inner < 10)) && inner=10
 
   echo
   ui_box_line top "$width"
   printf '%s ' "$UI_V"
   ui_text cyan "$title"
   pad=$((inner - 1 - ${#title}))
-  (( pad < 0 )) && pad=0
+  ((pad < 0)) && pad=0
   printf '%*s%s\n' "$pad" "" "$UI_V"
   if [[ -n "$subtitle" ]]; then
     printf '%s ' "$UI_V"
     ui_text muted "$subtitle"
     pad=$((inner - 1 - ${#subtitle}))
-    (( pad < 0 )) && pad=0
+    ((pad < 0)) && pad=0
     printf '%*s%s\n' "$pad" "" "$UI_V"
   fi
   ui_box_line bot "$width"
@@ -504,10 +535,10 @@ ui_box_titled_top() {
   local width="${2:-$(ui_panel_width)}"
   local inner=$((width - 2))
   local fill
-  (( inner < 10 )) && inner=10
+  ((inner < 10)) && inner=10
   # "─ " + title + " " + fill  == inner
   fill=$((inner - 3 - ${#title}))
-  (( fill < 1 )) && fill=1
+  ((fill < 1)) && fill=1
   ui_c muted
   printf '%s%s ' "$UI_TL" "$UI_H"
   ui_c reset
@@ -538,7 +569,7 @@ ui_row_begin() {
 ui_row_add() {
   local text="${1:-}"
   printf '%s' "$text"
-  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + ${#text} ))
+  UI_ROW_USED=$((${UI_ROW_USED:-0} + ${#text}))
 }
 
 ui_row_add_colored() {
@@ -546,7 +577,7 @@ ui_row_add_colored() {
   shift
   local text="$*"
   ui_text "$color" "$text"
-  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + ${#text} ))
+  UI_ROW_USED=$((${UI_ROW_USED:-0} + ${#text}))
 }
 
 # Add a semantic percentage bar without letting ANSI escape sequences affect
@@ -558,15 +589,15 @@ ui_row_add_percent_bar() {
 
   [[ "$percent" =~ ^[0-9]+$ ]] || percent=0
   [[ "$length" =~ ^[0-9]+$ ]] || length=10
-  (( percent < 0 )) && percent=0
-  (( percent > 100 )) && percent=100
-  (( length < 4 )) && length=4
+  ((percent < 0)) && percent=0
+  ((percent > 100)) && percent=100
+  ((length < 4)) && length=4
 
-  filled=$(( (percent * length + 50) / 100 ))
-  (( filled > length )) && filled="$length"
-  empty=$(( length - filled ))
+  filled=$(((percent * length + 50) / 100))
+  ((filled > length)) && filled="$length"
+  empty=$((length - filled))
 
-  if (( ${UI_UNICODE:-0} == 1 )); then
+  if ((${UI_UNICODE:-0} == 1)); then
     fill_char="█"
     empty_char="░"
   else
@@ -580,7 +611,7 @@ ui_row_add_percent_bar() {
   ui_c reset
   ui_text muted "$(ui_repeat "$empty_char" "$empty")"
   ui_text muted "]"
-  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + length + 2 ))
+  UI_ROW_USED=$((${UI_ROW_USED:-0} + length + 2))
 }
 
 # Pad the current box row to an exact visible column. This keeps internal
@@ -589,10 +620,10 @@ ui_row_add_percent_bar() {
 ui_row_pad_to() {
   local target="${1:-0}" pad
   [[ "$target" =~ ^[0-9]+$ ]] || return 1
-  pad=$(( target - ${UI_ROW_USED:-0} ))
-  (( pad > 0 )) || return 0
+  pad=$((target - ${UI_ROW_USED:-0}))
+  ((pad > 0)) || return 0
   printf '%*s' "$pad" ''
-  UI_ROW_USED=$(( ${UI_ROW_USED:-0} + pad ))
+  UI_ROW_USED=$((${UI_ROW_USED:-0} + pad))
 }
 
 ui_row_end() {
@@ -600,7 +631,7 @@ ui_row_end() {
   width="$(ui_panel_width)"
   inner=$((width - 2))
   pad=$((inner - ${UI_ROW_USED:-0}))
-  (( pad < 0 )) && pad=0
+  ((pad < 0)) && pad=0
   printf '%*s' "$pad" ""
   ui_text muted "$UI_V"
   printf '\n'
@@ -614,8 +645,8 @@ ui_row_plain() {
   width="$(ui_panel_width)"
   inner=$((width - 2))
   max=$((inner - 1))
-  (( max < 8 )) && max=8
-  if (( ${#text} > max )); then
+  ((max < 8)) && max=8
+  if ((${#text} > max)); then
     text="${text:0:$((max - 3))}..."
   fi
   ui_row_begin

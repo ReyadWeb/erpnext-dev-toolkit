@@ -1789,7 +1789,7 @@ show_hostname_hosts_menu() {
       "5) Stable VM IP guide" \
       "6) Multi-environment naming guide" \
       "7) Host access test guide"
-    menu_footer back "Access & Networking"
+    ui_submenu_footer
     local choice=""
     menu_read_choice choice
 
@@ -1937,16 +1937,6 @@ render_production_access_menu_options() {
   ui_box_line bot "$width"
 }
 
-access_menu_footer() {
-  echo
-  ui_text cyan "B."
-  printf ' Back'
-  printf '                        '
-  ui_text orange "Q."
-  printf ' Quit
-'
-}
-
 show_access_menu() {
   local production_mode=0
 
@@ -1965,7 +1955,7 @@ show_access_menu() {
       render_local_access_menu_options
     fi
 
-    access_menu_footer
+    ui_submenu_footer
 
     local access_choice=""
     menu_read_choice access_choice
@@ -2095,7 +2085,7 @@ show_credentials_menu() {
       "4) Secure file" \
       "5) Delete local file" \
       "6) Reset admin password"
-    menu_footer
+    ui_submenu_footer
     local credentials_choice=""
     menu_read_choice credentials_choice
 

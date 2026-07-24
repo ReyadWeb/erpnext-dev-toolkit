@@ -429,11 +429,15 @@ restore_site_full() {
         use_latest="y"
       fi
       if [[ "$use_latest" =~ ^[Nn]$|^[Nn][Oo]$ ]]; then
-        db_file=""; public_file=""; private_file=""
+        db_file=""
+        public_file=""
+        private_file=""
       fi
     else
       status_line "Latest backup set" "WARN" "${prefix:-none} is partial; manual selection required"
-      db_file=""; public_file=""; private_file=""
+      db_file=""
+      public_file=""
+      private_file=""
     fi
   fi
 
@@ -549,27 +553,53 @@ run_maintenance_menu() {
       "7) Repair frontend assets" \
       "8) Run safe repair" \
       "9) Show recent service logs"
-    menu_footer
+    ui_submenu_footer
     local maintenance_choice=""
     menu_read_choice maintenance_choice
 
     case "$maintenance_choice" in
-      1) maintenance_migrate; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      2) maintenance_build; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      3) maintenance_clear_cache; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      4) maintenance_restart; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      5) verify_frontend_assets; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      6) wait_frontend_assets; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      7) repair_frontend_assets; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      8) run_repair; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      9) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Maintenance..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        maintenance_migrate
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      2)
+        maintenance_build
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      3)
+        maintenance_clear_cache
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      4)
+        maintenance_restart
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      5)
+        verify_frontend_assets
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      6)
+        wait_frontend_assets
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      7)
+        repair_frontend_assets
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      8)
+        run_repair
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      9)
+        show_erpnext_service_logs
+        pause_after_screen "Press Enter to return to Maintenance..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
 }
-
 
 # ============================================================
 # Backup / Restore Hardening
@@ -668,7 +698,6 @@ backup_latest_set_paths() {
 
   return 1
 }
-
 
 off_vm_backup_summary_pair() {
   off_vm_backup_load_config
@@ -843,10 +872,10 @@ verify_latest_backup_set() {
   ok_count=0
   fail_count=0
 
-  if verify_backup_file "Database" "$db_file" gzip; then ok_count=$((ok_count+1)); else fail_count=$((fail_count+1)); fi
-  if verify_backup_file "Public files" "$public_file" tar; then ok_count=$((ok_count+1)); else fail_count=$((fail_count+1)); fi
-  if verify_backup_file "Private files" "$private_file" tar; then ok_count=$((ok_count+1)); else fail_count=$((fail_count+1)); fi
-  if verify_backup_file "Site config" "$config_file" json; then ok_count=$((ok_count+1)); else true; fi
+  if verify_backup_file "Database" "$db_file" gzip; then ok_count=$((ok_count + 1)); else fail_count=$((fail_count + 1)); fi
+  if verify_backup_file "Public files" "$public_file" tar; then ok_count=$((ok_count + 1)); else fail_count=$((fail_count + 1)); fi
+  if verify_backup_file "Private files" "$private_file" tar; then ok_count=$((ok_count + 1)); else fail_count=$((fail_count + 1)); fi
+  if verify_backup_file "Site config" "$config_file" json; then ok_count=$((ok_count + 1)); else true; fi
 
   if [[ "$fail_count" -eq 0 ]]; then
     if restore_rehearsal_recorded_ok; then
@@ -976,8 +1005,8 @@ restore_rehearsal_summary_pair() {
   [[ -n "$target_kind" || -n "$target_label" ]] && detail="${detail}; target ${target_kind:-restore-vm}${target_label:+/${target_label}}"
   [[ -n "$target_ip" ]] && detail="${detail}; IP noted ${target_ip}"
   case "$login_validated" in
-    true|yes|YES|1) detail="${detail}; login validated" ;;
-    false|no|NO|0) detail="${detail}; login not recorded" ;;
+    true | yes | YES | 1) detail="${detail}; login validated" ;;
+    false | no | NO | 0) detail="${detail}; login not recorded" ;;
   esac
   printf 'OK|%s
 ' "$detail"
@@ -1064,8 +1093,8 @@ record_restore_rehearsal() {
     result="${answer_result:-$result}"
     read -r -p "Was browser/login validation completed? [y/N]: " answer_login
     case "$answer_login" in
-      y|Y|yes|YES) login_validated="true" ;;
-      n|N|no|NO|"") login_validated="false" ;;
+      y | Y | yes | YES) login_validated="true" ;;
+      n | N | no | NO | "") login_validated="false" ;;
       *) login_validated="$(sanitize_restore_rehearsal_value "$answer_login")" ;;
     esac
     read -r -p "Notes [${notes}]: " answer_notes
@@ -1153,7 +1182,6 @@ show_restore_rehearsal_report() {
   ui_box_end
 }
 
-
 backup_schedule_timer_active() {
   command -v systemctl >/dev/null 2>&1 || return 1
   systemctl is-active --quiet "$BACKUP_SCHEDULE_TIMER" 2>/dev/null
@@ -1212,7 +1240,7 @@ configure_backup_schedule() {
   service_tmp="$(mktemp /tmp/erpnext-dev-backup.XXXXXX.service)" || fail "Could not create temporary service unit file."
   timer_tmp="$(mktemp /tmp/erpnext-dev-backup.XXXXXX.timer)" || fail "Could not create temporary timer unit file."
 
-  cat > "$service_tmp" <<EOF_SERVICE
+  cat >"$service_tmp" <<EOF_SERVICE
 [Unit]
 Description=ERPNext scheduled backup for ${SITE_NAME}
 Wants=network-online.target
@@ -1226,7 +1254,7 @@ Environment=DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-development}
 ExecStart=${INSTALLER_CANONICAL_PATH} backup-files
 EOF_SERVICE
 
-  cat > "$timer_tmp" <<EOF_TIMER
+  cat >"$timer_tmp" <<EOF_TIMER
 [Unit]
 Description=Run ERPNext scheduled backup for ${SITE_NAME}
 
@@ -1287,7 +1315,6 @@ show_backup_schedule_status() {
   ui_box_end
 }
 
-
 backup_complete_sets() {
   local backup_dir db_file candidate completeness prefix public_file private_file config_file mtime
   backup_dir="$(site_backup_dir)"
@@ -1337,7 +1364,7 @@ backup_retention_candidate_sets() {
   index=0
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
-    index=$((index+1))
+    index=$((index + 1))
     if [[ "$index" -gt "$keep" ]]; then
       printf '%s\n' "$line"
     fi
@@ -1353,7 +1380,7 @@ show_backup_retention_plan() {
   keep="$(backup_retention_keep_count)"
   delete_count=0
   if [[ "$complete_count" -gt "$keep" ]]; then
-    delete_count=$((complete_count-keep))
+    delete_count=$((complete_count - keep))
   fi
   disk_percent="$(backup_disk_usage_percent)"
   warn_percent="${BACKUP_RETENTION_WARN_DISK_PERCENT:-80}"
@@ -1432,7 +1459,7 @@ cleanup_old_backups() {
   while IFS='|' read -r _mtime prefix db_file public_file private_file config_file; do
     [[ -n "$prefix" ]] || continue
     echo "  - $prefix"
-  done <<< "$candidates"
+  done <<<"$candidates"
 
   if [[ "$mode" == "dry-run" ]]; then
     echo
@@ -1458,7 +1485,7 @@ cleanup_old_backups() {
         $SUDO rm -f -- "$file"
       fi
     done
-  done <<< "$candidates"
+  done <<<"$candidates"
 
   disk_after="$($SUDO du -sh "$(site_backup_dir)" 2>/dev/null | awk '{print $1}' || echo unknown)"
   echo
@@ -1535,7 +1562,6 @@ show_restore_preflight() {
   ui_box_end
 }
 
-
 off_vm_backup_load_config() {
   local value
   if [[ -z "${OFF_VM_BACKUP_TARGET:-}" ]]; then
@@ -1564,7 +1590,7 @@ off_vm_backup_load_config() {
 off_vm_strict_host_key_enabled() {
   off_vm_backup_load_config
   case "${OFF_VM_STRICT_HOST_KEY,,}" in
-    1|true|yes|on) return 0 ;;
+    1 | true | yes | on) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -1622,7 +1648,7 @@ validate_off_vm_backup_target() {
   [[ "$target" != *"'"* ]] || return 1
   [[ "$target" != -* ]] || return 1
   case "$target" in
-    *example-backup-server*|*example.com*|backup@*)
+    *example-backup-server* | *example.com* | backup@*)
       # Reject documentation placeholders so users do not save/test the example target.
       [[ "$target" != *example-backup-server* && "$target" != *example.com* ]] || return 1
       ;;
@@ -1693,7 +1719,7 @@ off_vm_verify_host_key() {
   $SUDO $ssh_cmd_str "$host" true >/tmp/erpnext-dev-offvm-verify.out 2>&1
   rc=$?
   set -e
-  if (( rc == 0 )); then
+  if ((rc == 0)); then
     status_line "SSH probe" "OK" "host key and auth accepted"
   else
     status_line "SSH probe" "WARN" "exit ${rc} (host key mismatch, missing trust, or auth). See /tmp/erpnext-dev-offvm-verify.out"
@@ -1843,7 +1869,6 @@ generate_off_vm_backup_key() {
   ui_next "$(toolkit_cmd backup-server-setup) on the backup server" "$(toolkit_cmd off-vm-backup-guided-setup) on this ERPNext VM"
   ui_box_end
 }
-
 
 restore_backup_default_identity() {
   printf '%s\n' "${RESTORE_BACKUP_SSH_IDENTITY:-/root/.ssh/erpnext_restore_backup}"
@@ -2061,7 +2086,7 @@ backup_server_remove_restore_key() {
     skip && /^# erpnext-dev restore rehearsal key end:/ { skip=0; next }
     !skip { print }
     END { if (removed == 0) exit 2 }
-  ' "$auth_file" > "$tmp_file"
+  ' "$auth_file" >"$tmp_file"
   rc=$?
   set -e
   if [[ "$rc" -eq 2 ]]; then
@@ -2181,19 +2206,45 @@ restore_rehearsal_wizard() {
       "5) Restore latest backup set" \
       "6) Post-restore checks" \
       "7) Cleanup reminder"
-    menu_footer
+    ui_submenu_footer
     local restore_choice=""
     menu_read_choice restore_choice
     case "$restore_choice" in
-      1) restore_clean_vm_preflight; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
-      2) generate_restore_backup_key; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
-      3) pull_off_vm_backup_to_restore_vm; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
-      4) verify_latest_backup_set; show_restore_preflight; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
-      5) restore_site_full; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
-      6) run_full_status || true; show_backup_status || true; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
-      7) echo; echo "After browser/login validation, run this on the backup server:"; echo "  sudo erpnext-dev backup-server-list-restore-keys"; echo "  sudo erpnext-dev backup-server-remove-restore-key"; pause_after_screen "Press Enter to return to Restore Rehearsal..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        restore_clean_vm_preflight
+        pause_after_screen "Press Enter to return to Restore Rehearsal..."
+        ;;
+      2)
+        generate_restore_backup_key
+        pause_after_screen "Press Enter to return to Restore Rehearsal..."
+        ;;
+      3)
+        pull_off_vm_backup_to_restore_vm
+        pause_after_screen "Press Enter to return to Restore Rehearsal..."
+        ;;
+      4)
+        verify_latest_backup_set
+        show_restore_preflight
+        pause_after_screen "Press Enter to return to Restore Rehearsal..."
+        ;;
+      5)
+        restore_site_full
+        pause_after_screen "Press Enter to return to Restore Rehearsal..."
+        ;;
+      6)
+        run_full_status || true
+        show_backup_status || true
+        pause_after_screen "Press Enter to return to Restore Rehearsal..."
+        ;;
+      7)
+        echo
+        echo "After browser/login validation, run this on the backup server:"
+        echo "  sudo erpnext-dev backup-server-list-restore-keys"
+        echo "  sudo erpnext-dev backup-server-remove-restore-key"
+        pause_after_screen "Press Enter to return to Restore Rehearsal..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) menu_invalid_choice "$restore_choice" "type b to go back or q to quit" || true ;;
     esac
   done
@@ -2212,7 +2263,6 @@ normalize_backup_server_dir() {
   [[ "$dir" != *".."* ]] || return 1
   printf '%s\n' "${dir%/}"
 }
-
 
 backup_server_suggested_root() {
   local configured="${1:-}" volume_mount=""
@@ -2533,13 +2583,16 @@ run_off_vm_backup_rsync() {
 object_backup_load_config() {
   local v
   if [[ -z "${OBJECT_RCLONE_REMOTE:-}" ]]; then
-    v="$(read_config_key_from_file "$OBJECT_BACKUP_CONFIG_FILE" OBJECT_RCLONE_REMOTE 2>/dev/null || true)"; [[ -n "$v" ]] && OBJECT_RCLONE_REMOTE="$v"
+    v="$(read_config_key_from_file "$OBJECT_BACKUP_CONFIG_FILE" OBJECT_RCLONE_REMOTE 2>/dev/null || true)"
+    [[ -n "$v" ]] && OBJECT_RCLONE_REMOTE="$v"
   fi
   if [[ -z "${OBJECT_BUCKET:-}" ]]; then
-    v="$(read_config_key_from_file "$OBJECT_BACKUP_CONFIG_FILE" OBJECT_BUCKET 2>/dev/null || true)"; [[ -n "$v" ]] && OBJECT_BUCKET="$v"
+    v="$(read_config_key_from_file "$OBJECT_BACKUP_CONFIG_FILE" OBJECT_BUCKET 2>/dev/null || true)"
+    [[ -n "$v" ]] && OBJECT_BUCKET="$v"
   fi
   if [[ -z "${OBJECT_PREFIX:-}" ]]; then
-    v="$(read_config_key_from_file "$OBJECT_BACKUP_CONFIG_FILE" OBJECT_PREFIX 2>/dev/null || true)"; [[ -n "$v" ]] && OBJECT_PREFIX="$v"
+    v="$(read_config_key_from_file "$OBJECT_BACKUP_CONFIG_FILE" OBJECT_PREFIX 2>/dev/null || true)"
+    [[ -n "$v" ]] && OBJECT_PREFIX="$v"
   fi
 }
 
@@ -2552,7 +2605,8 @@ object_backup_configured() {
 object_backup_dest() {
   object_backup_load_config
   local prefix="${OBJECT_PREFIX:-}"
-  prefix="${prefix#/}"; prefix="${prefix%/}"
+  prefix="${prefix#/}"
+  prefix="${prefix%/}"
   if [[ -n "$prefix" ]]; then
     printf '%s:%s/%s/%s\n' "$OBJECT_RCLONE_REMOTE" "$OBJECT_BUCKET" "$prefix" "$SITE_NAME"
   else
@@ -2858,9 +2912,11 @@ show_off_vm_backup_status() {
   local target_status target_detail last_status last_run last_detail latest_lines completeness
   off_vm_backup_load_config
   if off_vm_backup_configured; then
-    target_status="OK"; target_detail="$OFF_VM_BACKUP_TARGET"
+    target_status="OK"
+    target_detail="$OFF_VM_BACKUP_TARGET"
   else
-    target_status="WARN"; target_detail="not configured"
+    target_status="WARN"
+    target_detail="not configured"
   fi
   last_status="$(off_vm_backup_last_state LAST_STATUS 2>/dev/null || echo none)"
   last_run="$(off_vm_backup_last_state LAST_RUN_AT 2>/dev/null || echo never)"
@@ -2932,28 +2988,76 @@ off_vm_backup_wizard() {
       "14) Generate restore key" \
       "15) Add restore key" \
       "16) Remove restore key"
-    menu_footer
+    ui_submenu_footer
     local off_choice=""
     menu_read_choice off_choice
     case "$off_choice" in
-      1) show_off_vm_backup_plan; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      2) off_vm_backup_guided_setup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      3) generate_off_vm_backup_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      4) configure_rsync_backup_target; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      5) off_vm_trust_host_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      6) off_vm_verify_host_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      7) off_vm_strict_host_key_enable; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      8) run_off_vm_backup_rsync dry-run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      9) run_off_vm_backup_rsync run; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      10) show_off_vm_backup_status; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      11) disable_off_vm_backup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      12) backup_server_setup; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      13) restore_rehearsal_wizard; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      14) generate_restore_backup_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      15) backup_server_add_restore_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      16) backup_server_remove_restore_key; pause_after_screen "Press Enter to return to Off-VM Backup..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        show_off_vm_backup_plan
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      2)
+        off_vm_backup_guided_setup
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      3)
+        generate_off_vm_backup_key
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      4)
+        configure_rsync_backup_target
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      5)
+        off_vm_trust_host_key
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      6)
+        off_vm_verify_host_key
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      7)
+        off_vm_strict_host_key_enable
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      8)
+        run_off_vm_backup_rsync dry-run
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      9)
+        run_off_vm_backup_rsync run
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      10)
+        show_off_vm_backup_status
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      11)
+        disable_off_vm_backup
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      12)
+        backup_server_setup
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      13)
+        restore_rehearsal_wizard
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      14)
+        generate_restore_backup_key
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      15)
+        backup_server_add_restore_key
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      16)
+        backup_server_remove_restore_key
+        pause_after_screen "Press Enter to return to Off-VM Backup..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -2976,25 +3080,64 @@ backup_hardening_wizard() {
       "11) Retention plan" \
       "12) Retention status" \
       "13) Cleanup dry run"
-    menu_footer
+    ui_submenu_footer
     local backup_harden_choice=""
     menu_read_choice backup_harden_choice
     case "$backup_harden_choice" in
-      1) create_site_backup true; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      2) show_backup_status; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      3) verify_latest_backup_set; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      4) show_off_vm_backup_guide; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      5) show_restore_rehearsal_guide; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      6) show_production_checklist; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      7) list_site_backups; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      8) show_backup_schedule_plan; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      9) configure_backup_schedule; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      10) show_backup_schedule_status; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      11) show_backup_retention_plan; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      12) show_backup_retention_status; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      13) cleanup_old_backups dry-run; pause_after_screen "Press Enter to return to Backup Hardening..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        create_site_backup true
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      2)
+        show_backup_status
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      3)
+        verify_latest_backup_set
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      4)
+        show_off_vm_backup_guide
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      5)
+        show_restore_rehearsal_guide
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      6)
+        show_production_checklist
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      7)
+        list_site_backups
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      8)
+        show_backup_schedule_plan
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      9)
+        configure_backup_schedule
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      10)
+        show_backup_schedule_status
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      11)
+        show_backup_retention_plan
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      12)
+        show_backup_retention_status
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      13)
+        cleanup_old_backups dry-run
+        pause_after_screen "Press Enter to return to Backup Hardening..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -3019,28 +3162,70 @@ run_backup_maintenance_menu() {
       "13) Retention status" \
       "14) Cleanup dry run" \
       "15) Maintenance tasks"
-    menu_footer
+    ui_submenu_footer
     local backup_choice=""
     menu_read_choice backup_choice
 
     case "$backup_choice" in
-      1) create_site_backup false; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      2) create_site_backup true; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      3) show_backup_status; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      4) verify_latest_backup_set; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      5) show_off_vm_backup_guide; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      6) show_restore_rehearsal_guide; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      7) list_site_backups; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      8) restore_site_database; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      9) restore_site_full; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      10) show_backup_schedule_status; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      11) configure_backup_schedule; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      12) disable_backup_schedule; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      13) show_backup_retention_status; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
-      14) cleanup_old_backups dry-run; pause_after_screen "Press Enter to return to Backup / Maintenance..." ;;
+      1)
+        create_site_backup false
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      2)
+        create_site_backup true
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      3)
+        show_backup_status
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      4)
+        verify_latest_backup_set
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      5)
+        show_off_vm_backup_guide
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      6)
+        show_restore_rehearsal_guide
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      7)
+        list_site_backups
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      8)
+        restore_site_database
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      9)
+        restore_site_full
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      10)
+        show_backup_schedule_status
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      11)
+        configure_backup_schedule
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      12)
+        disable_backup_schedule
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      13)
+        show_backup_retention_status
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
+      14)
+        cleanup_old_backups dry-run
+        pause_after_screen "Press Enter to return to Backup / Maintenance..."
+        ;;
       15) run_maintenance_menu ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done

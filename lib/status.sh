@@ -375,16 +375,6 @@ render_status_menu_options() {
   ui_box_line bot "$width"
 }
 
-status_menu_footer() {
-  echo
-  ui_text cyan "B."
-  printf ' Back'
-  printf '                        '
-  ui_text orange "Q."
-  printf ' Quit
-'
-}
-
 show_status_menu() {
   while true; do
     ui_submenu_header "Status" \
@@ -392,7 +382,7 @@ show_status_menu() {
 
     render_status_menu_options
 
-    status_menu_footer
+    ui_submenu_footer
 
     local status_choice=""
     menu_read_choice status_choice

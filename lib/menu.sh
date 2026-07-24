@@ -709,7 +709,7 @@ show_local_development_menu() {
       "7) Credentials" \
       "8) Environment check" \
       "9) Setup lifecycle guide"
-    menu_footer back "Main menu"
+    ui_submenu_footer
     local choice=""
     menu_read_choice choice
 
@@ -754,7 +754,7 @@ show_production_setup_menu() {
       "7) Production operations" \
       "8) Final QA" \
       "9) Setup lifecycle guide"
-    menu_footer back "Main menu"
+    ui_submenu_footer
     local choice=""
     menu_read_choice choice
 
@@ -789,20 +789,81 @@ show_production_setup_menu() {
   done
 }
 
+https_domains_menu_render_option() {
+  local key="$1"
+  local label="$2"
+
+  ui_row_add_colored cyan "[$key]"
+  ui_row_add " $label"
+}
+
+https_domains_menu_render_pair() {
+  local width="$1"
+  local left_key="$2"
+  local left_label="$3"
+  local right_key="${4:-}"
+  local right_label="${5:-}"
+  local second_column
+
+  second_column=$((width / 2))
+
+  ui_row_begin
+  https_domains_menu_render_option "$left_key" "$left_label"
+
+  if [[ -n "$right_key" ]]; then
+    ui_row_pad_to "$second_column"
+    https_domains_menu_render_option "$right_key" "$right_label"
+  fi
+
+  ui_row_end
+}
+
+render_https_domains_menu_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    https_domains_menu_render_pair \
+      "$width" "1" "Local HTTPS" \
+      "5" "Local domain / DNS status"
+
+    https_domains_menu_render_pair \
+      "$width" "2" "Production HTTPS" \
+      "6" "SSL / HTTPS roadmap"
+
+    https_domains_menu_render_pair \
+      "$width" "3" "Domain configuration" \
+      "7" "SSL mode status & guide"
+
+    https_domains_menu_render_pair \
+      "$width" "4" "Change local domain" \
+      "8" "Production readiness"
+  else
+    https_domains_menu_render_pair "$width" "1" "Local HTTPS"
+    https_domains_menu_render_pair "$width" "2" "Production HTTPS"
+    https_domains_menu_render_pair "$width" "3" "Domain configuration"
+    https_domains_menu_render_pair "$width" "4" "Change local domain"
+    https_domains_menu_render_pair "$width" "5" "Local domain / DNS status"
+    https_domains_menu_render_pair "$width" "6" "SSL / HTTPS roadmap"
+    https_domains_menu_render_pair "$width" "7" "SSL mode status & guide"
+    https_domains_menu_render_pair "$width" "8" "Production readiness"
+  fi
+
+  ui_box_line bot "$width"
+}
+
 show_https_domains_menu() {
   while true; do
+
     ui_submenu_header "HTTPS & Domains" \
       "Local trust, production certificates, domains, and SSL guidance"
-    print_two_column_menu \
-      "1) Local HTTPS" \
-      "2) Production HTTPS" \
-      "3) Domain configuration" \
-      "4) Change local domain" \
-      "5) Local domain / DNS status" \
-      "6) SSL / HTTPS roadmap" \
-      "7) SSL mode status & guide" \
-      "8) Production readiness"
-    menu_footer back "Main menu"
+
+    render_https_domains_menu_options
+
+    ui_submenu_footer
     local choice=""
     menu_read_choice choice
 
@@ -902,16 +963,6 @@ render_operations_menu_options() {
   ui_box_line bot "$width"
 }
 
-operations_menu_footer() {
-  echo
-  ui_text cyan "B."
-  printf ' Back'
-  printf '                        '
-  ui_text orange "Q."
-  printf ' Quit
-'
-}
-
 show_operations_updates_menu() {
   while true; do
     ui_submenu_header "Updates" \
@@ -931,7 +982,7 @@ show_operations_updates_menu() {
 
     ui_box_line bot "$width"
 
-    operations_menu_footer
+    ui_submenu_footer
 
     local choice=""
     menu_read_choice choice
@@ -965,7 +1016,7 @@ show_operations_menu() {
 
     render_operations_menu_options
 
-    operations_menu_footer
+    ui_submenu_footer
 
     local choice=""
     menu_read_choice choice

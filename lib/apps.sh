@@ -1371,7 +1371,7 @@ run_app_install_wizard() {
     printf '\n'
     ui_text muted "The wizard will offer a backup checkpoint first."
     printf '\n'
-    menu_footer
+    ui_submenu_footer
     menu_read_choice choice
 
     case "$choice" in
@@ -1628,7 +1628,7 @@ show_advanced_app_tools_menu() {
     print_two_column_menu "1) Custom Git app" "2) Repair app registry" "3) Rollback guide" "4) Installed apps"
     echo
     warn "Custom Git apps are not curated by this toolkit and may break the site if incompatible."
-    menu_footer
+    ui_submenu_footer
     local advanced_app_choice=""
     menu_read_choice advanced_app_choice
 
@@ -1841,15 +1841,6 @@ render_app_library_menu_options() {
   ui_box_line bot "$width"
 }
 
-app_menu_footer() {
-  echo
-  ui_text cyan "B."
-  printf ' Back'
-  printf '                        '
-  ui_text orange "Q."
-  printf ' Quit\n'
-}
-
 show_app_profile_collection_menu() {
   local title="$1"
   local description="$2"
@@ -1891,7 +1882,7 @@ show_app_profile_collection_menu() {
     fi
 
     echo
-    app_menu_footer
+    ui_submenu_footer
 
     choice=""
     menu_read_choice choice
@@ -1995,7 +1986,7 @@ show_app_library_menu() {
     render_app_library_menu_options
 
     echo
-    app_menu_footer
+    ui_submenu_footer
 
     local app_choice=""
     menu_read_choice app_choice
