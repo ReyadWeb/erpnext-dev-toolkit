@@ -16,6 +16,10 @@ _ERPNEXT_DEV_LOCAL_IP_LOADED=1
 : "${LOCAL_IP_DRY_RUN:=0}"
 # Optional override for tests: netplan | ifupdown | none
 : "${LOCAL_IP_FORCE_BACKEND:=}"
+: "${LOCAL_IP_RESOLV_CONF:=/etc/resolv.conf}"
+: "${LOCAL_IP_DNS_SERVERS:=1.1.1.1 8.8.8.8}"
+: "${LOCAL_IP_DNS_TEST_HOSTS:=deb.debian.org github.com}"
+: "${LOCAL_IP_OS_RELEASE_FILE:=/etc/os-release}"
 
 local_ip_state_file() {
   printf '%s\n' "${LOCAL_IP_STATE_FILE}"
@@ -53,6 +57,156 @@ local_ip_backend() {
     return 0
   fi
   printf 'none\n'
+}
+
+local_ip_os_id() {
+  local os_id=""
+
+  if [[ -n "${LOCAL_IP_OS_ID:-}" ]]; then
+    printf '%s\n' "${LOCAL_IP_OS_ID,,}"
+    return 0
+  fi
+
+  if [[ -r "${LOCAL_IP_OS_RELEASE_FILE}" ]]; then
+    os_id="$(
+      awk -F= '
+        $1 == "ID" {
+          gsub(/"/, "", $2)
+          print tolower($2)
+          exit
+        }
+      ' "${LOCAL_IP_OS_RELEASE_FILE}" 2>/dev/null
+    )"
+  fi
+
+  printf '%s\n' "${os_id:-unknown}"
+}
+
+local_ip_resolver_has_nameserver() {
+  [[ -r "${LOCAL_IP_RESOLV_CONF}" ]] || return 1
+
+  grep -Eq \
+    '^[[:space:]]*nameserver[[:space:]]+[^[:space:]#]+' \
+    "${LOCAL_IP_RESOLV_CONF}" 2>/dev/null
+}
+
+local_ip_prepare_ifupdown_dns() {
+  if [[ "${LOCAL_IP_DRY_RUN}" == "1" ]]; then
+    echo "DRY RUN: resolver integration would be verified"
+    return 0
+  fi
+
+  if command -v resolvconf >/dev/null 2>&1; then
+    status_line \
+      "Resolver integration" \
+      "OK" \
+      "resolvconf available"
+    return 0
+  fi
+
+  if [[ "$(local_ip_os_id)" != "debian" ]]; then
+    err "ifupdown DNS integration requires resolvconf on this guest."
+    return 1
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    err "apt-get is unavailable; cannot install Debian resolver integration."
+    return 1
+  fi
+
+  status_line \
+    "Resolver integration" \
+    "INFO" \
+    "installing resolvconf before changing networking"
+
+  if ! $SUDO env DEBIAN_FRONTEND=noninteractive \
+    apt-get update; then
+    err "Could not refresh apt metadata for resolvconf."
+    return 1
+  fi
+
+  if ! $SUDO env DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y resolvconf; then
+    err "Could not install resolvconf."
+    return 1
+  fi
+
+  if ! command -v resolvconf >/dev/null 2>&1; then
+    err "resolvconf installation completed but its command is unavailable."
+    return 1
+  fi
+
+  status_line \
+    "Resolver integration" \
+    "OK" \
+    "resolvconf installed"
+}
+
+local_ip_refresh_ifupdown_dns() {
+  local iface="${1:-unknown}"
+
+  if [[ "${LOCAL_IP_DRY_RUN}" == "1" ]]; then
+    echo "DRY RUN: resolver state would be refreshed for ${iface}"
+    return 0
+  fi
+
+  if ! command -v resolvconf >/dev/null 2>&1; then
+    err "resolvconf is unavailable after applying ifupdown."
+    return 1
+  fi
+
+  if ! $SUDO resolvconf -u; then
+    err "resolvconf could not refresh ${LOCAL_IP_RESOLV_CONF}."
+    return 1
+  fi
+
+  status_line \
+    "Resolver refresh" \
+    "OK" \
+    "${iface}"
+}
+
+local_ip_verify_dns_resolution() {
+  local attempt host
+  local -a hosts=()
+
+  if [[ "${LOCAL_IP_DRY_RUN}" == "1" ]]; then
+    echo "DRY RUN: DNS resolution verification skipped"
+    return 0
+  fi
+
+  if ! command -v getent >/dev/null 2>&1; then
+    err "getent is unavailable; cannot verify DNS resolution."
+    return 1
+  fi
+
+  if ! local_ip_resolver_has_nameserver; then
+    err "${LOCAL_IP_RESOLV_CONF} contains no usable nameserver entry."
+    return 1
+  fi
+
+  read -r -a hosts <<<"${LOCAL_IP_DNS_TEST_HOSTS}"
+
+  for attempt in 1 2 3 4 5; do
+    for host in "${hosts[@]}"; do
+      [[ -n "$host" ]] || continue
+
+      if getent hosts "$host" >/dev/null 2>&1; then
+        status_line \
+          "DNS resolution" \
+          "OK" \
+          "$host"
+        return 0
+      fi
+    done
+
+    if ((attempt < 5)); then
+      sleep 2
+    fi
+  done
+
+  err "DNS resolution failed after applying the static interface."
+  return 1
 }
 
 local_ip_read_state_key() {
@@ -387,30 +541,45 @@ local_ip_backup_netplan() {
 }
 
 local_ip_backup_ifupdown() {
-  local backup_root stamp dest interfaces ifdir
+  local backup_root stamp dest interfaces ifdir resolver
   backup_root="$(local_ip_backup_dir)"
   stamp="$(date +%Y%m%dT%H%M%S 2>/dev/null || echo manual)"
   dest="${backup_root}/ifupdown-${stamp}"
   interfaces="${LOCAL_IP_INTERFACES_FILE}"
   ifdir="${LOCAL_IP_IFUPDOWN_DIR}"
+  resolver="${LOCAL_IP_RESOLV_CONF}"
 
   if [[ "${LOCAL_IP_DRY_RUN}" == "1" ]]; then
     mkdir -p "${dest}/interfaces.d"
+
     if [[ -f "$interfaces" ]]; then
       cp -a "$interfaces" "${dest}/interfaces"
     fi
+
     if [[ -d "$ifdir" ]]; then
       cp -a "$ifdir"/. "${dest}/interfaces.d/" 2>/dev/null || true
     fi
+
+    if [[ -e "$resolver" || -L "$resolver" ]]; then
+      cp -a "$resolver" "${dest}/resolv.conf"
+    fi
   else
     $SUDO mkdir -p "${dest}/interfaces.d"
+
     if [[ -f "$interfaces" ]]; then
       $SUDO cp -a "$interfaces" "${dest}/interfaces"
     fi
-    if [[ -d "$ifdir" ]] && compgen -G "${ifdir}/*" >/dev/null 2>&1; then
+
+    if [[ -d "$ifdir" ]] \
+      && compgen -G "${ifdir}/*" >/dev/null 2>&1; then
       $SUDO cp -a "${ifdir}/." "${dest}/interfaces.d/"
     fi
+
+    if [[ -e "$resolver" || -L "$resolver" ]]; then
+      $SUDO cp -a "$resolver" "${dest}/resolv.conf"
+    fi
   fi
+
   LOCAL_IP_LAST_BACKUP="$dest"
   printf '%s\n' "$dest"
 }
@@ -501,7 +670,7 @@ auto ${iface}
 iface ${iface} inet static
     address ${address}/${prefix}
     gateway ${gateway}
-    dns-nameservers 1.1.1.1 8.8.8.8
+    dns-nameservers ${LOCAL_IP_DNS_SERVERS}
 EOF
 
   if [[ "${LOCAL_IP_DRY_RUN}" == "1" ]]; then
@@ -627,6 +796,14 @@ run_local_static_ip_wizard() {
     local_ip_backup_ifupdown >/dev/null
     backup="${LOCAL_IP_LAST_BACKUP:-}"
     status_line "Backup" "OK" "$backup"
+
+    if ! local_ip_prepare_ifupdown_dns; then
+      err "Resolver integration could not be prepared."
+      echo "Network backup: ${backup}"
+      echo "Rollback: $(toolkit_cmd local-static-ip-rollback)"
+      return 1
+    fi
+
     local_ip_disable_ifupdown_dhcp_for_iface "$iface"
     path="$(local_ip_write_static_ifupdown "$iface" "$ip" "$prefix" "$gateway")"
     status_line "Wrote" "OK" "$path"
@@ -640,7 +817,23 @@ run_local_static_ip_wizard() {
       warn "Removed unused $(local_ip_netplan_path) (using ifupdown backend)."
     fi
     if ! local_ip_apply_ifupdown "$iface"; then
-      err "Failed to apply ifupdown static IP. Rollback: $(toolkit_cmd local-static-ip-rollback)"
+      err "Failed to apply ifupdown static IP."
+      echo "Network backup: ${backup}"
+      echo "Rollback: $(toolkit_cmd local-static-ip-rollback)"
+      return 1
+    fi
+
+    if ! local_ip_refresh_ifupdown_dns "$iface"; then
+      err "Static addressing applied, but resolver refresh failed."
+      echo "Network backup: ${backup}"
+      echo "Rollback: $(toolkit_cmd local-static-ip-rollback)"
+      return 1
+    fi
+
+    if ! local_ip_verify_dns_resolution; then
+      err "Static addressing applied, but live DNS verification failed."
+      echo "Network backup: ${backup}"
+      echo "Rollback: $(toolkit_cmd local-static-ip-rollback)"
       return 1
     fi
   fi
@@ -658,7 +851,7 @@ run_local_static_ip_wizard() {
 }
 
 run_local_static_ip_rollback() {
-  local backup dest dir backend
+  local backup dest dir backend resolver
   require_sudo
 
   backup="$(local_ip_read_state_key NETPLAN_BACKUP 2>/dev/null || true)"
@@ -693,6 +886,7 @@ run_local_static_ip_rollback() {
 
   if [[ "$backend" == "ifupdown" ]]; then
     dir="${LOCAL_IP_IFUPDOWN_DIR}"
+    resolver="${LOCAL_IP_RESOLV_CONF}"
     if [[ "${LOCAL_IP_DRY_RUN}" == "1" ]]; then
       mkdir -p "$dir"
       rm -f "$(local_ip_ifupdown_path)" 2>/dev/null || true
@@ -701,6 +895,11 @@ run_local_static_ip_rollback() {
       fi
       if [[ -d "${backup}/interfaces.d" ]]; then
         cp -a "${backup}/interfaces.d"/. "$dir"/ 2>/dev/null || true
+      fi
+
+      if [[ -e "${backup}/resolv.conf" || -L "${backup}/resolv.conf" ]]; then
+        rm -f "$resolver" 2>/dev/null || true
+        cp -a "${backup}/resolv.conf" "$resolver"
       fi
     else
       $SUDO mkdir -p "$dir"
@@ -711,7 +910,13 @@ run_local_static_ip_rollback() {
       if [[ -d "${backup}/interfaces.d" ]] && compgen -G "${backup}/interfaces.d/*" >/dev/null 2>&1; then
         $SUDO cp -a "${backup}/interfaces.d/." "${dir}/"
       fi
+
+      if [[ -e "${backup}/resolv.conf" || -L "${backup}/resolv.conf" ]]; then
+        $SUDO rm -f "$resolver" 2>/dev/null || true
+        $SUDO cp -a "${backup}/resolv.conf" "$resolver"
+      fi
     fi
+
     local_ip_apply_ifupdown "$(local_ip_current_iface)" || warn "ifupdown re-apply reported a problem; check IP with ip -brief address"
     status_line "ifupdown" "OK" "restored from backup"
   else
