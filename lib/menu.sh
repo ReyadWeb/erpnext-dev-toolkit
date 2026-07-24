@@ -1295,6 +1295,437 @@ show_operations_menu() {
   done
 }
 
+help_menu_render_option() {
+  local key="$1"
+  local label="$2"
+
+  ui_row_add_colored cyan "[$key]"
+  ui_row_add " $label"
+}
+
+help_menu_render_pair() {
+  local width="$1"
+  local left_key="$2"
+  local left_label="$3"
+  local right_key="${4:-}"
+  local right_label="${5:-}"
+  local content_width left_cell_width left_target
+
+  content_width=$((width - 6))
+  left_cell_width=$((content_width / 2))
+  left_target=$((1 + left_cell_width))
+
+  ui_row_begin
+  help_menu_render_option "$left_key" "$left_label"
+
+  if [[ -n "$right_key" ]]; then
+    ui_row_pad_to "$left_target"
+    ui_row_add " "
+    ui_row_add_colored muted "$UI_DIV"
+    ui_row_add " "
+    help_menu_render_option "$right_key" "$right_label"
+  fi
+
+  ui_row_end
+}
+
+render_help_menu_options() {
+  local width
+
+  width="$(ui_panel_width)"
+
+  ui_box_line top "$width"
+
+  if ((width >= 80)); then
+    help_menu_render_pair \
+      "$width" "1" "Getting started" \
+      "5" "Troubleshooting"
+
+    help_menu_render_pair \
+      "$width" "2" "Command reference" \
+      "6" "Support tools"
+
+    help_menu_render_pair \
+      "$width" "3" "Guides" \
+      "7" "Version & install"
+
+    help_menu_render_pair \
+      "$width" "4" "Next recommended step" \
+      "8" "Release information"
+  else
+    help_menu_render_pair "$width" "1" "Getting started"
+    help_menu_render_pair "$width" "2" "Command reference"
+    help_menu_render_pair "$width" "3" "Guides"
+    help_menu_render_pair "$width" "4" "Next recommended step"
+    help_menu_render_pair "$width" "5" "Troubleshooting"
+    help_menu_render_pair "$width" "6" "Support tools"
+    help_menu_render_pair "$width" "7" "Version & install"
+    help_menu_render_pair "$width" "8" "Release information"
+  fi
+
+  ui_box_line mid "$width"
+
+  if ((width >= 80)); then
+    help_menu_render_pair \
+      "$width" "D" "Doctor" \
+      "A" "Command audit"
+  else
+    help_menu_render_pair "$width" "D" "Doctor"
+    help_menu_render_pair "$width" "A" "Command audit"
+  fi
+
+  ui_box_line bot "$width"
+}
+
+help_getting_started_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Getting Started" \
+      "Choose a guided starting point or review the current environment."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      help_menu_render_pair \
+        "$width" "1" "Start here wizard" \
+        "4" "Environment check"
+
+      help_menu_render_pair \
+        "$width" "2" "Next recommended step" \
+        "5" "Access overview"
+
+      help_menu_render_pair \
+        "$width" "3" "Setup lifecycle"
+    else
+      help_menu_render_pair "$width" "1" "Start here wizard"
+      help_menu_render_pair "$width" "2" "Next recommended step"
+      help_menu_render_pair "$width" "3" "Setup lifecycle"
+      help_menu_render_pair "$width" "4" "Environment check"
+      help_menu_render_pair "$width" "5" "Access overview"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        run_first_run_wizard
+        ;;
+      2)
+        show_next_step
+        pause_after_screen "Press Enter to return to Getting Started..."
+        ;;
+      3)
+        show_setup_lifecycle_plan
+        echo
+        show_setup_effort_guide
+        pause_after_screen "Press Enter to return to Getting Started..."
+        ;;
+      4)
+        show_environment_check
+        pause_after_screen "Press Enter to return to Getting Started..."
+        ;;
+      5)
+        show_access_info
+        pause_after_screen "Press Enter to return to Getting Started..."
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+help_guides_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Guides" \
+      "Open setup, recovery, HTTPS, and environment guidance."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      help_menu_render_pair \
+        "$width" "1" "Setup lifecycle" \
+        "4" "Release notes"
+
+      help_menu_render_pair \
+        "$width" "2" "HTTPS roadmap" \
+        "5" "Multi-environment"
+
+      help_menu_render_pair \
+        "$width" "3" "Service recovery"
+    else
+      help_menu_render_pair "$width" "1" "Setup lifecycle"
+      help_menu_render_pair "$width" "2" "HTTPS roadmap"
+      help_menu_render_pair "$width" "3" "Service recovery"
+      help_menu_render_pair "$width" "4" "Release notes"
+      help_menu_render_pair "$width" "5" "Multi-environment"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        show_setup_lifecycle_plan
+        echo
+        show_setup_effort_guide
+        pause_after_screen "Press Enter to return to Guides..."
+        ;;
+      2)
+        show_ssl_roadmap_guide
+        pause_after_screen "Press Enter to return to Guides..."
+        ;;
+      3)
+        show_service_recovery_plan
+        pause_after_screen "Press Enter to return to Guides..."
+        ;;
+      4)
+        show_release_notes_guide
+        pause_after_screen "Press Enter to return to Guides..."
+        ;;
+      5)
+        show_multi_environment_guide
+        pause_after_screen "Press Enter to return to Guides..."
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+help_troubleshooting_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Troubleshooting" \
+      "Diagnose access, runtime, service, and frontend problems."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      help_menu_render_pair \
+        "$width" "1" "Doctor" \
+        "4" "Frontend assets"
+
+      help_menu_render_pair \
+        "$width" "2" "Verify access" \
+        "5" "Environment check"
+
+      help_menu_render_pair \
+        "$width" "3" "Service recovery"
+    else
+      help_menu_render_pair "$width" "1" "Doctor"
+      help_menu_render_pair "$width" "2" "Verify access"
+      help_menu_render_pair "$width" "3" "Service recovery"
+      help_menu_render_pair "$width" "4" "Frontend assets"
+      help_menu_render_pair "$width" "5" "Environment check"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        run_doctor_plain
+        pause_after_screen "Press Enter to return to Troubleshooting..."
+        ;;
+      2)
+        verify_access || true
+        pause_after_screen "Press Enter to return to Troubleshooting..."
+        ;;
+      3)
+        show_service_recovery_plan
+        pause_after_screen "Press Enter to return to Troubleshooting..."
+        ;;
+      4)
+        verify_frontend_assets || true
+        pause_after_screen "Press Enter to return to Troubleshooting..."
+        ;;
+      5)
+        show_environment_check
+        pause_after_screen "Press Enter to return to Troubleshooting..."
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+help_support_tools_menu() {
+  while true; do
+    local width choice=""
+
+    ui_submenu_header "Support Tools" \
+      "Create, inspect, and audit safe troubleshooting information."
+
+    width="$(ui_panel_width)"
+    ui_box_line top "$width"
+
+    if ((width >= 80)); then
+      help_menu_render_pair \
+        "$width" "1" "Create support bundle" \
+        "3" "Audit latest bundle"
+
+      help_menu_render_pair \
+        "$width" "2" "Latest bundle contents" \
+        "4" "Doctor JSON"
+    else
+      help_menu_render_pair "$width" "1" "Create support bundle"
+      help_menu_render_pair "$width" "2" "Latest bundle contents"
+      help_menu_render_pair "$width" "3" "Audit latest bundle"
+      help_menu_render_pair "$width" "4" "Doctor JSON"
+    fi
+
+    ui_box_line bot "$width"
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        create_support_bundle
+        pause_after_screen "Press Enter to return to Support Tools..."
+        ;;
+      2)
+        show_latest_support_bundle_contents
+        pause_after_screen "Press Enter to return to Support Tools..."
+        ;;
+      3)
+        support_bundle_audit_archive || true
+        pause_after_screen "Press Enter to return to Support Tools..."
+        ;;
+      4)
+        run_doctor_json
+        pause_after_screen "Press Enter to return to Support Tools..."
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
+help_version_install_page() {
+  ui_submenu_header "Version & Installation" \
+    "Review Toolkit versions, active paths, and installation state."
+
+  show_toolkit_versions
+
+  echo
+  show_where_installed
+}
+
+help_release_information_page() {
+  ui_submenu_header "Release Information" \
+    "Review release guidance and the current readiness assessment."
+
+  show_release_notes_guide
+
+  echo
+  show_release_readiness || true
+}
+
+show_help_menu() {
+  while true; do
+    local choice=""
+
+    ui_submenu_header "Help" \
+      "Guidance, troubleshooting, support, and Toolkit information."
+
+    render_help_menu_options
+    ui_submenu_footer
+
+    menu_read_choice choice
+
+    case "$choice" in
+      1)
+        help_getting_started_menu
+        ;;
+      2)
+        show_help
+        pause_after_screen "Press Enter to return to Help..."
+        ;;
+      3)
+        help_guides_menu
+        ;;
+      4)
+        show_next_step
+        pause_after_screen "Press Enter to return to Help..."
+        ;;
+      5)
+        help_troubleshooting_menu
+        ;;
+      6)
+        help_support_tools_menu
+        ;;
+      7)
+        help_version_install_page
+        pause_after_screen "Press Enter to return to Help..."
+        ;;
+      8)
+        help_release_information_page
+        pause_after_screen "Press Enter to return to Help..."
+        ;;
+      d | D)
+        run_doctor_plain
+        pause_after_screen "Press Enter to return to Help..."
+        ;;
+      a | A)
+        show_command_audit
+        pause_after_screen "Press Enter to return to Help..."
+        ;;
+      b | B | "")
+        return 0
+        ;;
+      q | Q)
+        exit 0
+        ;;
+      *)
+        warn "Invalid option"
+        ;;
+    esac
+  done
+}
+
 show_menu() {
   local choice
   while true; do
@@ -1319,8 +1750,7 @@ show_menu() {
       10) show_operations_menu ;;
       11) show_advanced_menu ;;
       12)
-        show_help
-        pause_after_screen "Press Enter to return to Main menu..."
+        show_help_menu
         ;;
       d | D)
         run_operations_dashboard

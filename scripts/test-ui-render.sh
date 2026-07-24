@@ -610,19 +610,25 @@ grep -qE '\[5\].*Networking' "$advanced_120_tmp" \
   || note_fail "Advanced missing Networking routing"
 
 if ! awk '
+  /^\+.*\+$/ {
+    last_border_width = length($0)
+  }
+
   index($0, "Installation & repair") && index($0, "Domains & HTTPS") {
     found = 1
+    row_width = length($0)
 
-    if (length($0) != 120 || substr($0, 120, 1) != "|") {
-      bad = 1
-    }
+    if (last_border_width == 0) bad = 1
+    if (row_width != last_border_width) bad = 1
+    if (substr($0, 1, 1) != "|") bad = 1
+    if (substr($0, row_width, 1) != "|") bad = 1
   }
 
   END {
     exit !(found && !bad)
   }
 ' "$advanced_120_tmp"; then
-  note_fail "Advanced right border is not aligned at 120 columns"
+  note_fail "Advanced right border does not match its frame at 120 columns"
 fi
 
 grep -qE 'B\.[[:space:]]+Back' "$advanced_120_tmp" \
@@ -651,19 +657,25 @@ grep -qE '\[1\].*\[6\]' "$advanced_80_tmp" \
   || note_fail "Advanced did not retain two columns at 80 columns"
 
 if ! awk '
+  /^\+.*\+$/ {
+    last_border_width = length($0)
+  }
+
   index($0, "Installation & repair") && index($0, "Domains & HTTPS") {
     found = 1
+    row_width = length($0)
 
-    if (length($0) != 80 || substr($0, 80, 1) != "|") {
-      bad = 1
-    }
+    if (last_border_width == 0) bad = 1
+    if (row_width != last_border_width) bad = 1
+    if (substr($0, 1, 1) != "|") bad = 1
+    if (substr($0, row_width, 1) != "|") bad = 1
   }
 
   END {
     exit !(found && !bad)
   }
 ' "$advanced_80_tmp"; then
-  note_fail "Advanced right border is not aligned at 80 columns"
+  note_fail "Advanced right border does not match its frame at 80 columns"
 fi
 
 rm -f "$advanced_80_tmp"
@@ -693,6 +705,95 @@ grep -q "Developer tools" "$advanced_70_tmp" \
   || note_fail "narrow Advanced menu missing Developer tools"
 
 rm -f "$advanced_70_tmp"
+
+# Categorized Help hub.
+help_hub_tmp="$(mktemp /tmp/erpnext-dev-ui-help-hub.XXXXXX)"
+
+if ! printf '12\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh menu >"$help_hub_tmp" 2>/dev/null; then
+  note_fail "Help hub render failed"
+fi
+
+grep -qE '\[1\].*Getting started.*\[5\].*Troubleshooting' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Getting started / Troubleshooting"
+
+grep -qE '\[2\].*Command reference.*\[6\].*Support tools' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Command reference / Support tools"
+
+grep -qE '\[3\].*Guides.*\[7\].*Version & install' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Guides / Version & install"
+
+grep -qE '\[4\].*Next recommended step.*\[8\].*Release information' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Next step / Release information"
+
+grep -qE '\[D\].*Doctor.*\[A\].*Command audit' \
+  "$help_hub_tmp" \
+  || note_fail "Help hub missing Doctor / Command audit"
+
+if grep -q "Common environment overrides" "$help_hub_tmp"; then
+  note_fail "main-menu Help still opens the full CLI help directly"
+fi
+
+if ! awk '
+  index($0, "Getting started") && index($0, "Troubleshooting") {
+    found = 1
+
+    if (length($0) != 120 || substr($0, 120, 1) != "|") {
+      bad = 1
+    }
+  }
+
+  END {
+    exit !(found && !bad)
+  }
+' "$help_hub_tmp"; then
+  note_fail "Help hub right border is not aligned at 120 columns"
+fi
+
+grep -qE 'B\.[[:space:]]+Back' "$help_hub_tmp" \
+  || note_fail "Help hub missing canonical Back footer"
+
+grep -qE 'Q\.[[:space:]]+Quit' "$help_hub_tmp" \
+  || note_fail "Help hub missing canonical Quit footer"
+
+rm -f "$help_hub_tmp"
+
+help_narrow_tmp="$(mktemp /tmp/erpnext-dev-ui-help-narrow.XXXXXX)"
+
+if ! printf '12\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=70 \
+  MENU_TERMINAL_COLS=70 \
+  ./erpnext-dev.sh menu >"$help_narrow_tmp" 2>/dev/null; then
+  note_fail "narrow Help hub render failed"
+fi
+
+if grep -qE '\[1\].*\[5\]' "$help_narrow_tmp"; then
+  note_fail "Help hub did not switch to single-column at 70 columns"
+fi
+
+grep -q "Getting started" "$help_narrow_tmp" \
+  || note_fail "narrow Help hub missing Getting started"
+
+grep -q "Release information" "$help_narrow_tmp" \
+  || note_fail "narrow Help hub missing Release information"
+
+rm -f "$help_narrow_tmp"
 
 if ((fail > 0)); then
   echo "test-ui-render: ${fail} failure(s)" >&2

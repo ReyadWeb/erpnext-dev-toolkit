@@ -213,7 +213,7 @@ ui_menu_labels_fit_two_column() {
   local width left_width right_width cell item parsed label
   width="$(ui_panel_width)"
   left_width=$((width / 2 - 4))
-  right_width=$((width - left_width - 7))
+  right_width=$((width - left_width - 5))
   ((left_width < 24)) && left_width=24
   ((right_width < 24)) && right_width=24
   cell="$left_width"
@@ -404,7 +404,7 @@ ui_render_boxed_menu() {
   fi
 
   left_width=$((width / 2 - 4))
-  right_width=$((width - left_width - 7))
+  right_width=$((width - left_width - 5))
   ((left_width < 24)) && left_width=24
   ((right_width < 24)) && right_width=24
 

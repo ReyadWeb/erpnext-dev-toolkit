@@ -3140,14 +3140,6 @@ verify_ssl_rollback() {
 # shellcheck disable=SC2120 # back_target is an optional caller override with a default
 run_local_ssl_wizard() {
   local back_target="${1:-return}"
-  local back_label="Local HTTPS"
-  if [[ "$back_target" == "main" ]]; then
-    back_label="Main menu"
-  elif [[ "$back_target" == "guided" ]]; then
-    # Called from the guided follow-up chain: leaving returns to the guided flow
-    # (credentials -> security -> apps), NOT the main menu.
-    back_label="Continue guided setup"
-  fi
   while true; do
     ui_submenu_header "SSL Wizard" \
       "Local domains such as ${SITE_NAME} · public domains: production-ssl-menu"
@@ -3225,7 +3217,6 @@ run_local_ssl_wizard() {
 
 show_production_ssl_menu() {
   local back_target="${1:-return}"
-  local back_label="Main menu"
   while true; do
     ui_submenu_header "Production HTTPS" \
       "Public domains only · local .test HTTPS: HTTPS & Domains > 1"
@@ -3312,7 +3303,6 @@ show_production_ssl_menu() {
 
 show_local_ssl_menu() {
   local back_target="${1:-return}"
-  local back_label="Main menu"
   while true; do
     ui_submenu_header "Local HTTPS" \
       "Local domains such as ${SITE_NAME} · day-to-day: [1] SSL Wizard"
