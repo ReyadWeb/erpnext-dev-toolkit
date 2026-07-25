@@ -1,60 +1,43 @@
 #!/usr/bin/env bash
+# Generate SHA256SUMS from the authoritative release manifest.
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-checksum_files=(
-  erpnext-dev.sh
-  VERSION
-  scripts/release-version.sh
-  scripts/test-release-version.sh
-  docs/RELEASE-AUTOMATION.md
-  lib/common.sh
-  lib/ui.sh
-  lib/config.sh
-  lib/access.sh
-  lib/local_ip.sh
-  lib/frappe.sh
-  lib/support.sh
-  lib/backup.sh
-  lib/ssl.sh
-  lib/firewall.sh
-  lib/apps.sh
-  lib/health.sh
-  lib/storage.sh
-  lib/service.sh
-  lib/status.sh
-  lib/docker.sh
-  lib/engine.sh
-  lib/install.sh
-  lib/ops.sh
-  lib/dashboard.sh
-  lib/healing.sh
-  lib/menu.sh
-  lib/security.sh
-  lib/update.sh
-  scripts/validate-release.sh
-  scripts/run-shellcheck.sh
-  scripts/check-module-consistency.sh
-  scripts/build-release-bundle.sh
-  scripts/test-legacy-modular-bootstrap.sh
-  scripts/host-firefox-trust-mkcert.sh
-  scripts/frappe-frontend-asset-checklist.sh
-  RELEASE-MANIFEST.txt
-)
+ROOT_DIR="${ERPNEXT_RELEASE_ROOT:-${DEFAULT_ROOT}}"
+MANIFEST_FILE="${ERPNEXT_RELEASE_MANIFEST:-${ROOT_DIR}/RELEASE-MANIFEST.txt}"
+CHECKSUM_FILE="${ERPNEXT_RELEASE_CHECKSUMS:-${ROOT_DIR}/SHA256SUMS}"
+MANIFEST_HELPER="${ERPNEXT_RELEASE_MANIFEST_HELPER:-${SCRIPT_DIR}/release-manifest-files.sh}"
 
-tmp_file="$(mktemp "${ROOT_DIR}/SHA256SUMS.XXXXXX")"
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
+
+[[ -x "$MANIFEST_HELPER" ]] \
+  || fail "release manifest helper is missing or not executable: ${MANIFEST_HELPER}"
+
+tmp_file="$(mktemp "${CHECKSUM_FILE}.XXXXXX")"
 trap 'rm -f "$tmp_file"' EXIT
 
-for file in "${checksum_files[@]}"; do
-  [[ -f "$file" ]] || {
-    echo "missing checksum target: $file" >&2
-    exit 1
-  }
-  sha256sum "$file" >>"$tmp_file"
-done
+count=0
 
-mv "$tmp_file" SHA256SUMS
-echo "Wrote SHA256SUMS with ${#checksum_files[@]} entries:"
-cat SHA256SUMS
+while IFS= read -r file; do
+  (
+    cd "$ROOT_DIR"
+    sha256sum "$file"
+  ) >>"$tmp_file"
+  count=$((count + 1))
+done < <(
+  ERPNEXT_RELEASE_ROOT="$ROOT_DIR" \
+    ERPNEXT_RELEASE_MANIFEST="$MANIFEST_FILE" \
+    "$MANIFEST_HELPER" --exclude-checksum
+)
+
+((count > 0)) || fail "release manifest contains no checksum targets"
+
+mv "$tmp_file" "$CHECKSUM_FILE"
+trap - EXIT
+
+echo "Wrote ${CHECKSUM_FILE} with ${count} manifest artifact(s)."

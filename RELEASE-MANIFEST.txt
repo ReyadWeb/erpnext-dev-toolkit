@@ -101,3 +101,7 @@ VERSION
 scripts/release-version.sh
 scripts/test-release-version.sh
 docs/RELEASE-AUTOMATION.md
+scripts/release-manifest-files.sh
+scripts/check-release-artifact-consistency.sh
+scripts/test-release-manifest.sh
+scripts/test-release-artifact-consistency.sh

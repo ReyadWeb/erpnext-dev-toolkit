@@ -49,8 +49,6 @@ compare_list() {
 
 compare_list "toolkit_release_lib_files()" \
   "$(sed -n '/^toolkit_release_lib_files()/,/^}/p' lib/security.sh | grep -oE '[a-z0-9_]+\.sh')"
-compare_list "generate-release-checksums.sh" \
-  "$(grep -oE 'lib/[a-z0-9_]+\.sh' scripts/generate-release-checksums.sh | sed 's#lib/##')"
 compare_list "run-shellcheck.sh targets" \
   "$(grep -oE 'lib/[a-z0-9_]+\.sh' scripts/run-shellcheck.sh | sed 's#lib/##')"
 compare_list "SHA256SUMS" \
@@ -79,7 +77,7 @@ else
   declare -A defined_set=()
   while IFS= read -r def_fn; do
     [[ -n "$def_fn" ]] && defined_set["$def_fn"]=1
-  done <<< "$defined_functions"
+  done <<<"$defined_functions"
 
   missing=""
   while IFS= read -r fn; do
