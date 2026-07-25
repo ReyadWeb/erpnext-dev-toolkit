@@ -135,7 +135,9 @@ scripts/release-pretag-check.sh v1.20.0
 
 The pre-tag gate requires a clean tree, exact canonical tag alignment, an
 allowed branch, no existing local or remote tag, and synchronization with the
-remote branch. It runs strict release validation, builds the bundle, extracts
+remote branch. Prerelease tags may be validated from the synchronized `beta`
+proving branch or a matching release/feature branch. It runs strict release
+validation, builds the bundle, extracts
 it into a clean directory, verifies every checksum, checks the canonical and
 runtime versions, and runs `verify-toolkit`.
 
