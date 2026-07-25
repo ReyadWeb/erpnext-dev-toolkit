@@ -25,6 +25,8 @@
   helpers.
 - Updated GitHub release tag validation to use `release-version.sh` rather than
   independently parsing `SCRIPT_VERSION`.
+- Allowed strict prerelease pre-tag validation from the synchronized `beta`
+  proving branch used by blocking integration workflows.
 - Expanded ShellCheck and full release validation to cover all release
   automation commands and tests.
 

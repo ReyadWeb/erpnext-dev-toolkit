@@ -92,6 +92,18 @@ run_pretag() {
 
 run_pretag v1.20.0-beta.1 >/dev/null
 
+(
+  cd "$fixture"
+  git switch -qc beta
+)
+
+run_pretag v1.20.0-beta.1 >/dev/null
+
+(
+  cd "$fixture"
+  git switch -q feature/v1.20-release-reliability
+)
+
 if run_pretag v1.20.0-beta.2 >/dev/null 2>&1; then
   fail "mismatched tag was accepted"
 fi
