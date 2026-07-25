@@ -1378,11 +1378,8 @@ Examples:
 Options:
   -y, --yes  Assume yes for supported confirmations
 
-Verified release entry points:
-  Public VM:
-    VERSION="v${SCRIPT_VERSION}"; curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/erpnext-dev.sh"; curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/SHA256SUMS"; sha256sum -c SHA256SUMS; chmod +x erpnext-dev.sh; sudo ./erpnext-dev.sh public-vm-guided-setup
-  Local VM:
-    VERSION="v${SCRIPT_VERSION}"; curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/erpnext-dev.sh"; curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/SHA256SUMS"; sha256sum -c SHA256SUMS; chmod +x erpnext-dev.sh; sudo ./erpnext-dev.sh local-dev-quickstart
+Verified signed-release bootstrap:
+$(verified_release_bundle_bootstrap "first-run" "  ")
 
 Common environment overrides:
   SITE_NAME=erp.test

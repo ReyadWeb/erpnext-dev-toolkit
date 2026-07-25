@@ -113,3 +113,4 @@ scripts/release-promote-stable.sh
 scripts/release-pretag-check.sh
 scripts/test-release-promote-stable.sh
 scripts/test-release-pretag-check.sh
+scripts/test-release-bootstrap-guidance.sh

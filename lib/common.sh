@@ -474,6 +474,63 @@ toolkit_cmd_env() {
   printf '%s' "sudo ${env_args:+$env_args }${script_path}${subcmd:+ $subcmd}"
 }
 
+
+# Print a complete signed-release bootstrap block. The block downloads the
+# manifest-driven archive, pins the bundled signing-key fingerprint, verifies
+# SHA256SUMS.asc, verifies the full extracted tree, installs the same tag through
+# the atomic updater, and finally runs the requested toolkit action.
+verified_release_bundle_bootstrap() {
+  local subcmd="${1:-first-run}"
+  local indent="${2:-  }"
+  local version="${3:-v${SCRIPT_VERSION}}"
+  local repo="https://github.com/ReyadWeb/erpnext-dev-toolkit"
+  local fingerprint="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
+  local line
+
+  [[ "$subcmd" =~ ^[a-z0-9][a-z0-9-]*$ ]] || return 2
+  [[ "$version" =~ ^v[0-9A-Za-z][0-9A-Za-z.-]*$ ]] || return 2
+
+  while IFS= read -r line; do
+    printf '%s%s\n' "$indent" "$line"
+  done <<EOF_BOOTSTRAP
+(
+  set -Eeuo pipefail
+  sudo apt-get update
+  sudo apt-get install -y curl ca-certificates gnupg tar
+  VERSION="${version}"
+  workdir="\$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
+  gnupg_home=""
+  cleanup() {
+    rm -rf "\$workdir"
+    if [[ -n "\${gnupg_home:-}" ]]; then
+      rm -rf "\$gnupg_home"
+    fi
+  }
+  trap cleanup EXIT
+  cd "\$workdir"
+  base="${repo}/releases/download/\${VERSION}"
+  archive="erpnext-dev-\${VERSION}.tar.gz"
+  curl -fsSLO "\${base}/\${archive}"
+  if tar -tzf "\$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+    echo "Unsafe path detected in release bundle." >&2
+    exit 1
+  fi
+  tar --no-same-owner --no-same-permissions -xzf "\$archive"
+  cd "erpnext-dev-\${VERSION}"
+  expected_fpr="${fingerprint}"
+  actual_fpr="\$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '\$1 == "fpr" { print \$10; exit }')"
+  test "\$actual_fpr" = "\$expected_fpr"
+  gnupg_home="\$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
+  chmod 700 "\$gnupg_home"
+  GNUPGHOME="\$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
+  GNUPGHOME="\$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
+  sha256sum -c SHA256SUMS
+  sudo env TOOLKIT_UPDATE_VERSION="\$VERSION" ./erpnext-dev.sh update-toolkit
+  sudo erpnext-dev ${subcmd}
+)
+EOF_BOOTSTRAP
+}
+
 suggested_vm_ssh_user() {
   if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
     printf '%s' "$SUDO_USER"
