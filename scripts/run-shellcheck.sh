@@ -52,6 +52,10 @@ targets=(
   scripts/check-release-artifact-consistency.sh
   scripts/test-release-manifest.sh
   scripts/test-release-artifact-consistency.sh
+  scripts/release-update-metadata.sh
+  scripts/release-prepare-beta.sh
+  scripts/test-release-metadata.sh
+  scripts/test-release-prepare-beta.sh
   scripts/generate-release-checksums.sh
   scripts/run-shellcheck.sh
   scripts/check-module-consistency.sh

@@ -89,3 +89,26 @@ Later v1.20 development stages add:
 - automated beta preparation;
 - automated stable promotion;
 - pre-tag repository checks.
+
+## Transactional beta preparation
+
+Prepare beta release metadata with:
+
+```bash
+scripts/release-prepare-beta.sh   1.20.0-beta.1   "Release reliability foundation"
+```
+
+The command requires a clean matching release or feature branch, a beta
+version using `X.Y.Z-beta.N`, and no existing local target tag.
+
+It updates canonical version metadata, documentation banners, the README exact
+pin, the release-manifest header, and the changelog. It then regenerates
+`SHA256SUMS` and runs full release validation.
+
+All modified metadata is backed up before editing. Any edit, checksum, or
+validation failure restores the exact pre-command files.
+
+```bash
+scripts/test-release-metadata.sh
+scripts/test-release-prepare-beta.sh
+```

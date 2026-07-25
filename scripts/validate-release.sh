@@ -32,6 +32,15 @@ pass() {
 [[ -f README.md ]] || fail "README.md is missing"
 [[ -f SECURITY.md ]] || fail "SECURITY.md is missing"
 
+[[ -x scripts/release-update-metadata.sh ]] \
+  || fail "scripts/release-update-metadata.sh is missing or not executable"
+[[ -x scripts/release-prepare-beta.sh ]] \
+  || fail "scripts/release-prepare-beta.sh is missing or not executable"
+[[ -x scripts/test-release-metadata.sh ]] \
+  || fail "scripts/test-release-metadata.sh is missing or not executable"
+[[ -x scripts/test-release-prepare-beta.sh ]] \
+  || fail "scripts/test-release-prepare-beta.sh is missing or not executable"
+
 bash -n erpnext-dev.sh
 bash -n scripts/release-version.sh
 bash -n scripts/test-release-version.sh
@@ -83,6 +92,10 @@ bash -n lib/healing.sh
 bash -n lib/security.sh
 [[ -f lib/update.sh ]] || fail "lib/update.sh is missing"
 bash -n lib/update.sh
+bash -n scripts/release-update-metadata.sh
+bash -n scripts/release-prepare-beta.sh
+bash -n scripts/test-release-metadata.sh
+bash -n scripts/test-release-prepare-beta.sh
 pass "bash syntax valid"
 
 scripts/release-version.sh assert-script
@@ -97,13 +110,19 @@ pass "release manifest parser tests passed"
 scripts/test-release-artifact-consistency.sh
 pass "release artifact consistency tests passed"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh scripts/release-update-metadata.sh scripts/release-prepare-beta.sh scripts/test-release-metadata.sh scripts/test-release-prepare-beta.sh
 
 chmod +x \
   scripts/release-manifest-files.sh \
   scripts/check-release-artifact-consistency.sh \
   scripts/test-release-manifest.sh \
   scripts/test-release-artifact-consistency.sh
+
+scripts/test-release-metadata.sh
+pass "release metadata update tests passed"
+
+scripts/test-release-prepare-beta.sh
+pass "beta preparation transaction tests passed"
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
