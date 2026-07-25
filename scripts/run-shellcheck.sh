@@ -46,6 +46,8 @@ targets=(
   lib/security.sh
   lib/update.sh
   scripts/validate-release.sh
+  scripts/release-version.sh
+  scripts/test-release-version.sh
   scripts/generate-release-checksums.sh
   scripts/run-shellcheck.sh
   scripts/check-module-consistency.sh

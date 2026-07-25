@@ -14,12 +14,19 @@ pass() {
 }
 
 [[ -f erpnext-dev.sh ]] || fail "erpnext-dev.sh is missing"
+[[ -f VERSION ]] || fail "VERSION is missing"
+[[ -x scripts/release-version.sh ]] ||
+  fail "scripts/release-version.sh is missing or not executable"
+[[ -x scripts/test-release-version.sh ]] ||
+  fail "scripts/test-release-version.sh is missing or not executable"
 [[ -f SHA256SUMS ]] || fail "SHA256SUMS is missing"
 [[ -f RELEASE-MANIFEST.txt ]] || fail "RELEASE-MANIFEST.txt is missing"
 [[ -f README.md ]] || fail "README.md is missing"
 [[ -f SECURITY.md ]] || fail "SECURITY.md is missing"
 
 bash -n erpnext-dev.sh
+bash -n scripts/release-version.sh
+bash -n scripts/test-release-version.sh
 [[ -f lib/common.sh ]] || fail "lib/common.sh is missing"
 [[ -f lib/config.sh ]] || fail "lib/config.sh is missing"
 [[ -f lib/access.sh ]] || fail "lib/access.sh is missing"
@@ -66,6 +73,12 @@ bash -n lib/security.sh
 bash -n lib/update.sh
 pass "bash syntax valid"
 
+scripts/release-version.sh assert-script
+pass "VERSION matches SCRIPT_VERSION"
+
+scripts/test-release-version.sh
+pass "canonical release version tests passed"
+
 chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
 
 # Module lists and dispatcher targets must all agree. This is the single guard
@@ -87,9 +100,7 @@ echo "$version_output"
 [[ "$version_output" == *"ERPNext Developer Toolkit v"* ]] || fail "version output not recognized"
 pass "version command works"
 
-script_version="$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n 1 | cut -d'"' -f2)"
-[[ -n "$script_version" ]] || fail "could not read SCRIPT_VERSION from erpnext-dev.sh"
-tag_version="v${script_version}"
+tag_version="$(scripts/release-version.sh tag)"
 
 grep -q "^## ${tag_version}" CHANGELOG.md || fail "CHANGELOG.md missing top entry for ${tag_version}"
 pass "CHANGELOG version matches SCRIPT_VERSION (${tag_version})"

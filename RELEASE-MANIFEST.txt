@@ -97,3 +97,7 @@ docs/assets/health-json-example.md
 docs/assets/health-metrics-example.txt
 docs/assets/menu-ui-mockup.png
 scripts/assert-github-release-assets.sh
+VERSION
+scripts/release-version.sh
+scripts/test-release-version.sh
+docs/RELEASE-AUTOMATION.md

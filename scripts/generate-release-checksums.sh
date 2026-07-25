@@ -6,6 +6,10 @@ cd "$ROOT_DIR"
 
 checksum_files=(
   erpnext-dev.sh
+  VERSION
+  scripts/release-version.sh
+  scripts/test-release-version.sh
+  docs/RELEASE-AUTOMATION.md
   lib/common.sh
   lib/ui.sh
   lib/config.sh
