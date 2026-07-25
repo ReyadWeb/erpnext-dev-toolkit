@@ -1,6 +1,6 @@
 # Testing guide
 
-**Current release:** v1.20.0-beta.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven versus what still requires production field validation.
+**Current release:** v1.20.0-beta.2 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven versus what still requires production field validation.
 
 ---
 
