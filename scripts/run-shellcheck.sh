@@ -46,6 +46,20 @@ targets=(
   lib/security.sh
   lib/update.sh
   scripts/validate-release.sh
+  scripts/release-version.sh
+  scripts/test-release-version.sh
+  scripts/release-manifest-files.sh
+  scripts/check-release-artifact-consistency.sh
+  scripts/test-release-manifest.sh
+  scripts/test-release-artifact-consistency.sh
+  scripts/release-update-metadata.sh
+  scripts/release-prepare-beta.sh
+  scripts/test-release-metadata.sh
+  scripts/test-release-prepare-beta.sh
+  scripts/release-promote-stable.sh
+  scripts/release-pretag-check.sh
+  scripts/test-release-promote-stable.sh
+  scripts/test-release-pretag-check.sh
   scripts/generate-release-checksums.sh
   scripts/run-shellcheck.sh
   scripts/check-module-consistency.sh
@@ -97,7 +111,7 @@ for target in "${targets[@]}"; do
   fi
 done
 
-if (( failed != 0 )); then
+if ((failed != 0)); then
   echo "shellcheck reported failures" >&2
   exit 1
 fi

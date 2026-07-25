@@ -1,3 +1,142 @@
+## v1.20.0 - Engine Stability and Reliability Foundation
+
+### Added
+
+- Added `VERSION` as the canonical repository release-version source.
+- Added reusable helpers for canonical-version reading, runtime-version
+  alignment, release-tag generation, and tag validation.
+- Added an authoritative release-manifest parser that rejects duplicate,
+  absolute, traversing, missing, directory, whitespace-containing, and
+  symbolic-link entries.
+- Added exact manifest-to-checksum coverage verification.
+- Added transactional beta preparation and prerelease-to-stable promotion with
+  automatic metadata rollback when editing, checksum generation, or validation
+  fails.
+- Added a strict pre-tag gate covering branch policy, remote synchronization,
+  tag availability, version alignment, bundle construction, checksums, runtime
+  modules, and toolkit integrity.
+- Added hermetic regression tests for release versions, manifests, metadata,
+  beta preparation, stable promotion, pre-tag validation, artifact consistency,
+  and signed-release bootstrap guidance.
+
+### Changed
+
+- Made `RELEASE-MANIFEST.txt` authoritative for release-bundle contents and
+  `SHA256SUMS`.
+- Updated bundle construction and checksum generation to use the canonical
+  manifest and version helpers.
+- Updated GitHub release validation to derive release identity from the
+  canonical version instead of independently parsing `SCRIPT_VERSION`.
+- Allowed strict prerelease pre-tag validation from the synchronized `beta`
+  proving branch.
+- Replaced obsolete raw two-file installation guidance with a complete signed
+  release-bundle workflow.
+- The signed-bundle workflow now verifies the pinned maintainer fingerprint,
+  `SHA256SUMS.asc`, every file in the extracted release tree, and then installs
+  the selected tag through the atomic updater.
+- Expanded ShellCheck, syntax validation, release validation, and regression
+  coverage for all new release-automation commands.
+
+### Validation
+
+- Passed Bash syntax checks, shfmt, ShellCheck, all hermetic release tests, and
+  the complete local release validator.
+- Passed Release Validation CI and disposable-VM Integration CI on the accepted
+  `v1.20.0-beta.2` commit
+  `dd7f68def8a64e548a02d9ccc9abba1bf70d62bf`.
+- Passed native installation and smoke validation on Ubuntu 24.04 and Ubuntu
+  26.04.
+- Passed Docker engine and Docker production-compose installation, backup,
+  verification, restore, exposure-guardrail, and runtime-health tests.
+- Passed frontend reachability, browser asset consistency, frontend repair,
+  clean-reinstallation isolation, backup-and-restore, and production-runtime
+  conversion gates.
+- Published signed `v1.20.0-beta.1` and `v1.20.0-beta.2` prereleases with the
+  release archive, entrypoint, manifest, checksum inventory, and detached
+  checksum signature.
+- Passed real Debian upgrade acceptance from `v1.20.0-beta.1` to
+  `v1.20.0-beta.2`.
+- Verified 24 of 24 runtime modules after installation.
+- Verified corrected signed-release guidance and confirmed the obsolete raw
+  entrypoint instructions are absent.
+- Passed dedicated `toolkit-rollback` from beta.2 to beta.1 and a signed restore
+  back to beta.2 with complete integrity verification.
+
+## v1.20.0-beta.2 - Signed release bootstrap guidance correction
+
+### Fixed
+
+- Replaced obsolete instructions that downloaded only `erpnext-dev.sh` and
+  `SHA256SUMS`, even though the checksum inventory represents the complete
+  modular release.
+- Updated integrity output, main help, HTTPS setup guidance, backup-server
+  guidance, security documentation, and testing instructions to use the
+  complete release archive.
+- Added signing-key fingerprint pinning and verification of the bundled
+  maintainer public key.
+- Added detached-signature verification for `SHA256SUMS.asc`.
+- Added whole-tree checksum verification inside the extracted release archive.
+- Routed installation through the atomic tag-pinned updater after verification.
+
+### Added
+
+- Added a canonical reusable signed-release bootstrap renderer.
+- Added regression coverage preventing active guidance from returning to the
+  obsolete raw two-file installation model.
+- Added the bootstrap-guidance regression test to the release manifest,
+  ShellCheck coverage, syntax validation, and the complete release validator.
+
+### Validation
+
+- Passed full local release validation, ShellCheck, shfmt, syntax checks, and
+  bootstrap-guidance regression tests.
+- Passed Release Validation CI and disposable-VM Integration CI on commit
+  `dd7f68def8a64e548a02d9ccc9abba1bf70d62bf`.
+- Published the signed `v1.20.0-beta.2` prerelease with all required assets.
+- Passed real Debian upgrade, complete toolkit integrity, corrected-guidance,
+  dedicated rollback, and beta.2 restoration acceptance tests.
+
+## v1.20.0-beta.1 - Engine Stability and Reliability Foundation
+
+### Added
+
+- Added `VERSION` as the canonical repository release-version source.
+- Added reusable release-version validation and tag-alignment helpers.
+- Added a secure release-manifest parser that rejects duplicate, absolute,
+  traversing, missing, directory, whitespace-containing, and symbolic-link
+  entries.
+- Added exact manifest-to-checksum coverage verification.
+- Added transactional beta preparation with automatic metadata rollback when
+  editing, checksum generation, or validation fails.
+- Added transactional prerelease-to-stable promotion.
+- Added a strict pre-tag gate for branch, tag, remote synchronization, bundle,
+  checksum, canonical-version, runtime-version, and `verify-toolkit` checks.
+- Added hermetic tests for version handling, release manifests, artifact
+  consistency, metadata updates, beta preparation, stable promotion, and
+  pre-tag validation.
+
+### Changed
+
+- Made `RELEASE-MANIFEST.txt` authoritative for both bundle contents and
+  `SHA256SUMS`.
+- Updated release bundle construction to use the canonical version and manifest
+  helpers.
+- Updated GitHub release tag validation to use `release-version.sh` rather than
+  independently parsing `SCRIPT_VERSION`.
+- Allowed strict prerelease pre-tag validation from the synchronized `beta`
+  proving branch used by blocking integration workflows.
+- Expanded ShellCheck and full release validation to cover all release
+  automation commands and tests.
+
+### Validation
+
+- Verified canonical and runtime version alignment.
+- Verified exact release-manifest and checksum coverage.
+- Verified all runtime-module inventories remain synchronized.
+- Passed Bash syntax checks, shfmt, ShellCheck, hermetic release tests, and the
+  complete release validator.
+- Built and inspected the `v1.20.0-beta.1` release bundle from the manifest.
+
 ## v1.19.22 - Responsive interface and local reliability
 
 ### Added

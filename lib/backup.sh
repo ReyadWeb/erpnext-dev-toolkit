@@ -1865,7 +1865,7 @@ generate_off_vm_backup_key() {
   echo
   echo "Or bootstrap it directly from GitHub on the backup server:"
   echo "  sudo apt-get update && sudo apt-get install -y curl ca-certificates"
-  echo "  VERSION=\"v${SCRIPT_VERSION}\"; curl -fsSLO \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/erpnext-dev.sh\"; curl -fsSLO \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/SHA256SUMS\"; sha256sum -c SHA256SUMS; chmod +x erpnext-dev.sh; sudo ./erpnext-dev.sh backup-server-setup"
+  verified_release_bundle_bootstrap "backup-server-setup" "  "
   ui_next "$(toolkit_cmd backup-server-setup) on the backup server" "$(toolkit_cmd off-vm-backup-guided-setup) on this ERPNext VM"
   ui_box_end
 }
@@ -2463,7 +2463,7 @@ off_vm_backup_guided_setup() {
   echo
   echo "Prepare the backup server next. On the backup server, run:"
   echo "  sudo apt-get update && sudo apt-get install -y curl ca-certificates"
-  echo "  VERSION=\"v${SCRIPT_VERSION}\"; curl -fsSLO \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/erpnext-dev.sh\"; curl -fsSLO \"https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/\${VERSION}/SHA256SUMS\"; sha256sum -c SHA256SUMS; chmod +x erpnext-dev.sh; sudo ./erpnext-dev.sh backup-server-setup"
+  verified_release_bundle_bootstrap "backup-server-setup" "  "
   echo
   if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
     echo "Paste the Target URI printed by backup-server-setup."

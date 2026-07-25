@@ -11,9 +11,15 @@ fail() {
   exit 1
 }
 
-script_version="$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n1 | cut -d'"' -f2)"
-[[ -n "${script_version}" ]] || fail "could not read SCRIPT_VERSION"
-tag="v${script_version}"
+[[ -f VERSION ]] || fail "VERSION is missing"
+
+[[ -x scripts/release-version.sh ]] ||
+  fail "scripts/release-version.sh is missing or not executable"
+
+scripts/release-version.sh assert-script >/dev/null
+
+script_version="$(scripts/release-version.sh read)"
+tag="$(scripts/release-version.sh tag)"
 
 grep -qE "^\*\*Current release:\*\* ${tag}( |$|\.|·)" README.md \
   || fail "README.md Current release banner must be ${tag}"

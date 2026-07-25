@@ -188,17 +188,29 @@ Once `GPG_PRIVATE_KEY` is available to the `publish` job, `release.yml` signs `S
 **End-user verification** — before running the toolkit as root:
 
 ```bash
-# Download the artifacts from the release (tag-pinned):
+# Replace vX.Y.Z with the exact signed release tag.
 VERSION="vX.Y.Z"
+workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
+cd "$workdir" || exit 1
 base="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
-curl -fsSLO "${base}/erpnext-dev.sh"
-curl -fsSLO "${base}/SHA256SUMS"
-curl -fsSLO "${base}/SHA256SUMS.asc"
+archive="erpnext-dev-${VERSION}.tar.gz"
+curl -fsSLO "${base}/${archive}"
+if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+  echo "Unsafe path detected in release bundle." >&2
+  exit 1
+fi
+tar --no-same-owner --no-same-permissions -xzf "$archive"
+cd "erpnext-dev-${VERSION}" || exit 1
 
-# Import the maintainer public key once, then verify signature + checksums:
-curl -fsSL "https://github.com/ReyadWeb.gpg" | gpg --import   # or the published key
-gpg --verify SHA256SUMS.asc SHA256SUMS
+expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
+actual_fpr="$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '$1 == "fpr" { print $10; exit }')"
+test "$actual_fpr" = "$expected_fpr"
+gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
+chmod 700 "$gnupg_home"
+GNUPGHOME="$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
+GNUPGHOME="$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
+rm -rf "$gnupg_home"
 ```
 
 Or use the toolkit, which runs the same check in a throwaway keyring and pins the fingerprint automatically. When run from a checkout (or the installed `/opt/erpnext-dev` tree) it uses the bundled public key at `docs/erpnext-dev-signing-key.asc` and the fingerprint baked into the script, so no configuration is needed:

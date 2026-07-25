@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit — Roadmap
 
-**Current release:** v1.19.22 (July 2026)
+**Current release:** v1.20.0 (July 2026)
 **Theme for v1.18–v1.23:** security closure → local IP stability → repo governance → asset-readiness gaps → guarded auto-healing (v1.19+) → panel readiness.  
 **Next up:** validate the combined v1.19.22 line in CI, then complete production VPS regression testing for the stable Docker optional-app lifecycle together with the responsive UI, Logs, and Debian static-IP DNS fixes.
 **Deferred:** v1.20.0 External Watchdog until v1.19.20 Docker field validation is complete.
