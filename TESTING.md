@@ -1,6 +1,6 @@
 # Testing guide
 
-**Current release:** v1.20.0-beta.1 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven versus what still requires production field validation.
+**Current release:** v1.20.0-beta.2 · See [`ROADMAP.md`](ROADMAP.md) for what is CI-proven versus what still requires production field validation.
 
 ---
 
@@ -2494,12 +2494,29 @@ erpnext-dev.sh
 Run on a VM or disposable test machine:
 
 ```bash
-VERSION="v1.1.70"
-curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/erpnext-dev.sh"
-curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/SHA256SUMS"
+VERSION="vX.Y.Z"
+workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
+cd "$workdir" || exit 1
+base="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
+archive="erpnext-dev-${VERSION}.tar.gz"
+curl -fsSLO "${base}/${archive}"
+if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+  echo "Unsafe path detected in release bundle." >&2
+  exit 1
+fi
+tar --no-same-owner --no-same-permissions -xzf "$archive"
+cd "erpnext-dev-${VERSION}" || exit 1
+expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
+actual_fpr="$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '$1 == "fpr" { print $10; exit }')"
+test "$actual_fpr" = "$expected_fpr"
+gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
+chmod 700 "$gnupg_home"
+GNUPGHOME="$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
+GNUPGHOME="$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
-chmod +x erpnext-dev.sh
-sudo ./erpnext-dev.sh install-cli
+rm -rf "$gnupg_home"
+sudo env TOOLKIT_UPDATE_VERSION="$VERSION" ./erpnext-dev.sh update-toolkit
+sudo erpnext-dev install-cli
 erpnext-dev version
 erpnext-dev --help
 erpnext-dev where-installed
@@ -2526,11 +2543,27 @@ Run inside a fresh Ubuntu 24.04 or 26.04 LTS VM (the only supported targets):
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
-curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/erpnext-dev.sh"
-curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/SHA256SUMS"
+VERSION="vX.Y.Z"
+workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
+cd "$workdir" || exit 1
+base="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
+archive="erpnext-dev-${VERSION}.tar.gz"
+curl -fsSLO "${base}/${archive}"
+if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+  echo "Unsafe path detected in release bundle." >&2
+  exit 1
+fi
+tar --no-same-owner --no-same-permissions -xzf "$archive"
+cd "erpnext-dev-${VERSION}" || exit 1
+expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
+actual_fpr="$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '$1 == "fpr" { print $10; exit }')"
+test "$actual_fpr" = "$expected_fpr"
+gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
+chmod 700 "$gnupg_home"
+GNUPGHOME="$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
+GNUPGHOME="$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
-chmod +x erpnext-dev.sh
+rm -rf "$gnupg_home"
 sudo ./erpnext-dev.sh install-preflight
 ```
 
@@ -2547,11 +2580,27 @@ Run inside a fresh local VM:
 
 ```bash
 sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y curl ca-certificates
-VERSION="v1.1.70"
-curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/erpnext-dev.sh"
-curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/SHA256SUMS"
+VERSION="vX.Y.Z"
+workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
+cd "$workdir" || exit 1
+base="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
+archive="erpnext-dev-${VERSION}.tar.gz"
+curl -fsSLO "${base}/${archive}"
+if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+  echo "Unsafe path detected in release bundle." >&2
+  exit 1
+fi
+tar --no-same-owner --no-same-permissions -xzf "$archive"
+cd "erpnext-dev-${VERSION}" || exit 1
+expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
+actual_fpr="$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '$1 == "fpr" { print $10; exit }')"
+test "$actual_fpr" = "$expected_fpr"
+gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
+chmod 700 "$gnupg_home"
+GNUPGHOME="$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
+GNUPGHOME="$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
-chmod +x erpnext-dev.sh
+rm -rf "$gnupg_home"
 sudo ./erpnext-dev.sh local-dev-quickstart
 ```
 

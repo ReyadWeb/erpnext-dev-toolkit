@@ -255,17 +255,8 @@ verify_toolkit_integrity() {
   echo "Verified tag-pinned update example:"
   echo "  TOOLKIT_UPDATE_VERSION=v${SCRIPT_VERSION} sudo erpnext-dev update-toolkit"
   echo
-  echo "Manual verified download:"
-  echo "  VERSION=\"v${SCRIPT_VERSION}\""
-  echo '  workdir="$(mktemp -d /tmp/erpnext-dev-update.XXXXXX)"; cd "$workdir" || exit 1'
-  echo '  curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/erpnext-dev.sh"'
-  echo '  curl -fsSLO "https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/${VERSION}/SHA256SUMS"'
-  echo "  sha256sum -c SHA256SUMS"
-  echo "  sudo mkdir -p /opt/erpnext-dev"
-  echo "  sudo install -m 0755 erpnext-dev.sh /opt/erpnext-dev/erpnext-dev.sh"
-  echo "  sudo install -m 0644 SHA256SUMS /opt/erpnext-dev/SHA256SUMS"
-  echo "  sudo ln -sf /opt/erpnext-dev/erpnext-dev.sh /usr/local/bin/erpnext-dev"
-  echo "  sudo erpnext-dev verify-toolkit"
+  echo "Manual verified signed-release installation:"
+  verified_release_bundle_bootstrap "verify-toolkit" "  "
   ui_box_end
   return "$match_state"
 }

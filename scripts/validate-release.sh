@@ -49,6 +49,8 @@ pass() {
   || fail "scripts/test-release-promote-stable.sh is missing or not executable"
 [[ -x scripts/test-release-pretag-check.sh ]] \
   || fail "scripts/test-release-pretag-check.sh is missing or not executable"
+[[ -x scripts/test-release-bootstrap-guidance.sh ]] \
+  || fail "scripts/test-release-bootstrap-guidance.sh is missing or not executable"
 
 bash -n erpnext-dev.sh
 bash -n scripts/release-version.sh
@@ -109,6 +111,7 @@ bash -n scripts/release-promote-stable.sh
 bash -n scripts/release-pretag-check.sh
 bash -n scripts/test-release-promote-stable.sh
 bash -n scripts/test-release-pretag-check.sh
+bash -n scripts/test-release-bootstrap-guidance.sh
 pass "bash syntax valid"
 
 scripts/release-version.sh assert-script
@@ -129,7 +132,8 @@ chmod +x \
   scripts/release-manifest-files.sh \
   scripts/check-release-artifact-consistency.sh \
   scripts/test-release-manifest.sh \
-  scripts/test-release-artifact-consistency.sh
+  scripts/test-release-artifact-consistency.sh \
+  scripts/test-release-bootstrap-guidance.sh
 
 scripts/test-release-metadata.sh
 pass "release metadata update tests passed"
@@ -142,6 +146,9 @@ pass "stable promotion transaction tests passed"
 
 scripts/test-release-pretag-check.sh
 pass "pre-tag repository gate tests passed"
+
+scripts/test-release-bootstrap-guidance.sh
+pass "signed release bootstrap guidance tests passed"
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the

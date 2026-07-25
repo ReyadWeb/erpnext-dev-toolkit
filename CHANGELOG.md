@@ -1,3 +1,13 @@
+## v1.20.0-beta.2 - Signed release bootstrap guidance correction
+
+### Added
+
+- Release notes pending final review.
+
+### Validation
+
+- Release validation pending.
+
 ## v1.20.0-beta.1 - Engine Stability and Reliability Foundation
 
 ### Added
