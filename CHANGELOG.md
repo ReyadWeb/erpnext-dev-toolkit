@@ -1,3 +1,76 @@
+## v1.20.0-beta.1 - Engine Stability and Reliability Foundation
+
+### Added
+
+- Added `VERSION` as the canonical repository release-version source.
+- Added reusable release-version validation and tag-alignment helpers.
+- Added a secure release-manifest parser that rejects duplicate, absolute,
+  traversing, missing, directory, whitespace-containing, and symbolic-link
+  entries.
+- Added exact manifest-to-checksum coverage verification.
+- Added transactional beta preparation with automatic metadata rollback when
+  editing, checksum generation, or validation fails.
+- Added transactional prerelease-to-stable promotion.
+- Added a strict pre-tag gate for branch, tag, remote synchronization, bundle,
+  checksum, canonical-version, runtime-version, and `verify-toolkit` checks.
+- Added hermetic tests for version handling, release manifests, artifact
+  consistency, metadata updates, beta preparation, stable promotion, and
+  pre-tag validation.
+
+### Changed
+
+- Made `RELEASE-MANIFEST.txt` authoritative for both bundle contents and
+  `SHA256SUMS`.
+- Updated release bundle construction to use the canonical version and manifest
+  helpers.
+- Updated GitHub release tag validation to use `release-version.sh` rather than
+  independently parsing `SCRIPT_VERSION`.
+- Expanded ShellCheck and full release validation to cover all release
+  automation commands and tests.
+
+### Validation
+
+- Verified canonical and runtime version alignment.
+- Verified exact release-manifest and checksum coverage.
+- Verified all runtime-module inventories remain synchronized.
+- Passed Bash syntax checks, shfmt, ShellCheck, hermetic release tests, and the
+  complete release validator.
+- Built and inspected the `v1.20.0-beta.1` release bundle from the manifest.
+
+## v1.19.22 - Responsive interface and local reliability
+
+### Added
+
+- Responsive dashboard and categorized terminal navigation.
+- Environment-aware networking, HTTPS, security, backup, application, and operations workflows.
+- Scalable categorized optional-application navigation.
+
+### Fixed
+
+- Main-menu `L` and `l` now display runtime logs and keep the page visible until the user returns.
+- Debian 13 static-IP setup preserves DNS through `resolvconf`.
+- Static-IP rollback preserves and restores resolver configuration.
+- Boxed menu rows remain aligned across wide, compact, and narrow terminals.
+- Submenu navigation and return behaviour are consistent.
+
+### Integrated
+
+- Preserved the stable v1.19.21 Docker optional-application reliability improvements.
+- Synchronized the permanent beta line with stable v1.19.21 before promotion.
+
+### Validation
+
+- Passed Release Validation CI.
+- Passed disposable-VM integration CI.
+- Passed real Debian 13 native installation acceptance.
+- Validated ERPNext and Frappe version-16 runtime.
+- Validated CRM and Print Designer installation.
+- Validated toolkit integrity with 24 of 24 runtime modules matching.
+- Validated service runtime and boot autostart.
+- Validated local HTTP, HTTPS, login assets, and frontend static assets.
+- Validated static IP, default route, and DNS after reboot.
+- Validated backup, restore, security hardening, and runtime Logs navigation.
+
 ## v1.19.22-beta.1 - Stable synchronization and local reliability
 
 ### Integrated

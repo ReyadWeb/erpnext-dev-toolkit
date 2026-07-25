@@ -14,12 +14,49 @@ pass() {
 }
 
 [[ -f erpnext-dev.sh ]] || fail "erpnext-dev.sh is missing"
+[[ -f VERSION ]] || fail "VERSION is missing"
+[[ -x scripts/release-version.sh ]] \
+  || fail "scripts/release-version.sh is missing or not executable"
+[[ -x scripts/test-release-version.sh ]] \
+  || fail "scripts/test-release-version.sh is missing or not executable"
+[[ -x scripts/release-manifest-files.sh ]] \
+  || fail "scripts/release-manifest-files.sh is missing or not executable"
+[[ -x scripts/check-release-artifact-consistency.sh ]] \
+  || fail "scripts/check-release-artifact-consistency.sh is missing or not executable"
+[[ -x scripts/test-release-manifest.sh ]] \
+  || fail "scripts/test-release-manifest.sh is missing or not executable"
+[[ -x scripts/test-release-artifact-consistency.sh ]] \
+  || fail "scripts/test-release-artifact-consistency.sh is missing or not executable"
 [[ -f SHA256SUMS ]] || fail "SHA256SUMS is missing"
 [[ -f RELEASE-MANIFEST.txt ]] || fail "RELEASE-MANIFEST.txt is missing"
 [[ -f README.md ]] || fail "README.md is missing"
 [[ -f SECURITY.md ]] || fail "SECURITY.md is missing"
 
+[[ -x scripts/release-update-metadata.sh ]] \
+  || fail "scripts/release-update-metadata.sh is missing or not executable"
+[[ -x scripts/release-prepare-beta.sh ]] \
+  || fail "scripts/release-prepare-beta.sh is missing or not executable"
+[[ -x scripts/test-release-metadata.sh ]] \
+  || fail "scripts/test-release-metadata.sh is missing or not executable"
+[[ -x scripts/test-release-prepare-beta.sh ]] \
+  || fail "scripts/test-release-prepare-beta.sh is missing or not executable"
+
+[[ -x scripts/release-promote-stable.sh ]] \
+  || fail "scripts/release-promote-stable.sh is missing or not executable"
+[[ -x scripts/release-pretag-check.sh ]] \
+  || fail "scripts/release-pretag-check.sh is missing or not executable"
+[[ -x scripts/test-release-promote-stable.sh ]] \
+  || fail "scripts/test-release-promote-stable.sh is missing or not executable"
+[[ -x scripts/test-release-pretag-check.sh ]] \
+  || fail "scripts/test-release-pretag-check.sh is missing or not executable"
+
 bash -n erpnext-dev.sh
+bash -n scripts/release-version.sh
+bash -n scripts/test-release-version.sh
+bash -n scripts/release-manifest-files.sh
+bash -n scripts/check-release-artifact-consistency.sh
+bash -n scripts/test-release-manifest.sh
+bash -n scripts/test-release-artifact-consistency.sh
 [[ -f lib/common.sh ]] || fail "lib/common.sh is missing"
 [[ -f lib/config.sh ]] || fail "lib/config.sh is missing"
 [[ -f lib/access.sh ]] || fail "lib/access.sh is missing"
@@ -64,9 +101,47 @@ bash -n lib/healing.sh
 bash -n lib/security.sh
 [[ -f lib/update.sh ]] || fail "lib/update.sh is missing"
 bash -n lib/update.sh
+bash -n scripts/release-update-metadata.sh
+bash -n scripts/release-prepare-beta.sh
+bash -n scripts/test-release-metadata.sh
+bash -n scripts/test-release-prepare-beta.sh
+bash -n scripts/release-promote-stable.sh
+bash -n scripts/release-pretag-check.sh
+bash -n scripts/test-release-promote-stable.sh
+bash -n scripts/test-release-pretag-check.sh
 pass "bash syntax valid"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh
+scripts/release-version.sh assert-script
+pass "VERSION matches SCRIPT_VERSION"
+
+scripts/test-release-version.sh
+pass "canonical release version tests passed"
+
+scripts/test-release-manifest.sh
+pass "release manifest parser tests passed"
+
+scripts/test-release-artifact-consistency.sh
+pass "release artifact consistency tests passed"
+
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh scripts/release-update-metadata.sh scripts/release-prepare-beta.sh scripts/test-release-metadata.sh scripts/test-release-prepare-beta.sh scripts/release-promote-stable.sh scripts/release-pretag-check.sh scripts/test-release-promote-stable.sh scripts/test-release-pretag-check.sh
+
+chmod +x \
+  scripts/release-manifest-files.sh \
+  scripts/check-release-artifact-consistency.sh \
+  scripts/test-release-manifest.sh \
+  scripts/test-release-artifact-consistency.sh
+
+scripts/test-release-metadata.sh
+pass "release metadata update tests passed"
+
+scripts/test-release-prepare-beta.sh
+pass "beta preparation transaction tests passed"
+
+scripts/test-release-promote-stable.sh
+pass "stable promotion transaction tests passed"
+
+scripts/test-release-pretag-check.sh
+pass "pre-tag repository gate tests passed"
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
@@ -87,9 +162,7 @@ echo "$version_output"
 [[ "$version_output" == *"ERPNext Developer Toolkit v"* ]] || fail "version output not recognized"
 pass "version command works"
 
-script_version="$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n 1 | cut -d'"' -f2)"
-[[ -n "$script_version" ]] || fail "could not read SCRIPT_VERSION from erpnext-dev.sh"
-tag_version="v${script_version}"
+tag_version="$(scripts/release-version.sh tag)"
 
 grep -q "^## ${tag_version}" CHANGELOG.md || fail "CHANGELOG.md missing top entry for ${tag_version}"
 pass "CHANGELOG version matches SCRIPT_VERSION (${tag_version})"
@@ -117,16 +190,8 @@ pass "release doc banners + README latest-install path aligned (${tag_version})"
 grep -q "Release Manifest ${tag_version}" RELEASE-MANIFEST.txt || fail "RELEASE-MANIFEST.txt version header does not match ${tag_version}"
 pass "RELEASE-MANIFEST version matches SCRIPT_VERSION (${tag_version})"
 
-while IFS= read -r line || [[ -n "$line" ]]; do
-  line="${line%%#*}"
-  line="$(printf '%s' "$line" | tr -d '[:space:]')"
-  [[ -n "$line" ]] || continue
-  [[ -e "$line" ]] || fail "RELEASE-MANIFEST entry missing: $line"
-done < RELEASE-MANIFEST.txt
-pass "RELEASE-MANIFEST entries exist"
-
-sha256sum -c SHA256SUMS
-pass "SHA256SUMS verifies all listed release artifacts"
+scripts/check-release-artifact-consistency.sh
+pass "release manifest and SHA256SUMS are complete and valid"
 
 ./erpnext-dev.sh --help >/tmp/erpnext-dev-help.$$ 2>&1 || fail "--help failed"
 grep -q "production-ops-wizard" /tmp/erpnext-dev-help.$$ || fail "help missing production-ops-wizard"
@@ -144,12 +209,12 @@ pass "verify-toolkit active checksum match"
 fixture_dir="$(mktemp -d /tmp/erpnext-dev-support-fixture.XXXXXX)"
 fixture_archive="${fixture_dir}/erpnext-dev-support-bundle-fixture.tar.gz"
 mkdir -p "${fixture_dir}/erpnext-dev-support-bundle-fixture"
-cat > "${fixture_dir}/erpnext-dev-support-bundle-fixture/manifest.txt" <<'EOF_FIXTURE'
+cat >"${fixture_dir}/erpnext-dev-support-bundle-fixture/manifest.txt" <<'EOF_FIXTURE'
 ERPNext Developer Toolkit Support Bundle
 Generated for validation fixture.
 No credentials are included.
 EOF_FIXTURE
-cat > "${fixture_dir}/erpnext-dev-support-bundle-fixture/system-summary.txt" <<'EOF_FIXTURE'
+cat >"${fixture_dir}/erpnext-dev-support-bundle-fixture/system-summary.txt" <<'EOF_FIXTURE'
 Runtime OK
 HTTPS OK
 Backup OK
@@ -175,10 +240,10 @@ bad_archive="${bad_dir}/erpnext-dev-support-bundle-badfixture.tar.gz"
 bad_root="${bad_dir}/erpnext-dev-support-bundle-badfixture"
 mkdir -p "$bad_root"
 # Forbidden filename + secret content.
-cat > "${bad_root}/site_config.json" <<'EOF_BAD'
+cat >"${bad_root}/site_config.json" <<'EOF_BAD'
 { "db_password": "supersecret123", "encryption_key": "abc" }
 EOF_BAD
-cat > "${bad_root}/id_ed25519" <<'EOF_BAD'
+cat >"${bad_root}/id_ed25519" <<'EOF_BAD'
 -----BEGIN OPENSSH PRIVATE KEY-----
 b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAA
 -----END OPENSSH PRIVATE KEY-----
@@ -196,8 +261,8 @@ kw_tok="tok""en"
   # chars, contains dots). The scanner must catch this too, not just the classic
   # opaque ghp_ shape. See github.blog/changelog 2026-05-15 (per-request override).
   printf '%s=ghs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbb.cccccccccccccccccccc\n' "$kw_tok"
-} > "${bad_root}/notes.txt"
-: > "${bad_root}/database.sql.gz"
+} >"${bad_root}/notes.txt"
+: >"${bad_root}/database.sql.gz"
 tar -C "$bad_dir" -czf "$bad_archive" erpnext-dev-support-bundle-badfixture
 
 bad_out="/tmp/erpnext-dev-support-badaudit.$$"
