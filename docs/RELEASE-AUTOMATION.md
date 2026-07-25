@@ -87,8 +87,7 @@ A release must be rejected when:
 Later v1.20 development stages add:
 
 - automated beta preparation;
-- automated stable promotion;
-- pre-tag repository checks.
+- automated release pull-request orchestration.
 
 ## Transactional beta preparation
 
@@ -111,4 +110,39 @@ validation failure restores the exact pre-command files.
 ```bash
 scripts/test-release-metadata.sh
 scripts/test-release-prepare-beta.sh
+```
+
+## Stable promotion
+
+After beta or release-candidate validation, create or update the matching
+release branch and run:
+
+```bash
+scripts/release-promote-stable.sh   1.20.0   "Engine stability and reliability foundation"
+```
+
+Stable promotion requires `release/vX.Y.Z`, a clean working tree, and a
+matching `X.Y.Z-beta.N` or `X.Y.Z-rc.N` canonical version. Any failure restores
+the exact prerelease metadata. The command does not create a tag.
+
+## Strict pre-tag gate
+
+After the stable release PR is merged and local `main` is updated:
+
+```bash
+scripts/release-pretag-check.sh v1.20.0
+```
+
+The pre-tag gate requires a clean tree, exact canonical tag alignment, an
+allowed branch, no existing local or remote tag, and synchronization with the
+remote branch. It runs strict release validation, builds the bundle, extracts
+it into a clean directory, verifies every checksum, checks the canonical and
+runtime versions, and runs `verify-toolkit`.
+
+Use `--offline` only for isolated validation where remote checks are
+intentionally unavailable. The command never creates or pushes a tag.
+
+```bash
+scripts/test-release-promote-stable.sh
+scripts/test-release-pretag-check.sh
 ```

@@ -73,17 +73,11 @@ jobs:
           RELEASE_STRICT: "1"
         run: scripts/validate-release.sh
 
-      - name: Confirm tag matches SCRIPT_VERSION
+      - name: Confirm tag matches canonical release version
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
-          ver="v$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n 1 | cut -d'"' -f2)"
-          echo "tag=${tag} script_version=${ver}"
-          if [[ "$tag" != "$ver" ]]; then
-            echo "::error::Tag ${tag} does not match SCRIPT_VERSION ${ver}."
-            exit 1
-          fi
-
+          scripts/release-version.sh assert-script
+          scripts/release-version.sh assert-tag "${GITHUB_REF_NAME}"
       - name: Sign SHA256SUMS (mandatory for stable tags)
         run: |
           set -euo pipefail

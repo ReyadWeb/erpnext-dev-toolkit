@@ -56,6 +56,10 @@ targets=(
   scripts/release-prepare-beta.sh
   scripts/test-release-metadata.sh
   scripts/test-release-prepare-beta.sh
+  scripts/release-promote-stable.sh
+  scripts/release-pretag-check.sh
+  scripts/test-release-promote-stable.sh
+  scripts/test-release-pretag-check.sh
   scripts/generate-release-checksums.sh
   scripts/run-shellcheck.sh
   scripts/check-module-consistency.sh
