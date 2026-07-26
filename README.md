@@ -2,106 +2,67 @@
 
 ![ERPNext Developer Toolkit](docs/assets/erpnext_dev_toolkit_banner.png)
 
-A guided installation and operations toolkit for **ERPNext / Frappe** on a fresh
-**Ubuntu 24.04 / 26.04 LTS or Debian 13** host (native or Docker). One command installs the full stack; a single
-`erpnext-dev` command then handles day-to-day operations: HTTPS, firewall
-hardening, scheduled and off-VM backups, restore rehearsals, health checks,
-optional apps, guarded upgrades, diagnostics, and redacted support bundles.
+**A guided platform for installing, securing, backing up, updating, and operating ERPNext.**
 
-It supports two setup paths:
+ERPNext Developer Toolkit gives local developers and server operators one consistent
+`erpnext-dev` command for the full ERPNext lifecycle. It supports native and Docker
+deployments on local virtual machines and public servers, then guides the operator
+through domains, HTTPS, security hardening, backups, restore testing, optional apps,
+health checks, diagnostics, signed updates, and rollback.
 
-- **Local development VM** — a local test hostname such as `erp.test`.
-- **Public VPS / cloud VM** — a real domain or subdomain such as `erp.example.com`.
+> This is a community project and is not an official Frappe Technologies product.
 
-> Version history lives in [`CHANGELOG.md`](CHANGELOG.md). Security posture and
-> release-signing details live in [`SECURITY.md`](SECURITY.md). Planned work and
-> the **v1.18–v1.23** plan (security → local IP → healing → panel readiness) are in [`ROADMAP.md`](ROADMAP.md). This README focuses on
-> installation, operations, and usage.
+**Current release:** v1.20.0
 
-**Current release:** v1.20.0 · **Readiness:** Debian 13 native acceptance passed for the responsive UI, Logs navigation, static-IP DNS persistence, HTTPS, backup/restore, reboot, and autostart. Combined beta CI and production regression validation remain pending; latest stable is v1.19.21.
+## At a glance
 
-### Beta testing channel
+| Area | Current support |
+|---|---|
+| **Deployment paths** | Local development VM and public VPS/cloud VM |
+| **Deployment engines** | Native and Docker |
+| **Native hosts** | Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 |
+| **Main command** | `erpnext-dev` |
+| **Release protection** | Signed releases, whole-tree checksums, atomic updates, rollback slots |
+| **Current focus** | Documentation consolidation before the v1.21 machine-interface foundation |
 
-The persistent `beta` branch is the mandatory real-VM proving ground before a stable release. Beta is mutable and unsigned, so use it only on disposable/local test VMs:
+## Choose your path
 
-```bash
-TOOLKIT_UPDATE_CHANNEL=beta TOOLKIT_UPDATE_SLOT=beta sudo -E erpnext-dev update-toolkit
-```
+| Your goal | Recommended path | Start command |
+|---|---|---|
+| Build or test ERPNext locally | **Local development VM** | `sudo ./erpnext-dev.sh local-dev-quickstart` |
+| Deploy ERPNext with a real domain | **Public VPS / cloud VM** | `sudo ./erpnext-dev.sh public-vm-guided-setup` |
+| Let the toolkit help you choose | **Guided start** | `sudo ./erpnext-dev.sh start-here` |
+| Check a host before changing it | **Read-only preflight** | `sudo ./erpnext-dev.sh install-preflight` |
+| Use containers | Choose **Docker** during guided setup | `sudo ./erpnext-dev.sh start-here` |
 
-Every push to `beta` runs both fast release validation and the real Ubuntu 24.04 install/integration workflow. Stable releases continue to come only from reviewed, signed tags.
-
-(after VPS production validation). v1.10.0 turns the toolkit into a **multi-engine**
-platform: choose a **native** VM install (default, unchanged) or a **Docker**
-engine that wraps the official `frappe_docker`, behind the same `erpnext-dev` CLI.
-
-> **OS support:** The native engine supports Ubuntu 24.04 / 26.04 LTS and Debian 13
-> (trixie). The Docker engine runs on any Docker-capable host and formally tracks
-> Ubuntu 24.04 / 26.04 and Debian 11 / 12 / 13. Automated **release** integration
-> coverage runs on **Ubuntu 24.04 (release-gating)** plus Docker legs. **Ubuntu 26.04**
-> is a **canary** (weekly schedule / manual dispatch only) until its asset gate is
-> green; then it returns as a hard gate. Debian 13 uses the same Debian-family
-> apt/systemd install path (GitHub provides no Debian runner, so it is
-> field-validated rather than gated in CI).
+The same toolkit continues to manage the environment after installation, regardless
+of the selected path or engine.
 
 ![From fresh host to validated go-live](docs/assets/toolkit_lifecycle_flow_diagram.png)
 
 ---
 
-## Deployment engines
-
-The toolkit is a multi-engine platform: the same `erpnext-dev` command drives two
-first-class deployment engines. During `install` / `local-dev-quickstart` you pick
-one; the choice is saved and every lifecycle command (`start`, `stop`, `status`,
-`logs`, `backup`, app installs, `doctor`) routes to it automatically.
-
-| Engine | What it does | Best for |
-| --- | --- | --- |
-| **Native** (default) | Installs ERPNext/Frappe directly on the VM (systemd, bench, host MariaDB/Redis/Nginx). Ubuntu 24.04/26.04, Debian 13. | Maximum host-level control and simplicity. |
-| **Docker** | Containerized stack wrapping the official `frappe_docker`: quick/local `pwd.yml` with a host frontend port (`8080` by default), or production `compose.yaml` with Traefik on 80/443. | Isolation, portability, upstream production alignment. |
-
-```bash
-sudo erpnext-dev set-engine       # choose native or docker for a fresh setup
-sudo erpnext-dev engine-status    # show the active engine and its settings
-```
-
-The Docker engine has two modes:
-
-- **Development** (default) — disposable upstream `pwd.yml` stack for local
-  testing (install / start / stop / status / logs / health / backup / apps).
-- **Production** (`sudo erpnext-dev docker-production-setup`, or
-  `DOCKER_MODE=production`) — wraps upstream `compose.yaml` with MariaDB/Redis
-  overrides, an immutable image pin, and Traefik HTTPS (Let's Encrypt or
-  Cloudflare Origin CA). The Docker Engine installs from Docker's official
-  signed apt repository; the exact `frappe_docker` commit SHA + ERPNext image
-  digest are recorded under `/opt/erpnext-dev/docker/erpnext-dev.pins`.
-
-Native remains the longest-validated path. Docker **production** compose and
-HTTPS are shipped and release-gated in CI; native **Debian 13** uses the same
-Debian-family install path and is **field-validated** (GitHub has no Debian
-runner). Ubuntu **26.04** is exercised as a weekly/manual CI canary (not on tag
-releases) until its browser-asset gate is stable enough to hard-gate.
-
-Docker access follows the engine's real port model instead of native Bench assumptions:
-
-- **Local / quick Docker:** the frontend is published on `8080` by default (or the saved `DOCKER_PUBLISH_PORT`). Use `http://VM_IP:8080` directly or `http://SITE:8080` after host mapping. Native Bench ports `8000/9000` are not Docker browser entrypoints.
-- **Local trusted HTTPS:** the guided Docker flow can use the same mkcert experience as native. Host Nginx serves `https://SITE` and proxies to the Docker published frontend port.
-- **Public Docker:** the Public VM guided wizard provisions the production Compose stack directly, or promotes an existing quick/dev Docker stack before HTTPS. Before TLS, the direct frontend binds only to `127.0.0.1:8080` (or the saved port). After TLS is enabled, Traefik owns public `80/443` and the direct frontend port is no longer publicly published.
-
-`sudo erpnext-dev docker-https-wizard` is context-aware: local Docker opens the trusted local-HTTPS workflow, while public Docker performs/requests production promotion and then offers Let's Encrypt or Cloudflare Origin CA.
-
-Docker firewall note: Docker-published ports can bypass normal UFW `INPUT` rules. For a local Docker VM, `local-firewall-profile` therefore installs a persistent `DOCKER-USER` forwarding filter that limits the published frontend port to private IPv4 networks and mirrors the policy for Docker IPv6 forwarding when active. If the Docker firewall backend does not expose `DOCKER-USER`, the toolkit warns instead of claiming UFW protected the port; restrict the port at the VM/hypervisor or cloud edge.
-
----
-
 ## Menu
 
-- [Start here](#start-here) — the important command for each case
-- [Deployment engines](#deployment-engines)
-- [Project status and roadmap](#project-status-and-roadmap)
+### Getting started
+
+- [Start here](#start-here)
 - [Install and verify](#install-and-verify)
 - [Requirements and preflight](#requirements-and-preflight)
+- [Deployment engines](#deployment-engines)
+- [Project status and roadmap](#project-status-and-roadmap)
+
+### Deployment
+
 - [Local development VM](#local-development-vm)
+- [Choose your host OS](#choose-your-host-os-linux-macos-or-windows)
 - [Public VPS / cloud VM](#public-vps--cloud-vm)
+- [Production runtime](#production-runtime-no-bench-start)
+- [HTTPS / SSL](#https--ssl)
+- [Security hardening](#security-hardening)
+
+### Operations
+
 - [The `erpnext-dev` command](#the-erpnext-dev-command)
 - [Credentials](#credentials)
 - [Backups and restore safety](#backups-and-restore-safety)
@@ -111,141 +72,172 @@ Docker firewall note: Docker-published ports can bypass normal UFW `INPUT` rules
 - [Health monitoring](#health-monitoring)
 - [Go-live validation](#go-live-validation)
 - [Optional Frappe apps](#optional-frappe-apps)
-- [HTTPS / SSL](#https--ssl)
-- [Security hardening](#security-hardening)
 - [Guarded upgrades](#guarded-upgrades)
 - [Toolkit integrity and updates](#toolkit-integrity-and-updates)
+
+### Support and project information
+
 - [Diagnostics and support](#diagnostics-and-support)
 - [Architecture diagrams](#architecture-diagrams)
 - [Documentation files](#documentation-files)
 - [Production caution](#production-caution)
+- [Additional resources](#additional-resources)
+- [A note to you](#a-note-to-you)
 
 ---
 
 ## Start here
 
-**Fresh local dev VM — download, verify, and install in one command:**
+### 1. Download the latest published stable release
+
+Use the release asset named `erpnext-dev-vX.Y.Z.tar.gz`. Do not install from
+GitHub's automatically generated source archives because they are not the supported
+release bundle.
 
 ```bash
-sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-REPO="ReyadWeb/erpnext-dev-toolkit" && \
-VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
-  "https://github.com/${REPO}/releases/latest" \
-  | sed -n 's|.*/tag/\([^/]*\)$|\1|p')" && \
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve latest release" >&2; exit 1; } && \
-BASE="https://github.com/${REPO}/releases/download/${VERSION}" && \
-cd ~ && \
-curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
-tar -xzf "erpnext-dev-${VERSION}.tar.gz" && \
-cd "erpnext-dev-${VERSION}" && \
-sha256sum -c SHA256SUMS && \
-sudo ./erpnext-dev.sh local-dev-quickstart
-```
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates gnupg tar
 
-Press **Enter** at the domain prompt to keep the default `erp.test`. Choose **Linux**
-for host OS when asked (or your actual host OS). After install, run the printed
-**host mapping** and **mkcert/scp** commands on your physical host machine — each
-is a single copy-paste line.
-
-**Debian tip:** if `sudo` is missing or your user is not in the `sudo` group, see
-[Debian 13 notes](#debian-13-notes-native) first (bootstrap as root, then re-run
-the block above as your normal user).
-
-Or install step by step ([details below](#install-and-verify)):
-
-```bash
-sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
 REPO="ReyadWeb/erpnext-dev-toolkit"
-VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
-  "https://github.com/${REPO}/releases/latest" \
-  | sed -n 's|.*/tag/\([^/]*\)$|\1|p')"
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve latest release" >&2; exit 1; }
-BASE="https://github.com/${REPO}/releases/download/${VERSION}"
-curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
-tar -xzf "erpnext-dev-${VERSION}.tar.gz"
-cd "erpnext-dev-${VERSION}"
+VERSION="$(
+  curl -fsSL -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${REPO}/releases/latest" |
+  sed -n 's|.*/tag/\([^/]*\)$|\1|p'
+)"
+
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "Could not resolve the latest stable release." >&2
+  exit 1
+}
+
+workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
+cd "$workdir" || exit 1
+
+base="https://github.com/${REPO}/releases/download/${VERSION}"
+archive="erpnext-dev-${VERSION}.tar.gz"
+
+curl -fsSLO "${base}/${archive}"
+
+if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+  echo "Unsafe path detected in release archive." >&2
+  exit 1
+fi
+
+tar --no-same-owner --no-same-permissions -xzf "$archive"
+cd "erpnext-dev-${VERSION}" || exit 1
+
+sudo ./erpnext-dev.sh verify-signature
 sha256sum -c SHA256SUMS
 ```
 
-Pin a **specific published** release (only after its Assets exist):
+Why this block resolves `/releases/latest` through `url_effective`:
+
+- It selects the latest **published stable** release.
+- It avoids a hardcoded version becoming stale.
+- It prevents installation from racing ahead of signed release assets.
+- It keeps the quickstart aligned with the repository's release validation rules.
+
+To pin the current stable release explicitly:
 
 ```bash
 VERSION="v1.20.0"
-REPO="ReyadWeb/erpnext-dev-toolkit"
-BASE="https://github.com/${REPO}/releases/download/${VERSION}"
-curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
 ```
 
-> **Use the release Assets, not “Source code”.** Install from
-> `erpnext-dev-vX.Y.Z.tar.gz` on the GitHub Release (plus `SHA256SUMS` /
-> `SHA256SUMS.asc`). The automatic “Source code (zip/tar.gz)” archives are not
-> the supported install path.
->
-> **Why the install block resolves `/releases/latest`:** during a release, `main`
-> may advertise a new `SCRIPT_VERSION` before the signed bundle is uploaded.
-> Resolving `/releases/latest` always downloads the last **published** release
-> (GitHub only marks latest after Assets exist), so the copy-paste path does not
-> 404 mid-pipeline. The banner **Current release** may briefly lead the install
-> path until publish finishes.
->
-> **Retrying after a failed download?** If an earlier attempt returned 404, left a
-> partial tarball, or you switched versions (for example from `v1.9.5` to `v1.10.0`),
-> remove leftovers from your home directory first so you do not mix old and new
-> files, then re-run the block above:
->
-> ```bash
-> cd ~
-> rm -rf erpnext-dev-v1.9.5 erpnext-dev-v1.10.0 erpnext-dev-v1.18.0
-> rm -f erpnext-dev-v*.tar.gz SHA256SUMS SHA256SUMS.asc
-> ```
->
-> That only cleans the download folder — it does **not** uninstall an already
-> installed ERPNext site. Use toolkit uninstall commands for that.
-
-Then run the command for your case:
+### 2. Run the workflow for your environment
 
 | I want to… | Command | Notes |
 |---|---|---|
-| Let the toolkit ask local vs. production | `sudo ./erpnext-dev.sh start-here` | Guided chooser |
-| Check the VM is safe before installing | `sudo ./erpnext-dev.sh install-preflight` | Read-only |
-| Install a **local dev** VM | `sudo ./erpnext-dev.sh local-dev-quickstart` | Defaults to `erp.test` |
-| Install a **production** VM | `sudo ./erpnext-dev.sh public-vm-guided-setup` | Needs a real domain |
-| Install / repair the `erpnext-dev` command | `sudo ./erpnext-dev.sh install-cli` | Then use `sudo erpnext-dev …` |
+| Let the toolkit choose the path with me | `sudo ./erpnext-dev.sh start-here` | Guided local/production chooser |
+| Check the host first | `sudo ./erpnext-dev.sh install-preflight` | Read-only and safe to repeat |
+| Install a local development VM | `sudo ./erpnext-dev.sh local-dev-quickstart` | Defaults to `erp.test` |
+| Install a public production VM | `sudo ./erpnext-dev.sh public-vm-guided-setup` | Requires a real domain |
+| Install or repair the CLI command | `sudo ./erpnext-dev.sh install-cli` | Enables `erpnext-dev …` |
 
-After install, everything else uses the stable `erpnext-dev` command:
+Run interactive commands on their own line. Do not append unrelated commands to a
+wizard invocation.
+
+### 3. Verify the installed toolkit
+
+```bash
+erpnext-dev version
+erpnext-dev where-installed
+sudo erpnext-dev verify-toolkit
+sudo erpnext-dev dashboard
+sudo erpnext-dev doctor --plain
+```
+
+### Essential day-to-day commands
 
 | Task | Command |
 |---|---|
-| Operations health dashboard | `sudo erpnext-dev dashboard` |
-| Daily operations menus | `sudo erpnext-dev production-ops-wizard` |
-| Install optional Frappe apps | `sudo erpnext-dev app-install-wizard` |
-| Create / verify a backup | `sudo erpnext-dev backup-files && sudo erpnext-dev backup-verify` |
-| Set up an off-VM backup server | `sudo erpnext-dev backup-server-setup` (on the backup server) |
-| Rehearse a restore on a disposable VM | `sudo erpnext-dev restore-rehearsal-wizard` |
-| Upgrade ERPNext safely | `sudo erpnext-dev safe-update-wizard` |
-| Show login credentials | `sudo erpnext-dev credentials-show` |
-| Health / diagnostics | `sudo erpnext-dev doctor --plain` |
-| Full command list | `erpnext-dev --help` |
+| Open the main menu | `sudo erpnext-dev menu` |
+| View operational health | `sudo erpnext-dev dashboard` |
+| Check services and environment | `sudo erpnext-dev status` |
+| Start, stop, or restart | `sudo erpnext-dev start`, `stop`, or `restart` |
+| View runtime logs | `sudo erpnext-dev logs` |
+| Run diagnostics | `sudo erpnext-dev doctor --plain` |
+| Display credentials privately | `sudo erpnext-dev credentials-show` |
+| Create and verify a backup | `sudo erpnext-dev backup-files` then `backup-verify` |
+| Rehearse recovery | `sudo erpnext-dev restore-rehearsal-wizard` |
+| Install optional applications | `sudo erpnext-dev app-install-wizard` |
+| Update the toolkit | `sudo erpnext-dev update-toolkit` |
+| Roll back the toolkit | `sudo erpnext-dev toolkit-rollback` |
+| Show every command | `erpnext-dev --help` |
 
-> Run interactive menu commands (for example `production-ops-wizard`) on their
-> own — don't chain other commands after them in the same line.
+---
+
+## Deployment engines
+
+The toolkit offers one operational interface across two deployment engines. The
+selected engine is saved, and later lifecycle commands route automatically.
+
+| Engine | What it does | Best fit |
+|---|---|---|
+| **Native** | Installs ERPNext/Frappe directly on the host and manages the host runtime. | Maximum host-level control and the longest field-validation history. |
+| **Docker** | Wraps the upstream `frappe_docker` deployment model behind the same toolkit command. | Isolation, portability, and container-oriented operations. |
+
+```bash
+sudo erpnext-dev set-engine
+sudo erpnext-dev engine-status
+```
+
+### Native engine
+
+Native deployments use host services for ERPNext, Frappe, MariaDB, Redis, Nginx,
+and the selected development or production runtime. The production workflow moves
+public servers away from `bench start` and into the managed production runtime.
+
+### Docker engine
+
+Docker supports two modes:
+
+- **Development/local mode** for disposable testing with a published frontend port.
+- **Production Compose mode** with public HTTPS and production-oriented service
+  configuration.
+
+The toolkit keeps engine-aware commands for status, logs, HTTPS, firewall rules,
+backup, restore, applications, health checks, and diagnostics. Docker-published
+ports follow Docker's forwarding model, so provider, hypervisor, or `DOCKER-USER`
+controls may be required in addition to ordinary host firewall rules.
 
 ---
 
 ## Project status and roadmap
 
-| Area | Rating | Notes |
-|------|--------|--------|
-| Local dev VM | 9.5 | Guided install, HTTPS, apps, backups — field-tested |
-| Public VPS production | 9.5 | Production runtime, gated releases — **validate on your VPS** |
-| Supply chain | 9.6 | Signed + gated CI; signing key gated by `release-signing` environment (v1.9.0); Actions pinned to commit SHAs + Dependabot (v1.9.1) |
-| Path to 9.8+ | — | v1.10.0 object-storage backups → v1.11.0 community polish |
+| Area | Status |
+|---|---|
+| Stable release | `v1.20.0` published, signed, and acceptance-tested |
+| Native installation | Ubuntu 24.04 and 26.04 release-tested; Debian 13 field-validated |
+| Docker installation | Development and production Compose paths covered by integration testing |
+| Release integrity | Canonical versioning, authoritative manifest, signed checksums, atomic updates, rollback |
+| Current work | Documentation consolidation and professional information architecture |
+| Next product milestone | v1.21 machine-readable interface and local agent foundation |
 
-See [`ROADMAP.md`](ROADMAP.md) for the full plan and timeline. VPS production checklist:
-[`TESTING.md` — VPS production validation](TESTING.md#vps-production-validation-v190).
+Detailed validation evidence belongs in [`TESTING.md`](TESTING.md),
+[`VALIDATION.md`](VALIDATION.md), and [`CHANGELOG.md`](CHANGELOG.md). Active planning
+belongs in [`ROADMAP.md`](ROADMAP.md).
 
 ---
-
 ## Clean reinstall safety
 
 When a native installation already exists at the configured `BENCH_PARENT`, a

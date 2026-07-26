@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-fail() {
+test_fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
@@ -29,11 +29,11 @@ required_rendered=(
 
 for expected in "${required_rendered[@]}"; do
   grep -Fq -- "$expected" <<<"$rendered" \
-    || fail "rendered bootstrap is missing: $expected"
+    || test_fail "rendered bootstrap is missing: $expected"
 done
 
 if grep -Eq 'raw\.githubusercontent\.com/.*/erpnext-dev\.sh' <<<"$rendered"; then
-  fail "rendered bootstrap still downloads the entrypoint from raw.githubusercontent.com"
+  test_fail "rendered bootstrap still downloads the entrypoint from raw.githubusercontent.com"
 fi
 
 active_guidance_files=(
@@ -48,28 +48,28 @@ active_guidance_files=(
 if grep -REn \
   'curl -fsSLO .*raw\.githubusercontent\.com/ReyadWeb/erpnext-dev-toolkit/.+erpnext-dev\.sh' \
   "${active_guidance_files[@]}"; then
-  fail "obsolete two-file bootstrap guidance remains"
+  test_fail "obsolete two-file bootstrap guidance remains"
 fi
 
 [[ "$(grep -Fc 'verified_release_bundle_bootstrap "backup-server-setup" "  "' lib/backup.sh)" -eq 2 ]] \
-  || fail "backup guidance must use the canonical helper twice"
+  || test_fail "backup guidance must use the canonical helper twice"
 
 [[ "$(grep -Fc 'verified_release_bundle_bootstrap "first-run" "  "' lib/ssl.sh)" -eq 1 ]] \
-  || fail "SSL/setup guidance must use the canonical helper once"
+  || test_fail "SSL/setup guidance must use the canonical helper once"
 
 [[ "$(grep -Fc 'verified_release_bundle_bootstrap "verify-toolkit" "  "' lib/security.sh)" -eq 1 ]] \
-  || fail "integrity guidance must use the canonical helper once"
+  || test_fail "integrity guidance must use the canonical helper once"
 
 grep -Fq '$(verified_release_bundle_bootstrap "first-run" "  ")' erpnext-dev.sh \
-  || fail "main help does not render the canonical signed bootstrap"
+  || test_fail "main help does not render the canonical signed bootstrap"
 
 for doc in SECURITY.md TESTING.md; do
   grep -Fq 'erpnext-dev-${VERSION}.tar.gz' "$doc" \
-    || fail "$doc does not document the release archive"
+    || test_fail "$doc does not document the release archive"
   grep -Fq 'SHA256SUMS.asc' "$doc" \
-    || fail "$doc does not document signature verification"
+    || test_fail "$doc does not document signature verification"
   grep -Fq 'BFC10C79427CF73496EA6F5A30BFD17DD559C8B6' "$doc" \
-    || fail "$doc does not pin the signing-key fingerprint"
+    || test_fail "$doc does not pin the signing-key fingerprint"
 done
 
 echo "OK: signed release bootstrap guidance is canonical and regression-tested"
