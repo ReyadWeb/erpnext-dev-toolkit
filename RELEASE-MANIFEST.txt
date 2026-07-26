@@ -28,6 +28,7 @@ docs/ROADMAP-HISTORY.md
 scripts/validate-release.sh
 scripts/repo-workflow.sh
 scripts/test-repo-workflow.sh
+scripts/test-repo-workflow-pr.sh
 scripts/test-health-snapshot.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh

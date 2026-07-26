@@ -7,10 +7,16 @@
   validation, exact-tree cache reuse, protected-branch blocking, publishing,
   and push recovery.
 - Added focused repository-workflow documentation.
+- Added authenticated pull-request creation, duplicate detection, status,
+  required-check watching, and explicit merge strategies to
+  `scripts/repo-workflow.sh`.
+- Added hermetic pull-request workflow tests using a fake GitHub CLI.
 
 ### Changed
 - Extended release validation, ShellCheck coverage, release manifests, and
   packaged documentation to include the repository workflow foundation.
+- Extended the repository workflow documentation and release validation
+  to cover the pull-request lifecycle.
 
 ## v1.20.0 - Engine Stability and Reliability Foundation
 

@@ -86,6 +86,69 @@ scripts/repo-workflow.sh publish \
 
 `--dry-run` leaves the validated files staged and creates no commit.
 
+## Pull-request workflow
+
+After `publish` pushes the branch, manage the pull request through the same
+repository command.
+
+Create a pull request:
+
+```bash
+scripts/repo-workflow.sh pr create
+```
+
+The command:
+
+- Requires an authenticated GitHub CLI session
+- Requires a clean feature or documentation branch
+- Confirms the branch is synchronized and present on `origin`
+- Reuses an existing open pull request instead of creating a duplicate
+- Uses `main` as the default base branch
+
+Optional creation controls:
+
+```bash
+scripts/repo-workflow.sh pr create \\
+  --base main \\
+  --title "Dev: improve repository workflow" \\
+  --body "Summary of the change"
+
+scripts/repo-workflow.sh pr create --draft
+scripts/repo-workflow.sh pr create --body-file /path/to/pr-body.md
+```
+
+Show the current branch pull request:
+
+```bash
+scripts/repo-workflow.sh pr status
+```
+
+Show checks once or watch them until completion:
+
+```bash
+scripts/repo-workflow.sh pr checks
+scripts/repo-workflow.sh pr checks --watch --required
+```
+
+Merge only after required checks pass:
+
+```bash
+scripts/repo-workflow.sh pr merge
+```
+
+The default strategy is a merge commit. Other supported controls are:
+
+```bash
+scripts/repo-workflow.sh pr merge --squash
+scripts/repo-workflow.sh pr merge --rebase
+scripts/repo-workflow.sh pr merge --admin
+scripts/repo-workflow.sh pr merge --delete-branch
+```
+
+`--admin` is explicit because it bypasses repository merge restrictions. Use it
+only after reviewing the successful required checks and confirming that the
+remaining restriction is an intentional solo-maintainer or emergency override.
+
 ## Validation modes
 
 | Mode | Intended use | Local work |
