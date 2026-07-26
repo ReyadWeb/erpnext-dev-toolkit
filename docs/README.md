@@ -95,6 +95,8 @@ installation slots.
 - [Development guide](DEVELOPMENT.md)
 - [Release automation](RELEASE-AUTOMATION.md)
 - [Release process](RELEASE-PROCESS.md)
+- [Active roadmap](../ROADMAP.md)
+- [Roadmap history](ROADMAP-HISTORY.md)
 - [Roadmap board](ROADMAP-BOARD.md)
 - [Community board](COMMUNITY-BOARD.md)
 

@@ -24,6 +24,7 @@ docs/security/SECURITY-HISTORY.md
 docs/HEALTH-ARCHITECTURE.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
+docs/ROADMAP-HISTORY.md
 scripts/validate-release.sh
 scripts/test-health-snapshot.sh
 scripts/generate-release-checksums.sh
