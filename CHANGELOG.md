@@ -1,3 +1,17 @@
+## Unreleased
+### Added
+- Added `scripts/repo-workflow.sh` as the routine repository interface for
+  status, risk-based validation, automatic checksum regeneration, commit,
+  push, validation caching, and resumable failures.
+- Added hermetic workflow regression coverage for fast checks, automatic full
+  validation, exact-tree cache reuse, protected-branch blocking, publishing,
+  and push recovery.
+- Added focused repository-workflow documentation.
+
+### Changed
+- Extended release validation, ShellCheck coverage, release manifests, and
+  packaged documentation to include the repository workflow foundation.
+
 ## v1.20.0 - Engine Stability and Reliability Foundation
 
 ### Added
