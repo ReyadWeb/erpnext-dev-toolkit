@@ -16,6 +16,11 @@ TESTING.md
 VALIDATION.md
 ROADMAP.md
 docs/README.md
+docs/security/README.md
+docs/security/SECURITY-ARCHITECTURE.md
+docs/security/RELEASE-TRUST.md
+docs/security/PRODUCTION-HARDENING.md
+docs/security/SECURITY-HISTORY.md
 docs/HEALTH-ARCHITECTURE.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md

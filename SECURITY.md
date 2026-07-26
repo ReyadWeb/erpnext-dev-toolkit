@@ -1,521 +1,316 @@
-## v1.6.0 release governance and atomic self-update
+# Security Policy
 
-v1.6.0 turns release integrity from "available" into "enforced":
+**Current release:** v1.20.0
 
-- **Publishing is gated on the full test pipeline.** `release.yml` is now a
-  single tag pipeline — `validate` (shellcheck + `validate-release.sh` + bundle
-  quickstart) → `integration` (a real disposable-VM install + backup/restore
-  round-trip + production-runtime conversion) → `publish`. The publish job
-  `needs: [validate, integration]`, so a release can never be published unless
-  both gates pass first. A compromised or broken tree fails before any artifact
-  is shipped.
-- **Signing is mandatory for stable tags.** A stable `vX.Y.Z` tag FAILS the
-  release if the signing key is missing or signing/verification fails — it no
-  longer silently publishes unsigned. The only unsigned path is an explicit
-  emergency pre-release tag (e.g. `vX.Y.Z-unsigned`), which is marked as a
-  GitHub pre-release.
-- **Self-update is atomic and checksum-gated.** `update-toolkit` downloads the
-  release bundle, verifies whole-tree checksums (`sha256sum -c`), extracts to
-  `/opt/erpnext-dev/releases/<ver>/`, then flips `/opt/erpnext-dev/current` with
-  a single atomic `rename`. The previous release is retained for instant
-  `toolkit-rollback`. As of **v1.8.2**, staged signature verification on the tag
-  channel matches bootstrap `verify-signature`: signature, gpg, bundled pubkey, and
-  pinned maintainer fingerprint are all required (fail closed).
-- **Symlink resolution fix.** The entry script resolves its own real path
-  (`readlink -f`) before locating `lib/`, so running through the CLI symlink or
-  the `current` release symlink always sources modules from the real, verified
-  release directory.
+ERPNext Developer Toolkit performs privileged installation and operations work. This policy explains how to report vulnerabilities, which versions receive security attention, what the toolkit protects, and which responsibilities remain with the server operator.
 
-## v1.3.0 signed releases (Phase C P0 milestone)
+> Report suspected vulnerabilities privately. Do not open a public GitHub issue for security-sensitive reports.
 
-v1.3.0 adds maintainer-identity verification on top of the existing SHA256 integrity workflow: a `release.yml` workflow signs `SHA256SUMS` with the maintainer GPG key on every `v*` tag and attaches `SHA256SUMS.asc` to the GitHub Release, and a new `verify-signature` command verifies that signature. See "Verifying release signatures" below. This closes the gap noted under P0: SHA256-only verification cannot detect an attacker who controls both the script and its checksum, whereas a signature they cannot forge can.
+## Supported versions
 
-## v1.2.0 Phase C security hardening
+| Version line | Security status |
+|---|---|
+| `v1.20.x` | Supported |
+| Earlier releases | Upgrade to the current stable release before routine support. Security reports are still accepted when the issue may affect current code or prevents a safe upgrade. |
+| Development branches and prereleases | Evaluation only unless a release note explicitly states otherwise |
 
-v1.2.0 adds `lib/security.sh` with `security-audit`, checksum-gated tag-pinned `update-toolkit`, production credential handoff prompts, and expanded support-bundle audit patterns.
+Check the installed version with:
 
-## v1.1.90 ops module extraction — Phase B complete
-
-v1.1.90 extracts the production operations dashboard into `lib/ops.sh`. Next: Phase C security hardening (v1.2.0).
-
-## v1.1.89 status module extraction
-
-v1.1.89 extracts install/runtime status helpers into `lib/status.sh`.
-
-## v1.1.88 frappe module extraction and dispatcher thinning
-
-v1.1.88 extracts Frappe/bench helpers into `lib/frappe.sh` and removes duplicate support/doctor code from the main script.
-
-## v1.1.87 access module extraction
-
-v1.1.87 extracts browser access, host DNS, networking guides, and credentials UI into `lib/access.sh`.
-
-## v1.1.86 config module extraction
-
-v1.1.86 extracts site and domain configuration into `lib/config.sh`.
-
-## v1.1.85 install module complete (Tiers A–C)
-
-v1.1.85 completes `lib/install.sh` with guided setup, local/public quickstarts, and first-run wizard workflows.
-
-## v1.1.84 install Tier B extension
-
-v1.1.84 extends `lib/install.sh` with post-install checkpoint and summary helpers.
-
-## v1.1.83 install module extraction (Tier A)
-
-v1.1.83 extracts install preflight, system package setup, Frappe stack bootstrap, and install/repair/uninstall commands into `lib/install.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
-
-## v1.1.82 service module extraction
-
-v1.1.82 extracts ERPNext systemd service management and runtime state helpers into `lib/service.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
-
-## v1.1.81 storage module extraction
-
-v1.1.81 extracts root storage detection, status, and expansion helpers into `lib/storage.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
-
-## v1.1.80 health module extraction
-
-v1.1.80 extracts health checks, timers, go-live validation, and production readiness helpers into `lib/health.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
-
-## v1.1.79 app library module extraction
-
-v1.1.79 extracts curated Frappe app profiles, install wizards, and compatibility helpers into `lib/apps.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
-
-## v1.1.78 SSL and firewall module extraction
-
-v1.1.78 extracts production and local SSL/HTTPS helpers into `lib/ssl.sh` and firewall/UFW/Fail2Ban helpers into `lib/firewall.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
-
-## v1.1.77 backup module extraction
-
-v1.1.77 extracts local backup, off-VM backup, restore, and rehearsal helpers into `lib/backup.sh`. Install and update paths keep the full toolkit `lib/` tree under `/opt/erpnext-dev/lib/`.
-
-## v1.1.76 support module extraction
-
-v1.1.76 extracts doctor, support-bundle, support-bundle audit, and command-audit helpers into `lib/support.sh`. Install and update paths keep `/opt/erpnext-dev/lib/support.sh` beside the stable toolkit script.
-
-## v1.1.75 modularization and shellcheck
-
-v1.1.75 extracts shared helpers into `lib/common.sh` and adds `scripts/run-shellcheck.sh` to CI. Install and update paths now keep `/opt/erpnext-dev/lib/common.sh` beside the stable toolkit script.
-
-# Security Policy and Threat Model
-
-## Scope
-
-This document describes the security posture, assumptions, and improvement plan for the ERPNext Developer Toolkit. The toolkit is a Bash-based installation and operations toolkit for ERPNext/Frappe on Ubuntu 24.04 / 26.04 LTS and Debian 13, deployed natively or via Docker.
-
-The current validated production path includes:
-
-```text
-Production site: erp.flowmaya.com
-Production VPS: 65.109.221.4
-Backup server: 65.109.220.250
-Cloudflare Origin CA / Nginx HTTPS
-UFW and Fail2Ban
-Local scheduled backups
-Off-VM rsync backups
-Disposable restore rehearsal
-Health monitoring
-Go-live validation record
-Redacted support bundle evidence
+```bash
+erpnext-dev version
 ```
 
-The toolkit can help build and operate a production-candidate VM, but it is not a replacement for cloud-provider controls, password management, application-layer ERPNext security, or organization-specific security governance.
+Update to a specific signed release with:
+
+```bash
+sudo env \
+  TOOLKIT_UPDATE_VERSION=v1.20.0 \
+  erpnext-dev update-toolkit
+```
+
+## Reporting a vulnerability
+
+Use GitHub private vulnerability reporting:
+
+https://github.com/ReyadWeb/erpnext-dev-toolkit/security/advisories/new
+
+Do not disclose the issue publicly until a fix and coordinated disclosure plan are ready.
+
+### Include
+
+- Toolkit version from `erpnext-dev version`
+- Operating system and version
+- Deployment engine: native, Docker development, or Docker production
+- Environment type: local VM, public VPS, backup server, or restore VM
+- Exact command or workflow involved
+- Expected and observed behaviour
+- Reproduction steps that do not expose real customer data
+- Redacted logs, screenshots, or support-bundle audit output
+- Your assessment of impact and whether the issue is actively exploitable
+
+### Do not include
+
+- Passwords
+- Private keys
+- API or access tokens
+- Raw `site_config.json`
+- Database dumps
+- Customer records
+- Unredacted configuration files
+- Production backup archives
+
+For ordinary bugs, questions, and compatibility reports, use [SUPPORT.md](SUPPORT.md).
+
+## Response and disclosure
+
+This is a maintainer-led community project and does not promise a formal response-time SLA. Security reports are prioritised over ordinary support requests.
+
+The expected process is:
+
+1. Confirm receipt and establish a private communication channel.
+2. Reproduce and assess affected versions and deployment paths.
+3. Prepare a fix, tests, documentation, and release plan.
+4. Coordinate disclosure with the reporter.
+5. Publish a signed release and security advisory when appropriate.
+
+Do not test a suspected vulnerability against systems you do not own or have explicit permission to assess.
 
 ## Security model
 
+The toolkit is designed for a dedicated ERPNext host administered by trusted operators. It reduces common installation and operations risks, but it does not replace the security controls of the operating system, cloud provider, DNS provider, ERPNext, Frappe, or the organisation using the system.
+
+### Security boundaries
+
+The toolkit assumes:
+
+- The server administrator and `sudo` users are trusted.
+- The operating system and package repositories are trusted and maintained.
+- The selected GitHub release and maintainer signing-key fingerprint are verified.
+- Provider accounts, DNS accounts, SSH keys, and off-site backup credentials are protected.
+- ERPNext users, roles, permissions, and business data are governed separately.
+- Operators review and test changes before applying them to production.
+
 ### What the toolkit protects
 
-The toolkit is designed to reduce common operational risks:
+The toolkit provides controls for:
 
-- accidental production exposure of Bench ports such as `8000`, `9000`, Redis ports, and MariaDB;
-- missing local backup and off-VM backup workflows;
-- untested disaster recovery;
-- untracked restore rehearsal evidence;
-- accidental sharing of private keys, credentials, tokens, or raw `site_config.json` values in support bundles;
-- unclear distinction between local development VM, production VPS, backup server, and disposable restore VM;
-- unsafe firewall changes without status and rollback awareness.
+- Signed stable releases
+- Whole-tree release checksums
+- Canonical release-version and manifest validation
+- Atomic versioned toolkit installation
+- Rollback to a previously installed toolkit release
+- Runtime-module integrity verification
+- Guarded privileged workflows
+- Private single-instance locks
+- Environment-aware firewall and exposure checks
+- Credential-file permission checks
+- Redacted diagnostics and support bundles
+- Backup verification and restore rehearsal
+- CI validation, security scanning, and pinned GitHub Actions
 
-### What remains operator responsibility
+Technical details are documented in [Security architecture](docs/security/SECURITY-ARCHITECTURE.md).
 
-Operators remain responsible for:
+### What the toolkit does not guarantee
 
-- cloud-provider account security;
-- cloud firewall rules and provider snapshot policy;
-- DNS and Cloudflare account security;
-- SSH account policy and administrator IP restrictions;
-- ERPNext users, roles, passwords, two-factor authentication, and business permissions;
-- secure storage of generated credentials in a password manager;
-- periodic restore drills after major upgrades, migration, or backup-policy changes;
-- verifying release integrity before running toolkit updates as root.
+The toolkit cannot guarantee:
 
-## Key security findings
+- Security of the cloud, DNS, GitHub, email, or password-manager account
+- Correct ERPNext business permissions
+- Protection from a compromised root account
+- Protection from a compromised operating-system package repository
+- Availability of the VPS, network, DNS, or backup provider
+- That every secret will be detected by heuristic support-bundle redaction
+- That a backup is recoverable unless restore testing succeeds
+- Compatibility of every optional application or custom ERPNext modification
+- Compliance with organisation-specific legal or regulatory requirements
 
-### P0: Bootstrap trust and release integrity
+## Privileged execution
 
-The highest-priority security gap is release trust. Convenience bootstrap commands that download from GitHub and run with `sudo` are powerful but high trust. A compromised repository, account, branch, network path, or operator copy/paste mistake could result in root execution on the target VM.
+Many commands require root privileges because they install packages, configure services, manage firewall rules, write under `/etc` and `/opt`, or control production runtimes.
 
-The preferred direction is now partially implemented:
+The toolkit does not treat arbitrary remote shell execution as an application interface. Privileged operations are explicit toolkit commands with validation, environment checks, and bounded behaviour.
 
-1. install from pinned release tags instead of `main`;
-2. publish SHA256 checksums per release;
-3. document checksum verification before `sudo` execution;
-4. add a `verify-toolkit` command that reports installed path, installed version, installed SHA256, and match/mismatch against a known checksum when available; **implemented in v1.1.71**;
-5. GPG-signed releases; **implemented in v1.3.0** and made **mandatory for stable tags in v1.6.0** (`release.yml` signs `SHA256SUMS`; `verify-signature` checks it), with publishing **gated on CI + a real integration run**. As of **v1.8.0**, the stable-tag signing decision is extracted into `scripts/release-signing-policy.sh` and unit-tested in CI (a stable tag without a signing key must fail; pre-release escape hatch tags may publish unsigned).
+Before running an unfamiliar command:
 
-v1.1.70 implements items 1-3 for the `erpnext-dev.sh` script artifact by adding `SHA256SUMS` and tag-pinned README examples. v1.1.71 implements item 4 with `verify-toolkit`. v1.1.72 adds minimal CI and `scripts/validate-release.sh` so release checks are repeatable before publishing tags. v1.3.0 implements item 5. **v1.8.0** adds CI proof that atomic `update-toolkit` / `toolkit-rollback` flip the `current` symlink correctly and that a corrupt bundle is rejected without half-applying, plus negative `verify-toolkit` tamper tests on extracted bundles and live installs. Operators should prefer the verified, signed tag workflow for production systems. The mutable `main` branch raw URL remains a development convenience path only.
+```bash
+erpnext-dev --help
+sudo erpnext-dev doctor --plain
+sudo erpnext-dev verify-toolkit
+```
 
-With signing enabled, verification is no longer integrity-only: SHA256 proves the files match the checksum list, and the GPG signature proves the checksum list itself came from the maintainer. An attacker who changes both the script and its checksum can no longer defeat verification without also forging the maintainer signature.
+Review shell scripts before executing them as root, especially when using a development branch or unreviewed local modification.
 
-### Pinned bootstrap toolchain (reproducibility)
+## Release integrity
 
-The install path still runs external bootstrap installers (nvm, uv), but every moving version is pinned so installs are reproducible and auditable: `NODE_VERSION`, `NVM_VERSION`, `UV_VERSION`, `PYTHON_VERSION`, `FRAPPE_BRANCH`, `ERPNEXT_BRANCH`, and (as of v1.7.0) `BENCH_VERSION` for the `frappe-bench` CLI. These live as a single source of truth in `erpnext-dev.sh` and are surfaced by `erpnext-dev versions`, `where-installed`, and the support bundle. Each is override-able by env var; `BENCH_VERSION=` (empty) intentionally unpins `frappe-bench`.
+Stable releases publish:
+
+```text
+erpnext-dev-vX.Y.Z.tar.gz
+erpnext-dev.sh
+RELEASE-MANIFEST.txt
+SHA256SUMS
+SHA256SUMS.asc
+```
+
+Use an exact release tag when referring to the complete published archive:
+
+```bash
+VERSION="vX.Y.Z"
+archive="erpnext-dev-${VERSION}.tar.gz"
+```
+
+Stable tags require the release validation and integration gates to pass before publication. The checksum inventory is signed with the maintainer key, and the release archive contains the complete modular toolkit.
+
+Pinned maintainer fingerprint:
+
+```text
+BFC1 0C79 427C F734 96EA  6F5A 30BF D17D D559 C8B6
+```
+
+Machine-readable fingerprint: `BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`
+
+The public key is stored at [`docs/erpnext-dev-signing-key.asc`](docs/erpnext-dev-signing-key.asc).
 
 ### Verifying release signatures
 
-**Operator (maintainer) one-time setup** — required to activate signing:
-
-1. Generate a signing key (once): `gpg --full-generate-key` (Ed25519 or RSA 4096).
-2. Export the private key and add it as an **environment** secret `GPG_PRIVATE_KEY`
-   (and `GPG_PASSPHRASE` if the key is protected) in the `release-signing` environment:
-   `gpg --armor --export-secret-keys <KEYID>` → paste into the environment secret.
-   See "Signing authority separation (v1.9.0)" below for the full environment setup.
-3. Publish the public key and its fingerprint (in this file and/or the repository), so users can pin it:
-   `gpg --armor --export <KEYID>` and `gpg --fingerprint <KEYID>`.
-
-Once `GPG_PRIVATE_KEY` is available to the `publish` job, `release.yml` signs `SHA256SUMS` on every `v*` tag and attaches `SHA256SUMS.asc` to the release. As of v1.6.0 this is **required** for stable `vX.Y.Z` tags: if the key is missing, the release fails rather than shipping unsigned. An unsigned build is only possible via an explicit emergency pre-release tag such as `vX.Y.Z-unsigned`. As of v1.9.0 the key lives in the protected `release-signing` environment, so signing also requires the environment's reviewer approval.
-
-**End-user verification** — before running the toolkit as root:
+From an extracted release archive:
 
 ```bash
-# Replace vX.Y.Z with the exact signed release tag.
-VERSION="vX.Y.Z"
-workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
-cd "$workdir" || exit 1
-base="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
-archive="erpnext-dev-${VERSION}.tar.gz"
-curl -fsSLO "${base}/${archive}"
-if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
-  echo "Unsafe path detected in release bundle." >&2
-  exit 1
-fi
-tar --no-same-owner --no-same-permissions -xzf "$archive"
-cd "erpnext-dev-${VERSION}" || exit 1
-
-expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
-actual_fpr="$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '$1 == "fpr" { print $10; exit }')"
-test "$actual_fpr" = "$expected_fpr"
-gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
-chmod 700 "$gnupg_home"
-GNUPGHOME="$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
-GNUPGHOME="$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
+sudo ./erpnext-dev.sh verify-signature
 sha256sum -c SHA256SUMS
-rm -rf "$gnupg_home"
+sudo ./erpnext-dev.sh verify-toolkit
 ```
 
-Or use the toolkit, which runs the same check in a throwaway keyring and pins the fingerprint automatically. When run from a checkout (or the installed `/opt/erpnext-dev` tree) it uses the bundled public key at `docs/erpnext-dev-signing-key.asc` and the fingerprint baked into the script, so no configuration is needed:
+`verify-signature` uses a temporary GnuPG home, verifies the detached signature, and requires the bundled public key to match the pinned fingerprint.
 
-```bash
-sudo erpnext-dev verify-signature      # zero-config: bundled key + pinned fingerprint
-sudo erpnext-dev verify-toolkit        # then confirm files match the signed checksums
-```
+The complete manual verification workflow is in [Release trust](docs/security/RELEASE-TRUST.md).
 
-To override (e.g. fetch the key from an independent channel), set `TOOLKIT_SIGNING_PUBKEY` (path or https URL) and/or `TOOLKIT_SIGNING_KEY_FINGERPRINT` before running.
+### Signing authority separation
 
-**Maintainer signing key (pin this):**
+The release signing key is stored in the protected GitHub `release-signing` environment rather than ordinary repository secrets. The stable publish job reaches that environment only after its protection rules are satisfied.
+
+Maintainer configuration and key rotation are documented in [Release trust](docs/security/RELEASE-TRUST.md).
+
+## Updates and rollback
+
+`update-toolkit` installs a verified release into:
 
 ```text
-Key type:    Ed25519 (sign)
-UID:         ERPNext Dev Installer Signing Key <235979268+ReyadWeb@users.noreply.github.com>
-Fingerprint: BFC1 0C79 427C F734 96EA  6F5A 30BF D17D D559 C8B6
+/opt/erpnext-dev/releases/<version>/
 ```
 
-The public key is published in this repository at [`docs/erpnext-dev-signing-key.asc`](docs/erpnext-dev-signing-key.asc). Because it ships alongside the script, the real trust anchor is the fingerprint above (also baked into `lib/security.sh`): verify the fingerprint out-of-band before trusting a fresh download.
-
-### P1: Plaintext credentials on disk
-
-The toolkit creates credentials files for operator convenience. These files are useful during installation and recovery, but they should not become long-term secret storage.
-
-Recommended operator workflow:
-
-1. retrieve credentials only on the server console or trusted SSH session;
-2. copy them to a password manager;
-3. run the toolkit credential status/security commands;
-4. remove or restrict local credential files after handoff;
-5. never include credential files in tickets, chat, email, screenshots, or support bundles.
-
-Relevant commands include:
+The active pointers are switched only after checksum and signature verification succeeds. The previous release remains available for rollback.
 
 ```bash
-sudo erpnext-dev credentials-menu          # Advanced → Credentials / Login
+sudo erpnext-dev update-toolkit
+sudo erpnext-dev toolkit-rollback
+sudo erpnext-dev verify-toolkit
+```
+
+A failed download, extraction, signature check, checksum check, or installation gate must stop before the active release pointer changes.
+
+## Credentials and secrets
+
+Generated credentials are operational handoff material, not a long-term password store.
+
+Recommended workflow:
+
+1. Retrieve credentials through a trusted local console or SSH session.
+2. Save them in a password manager.
+3. Restrict or remove the local credential file.
+4. Rotate credentials after suspected exposure.
+5. Never place credentials in issues, chat, screenshots, or support bundles.
+
+Relevant commands:
+
+```bash
 sudo erpnext-dev credentials-info
 sudo erpnext-dev credentials-file-status
 sudo erpnext-dev credentials-secure
 sudo erpnext-dev credentials-delete
 ```
 
-The toolkit tees its stdout to a log file. To avoid persisting secrets there, `credentials-show` writes the credential block directly to the controlling terminal (`/dev/tty`), never to the logged stream; in a non-interactive session with no terminal it refuses to print and points to the file instead. Generated passwords are otherwise only written to the mode-`600` credentials file and passed to `bench`/`mariadb` as arguments/stdin (no `set -x`), so they do not reach the install log.
+`credentials-show` writes sensitive output directly to the controlling terminal rather than the ordinary logged output stream. It refuses to print when no interactive terminal is available.
 
-### Backup transport config keeps secrets out of the toolkit's files
+Backup transport secrets remain outside the toolkit's ordinary configuration files. SSH authentication uses an operator-managed key, and object-storage credentials remain in the standard `rclone` configuration.
 
-Off-VM and object-storage backups deliberately keep credentials **outside** the
-toolkit's own config. The toolkit persists only non-secret coordinates, each in a
-root-owned, mode-`600` file under `/etc/erpnext-dev/`:
+## Network exposure
 
-- Off-VM (rsync/SSH): `off-vm-backup.env` / `.state` store the target
-  `user@host:/path` and the SSH **identity path** — authentication is the SSH
-  key, managed by you, not a stored password.
-- Object storage (rclone): `object-backup.env` / `.state` (native) and
-  `docker-object-backup.env` / `.state` (Docker) store only the rclone **remote
-  name**, bucket, and prefix. The actual cloud credentials (access keys, tokens)
-  live in the standard rclone config (`rclone config`, typically
-  `~/.config/rclone/rclone.conf` for the running user), which the toolkit never
-  reads, copies, or logs.
+For a public VPS, the expected provider-firewall baseline is:
 
-This means the object-storage config files are safe to inspect and are not
-long-term secret storage. Rotate cloud keys in rclone, and protect the rclone
-config with normal filesystem permissions.
+```text
+22/tcp    administrator IP only where practical
+80/tcp    public
+443/tcp   public
+8000/tcp  blocked publicly
+9000/tcp  blocked publicly
+Redis     blocked publicly
+MariaDB   blocked publicly
+```
 
-### P1: Redacted support bundles are defensive, not perfect
+Docker-published ports follow Docker forwarding rules and may require provider, hypervisor, or `DOCKER-USER` controls in addition to UFW.
 
-Support bundles intentionally exclude private keys, raw credential files, `site_config.json` secrets, tokens, and password-like values. Redaction is still heuristic. Operators should review archive contents before sharing externally.
+Run:
 
-Recommended review:
+```bash
+sudo erpnext-dev security-audit
+sudo erpnext-dev doctor --plain
+sudo erpnext-dev production-checklist
+```
+
+The operational hardening checklist is in [Production hardening](docs/security/PRODUCTION-HARDENING.md).
+
+## Backups and recovery
+
+A backup is not considered reliable only because a file exists.
+
+Production operators should:
+
+- Create local backups
+- Verify backup structure and readability
+- Maintain an off-VM or object-storage copy
+- Monitor scheduled backup execution
+- Rehearse restore in a disposable environment
+- Confirm application health after restore
+- Protect backup credentials and encryption material separately
+
+The toolkit supports backup verification and restore rehearsal, but retention policy, provider durability, encryption policy, and business recovery objectives remain operator responsibilities.
+
+## Diagnostics and support bundles
+
+Support bundles intentionally exclude known credential files, private keys, tokens, and raw secret values. Redaction is defensive and heuristic, not perfect.
+
+Review every bundle before sharing:
 
 ```bash
 latest_bundle="$(ls -t /tmp/erpnext-dev-support-bundle-*.tar.gz | head -n 1)"
-echo "$latest_bundle"
 tar -tzf "$latest_bundle"
+
+rm -rf /tmp/erpnext-support-review
 mkdir -p /tmp/erpnext-support-review
 tar -xzf "$latest_bundle" -C /tmp/erpnext-support-review
 ```
 
-### Resolved: root-level monolithic script risk
+Do not share a bundle that contains customer data or credentials.
 
-The toolkit was a single large Bash script. As of the Phase B work it is a thin
-`erpnext-dev.sh` entry/dispatcher sourcing 17 `lib/*.sh` modules, each verified
-against `SHA256SUMS` by `verify-toolkit`. The former monolith audit/regression
-risk is retired.
+## Known limitations
 
-### Resolved: lock-file hardening (multi-user hosts)
+- Bash and operating-system tools remain part of the trusted computing base.
+- External package installers and repositories are trusted according to the pinned toolkit configuration and the host's package policy.
+- Support-bundle redaction cannot recognise every application-specific secret.
+- Solo-maintainer governance cannot provide independent review for every emergency action.
+- Pre-release tags may use an explicitly marked unsigned emergency path; stable `vX.Y.Z` tags must be signed.
+- A valid signature proves the checksum inventory was signed by the pinned key; it does not prove that the host, GitHub account, or operator is uncompromised.
+- Rollback restores a prior toolkit release, not ERPNext business data. Data recovery requires a verified backup and restore workflow.
 
-Earlier releases put the single-instance lock in a predictable, world-shared
-path (`/tmp/erpnext-dev-locks/toolkit.lock`, dir mode `1777`, file mode `666`)
-and created it with a truncate that followed symlinks — so on a multi-user host
-an unprivileged user could pre-plant the path as a symlink and have a later root
-run follow/truncate it.
+## Security documentation
 
-As of v1.7.0 the lock lives in a private directory chosen by identity: root uses
-`/run/lock/erpnext-dev/` (root-owned tmpfs), a normal user uses
-`${XDG_RUNTIME_DIR}/erpnext-dev/`, falling back to `/tmp/erpnext-dev-<uid>-locks/`.
-The directory is created mode `0700` and must be owned by us (or root); a
-symlinked lock directory or lock file is refused before any open/truncate, and
-the lock file itself is mode `0600` (no more `1777`/`666`). This closes the
-shared-`/tmp` symlink-redirect risk.
-
-## Release security status and roadmap
-
-### External review summary (July 2026)
-
-Independent review of v1.8.1 classifies the toolkit as **enterprise-candidate**
-for dedicated single-admin Ubuntu VM deployments (**9.4 / 10** in that scope).
-Ten prior architectural blockers are **resolved** — production Supervisor runtime,
-CLI install/repair, full module integrity, lock hardening, gated CI integration,
-stable signing at publish time, atomic updates, support-bundle negatives, and
-pinned toolchain. Full detail: [`ROADMAP.md`](ROADMAP.md#external-security-review--resolved-blockers-v181).
-
-**One P0 gap remains on the consumer (self-update) path** — documented below.
-
-### Implemented (v1.6.0 – v1.9.1)
-
-- **Gated publish:** validate → integration → sign → publish on every stable tag
-- **Mandatory signing** for stable tags (`vX.Y.Z`); pre-release tags may publish unsigned
-- **Full-tree integrity:** `verify-toolkit` checks entrypoint + all 17 modules
-- **Atomic self-update:** bundle verify + signature/fingerprint gate + `releases/<ver>` + rollback
-- **Self-update authenticity (v1.8.2):** tag-channel updates require the same signature
-  and pinned-fingerprint bar as bootstrap `verify-signature`
-- **CI supply-chain hardening (v1.9.1):** every GitHub Action is pinned to an immutable
-  commit SHA (not a moving tag), Dependabot bumps those pins deliberately, and the
-  Ubuntu 26.04 integration leg is a weekly/manual canary (omitted from tag release
-  checks) until its asset gate is green enough to hard-gate alongside 24.04
-- **Signing authority separation (v1.9.0):** signing key lives in the protected
-  `release-signing` environment; a signed release requires reviewer approval, not just
-  repository write access
-- **CI proof:** staged signature matrix, atomic update smoke, signing policy tests, tamper negatives
-
-**Current bootstrap workflow:**
-
-```bash
-VERSION="v1.8.2"
-BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
-curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
-tar -xzf "erpnext-dev-${VERSION}.tar.gz" && cd "erpnext-dev-${VERSION}"
-sha256sum -c SHA256SUMS
-sudo ./erpnext-dev.sh verify-signature
-sudo ./erpnext-dev.sh verify-toolkit
-```
-
-### Self-update authenticity (v1.8.2)
-
-Tag-channel `update-toolkit` uses `toolkit_gpg_verify_signature_files()` — the same
-core as `verify-signature`. For stable release bundles:
-
-| Condition | Policy |
-|-----------|--------|
-| Missing `SHA256SUMS.asc` | FAIL |
-| Missing `gpg` | FAIL |
-| Missing bundled pubkey | FAIL |
-| Bad signature | FAIL |
-| Signer fingerprint ≠ pinned maintainer key | FAIL |
-
-Pinned fingerprint: `BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`
-
-CI runs `scripts/test-staged-signature.sh` (unit matrix) and signed-bundle atomic
-update smoke (`scripts/test-atomic-update.sh`).
-
-### Signing authority separation (v1.9.0)
-
-Before v1.9.0 the signing key lived in ordinary **repository** Actions secrets, so
-anyone (or any workflow) with repository write access could, in principle, run the
-signing step. v1.9.0 separates *signing authority* from *repository write access*:
-the `publish` job in [`release.yml`](.github/workflows/release.yml) now runs in a
-protected GitHub **Environment** named `release-signing`. The GPG key is stored as an
-**environment** secret and is only exposed to a job that clears the environment's
-protection rules (a required human approval), so a signed release cannot be produced
-by repository write access alone.
-
-**Threat addressed:** a compromised repository token, a malicious workflow change, or
-an unattended automation can no longer sign a release. A named reviewer must approve
-the deployment to `release-signing` before the key is ever decrypted into a runner.
-
-**One-time maintainer setup (GitHub → Settings → Environments):**
-
-1. Create an environment named exactly `release-signing`.
-2. **Required reviewers:** add yourself (and any co-maintainers). Every stable release
-   then pauses at `publish` until a reviewer approves.
-3. **Deployment tags rule:** restrict deployments to the tag pattern `v*` so only
-   release tags can target this environment.
-4. **Move the secrets:** add `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE` if the key is
-   protected) as **environment** secrets, then **delete the repository-level**
-   `GPG_PRIVATE_KEY` / `GPG_PASSPHRASE`. Environment secrets take precedence, and
-   removing the repo-level copies ensures no other job can read the key.
-
-Until the environment is configured, GitHub auto-creates it unprotected on the first
-tagged run and signing falls back to the repository secrets — no regression, but also
-no protection. Configure the reviewer + tag rule to activate the gate.
-
-**Release flow after v1.9.0:** push a `vX.Y.Z` tag → `validate` and `integration`
-run → `publish` shows **Waiting** for `release-signing` approval → an approver
-reviews and approves → the key is imported, `SHA256SUMS` is signed, and the release
-is published. Denying the approval blocks signing and publishing.
-
-**Key-rotation runbook:**
-
-1. Generate the new signing key offline: `gpg --full-generate-key` (Ed25519 preferred).
-2. Update the pinned fingerprint in `lib/security.sh`
-   (`TOOLKIT_SIGNING_FINGERPRINT_DEFAULT`) and the public key at
-   [`docs/erpnext-dev-signing-key.asc`](docs/erpnext-dev-signing-key.asc), and refresh
-   the fingerprint block in this file. Land these on `main` before tagging.
-3. Replace the `GPG_PRIVATE_KEY` (and `GPG_PASSPHRASE`) **environment** secrets in
-   `release-signing` with the new key material.
-4. Revoke/retire the old key locally and publish its revocation if it was ever public.
-5. Cut the next stable tag; `verify-signature` on the new release must report the new
-   fingerprint. Signatures made by the retired key no longer validate, by design.
-
-> Note: signatures made by an old key stop validating once the pinned fingerprint
-> changes. This is intentional — communicate rotations in release notes so operators
-> re-pin. Historical releases keep their original (now-untrusted) signatures.
-
-### Implemented — v1.9.1 (CI supply-chain hardening)
-
-- **Actions pinned to commit SHAs.** `actions/checkout` and `actions/upload-artifact`
-  are pinned to immutable commit SHAs (with `# vX.Y.Z` comments) in all three
-  workflows, so a compromised or retagged action version cannot silently enter CI.
-- **Dependabot.** [`.github/dependabot.yml`](.github/dependabot.yml) opens weekly,
-  grouped PRs that bump both the pinned SHA and its version comment — updates are
-  deliberate and reviewable, never an implicit follow of a moving tag.
-- **Ubuntu 26.04 integration leg.** Added to the integration matrix as a non-blocking
-  preview leg (`continue-on-error` via `matrix.experimental`); Ubuntu 24.04 stays the
-  mandatory release gate. Flip the 26.04 leg to blocking once the runner image is GA.
-
-### Implemented — v1.18.0 (CI security scanners)
-
-- **Gitleaks** in [`.github/workflows/security.yml`](.github/workflows/security.yml):
-  checksum-pinned binary, current-tree scan, allowlist in [`.gitleaks.toml`](.gitleaks.toml)
-  for intentional PEM docs / validate-release negative fixtures.
-- **OpenSSF Scorecard** in [`.github/workflows/scorecard.yml`](.github/workflows/scorecard.yml)
-  (SARIF upload + public results on `main` / weekly schedule).
-- **Pinned-Actions check** (`scripts/check-pinned-actions.sh`) fails floating `@v*` tags.
-- **Scoped `shfmt`** (`scripts/check-shfmt.sh`) on hermetic `scripts/test-*.sh` only
-  (full `lib/` reformat deferred to avoid a huge churn PR).
-- **Risky-shell hermetic test** (`scripts/test-risky-shell-patterns.sh`) already gates
-  new `eval` / sourced `health.env` patterns in `lib/`.
-
-### Implemented — v1.18.2 (repository security & governance)
-
-OpenSSF Scorecard findings are triaged in epic
-[#82](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/82). Stance:
-
-| Finding | Stance (live Scorecard ~7.1 after v1.18.2) |
-|---------|--------|
-| **Token-Permissions** | **Fixed (10/10).** Workflow `contents: read`; publish job keeps `write` (Scorecard still *warns* on that job — intentional). |
-| **Branch-Protection** | **~8/10 (practical max for solo).** Force-push/delete blocked; PR + up-to-date + expanded required checks (incl. CodeQL / adversarial); `require_last_push_approval` on. Tier 4 needs **2 reviewers + CODEOWNERS hard gate** — not enabled until a second maintainer (`enforce_admins` stays false so emergency admin merge remains possible). |
-| **Code-Review** | **Accepted (0/10)** for a single maintainer: PR + mandatory CI, no fake second reviewers. |
-| **SAST** | **Partial (7/10).** CodeQL for Actions is detected; score rises as more PRs run `security-analysis.yml`. ShellCheck + adversarial suite remain the Bash gates (Scorecard does not count them as SAST). |
-| **Fuzzing** | **Accepted (0/10).** No OSS-Fuzz for Bash; adversarial-input suite is the substitute. |
-| **Maintained** | **Informational (0/10).** Repo created within 90 days — Scorecard cannot pass this yet; no artificial commits. |
-| **CII-Best-Practices** | **Deferred.** Enroll at [bestpractices.dev](https://www.bestpractices.dev/) after more production field evidence; not a vulnerability. |
-
-Related in-repo controls: expanded [`.github/CODEOWNERS`](.github/CODEOWNERS),
-[`.github/workflows/security-analysis.yml`](.github/workflows/security-analysis.yml),
-`scripts/test-adversarial-inputs.sh`.
-
-### Planned — v1.10.0 (object-storage backups)
-
-S3-compatible off-site backup target alongside rsync — after v1.9.1.
-
-### Historical milestones (implemented)
-
-<details>
-<summary>v1.1.69 – v1.1.72 release-trust foundation</summary>
-
-- v1.1.70: SHA256 checksums and tag-pinned bootstrap
-- v1.1.71: `verify-toolkit`
-- v1.1.72: GitHub Actions CI and `scripts/validate-release.sh`
-
-</details>
-
-## Reporting security issues
-
-Report suspected security issues **privately** before public disclosure.
-**Do not open a public GitHub Issue for vulnerabilities.**
-
-### Preferred: GitHub private vulnerability reporting
-
-Use GitHub's private reporting channel for this repository:
-
-https://github.com/ReyadWeb/erpnext-dev-toolkit/security/advisories/new
-
-That keeps the report confidential until a fix can be prepared.
-
-### What to include
-
-1. Toolkit version (`erpnext-dev version`).
-2. OS version (`/etc/os-release`).
-3. Command used and deployment engine (native / Docker development / Docker production).
-4. Redacted logs or support-bundle audit output.
-5. Environment type (local dev VM, production VPS, backup server, restore VM).
-
-Do **not** include passwords, private keys, API tokens, raw `site_config.json`,
-database dumps, or customer data.
-
-Allow reasonable time for investigation and a fix before public discussion.
-
-For urgent production exposure (e.g. credentials left on a public-facing VM), run
-`sudo erpnext-dev security-audit` and `sudo erpnext-dev credentials-delete` after
-password-manager handoff while waiting for a maintainer response.
-
-Support routing (bugs vs questions vs security) is summarized in
-[`SUPPORT.md`](SUPPORT.md).
-
-## v1.2.0 Phase C security hardening
+| Topic | Document |
+|---|---|
+| Security architecture and trust boundaries | [Security architecture](docs/security/SECURITY-ARCHITECTURE.md) |
+| Release signatures, verification, signing environment, and key rotation | [Release trust](docs/security/RELEASE-TRUST.md) |
+| Public-server hardening checklist | [Production hardening](docs/security/PRODUCTION-HARDENING.md) |
+| Security implementation history | [Security history](docs/security/SECURITY-HISTORY.md) |
+| Support routing | [SUPPORT.md](SUPPORT.md) |
+| Production acceptance | [VALIDATION.md](VALIDATION.md) |
+| Release history | [CHANGELOG.md](CHANGELOG.md) |

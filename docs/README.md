@@ -72,6 +72,14 @@ sudo erpnext-dev menu
 Start with [SECURITY.md](../SECURITY.md). It is the repository-level security policy
 and the authoritative entry point for vulnerability reporting.
 
+Focused security guides:
+
+- [Security documentation index](security/README.md)
+- [Security architecture](security/SECURITY-ARCHITECTURE.md)
+- [Release trust](security/RELEASE-TRUST.md)
+- [Production hardening](security/PRODUCTION-HARDENING.md)
+- [Security implementation history](security/SECURITY-HISTORY.md)
+
 Maintainer and release references:
 
 - [Release automation](RELEASE-AUTOMATION.md)
