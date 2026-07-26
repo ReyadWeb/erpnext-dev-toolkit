@@ -61,6 +61,8 @@ pass() {
   || fail "scripts/test-repo-workflow-release.sh is missing or not executable"
 [[ -x scripts/test-repo-workflow-release-transaction.sh ]] \
   || fail "scripts/test-repo-workflow-release-transaction.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-release-finalize.sh ]] \
+  || fail "scripts/test-repo-workflow-release-finalize.sh is missing or not executable"
 
 bash -n erpnext-dev.sh
 bash -n scripts/release-version.sh
@@ -127,6 +129,7 @@ bash -n scripts/test-repo-workflow.sh
 bash -n scripts/test-repo-workflow-pr.sh
 bash -n scripts/test-repo-workflow-release.sh
 bash -n scripts/test-repo-workflow-release-transaction.sh
+bash -n scripts/test-repo-workflow-release-finalize.sh
 pass "bash syntax valid"
 
 scripts/release-version.sh assert-script
@@ -149,7 +152,7 @@ chmod +x \
   scripts/test-release-manifest.sh \
   scripts/test-release-artifact-consistency.sh \
   scripts/test-release-bootstrap-guidance.sh
-chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh
+chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh
 
 scripts/test-release-metadata.sh
 pass "release metadata update tests passed"
@@ -174,6 +177,8 @@ scripts/test-repo-workflow-release.sh
 pass "repository release-status workflow tests passed"
 scripts/test-repo-workflow-release-transaction.sh
 pass "repository release transaction workflow tests passed"
+scripts/test-repo-workflow-release-finalize.sh
+pass "repository release finalization workflow tests passed"
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the

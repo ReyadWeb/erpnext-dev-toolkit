@@ -11,6 +11,11 @@
   required-check watching, and explicit merge strategies to
   `scripts/repo-workflow.sh`.
 - Added hermetic pull-request workflow tests using a fake GitHub CLI.
+- Added guarded annotated-tag publication, protected release-workflow
+  monitoring, and published release verification to the repository workflow.
+- Added hermetic finalization tests covering exact confirmation, pre-tag
+  proof, duplicate-tag blocking, workflow monitoring, assets, checksums,
+  and signing-key fingerprint verification.
 - Added read-only release status and explanation commands covering release
   identity, branch policy, synchronization, exact-tree validation cache, tags,
   GitHub release state, blockers, and the next safe action.
@@ -28,6 +33,8 @@
   packaged documentation to include the repository workflow foundation.
 - Extended the repository workflow documentation and release validation
   to cover the pull-request lifecycle.
+- Extended release documentation, manifests, linting, and validation to
+  cover the complete release lifecycle through publication verification.
 - Extended the repository workflow, release manifest, validation, and documentation
   with the W3.1 read-only release-intelligence foundation.
 - Allowed pull requests to originate from release branches while keeping routine

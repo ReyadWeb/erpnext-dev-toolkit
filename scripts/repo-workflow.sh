@@ -54,6 +54,9 @@ Usage:
   scripts/repo-workflow.sh release promote-stable X.Y.Z "Release title"
   scripts/repo-workflow.sh release publish --confirm-reviewed -m "Commit message"
   scripts/repo-workflow.sh release pretag [vX.Y.Z[-prerelease]] [--offline]
+  scripts/repo-workflow.sh release tag --confirm vX.Y.Z[-prerelease]
+  scripts/repo-workflow.sh release watch [vX.Y.Z[-prerelease]] [--interval SECONDS] [--attempts N]
+  scripts/repo-workflow.sh release verify [vX.Y.Z[-prerelease]]
   scripts/repo-workflow.sh resume
   scripts/repo-workflow.sh clean-cache
 
@@ -63,7 +66,7 @@ Commands:
   check        Regenerate checksums and run the minimum safe local validation.
   publish      Check, stage, commit, and push the current feature branch.
   pr           Create, inspect, check, and merge the current branch pull request.
-  release      Inspect and safely prepare, review, publish, and pre-tag releases.
+  release      Inspect, prepare, tag, watch, and verify protected releases.
   resume       Resume the last failed check or publish operation.
   clean-cache  Remove cached full-validation results and saved resume state.
 
@@ -150,7 +153,7 @@ risk_reason_for() {
     scripts/release-*.sh | scripts/test-release-*.sh)
       echo "release transaction or release regression path"
       ;;
-    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh)
+    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh)
       echo "repository workflow implementation"
       ;;
     SECURITY.md | docs/security/RELEASE-TRUST.md | docs/RELEASE-AUTOMATION.md | docs/RELEASE-PROCESS.md)
@@ -374,11 +377,12 @@ select_focused_tests() {
   declare -gA FOCUSED_TESTS=()
   for file in "${CHANGED_FILES[@]}"; do
     case "$file" in
-      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh)
+      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh)
         add_focused_test scripts/test-repo-workflow.sh
         add_focused_test scripts/test-repo-workflow-pr.sh
         add_focused_test scripts/test-repo-workflow-release.sh
         add_focused_test scripts/test-repo-workflow-release-transaction.sh
+        add_focused_test scripts/test-repo-workflow-release-finalize.sh
         ;;
       VERSION | erpnext-dev.sh | scripts/release-version.sh | scripts/test-release-version.sh)
         add_focused_test scripts/test-release-version.sh
@@ -1058,13 +1062,13 @@ release_compute_next_action() {
 
   if [[ "$RELEASE_GITHUB_RELEASE_STATE" == "published" ]]; then
     RELEASE_READINESS="complete"
-    RELEASE_NEXT_ACTION="No release action required for ${RELEASE_TAG}; the GitHub release is published."
+    RELEASE_NEXT_ACTION="${PROGRAM} release verify ${RELEASE_TAG}"
     return 0
   fi
 
   if [[ "$RELEASE_REMOTE_TAG" == "exists" ]]; then
     RELEASE_READINESS="tag exists; release verification required"
-    RELEASE_NEXT_ACTION="Inspect the existing ${RELEASE_TAG} tag and GitHub release; do not recreate the tag."
+    RELEASE_NEXT_ACTION="${PROGRAM} release watch ${RELEASE_TAG}"
     return 0
   fi
 
@@ -1097,7 +1101,7 @@ release_compute_next_action() {
 
   if [[ "$RELEASE_PRETAG_PROOF" == "valid for exact commit" ]]; then
     RELEASE_READINESS="pre-tag validation passed for exact commit"
-    RELEASE_NEXT_ACTION="The exact commit is ready for guarded tag creation; W3.2 does not create tags."
+    RELEASE_NEXT_ACTION="${PROGRAM} release tag --confirm ${RELEASE_TAG}"
     return 0
   fi
 
@@ -1495,6 +1499,338 @@ cmd_release_pretag() {
   ok "strict pre-tag validation passed; no tag was created"
 }
 
+release_remote_tag_commit() {
+  local tag="$1"
+  git ls-remote origin "refs/tags/${tag}^{}" 2>/dev/null \
+    | awk 'NR == 1 {print $1}'
+}
+
+release_require_exact_pretag_proof() {
+  local tag="$1" fingerprint proof_state
+  fingerprint="$(tree_fingerprint)"
+  proof_state="$(release_pretag_proof_state "$tag" "$fingerprint")"
+  [[ "$proof_state" == "valid for exact commit" ]] \
+    || fail "strict pre-tag proof is ${proof_state}; run: ${PROGRAM} release pretag ${tag}"
+}
+
+parse_release_tag_options() {
+  RELEASE_TAG_CONFIRMATION=""
+  while (($# > 0)); do
+    case "$1" in
+      --confirm)
+        shift
+        (($# > 0)) || fail "--confirm requires the exact canonical tag"
+        RELEASE_TAG_CONFIRMATION="$1"
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown release tag option: $1" ;;
+    esac
+    shift
+  done
+  [[ -n "$RELEASE_TAG_CONFIRMATION" ]] \
+    || fail "release tag requires: --confirm vX.Y.Z[-prerelease]"
+}
+
+cmd_release_tag() {
+  local target_tag branch expected_branch fingerprint
+  local remote_commit rc upstream counts behind ahead
+
+  parse_release_tag_options "$@"
+  [[ -x scripts/release-version.sh ]] \
+    || fail "scripts/release-version.sh is missing or not executable"
+
+  target_tag="$(scripts/release-version.sh tag)"
+  [[ "$RELEASE_TAG_CONFIRMATION" == "$target_tag" ]] \
+    || fail "confirmation ${RELEASE_TAG_CONFIRMATION} does not match canonical tag ${target_tag}"
+  scripts/release-version.sh assert-script
+  scripts/release-version.sh assert-tag "$target_tag"
+
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree must be clean before tag creation"
+
+  branch="$(branch_name)"
+  [[ -n "$branch" ]] || fail "release tag cannot be created from detached HEAD"
+  expected_branch="$(release_expected_branch "$(scripts/release-version.sh read)" "$(scripts/release-version.sh channel)")"
+  [[ "$branch" == "$expected_branch" ]] \
+    || fail "tag ${target_tag} must be created from ${expected_branch}; current branch is ${branch}"
+
+  heading "Release Tag Preflight"
+  fetch_and_check_sync "$branch"
+  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+  [[ "$upstream" == "origin/${branch}" ]] \
+    || fail "release branch upstream must be origin/${branch}; current upstream is ${upstream:-none}"
+  counts="$(git rev-list --left-right --count "${upstream}...HEAD")"
+  behind="${counts%%[[:space:]]*}"
+  ahead="${counts##*[[:space:]]}"
+  [[ "$behind" == "0" && "$ahead" == "0" ]] \
+    || fail "release branch must be synchronized with ${upstream}; ahead ${ahead}, behind ${behind}"
+
+  if git rev-parse -q --verify "refs/tags/${target_tag}" >/dev/null; then
+    fail "local tag already exists: ${target_tag}"
+  fi
+  if git ls-remote --exit-code --tags origin "refs/tags/${target_tag}" >/dev/null 2>&1; then
+    fail "remote tag already exists: ${target_tag}"
+  fi
+
+  fingerprint="$(tree_fingerprint)"
+  release_require_exact_pretag_proof "$target_tag"
+
+  heading "Create Annotated Release Tag"
+  git tag -a "$target_tag" "$(git rev-parse HEAD)" -m "ERPNext Developer Toolkit ${target_tag}"
+
+  set +e
+  git push origin "refs/tags/${target_tag}:refs/tags/${target_tag}"
+  rc=$?
+  set -e
+
+  if ((rc != 0)); then
+    remote_commit="$(release_remote_tag_commit "$target_tag")"
+    if [[ "$remote_commit" == "$(git rev-parse HEAD)" ]]; then
+      warn "tag push returned an error, but origin has the expected exact tag commit"
+    elif [[ -z "$remote_commit" ]]; then
+      git tag -d "$target_tag" >/dev/null 2>&1 || true
+      fail "tag push failed; the newly created local tag was removed so the operation can be retried"
+    else
+      fail "tag push failed and origin/${target_tag} points to an unexpected commit; inspect before continuing"
+    fi
+  fi
+
+  remote_commit="$(release_remote_tag_commit "$target_tag")"
+  [[ "$remote_commit" == "$(git rev-parse HEAD)" ]] \
+    || fail "origin/${target_tag} does not peel to the current release commit"
+
+  heading "Release Tag Published"
+  info "Tag" "$target_tag"
+  info "Commit" "$remote_commit"
+  info "Type" "annotated"
+  info "Next action" "${PROGRAM} release watch ${target_tag}"
+  ok "annotated release tag created and pushed"
+}
+
+parse_release_watch_options() {
+  RELEASE_WATCH_TAG=""
+  RELEASE_WATCH_INTERVAL=5
+  RELEASE_WATCH_ATTEMPTS=12
+
+  while (($# > 0)); do
+    case "$1" in
+      --interval)
+        shift
+        (($# > 0)) || fail "--interval requires seconds"
+        RELEASE_WATCH_INTERVAL="$1"
+        ;;
+      --attempts)
+        shift
+        (($# > 0)) || fail "--attempts requires a count"
+        RELEASE_WATCH_ATTEMPTS="$1"
+        ;;
+      v*)
+        [[ -z "$RELEASE_WATCH_TAG" ]] || fail "only one release tag may be supplied"
+        RELEASE_WATCH_TAG="$1"
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown release watch option: $1" ;;
+    esac
+    shift
+  done
+
+  [[ "$RELEASE_WATCH_INTERVAL" =~ ^[1-9][0-9]*$ ]] \
+    || fail "--interval must be a positive integer"
+  [[ "$RELEASE_WATCH_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] \
+    || fail "--attempts must be a positive integer"
+  ((RELEASE_WATCH_INTERVAL <= 60)) || fail "--interval cannot exceed 60 seconds"
+  ((RELEASE_WATCH_ATTEMPTS <= 120)) || fail "--attempts cannot exceed 120"
+}
+
+release_resolve_canonical_tag() {
+  local supplied="${1:-}" expected
+  expected="$(scripts/release-version.sh tag)"
+  if [[ -n "$supplied" ]]; then
+    scripts/release-version.sh assert-tag "$supplied" >/dev/null
+    printf '%s\n' "$supplied"
+  else
+    printf '%s\n' "$expected"
+  fi
+}
+
+release_find_workflow_run() {
+  local tag="$1"
+  gh run list \
+    --workflow release.yml \
+    --branch "$tag" \
+    --event push \
+    --limit 1 \
+    --json databaseId \
+    --jq '.[0].databaseId // empty'
+}
+
+cmd_release_watch() {
+  local target_tag run_id="" attempt remote_commit run_head conclusion run_url
+
+  parse_release_watch_options "$@"
+  require_gh
+  target_tag="$(release_resolve_canonical_tag "$RELEASE_WATCH_TAG")"
+  remote_commit="$(release_remote_tag_commit "$target_tag")"
+  [[ -n "$remote_commit" ]] \
+    || fail "remote annotated tag is missing or cannot be resolved: ${target_tag}"
+
+  heading "Locate Protected Release Workflow"
+  for ((attempt = 1; attempt <= RELEASE_WATCH_ATTEMPTS; attempt++)); do
+    run_id="$(release_find_workflow_run "$target_tag")"
+    [[ -z "$run_id" ]] || break
+    echo "Attempt ${attempt}/${RELEASE_WATCH_ATTEMPTS}: release workflow is not visible yet"
+    sleep "$RELEASE_WATCH_INTERVAL"
+  done
+  [[ -n "$run_id" ]] || fail "no release.yml workflow run was found for ${target_tag}"
+
+  run_head="$(gh run view "$run_id" --json headSha --jq '.headSha')"
+  [[ "$run_head" == "$remote_commit" ]] \
+    || fail "release workflow head ${run_head} does not match ${target_tag} commit ${remote_commit}"
+  run_url="$(gh run view "$run_id" --json url --jq '.url')"
+
+  info "Tag" "$target_tag"
+  info "Workflow run" "$run_id"
+  info "Commit" "$run_head"
+  info "URL" "$run_url"
+
+  heading "Watch Protected Release Workflow"
+  gh run watch "$run_id" --exit-status
+
+  conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // empty')"
+  [[ "$conclusion" == "success" ]] || fail "release workflow conclusion is ${conclusion:-unknown}"
+
+  heading "Release Workflow Complete"
+  info "Tag" "$target_tag"
+  info "Conclusion" "$conclusion"
+  info "Next action" "${PROGRAM} release verify ${target_tag}"
+  ok "release workflow completed successfully"
+}
+
+release_verify_signature() {
+  local root="$1" tag="$2" fingerprint expected gnupg
+  expected="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
+
+  if [[ ! -f "${root}/SHA256SUMS.asc" ]]; then
+    if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      fail "stable release is missing SHA256SUMS.asc"
+    fi
+    warn "prerelease is unsigned; checksum integrity was verified without maintainer authenticity"
+    return 0
+  fi
+
+  command -v gpg >/dev/null 2>&1 || fail "gpg is required to verify the release signature"
+  [[ -f "${root}/docs/erpnext-dev-signing-key.asc" ]] \
+    || fail "release bundle is missing the maintainer public key"
+
+  gnupg="$(mktemp -d /tmp/erpnext-release-gpg.XXXXXX)"
+  chmod 700 "$gnupg"
+  gpg --homedir "$gnupg" --batch --import "${root}/docs/erpnext-dev-signing-key.asc" >/dev/null 2>&1
+  fingerprint="$(gpg --homedir "$gnupg" --batch --with-colons --fingerprint | awk -F: '$1 == "fpr" {print $10; exit}')"
+  [[ "$fingerprint" == "$expected" ]] || {
+    rm -rf "$gnupg"
+    fail "maintainer key fingerprint mismatch: ${fingerprint:-missing}"
+  }
+  gpg --homedir "$gnupg" --batch --verify "${root}/SHA256SUMS.asc" "${root}/SHA256SUMS"
+  rm -rf "$gnupg"
+  ok "maintainer signing-key fingerprint verified"
+}
+
+cmd_release_verify() {
+  local supplied_tag="${1:-}" target_tag remote_commit run_id run_head conclusion
+  local metadata meta_tag is_draft is_prerelease release_url verify_dir archive list_file root stable=0
+  local -a asset_check_args
+
+  (($# <= 1)) || fail "usage: ${PROGRAM} release verify [vX.Y.Z[-prerelease]]"
+  require_gh
+  [[ -x scripts/release-version.sh ]] \
+    || fail "scripts/release-version.sh is missing or not executable"
+  [[ -x scripts/assert-github-release-assets.sh ]] \
+    || fail "scripts/assert-github-release-assets.sh is missing or not executable"
+
+  target_tag="$(release_resolve_canonical_tag "$supplied_tag")"
+  [[ "$target_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && stable=1
+
+  remote_commit="$(release_remote_tag_commit "$target_tag")"
+  [[ -n "$remote_commit" ]] \
+    || fail "remote annotated tag is missing or cannot be resolved: ${target_tag}"
+
+  run_id="$(release_find_workflow_run "$target_tag")"
+  [[ -n "$run_id" ]] || fail "no release.yml workflow run was found for ${target_tag}"
+  run_head="$(gh run view "$run_id" --json headSha --jq '.headSha')"
+  conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // empty')"
+  [[ "$run_head" == "$remote_commit" ]] || fail "release workflow head does not match the remote tag commit"
+  [[ "$conclusion" == "success" ]] || fail "release workflow has not completed successfully"
+
+  asset_check_args=("$target_tag")
+  ((stable == 0)) || asset_check_args+=(--require-latest)
+  scripts/assert-github-release-assets.sh "${asset_check_args[@]}"
+
+  metadata="$(gh release view "$target_tag" --json tagName,isDraft,isPrerelease,url --jq '"\(.tagName)|\(.isDraft)|\(.isPrerelease)|\(.url)"')"
+  IFS='|' read -r meta_tag is_draft is_prerelease release_url <<<"$metadata"
+  [[ "$meta_tag" == "$target_tag" ]] || fail "GitHub release tag identity mismatch"
+  [[ "$is_draft" == "false" ]] || fail "GitHub release is still a draft"
+  if ((stable == 1)); then
+    [[ "$is_prerelease" == "false" ]] || fail "stable release is incorrectly marked as prerelease"
+  else
+    [[ "$is_prerelease" == "true" ]] || fail "prerelease tag is not marked as a GitHub prerelease"
+  fi
+
+  verify_dir="$(mktemp -d /tmp/erpnext-release-verify.XXXXXX)"
+  heading "Download Published Release Assets"
+  if ! gh release download "$target_tag" --dir "$verify_dir" --clobber; then
+    warn "release downloads retained for inspection: ${verify_dir}"
+    fail "could not download published release assets"
+  fi
+
+  archive="${verify_dir}/erpnext-dev-${target_tag}.tar.gz"
+  [[ -f "$archive" ]] || fail "published release archive is missing"
+  [[ -f "${verify_dir}/SHA256SUMS" ]] || fail "published SHA256SUMS is missing"
+  [[ -f "${verify_dir}/erpnext-dev.sh" ]] || fail "published entrypoint asset is missing"
+  [[ -f "${verify_dir}/RELEASE-MANIFEST.txt" ]] || fail "published release manifest asset is missing"
+  if ((stable == 1)); then
+    [[ -f "${verify_dir}/SHA256SUMS.asc" ]] || fail "stable release signature asset is missing"
+  fi
+
+  list_file="${verify_dir}/archive.list"
+  tar -tzf "$archive" >"$list_file"
+  if grep -Eq '(^/|(^|/)\.\.(/|$))' "$list_file"; then
+    fail "release archive contains an unsafe path"
+  fi
+  tar --no-same-owner --no-same-permissions -C "$verify_dir" -xzf "$archive"
+
+  root="${verify_dir}/erpnext-dev-${target_tag}"
+  [[ -d "$root" ]] || fail "release archive root is missing or misnamed"
+  cmp -s "${verify_dir}/SHA256SUMS" "${root}/SHA256SUMS" || fail "standalone and bundled SHA256SUMS differ"
+  cmp -s "${verify_dir}/erpnext-dev.sh" "${root}/erpnext-dev.sh" || fail "standalone and bundled entrypoints differ"
+  cmp -s "${verify_dir}/RELEASE-MANIFEST.txt" "${root}/RELEASE-MANIFEST.txt" || fail "standalone and bundled manifests differ"
+  if [[ -f "${verify_dir}/SHA256SUMS.asc" ]]; then
+    cmp -s "${verify_dir}/SHA256SUMS.asc" "${root}/SHA256SUMS.asc" || fail "standalone and bundled signatures differ"
+  fi
+
+  (
+    cd "$root"
+    scripts/release-version.sh assert-script
+    scripts/release-version.sh assert-tag "$target_tag"
+    sha256sum -c SHA256SUMS
+  )
+  ok "release bundle checksums verified"
+  release_verify_signature "$root" "$target_tag"
+
+  rm -rf "$verify_dir"
+  heading "Published Release Verified"
+  info "Tag" "$target_tag"
+  info "Commit" "$remote_commit"
+  info "Workflow" "success"
+  info "Release" "$release_url"
+  ok "published release ${target_tag} verified"
+}
+
 cmd_release() {
   local subcommand="${1:-status}"
   if (($# > 0)); then
@@ -1508,6 +1844,9 @@ cmd_release() {
     promote-stable) cmd_release_promote_stable "$@" ;;
     publish) cmd_release_publish "$@" ;;
     pretag) cmd_release_pretag "$@" ;;
+    tag) cmd_release_tag "$@" ;;
+    watch) cmd_release_watch "$@" ;;
+    verify) cmd_release_verify "$@" ;;
     -h | --help | help) usage ;;
     *) fail "unknown release command: $subcommand" ;;
   esac
