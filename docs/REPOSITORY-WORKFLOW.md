@@ -188,6 +188,64 @@ These commands are advisory. They do not replace
 `scripts/release-pretag-check.sh`, which remains the strict release-tree,
 bundle, checksum, runtime, branch, synchronization, and tag-availability gate.
 
+## Transactional release workflow
+
+W3.2 wraps the existing transactional release scripts while preserving a
+mandatory human review boundary before release metadata is committed.
+
+Prepare beta metadata:
+
+```bash
+scripts/repo-workflow.sh release prepare-beta \
+  1.21.0-beta.1 \
+  "Release title"
+```
+
+Promote a matching beta or RC on `release/vX.Y.Z` to stable metadata:
+
+```bash
+scripts/repo-workflow.sh release promote-stable \
+  1.21.0 \
+  "Release title"
+```
+
+Both commands:
+
+1. Require a clean synchronized branch.
+2. Delegate metadata edits and validation to the canonical transactional
+   release helper.
+3. Build the release bundle and cache successful full validation for the exact
+   prepared tree.
+4. Leave the metadata uncommitted so the changelog and release identity can be
+   reviewed.
+
+After reviewing the diff, publish the release metadata through the explicit
+review gate:
+
+```bash
+scripts/repo-workflow.sh release publish \
+  --confirm-reviewed \
+  -m "Release: prepare v1.21.0-beta.1"
+```
+
+`release publish` is limited to `release/v*`, `feature/v*`, and `beta` branches.
+It regenerates checksums, validates the exact tree, stages all release changes,
+creates the commit, and pushes the branch. Routine `publish` remains blocked on
+release branches.
+
+Run the strict pre-tag gate after the release PR has been merged and the target
+branch is clean and synchronized:
+
+```bash
+scripts/repo-workflow.sh release pretag
+scripts/repo-workflow.sh release pretag v1.21.0 --offline
+```
+
+A successful pre-tag run records a local proof under `.git/erpnext-workflow/`
+for the exact tag, commit, and repository fingerprint. The proof becomes stale
+automatically when the commit or packaged tree changes. W3.2 never creates or
+pushes a tag.
+
 ## Validation modes
 
 | Mode | Intended use | Local work |

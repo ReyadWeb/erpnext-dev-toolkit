@@ -104,7 +104,7 @@ scripts/repo-workflow.sh release status --offline >"${tmp}/main-status.out"
 assert_contains "${tmp}/main-status.out" \
   "Static readiness             offline static checks passed"
 assert_contains "${tmp}/main-status.out" \
-  "scripts/release-pretag-check.sh v1.20.0 --offline"
+  "scripts/repo-workflow.sh release pretag v1.20.0 --offline"
 
 git tag -a v1.20.0 -m "Existing local release"
 scripts/repo-workflow.sh release status --offline >"${tmp}/local-tag.out"

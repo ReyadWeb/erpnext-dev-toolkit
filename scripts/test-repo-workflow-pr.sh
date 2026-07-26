@@ -182,7 +182,7 @@ rc=$?
 set -e
 ((rc != 0)) || fail "PR creation unexpectedly allowed protected main branch"
 assert_contains "${tmp}/protected.out" \
-  "pull request operations require a feature or documentation branch"
+  "pull request operations require a feature, documentation, or release branch"
 
 git switch feature/test >/dev/null 2>&1
 echo "dirty" >>README.md
