@@ -1,8 +1,8 @@
 # ERPNext Developer Toolkit Roadmap
 
 **Current release:** v1.20.0
-**Current work:** v1.21.0 — Machine-readable API foundation
-**Next product milestone:** v1.21.0 — Machine-readable API foundation
+**Current work:** v1.20.1 — Release Coherence and Public Testing Foundation
+**Next product milestone:** v1.20.1 — Release Coherence and Public Testing Foundation
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
 
 The active roadmap contains current priorities and forward-looking commitments only. Completed plans and superseded sequencing are preserved in [Roadmap history](docs/ROADMAP-HISTORY.md), [CHANGELOG.md](CHANGELOG.md), and Git history.
@@ -88,12 +88,14 @@ The detailed release record is maintained in [CHANGELOG.md](CHANGELOG.md).
 ## Delivery sequence
 
 ```text
-Documentation consolidation     Complete
-v1.21.0                         Current — Machine-readable API foundation
-v1.21.1                         Operation and job model
-v1.21.2                         Local privileged agent MVP
-v1.21.3                         External watchdog and heartbeat contract
-v1.21.4                         Panel integration contract
+Documentation consolidation     Complete after v1.20.0
+v1.20.1                         Current — release coherence and pre-sudo trust
+v1.20.2                         Promotion governance and release evidence
+v1.20.3                         Configuration and execution boundaries
+v1.20.4                         Transaction journal MVP
+v1.20.5                         Declarative command architecture
+v1.21.0                         Machine-readable API foundation
+v1.21.1+                        Jobs, privileged agent, watchdog, panel contract
 v1.22.0                         Real VPS validation matrix
 v1.23.0                         Onboarding and launch polish
 v2.0.0                          Stable panel-ready node-agent contract
@@ -121,8 +123,8 @@ Completed scope:
   validation matrix, and release-workflow documentation alignment
 
 Documentation consistency automation remains a normal maintenance improvement
-and may be implemented alongside v1.21 work. It no longer blocks transition to
-the machine-readable API foundation.
+and may be implemented during the v1.20.x reliability programme. It no longer
+blocks the completed documentation milestone.
 
 Completion evidence:
 
@@ -130,9 +132,95 @@ Completion evidence:
 - release manifest and checksums include the maintained documentation set;
 - active release guidance uses the guarded repository workflow;
 - version-specific testing evidence is preserved outside the active guide;
-- the roadmap and README identify v1.21.0 as current work.
+- the roadmap and README now identify v1.20.1 reliability work as current.
 
 # Now
+
+## v1.20.1 — Release Coherence and Public Testing Foundation
+
+**Status:** In implementation
+**Feature policy:** No new ERPNext deployment feature
+
+**Goal:** Realign source state, published release state, trust guidance, strict
+qualification, current repository workflow, and public testing before resuming the
+machine-interface roadmap.
+
+Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
+
+### R1 — Release-state invariant
+
+- [x] Adopt the formal release-state contract.
+- [x] Add measurable audit checks and negative tests.
+- [ ] Remove `SCRIPT_VERSION` as an independently maintained literal.
+- [ ] Derive channel from Git tag, release context, or immutable build metadata.
+- [ ] Generate immutable bundle metadata containing version, tag, channel, commit,
+  tree digest, and build time.
+- [ ] Make every workflow use `scripts/release-version.sh`.
+- [ ] Distinguish current development from latest published stable in every active
+  document and generated surface.
+
+### R2 — Authenticity before privilege
+
+- [ ] Publish `RELEASE-ASSETS.sha256` and its detached signature.
+- [ ] Verify the pinned signing-key fingerprint with a temporary keyring.
+- [ ] Verify signature, archive digest, archive paths, and internal checksums before
+  any downloaded toolkit code executes with `sudo`.
+- [ ] Make README, SECURITY, release notes, normal install, and recovery use the
+  same non-privileged verifier.
+
+### R3 — CI supply-chain consistency
+
+- [ ] Replace `curl | sudo tar` with a repository-controlled verified installer.
+- [ ] Pin every downloaded CI binary by version and SHA-256.
+- [ ] Extract without privilege and install only the verified executable.
+
+### R4 — Strict qualification
+
+- [ ] Contributor mode may warn about optional local dependencies.
+- [ ] Required PR and release modes may not skip required checks.
+- [ ] High-risk paths require same-commit integration evidence.
+
+### R5 — Package and public-testing alignment
+
+- [ ] Ship W1–W3 repository workflow and D1–D4 documentation in v1.20.1.
+- [ ] Verify issue or Discussion submission with a non-maintainer account.
+- [ ] Keep security reports in private vulnerability reporting.
+- [ ] Complete native, Docker, upgrade, rollback, and public-reporting gates.
+
+## v1.20.2 — Promotion governance and release evidence
+
+**Status:** Planned after v1.20.1
+
+- Exact-commit beta-to-stable promotion where practical.
+- Formally defined same-runtime-payload digest otherwise.
+- Artifact attestation, provenance, immutable-release verification, and protected
+  release-environment review.
+
+## v1.20.3 — Configuration and execution safety
+
+**Status:** Planned
+
+- Typed configuration registry and data classification.
+- Ownership, mode, canonical-path, and symlink policy.
+- Argument-safe execution wrappers and adversarial argument tests.
+
+## v1.20.4 — Transaction journal MVP
+
+**Status:** Planned
+
+Start with toolkit update and restore: preflight, capture, recovery point, mutation,
+verification, commit, rollback, recovery evidence, SIGTERM handling, resume, and
+idempotency.
+
+## v1.20.5 — Declarative command architecture
+
+**Status:** Planned
+
+Create one command registry to drive or validate dispatch, root policy, locking,
+destructive confirmation, help, menu consistency, audit class, supported engines,
+and future capability metadata.
+
+# After the reliability foundations
 
 ## v1.21.0 — Machine-readable API foundation
 

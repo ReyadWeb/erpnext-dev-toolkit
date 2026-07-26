@@ -54,6 +54,8 @@ targets=(
   scripts/test-repo-workflow-release-finalize.sh
   scripts/release-version.sh
   scripts/test-release-version.sh
+  scripts/check-release-state-invariants.sh
+  scripts/test-release-state-invariants.sh
   scripts/release-manifest-files.sh
   scripts/check-release-artifact-consistency.sh
   scripts/test-release-manifest.sh

@@ -86,6 +86,7 @@ Maintainer and release references:
 
 - [Release automation](RELEASE-AUTOMATION.md)
 - [Release process](RELEASE-PROCESS.md)
+- [Release-state contract](RELEASE-STATE.md)
 - [Published signing key](erpnext-dev-signing-key.asc)
 
 Stable releases use a complete archive, an authoritative release manifest,

@@ -13,6 +13,7 @@ health checks, diagnostics, signed updates, and rollback.
 > This is a community project and is not an official Frappe Technologies product.
 
 **Current release:** v1.20.0
+**Current development programme:** v1.20.1–v1.20.5 reliability foundations before v1.21.0.
 
 ## At a glance
 
@@ -23,7 +24,7 @@ health checks, diagnostics, signed updates, and rollback.
 | **Native hosts** | Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 |
 | **Main command** | `erpnext-dev` |
 | **Release protection** | Signed releases, whole-tree checksums, atomic updates, rollback slots |
-| **Current focus** | v1.21.0 machine-readable API foundation |
+| **Current focus** | v1.20.1 release-state, trust, and strict-validation foundation |
 
 ## Choose your path
 
@@ -230,8 +231,8 @@ controls may be required in addition to ordinary host firewall rules.
 | Native installation | Ubuntu 24.04 and 26.04 release-tested; Debian 13 field-validated |
 | Docker installation | Development and production Compose paths covered by integration testing |
 | Release integrity | Canonical versioning, authoritative manifest, signed checksums, atomic updates, rollback |
-| Current work | Documentation consolidation and professional information architecture |
-| Next product milestone | v1.21 machine-readable interface and local agent foundation |
+| Current work | v1.20.1 release coherence, pre-sudo trust, strict qualification, and public-testing readiness |
+| Next product milestone | v1.20.x reliability programme; v1.21 machine-readable interface follows |
 
 Detailed validation evidence belongs in [`TESTING.md`](TESTING.md),
 [`VALIDATION.md`](VALIDATION.md), and [`CHANGELOG.md`](CHANGELOG.md). Active planning
