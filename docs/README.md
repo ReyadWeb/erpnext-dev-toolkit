@@ -93,6 +93,7 @@ installation slots.
 ## Development and maintenance
 
 - [Development guide](DEVELOPMENT.md)
+- [Repository workflow](REPOSITORY-WORKFLOW.md)
 - [Release automation](RELEASE-AUTOMATION.md)
 - [Release process](RELEASE-PROCESS.md)
 - [Active roadmap](../ROADMAP.md)

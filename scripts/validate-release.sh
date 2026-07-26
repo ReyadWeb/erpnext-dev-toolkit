@@ -51,6 +51,10 @@ pass() {
   || fail "scripts/test-release-pretag-check.sh is missing or not executable"
 [[ -x scripts/test-release-bootstrap-guidance.sh ]] \
   || fail "scripts/test-release-bootstrap-guidance.sh is missing or not executable"
+[[ -x scripts/repo-workflow.sh ]] \
+  || fail "scripts/repo-workflow.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow.sh ]] \
+  || fail "scripts/test-repo-workflow.sh is missing or not executable"
 
 bash -n erpnext-dev.sh
 bash -n scripts/release-version.sh
@@ -112,6 +116,8 @@ bash -n scripts/release-pretag-check.sh
 bash -n scripts/test-release-promote-stable.sh
 bash -n scripts/test-release-pretag-check.sh
 bash -n scripts/test-release-bootstrap-guidance.sh
+bash -n scripts/repo-workflow.sh
+bash -n scripts/test-repo-workflow.sh
 pass "bash syntax valid"
 
 scripts/release-version.sh assert-script
@@ -134,6 +140,7 @@ chmod +x \
   scripts/test-release-manifest.sh \
   scripts/test-release-artifact-consistency.sh \
   scripts/test-release-bootstrap-guidance.sh
+chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh
 
 scripts/test-release-metadata.sh
 pass "release metadata update tests passed"
@@ -149,6 +156,9 @@ pass "pre-tag repository gate tests passed"
 
 scripts/test-release-bootstrap-guidance.sh
 pass "signed release bootstrap guidance tests passed"
+
+scripts/test-repo-workflow.sh
+pass "repository workflow transaction tests passed"
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the

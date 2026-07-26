@@ -26,6 +26,8 @@ docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
 docs/ROADMAP-HISTORY.md
 scripts/validate-release.sh
+scripts/repo-workflow.sh
+scripts/test-repo-workflow.sh
 scripts/test-health-snapshot.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
@@ -91,6 +93,7 @@ scripts/test-update-channel.sh
 .github/ISSUE_TEMPLATE/docs-improvement.yml
 docs/erpnext-dev-signing-key.asc
 docs/DEVELOPMENT.md
+docs/REPOSITORY-WORKFLOW.md
 docs/RELEASE-PROCESS.md
 docs/COMMUNITY-BOARD.md
 docs/assets/erpnext_dev_toolkit_banner.png

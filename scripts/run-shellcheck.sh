@@ -46,6 +46,8 @@ targets=(
   lib/security.sh
   lib/update.sh
   scripts/validate-release.sh
+  scripts/repo-workflow.sh
+  scripts/test-repo-workflow.sh
   scripts/release-version.sh
   scripts/test-release-version.sh
   scripts/release-manifest-files.sh
