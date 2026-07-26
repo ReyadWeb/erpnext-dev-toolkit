@@ -44,6 +44,10 @@ Usage:
   scripts/repo-workflow.sh explain
   scripts/repo-workflow.sh check [--fast|--full|--mode auto|fast|full] [--no-cache]
   scripts/repo-workflow.sh publish -m "Commit message" [--fast|--full] [--dry-run] [--no-push]
+  scripts/repo-workflow.sh pr create [--base main] [--title TEXT] [--body TEXT|--body-file PATH] [--draft]
+  scripts/repo-workflow.sh pr status
+  scripts/repo-workflow.sh pr checks [--watch] [--required]
+  scripts/repo-workflow.sh pr merge [--merge|--squash|--rebase] [--admin] [--delete-branch]
   scripts/repo-workflow.sh resume
   scripts/repo-workflow.sh clean-cache
 
@@ -52,6 +56,7 @@ Commands:
   explain      Explain why the current tree selects fast or full validation.
   check        Regenerate checksums and run the minimum safe local validation.
   publish      Check, stage, commit, and push the current feature branch.
+  pr           Create, inspect, check, and merge the current branch pull request.
   resume       Resume the last failed check or publish operation.
   clean-cache  Remove cached full-validation results and saved resume state.
 
@@ -138,7 +143,7 @@ risk_reason_for() {
     scripts/release-*.sh | scripts/test-release-*.sh)
       echo "release transaction or release regression path"
       ;;
-    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh)
+    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh)
       echo "repository workflow implementation"
       ;;
     SECURITY.md | docs/security/RELEASE-TRUST.md | docs/RELEASE-AUTOMATION.md | docs/RELEASE-PROCESS.md)
@@ -362,8 +367,9 @@ select_focused_tests() {
   declare -gA FOCUSED_TESTS=()
   for file in "${CHANGED_FILES[@]}"; do
     case "$file" in
-      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh)
+      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh)
         add_focused_test scripts/test-repo-workflow.sh
+        add_focused_test scripts/test-repo-workflow-pr.sh
         ;;
       VERSION | erpnext-dev.sh | scripts/release-version.sh | scripts/test-release-version.sh)
         add_focused_test scripts/test-release-version.sh
@@ -641,6 +647,253 @@ cmd_publish() {
   ok "validated, committed, and pushed"
 }
 
+require_gh() {
+  command -v gh >/dev/null 2>&1 \
+    || fail "GitHub CLI (gh) is required for pull request commands"
+  gh auth status >/dev/null 2>&1 \
+    || fail "GitHub CLI is not authenticated; run: gh auth login"
+}
+
+ensure_pr_branch() {
+  local branch="$1"
+  [[ -n "$branch" ]] || fail "cannot manage a pull request from detached HEAD"
+  if is_protected_branch "$branch"; then
+    fail "pull request operations require a feature or documentation branch; current branch: ${branch}"
+  fi
+}
+
+ensure_clean_tree_for_pr() {
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree is not clean; publish or commit changes before creating a PR"
+}
+
+ensure_remote_branch() {
+  local branch="$1"
+  git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1 \
+    || fail "origin/${branch} does not exist; publish or push the branch first"
+}
+
+pr_number_for_branch() {
+  local branch="$1"
+  gh pr list \
+    --head "$branch" \
+    --state open \
+    --json number \
+    --limit 1 \
+    --jq '.[0].number // empty'
+}
+
+pr_url_for_branch() {
+  local branch="$1"
+  gh pr list \
+    --head "$branch" \
+    --state open \
+    --json url \
+    --limit 1 \
+    --jq '.[0].url // empty'
+}
+
+require_open_pr_number() {
+  local branch="$1" number
+  number="$(pr_number_for_branch "$branch")"
+  [[ -n "$number" ]] \
+    || fail "no open pull request exists for branch '${branch}'; create one with: ${PROGRAM} pr create"
+  printf '%s\n' "$number"
+}
+
+parse_pr_create_options() {
+  PR_BASE="main"
+  PR_TITLE=""
+  PR_BODY=""
+  PR_BODY_FILE=""
+  PR_DRAFT=0
+  PR_FILL=1
+
+  while (($# > 0)); do
+    case "$1" in
+      --base)
+        shift
+        (($# > 0)) || fail "--base requires a branch name"
+        PR_BASE="$1"
+        ;;
+      --title)
+        shift
+        (($# > 0)) || fail "--title requires text"
+        PR_TITLE="$1"
+        ;;
+      --body)
+        shift
+        (($# > 0)) || fail "--body requires text"
+        PR_BODY="$1"
+        ;;
+      --body-file)
+        shift
+        (($# > 0)) || fail "--body-file requires a path"
+        PR_BODY_FILE="$1"
+        ;;
+      --draft) PR_DRAFT=1 ;;
+      --fill) PR_FILL=1 ;;
+      --no-fill) PR_FILL=0 ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown pr create option: $1" ;;
+    esac
+    shift
+  done
+
+  [[ -z "$PR_BODY" || -z "$PR_BODY_FILE" ]] \
+    || fail "--body and --body-file cannot be used together"
+  if [[ -n "$PR_BODY_FILE" ]]; then
+    [[ -f "$PR_BODY_FILE" ]] || fail "PR body file does not exist: $PR_BODY_FILE"
+  fi
+  if [[ "$PR_FILL" == "0" && -z "$PR_TITLE" ]]; then
+    fail "pr create --no-fill requires --title"
+  fi
+}
+
+cmd_pr_create() {
+  local branch existing_url url
+  local -a args
+
+  parse_pr_create_options "$@"
+  require_gh
+  branch="$(branch_name)"
+  ensure_pr_branch "$branch"
+  ensure_clean_tree_for_pr
+
+  heading "Pull Request Preflight"
+  fetch_and_check_sync "$branch"
+  ensure_remote_branch "$branch"
+
+  existing_url="$(pr_url_for_branch "$branch")"
+  if [[ -n "$existing_url" ]]; then
+    heading "Pull Request"
+    info "Branch" "$branch"
+    info "Status" "already open"
+    info "URL" "$existing_url"
+    ok "reusing existing pull request"
+    return 0
+  fi
+
+  args=(pr create --base "$PR_BASE" --head "$branch")
+  [[ "$PR_FILL" == "0" ]] || args+=(--fill)
+  [[ -z "$PR_TITLE" ]] || args+=(--title "$PR_TITLE")
+  [[ -z "$PR_BODY" ]] || args+=(--body "$PR_BODY")
+  [[ -z "$PR_BODY_FILE" ]] || args+=(--body-file "$PR_BODY_FILE")
+  [[ "$PR_DRAFT" == "0" ]] || args+=(--draft)
+
+  url="$(gh "${args[@]}")"
+
+  heading "Pull Request Created"
+  info "Branch" "$branch"
+  info "Base" "$PR_BASE"
+  info "URL" "$url"
+  ok "pull request ready for CI"
+}
+
+cmd_pr_status() {
+  local branch number
+  (($# == 0)) || fail "pr status does not accept options"
+
+  require_gh
+  branch="$(branch_name)"
+  ensure_pr_branch "$branch"
+  number="$(require_open_pr_number "$branch")"
+
+  heading "Pull Request Status"
+  gh pr view "$number" \
+    --json number,url,state,isDraft,mergeStateStatus,title,headRefName,baseRefName \
+    --jq '"PR #\\(.number): \\(.title)\\nURL: \\(.url)\\nState: \\(.state)\\nDraft: \\(.isDraft)\\nMerge status: \\(.mergeStateStatus)\\nBranch: \\(.headRefName) -> \\(.baseRefName)"'
+}
+
+cmd_pr_checks() {
+  local branch number watch=0 required=0
+  local -a args
+
+  while (($# > 0)); do
+    case "$1" in
+      --watch) watch=1 ;;
+      --required) required=1 ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown pr checks option: $1" ;;
+    esac
+    shift
+  done
+
+  require_gh
+  branch="$(branch_name)"
+  ensure_pr_branch "$branch"
+  number="$(require_open_pr_number "$branch")"
+
+  args=(pr checks "$number")
+  [[ "$watch" == "0" ]] || args+=(--watch)
+  [[ "$required" == "0" ]] || args+=(--required)
+
+  heading "Pull Request Checks"
+  gh "${args[@]}"
+}
+
+cmd_pr_merge() {
+  local branch number strategy="merge" admin=0 delete_branch=0
+  local -a args
+
+  while (($# > 0)); do
+    case "$1" in
+      --merge) strategy="merge" ;;
+      --squash) strategy="squash" ;;
+      --rebase) strategy="rebase" ;;
+      --admin) admin=1 ;;
+      --delete-branch) delete_branch=1 ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown pr merge option: $1" ;;
+    esac
+    shift
+  done
+
+  require_gh
+  branch="$(branch_name)"
+  ensure_pr_branch "$branch"
+  ensure_clean_tree_for_pr
+  number="$(require_open_pr_number "$branch")"
+
+  heading "Required Pull Request Checks"
+  if ! gh pr checks "$number" --required; then
+    fail "required pull request checks are not successful; rerun: ${PROGRAM} pr checks --watch --required"
+  fi
+
+  args=(pr merge "$number" "--${strategy}")
+  [[ "$admin" == "0" ]] || args+=(--admin)
+  [[ "$delete_branch" == "0" ]] || args+=(--delete-branch)
+
+  heading "Merge Pull Request"
+  gh "${args[@]}"
+  ok "pull request merge completed"
+}
+
+cmd_pr() {
+  local subcommand="${1:-status}"
+  if (($# > 0)); then
+    shift
+  fi
+
+  case "$subcommand" in
+    create) cmd_pr_create "$@" ;;
+    status) cmd_pr_status "$@" ;;
+    checks) cmd_pr_checks "$@" ;;
+    merge) cmd_pr_merge "$@" ;;
+    -h | --help | help) usage ;;
+    *) fail "unknown pr command: $subcommand" ;;
+  esac
+}
+
 cmd_resume() {
   local action mode stage message branch
   action="$(state_value action)"
@@ -695,6 +948,7 @@ main() {
     explain) cmd_explain "$@" ;;
     check) cmd_check "$@" ;;
     publish) cmd_publish "$@" ;;
+    pr) cmd_pr "$@" ;;
     resume) cmd_resume "$@" ;;
     clean-cache) cmd_clean_cache "$@" ;;
     -h | --help | help) usage ;;
