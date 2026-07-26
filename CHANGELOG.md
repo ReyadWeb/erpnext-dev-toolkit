@@ -16,6 +16,12 @@
   GitHub release state, blockers, and the next safe action.
 - Added hermetic release-intelligence regression coverage for stable, beta,
   offline, dirty-tree, existing-tag, and published-release states.
+- Added transactional beta preparation and stable-promotion wrappers, an
+  explicit reviewed-release publication gate, strict pre-tag orchestration,
+  and exact-commit pre-tag proof recording.
+- Added hermetic regression coverage for release preparation, review
+  enforcement, release-branch publication, stable promotion, and pre-tag
+  proof validity.
 
 ### Changed
 - Extended release validation, ShellCheck coverage, release manifests, and
@@ -24,6 +30,11 @@
   to cover the pull-request lifecycle.
 - Extended the repository workflow, release manifest, validation, and documentation
   with the W3.1 read-only release-intelligence foundation.
+- Allowed pull requests to originate from release branches while keeping routine
+  publication blocked there; release publication now requires the explicit
+  reviewed-release gate.
+- Extended release status with exact-commit pre-tag proof state and wrapper-based
+  next-action guidance.
 
 ## v1.20.0 - Engine Stability and Reliability Foundation
 

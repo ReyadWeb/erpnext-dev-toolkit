@@ -50,6 +50,10 @@ Usage:
   scripts/repo-workflow.sh pr merge [--merge|--squash|--rebase] [--admin] [--delete-branch]
   scripts/repo-workflow.sh release status [--offline]
   scripts/repo-workflow.sh release explain [--offline]
+  scripts/repo-workflow.sh release prepare-beta X.Y.Z-beta.N "Release title"
+  scripts/repo-workflow.sh release promote-stable X.Y.Z "Release title"
+  scripts/repo-workflow.sh release publish --confirm-reviewed -m "Commit message"
+  scripts/repo-workflow.sh release pretag [vX.Y.Z[-prerelease]] [--offline]
   scripts/repo-workflow.sh resume
   scripts/repo-workflow.sh clean-cache
 
@@ -59,7 +63,7 @@ Commands:
   check        Regenerate checksums and run the minimum safe local validation.
   publish      Check, stage, commit, and push the current feature branch.
   pr           Create, inspect, check, and merge the current branch pull request.
-  release      Inspect release identity, synchronization, tags, and readiness.
+  release      Inspect and safely prepare, review, publish, and pre-tag releases.
   resume       Resume the last failed check or publish operation.
   clean-cache  Remove cached full-validation results and saved resume state.
 
@@ -146,7 +150,7 @@ risk_reason_for() {
     scripts/release-*.sh | scripts/test-release-*.sh)
       echo "release transaction or release regression path"
       ;;
-    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh)
+    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh)
       echo "repository workflow implementation"
       ;;
     SECURITY.md | docs/security/RELEASE-TRUST.md | docs/RELEASE-AUTOMATION.md | docs/RELEASE-PROCESS.md)
@@ -370,10 +374,11 @@ select_focused_tests() {
   declare -gA FOCUSED_TESTS=()
   for file in "${CHANGED_FILES[@]}"; do
     case "$file" in
-      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh)
+      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh)
         add_focused_test scripts/test-repo-workflow.sh
         add_focused_test scripts/test-repo-workflow-pr.sh
         add_focused_test scripts/test-repo-workflow-release.sh
+        add_focused_test scripts/test-repo-workflow-release-transaction.sh
         ;;
       VERSION | erpnext-dev.sh | scripts/release-version.sh | scripts/test-release-version.sh)
         add_focused_test scripts/test-release-version.sh
@@ -661,9 +666,11 @@ require_gh() {
 ensure_pr_branch() {
   local branch="$1"
   [[ -n "$branch" ]] || fail "cannot manage a pull request from detached HEAD"
-  if is_protected_branch "$branch"; then
-    fail "pull request operations require a feature or documentation branch; current branch: ${branch}"
-  fi
+  case "$branch" in
+    main | master | beta)
+      fail "pull request operations require a feature, documentation, or release branch; current branch: ${branch}"
+      ;;
+  esac
 }
 
 ensure_clean_tree_for_pr() {
@@ -1046,7 +1053,7 @@ release_add_blocker() {
 release_compute_next_action() {
   local pretag_command
 
-  pretag_command="scripts/release-pretag-check.sh ${RELEASE_TAG}"
+  pretag_command="${PROGRAM} release pretag ${RELEASE_TAG}"
   [[ "$RELEASE_OFFLINE" == "0" ]] || pretag_command+=" --offline"
 
   if [[ "$RELEASE_GITHUB_RELEASE_STATE" == "published" ]]; then
@@ -1085,6 +1092,12 @@ release_compute_next_action() {
     else
       RELEASE_NEXT_ACTION="Resolve the blocking conditions listed by: ${PROGRAM} release explain"
     fi
+    return 0
+  fi
+
+  if [[ "$RELEASE_PRETAG_PROOF" == "valid for exact commit" ]]; then
+    RELEASE_READINESS="pre-tag validation passed for exact commit"
+    RELEASE_NEXT_ACTION="The exact commit is ready for guarded tag creation; W3.2 does not create tags."
     return 0
   fi
 
@@ -1149,6 +1162,7 @@ release_collect_state() {
   else
     RELEASE_FULL_VALIDATION="not cached for exact tree"
   fi
+  RELEASE_PRETAG_PROOF="$(release_pretag_proof_state "$RELEASE_TAG" "$fingerprint")"
 
   RELEASE_BLOCKERS=()
   [[ "$RELEASE_VERSION_ALIGNMENT" == "OK" ]] \
@@ -1203,6 +1217,7 @@ cmd_release_status() {
   info "Branch sync" "$RELEASE_SYNC"
   info "Remote refresh" "$RELEASE_REMOTE_REFRESH"
   info "Full validation" "$RELEASE_FULL_VALIDATION"
+  info "Pre-tag proof" "$RELEASE_PRETAG_PROOF"
   info "Local tag" "$RELEASE_LOCAL_TAG"
   info "Remote tag" "$RELEASE_REMOTE_TAG"
   info "GitHub release" "$RELEASE_GITHUB_RELEASE"
@@ -1221,6 +1236,7 @@ cmd_release_explain() {
   info "Channel" "$RELEASE_CHANNEL"
   info "Expected identity" "${RELEASE_TAG} from ${RELEASE_EXPECTED_BRANCH}"
   info "Static readiness" "$RELEASE_READINESS"
+  info "Pre-tag proof" "$RELEASE_PRETAG_PROOF"
 
   echo
   if [[ "$RELEASE_GITHUB_RELEASE_STATE" == "published" ]]; then
@@ -1241,6 +1257,244 @@ cmd_release_explain() {
   info "Recommended next action" "$RELEASE_NEXT_ACTION"
 }
 
+release_clear_pretag_proof() {
+  rm -rf "${STATE_DIR}/release-pretag"
+}
+
+release_pretag_proof_state() {
+  local tag="$1" fingerprint="$2" dir
+  local proof_tag proof_commit proof_fingerprint
+
+  dir="${STATE_DIR}/release-pretag"
+  if [[ ! -f "${dir}/tag" || ! -f "${dir}/commit" || ! -f "${dir}/fingerprint" ]]; then
+    printf '%s\n' "missing"
+    return 0
+  fi
+
+  proof_tag="$(cat "${dir}/tag")"
+  proof_commit="$(cat "${dir}/commit")"
+  proof_fingerprint="$(cat "${dir}/fingerprint")"
+
+  if [[ "$proof_tag" == "$tag" &&
+    "$proof_commit" == "$(git rev-parse HEAD)" &&
+    "$proof_fingerprint" == "$fingerprint" ]]; then
+    printf '%s\n' "valid for exact commit"
+  else
+    printf '%s\n' "stale"
+  fi
+}
+
+release_record_pretag_proof() {
+  local tag="$1" fingerprint="$2" dir
+  dir="${STATE_DIR}/release-pretag"
+  mkdir -p "$dir"
+  printf '%s\n' "$tag" >"${dir}/tag"
+  printf '%s\n' "$(git rev-parse HEAD)" >"${dir}/commit"
+  printf '%s\n' "$fingerprint" >"${dir}/fingerprint"
+  chmod 600 "${dir}/tag" "${dir}/commit" "${dir}/fingerprint" 2>/dev/null || true
+}
+
+release_require_clean_transaction_tree() {
+  local branch
+  branch="$(branch_name)"
+  [[ -n "$branch" ]] || fail "release transaction cannot run from detached HEAD"
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree must be clean before a release metadata transaction"
+  fetch_and_check_sync "$branch"
+}
+
+release_cache_validated_tree() {
+  local fingerprint
+  [[ -x scripts/build-release-bundle.sh ]] \
+    || fail "scripts/build-release-bundle.sh is missing or not executable"
+  heading "Release bundle construction"
+  scripts/build-release-bundle.sh
+  fingerprint="$(tree_fingerprint)"
+  cache_store full "$fingerprint"
+  ok "cached full validation for the prepared release tree"
+}
+
+release_show_review_gate() {
+  local version="$1" message="$2"
+  heading "Release Metadata Prepared"
+  info "Version" "$version"
+  info "Working tree" "review required before publication"
+  echo
+  echo "Review the release metadata and changelog:"
+  echo "  git diff -- VERSION erpnext-dev.sh README.md ROADMAP.md TESTING.md CHANGELOG.md RELEASE-MANIFEST.txt SHA256SUMS"
+  echo
+  echo "After review, publish with the explicit review gate:"
+  echo "  ${PROGRAM} release publish --confirm-reviewed -m \"${message}\""
+  echo
+  git status --short
+}
+
+cmd_release_prepare_beta() {
+  local target_version="${1:-}" release_title="${2:-}"
+  (($# == 2)) || fail "usage: ${PROGRAM} release prepare-beta X.Y.Z-beta.N \"Release title\""
+  [[ "$target_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[1-9][0-9]*$ ]] \
+    || fail "beta version must use X.Y.Z-beta.N with N greater than zero"
+  [[ -n "$release_title" && "$release_title" != *$'\n'* && "$release_title" != *$'\r'* ]] \
+    || fail "release title must be non-empty and one line"
+  [[ -x scripts/release-prepare-beta.sh ]] \
+    || fail "scripts/release-prepare-beta.sh is missing or not executable"
+
+  release_require_clean_transaction_tree
+  release_clear_pretag_proof
+  heading "Prepare Beta Metadata"
+  scripts/release-prepare-beta.sh "$target_version" "$release_title"
+  release_cache_validated_tree
+  release_show_review_gate "$target_version" "Release: prepare v${target_version}"
+}
+
+cmd_release_promote_stable() {
+  local target_version="${1:-}" release_title="${2:-}"
+  (($# == 2)) || fail "usage: ${PROGRAM} release promote-stable X.Y.Z \"Release title\""
+  [[ "$target_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || fail "stable version must use X.Y.Z"
+  [[ -n "$release_title" && "$release_title" != *$'\n'* && "$release_title" != *$'\r'* ]] \
+    || fail "release title must be non-empty and one line"
+  [[ -x scripts/release-promote-stable.sh ]] \
+    || fail "scripts/release-promote-stable.sh is missing or not executable"
+
+  release_require_clean_transaction_tree
+  release_clear_pretag_proof
+  heading "Promote Stable Metadata"
+  scripts/release-promote-stable.sh "$target_version" "$release_title"
+  release_cache_validated_tree
+  release_show_review_gate "$target_version" "Release: promote v${target_version} stable"
+}
+
+parse_release_publish_options() {
+  RELEASE_PUBLISH_MESSAGE=""
+  RELEASE_PUBLISH_CONFIRMED=0
+
+  while (($# > 0)); do
+    case "$1" in
+      -m | --message)
+        shift
+        (($# > 0)) || fail "--message requires a commit message"
+        RELEASE_PUBLISH_MESSAGE="$1"
+        ;;
+      --confirm-reviewed) RELEASE_PUBLISH_CONFIRMED=1 ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown release publish option: $1" ;;
+    esac
+    shift
+  done
+
+  [[ -n "$RELEASE_PUBLISH_MESSAGE" ]] \
+    || fail "release publish requires -m \"Commit message\""
+  [[ "$RELEASE_PUBLISH_CONFIRMED" == "1" ]] \
+    || fail "release publish requires --confirm-reviewed after reviewing the metadata and changelog"
+}
+
+ensure_release_publish_branch() {
+  local branch="$1"
+  case "$branch" in
+    release/v* | feature/v* | beta) ;;
+    *)
+      fail "release publish is limited to release/v*, feature/v*, or beta branches; current branch: ${branch:-detached HEAD}"
+      ;;
+  esac
+}
+
+cmd_release_publish() {
+  local branch
+  parse_release_publish_options "$@"
+  branch="$(branch_name)"
+  ensure_release_publish_branch "$branch"
+
+  CURRENT_ACTION="release-publish"
+  CURRENT_MODE="full"
+  CURRENT_MESSAGE="$RELEASE_PUBLISH_MESSAGE"
+  state_write "$CURRENT_ACTION" "$CURRENT_MODE" "preflight" "$CURRENT_MESSAGE"
+
+  collect_changed_files
+  ((${#CHANGED_FILES[@]} > 0)) \
+    || fail "working tree is clean; there is no reviewed release metadata to publish"
+
+  run_step "Remote synchronization" fetch_and_check_sync "$branch"
+  perform_check full 0
+
+  CURRENT_ACTION="release-publish"
+  CURRENT_MODE="full"
+  CURRENT_MESSAGE="$RELEASE_PUBLISH_MESSAGE"
+  state_write "$CURRENT_ACTION" "$CURRENT_MODE" "stage" "$CURRENT_MESSAGE"
+
+  heading "Stage Reviewed Release Metadata"
+  git add -A
+  git diff --cached --check
+  git diff --cached --quiet \
+    && fail "no staged release changes remain after validation"
+  git diff --cached --stat
+
+  run_step "Create release commit" git commit -m "$RELEASE_PUBLISH_MESSAGE"
+  run_step "Push release branch" push_branch "$branch"
+  state_clear
+
+  heading "Release Metadata Published"
+  info "Branch" "$branch"
+  info "Commit" "$(git rev-parse --short HEAD)"
+  info "Upstream" "origin/${branch}"
+  info "Next action" "${PROGRAM} pr create"
+  ok "reviewed release metadata validated, committed, and pushed"
+}
+
+parse_release_pretag_options() {
+  RELEASE_PRETAG_TAG=""
+  RELEASE_PRETAG_OFFLINE=0
+
+  while (($# > 0)); do
+    case "$1" in
+      --offline) RELEASE_PRETAG_OFFLINE=1 ;;
+      v*)
+        [[ -z "$RELEASE_PRETAG_TAG" ]] || fail "only one tag may be supplied"
+        RELEASE_PRETAG_TAG="$1"
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown release pretag option: $1" ;;
+    esac
+    shift
+  done
+}
+
+cmd_release_pretag() {
+  local target_tag fingerprint
+  local -a args
+
+  parse_release_pretag_options "$@"
+  [[ -x scripts/release-version.sh ]] \
+    || fail "scripts/release-version.sh is missing or not executable"
+  [[ -x scripts/release-pretag-check.sh ]] \
+    || fail "scripts/release-pretag-check.sh is missing or not executable"
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree must be clean before pre-tag validation"
+
+  target_tag="${RELEASE_PRETAG_TAG:-$(scripts/release-version.sh tag)}"
+  args=("$target_tag")
+  [[ "$RELEASE_PRETAG_OFFLINE" == "0" ]] || args+=(--offline)
+
+  heading "Strict Pre-Tag Validation"
+  scripts/release-pretag-check.sh "${args[@]}"
+
+  fingerprint="$(tree_fingerprint)"
+  cache_store full "$fingerprint"
+  release_record_pretag_proof "$target_tag" "$fingerprint"
+
+  heading "Pre-Tag Proof Recorded"
+  info "Tag" "$target_tag"
+  info "Commit" "$(git rev-parse HEAD)"
+  info "Proof" "valid for exact commit"
+  ok "strict pre-tag validation passed; no tag was created"
+}
+
 cmd_release() {
   local subcommand="${1:-status}"
   if (($# > 0)); then
@@ -1250,6 +1504,10 @@ cmd_release() {
   case "$subcommand" in
     status) cmd_release_status "$@" ;;
     explain) cmd_release_explain "$@" ;;
+    prepare-beta) cmd_release_prepare_beta "$@" ;;
+    promote-stable) cmd_release_promote_stable "$@" ;;
+    publish) cmd_release_publish "$@" ;;
+    pretag) cmd_release_pretag "$@" ;;
     -h | --help | help) usage ;;
     *) fail "unknown release command: $subcommand" ;;
   esac
@@ -1285,6 +1543,20 @@ cmd_resume() {
       else
         [[ -n "$message" ]] || fail "saved publish operation has no commit message"
         cmd_publish --mode "${mode:-auto}" -m "$message"
+      fi
+      ;;
+    release-publish)
+      if [[ "$stage" == "Push release branch" ]] && [[ -z "$(git status --porcelain --untracked-files=all)" ]]; then
+        branch="$(branch_name)"
+        ensure_release_publish_branch "$branch"
+        CURRENT_ACTION="release-publish"
+        CURRENT_MODE="full"
+        CURRENT_MESSAGE="$message"
+        run_step "Push release branch" push_branch "$branch"
+        state_clear
+        ok "saved release publication completed"
+      else
+        fail "release publication cannot be resumed before the push stage; inspect the prepared metadata and rerun release publish --confirm-reviewed"
       fi
       ;;
     *) fail "unknown saved action: $action" ;;
