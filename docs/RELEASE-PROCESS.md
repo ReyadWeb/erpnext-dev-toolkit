@@ -1,127 +1,283 @@
 # Release process
 
-How stable releases of the **ERPNext Developer Toolkit** are produced. Operators
-verifying a downloaded release should follow [`SECURITY.md`](../SECURITY.md)
-(`verify-signature`, `verify-toolkit`). Contributors normally do **not** cut
-releases; this document is for maintainers and curious reviewers.
+This is the maintainer runbook for beta, release-candidate, and stable ERPNext
+Developer Toolkit releases.
 
----
+Operators verifying a downloaded stable release should follow
+[`SECURITY.md`](../SECURITY.md) and the signed bootstrap guidance in
+[`README.md`](../README.md).
 
-## What a release is
+## Release model
 
-A release is a **git tag** `vX.Y.Z` (or a pre-release tag such as
-`vX.Y.Z-unsigned`) on `main` that triggers
-[`.github/workflows/release.yml`](../.github/workflows/release.yml):
+A release is a canonical version, an authoritative release tree, and a guarded
+annotated Git tag:
 
 ```text
-validate  (ci.yml: shellcheck + validate-release + bundle smoke)
-    →
-integration  (integration.yml: native + Docker smoke gates)
-    →
-publish  (sign SHA256SUMS when required; attach bundle; GitHub Release)
+VERSION
+SCRIPT_VERSION
+CHANGELOG.md
+RELEASE-MANIFEST.txt
+SHA256SUMS
+vX.Y.Z[-prerelease]
 ```
 
-`publish` **needs** both prior jobs. A failing gate never publishes a stable
-artifact.
+The protected GitHub release workflow then performs validation, disposable
+integration, signing when required, asset publication, and post-upload checks.
 
----
+Stable publication is not complete until:
 
-## Version sources that must agree
+- the protected workflow succeeds;
+- the release archive and required standalone assets are present;
+- `SHA256SUMS.asc` exists;
+- the stable release is marked Latest;
+- independent `release verify` succeeds.
 
-Before tagging, ensure these match `SCRIPT_VERSION` in `erpnext-dev.sh`:
+Do not create lightweight or manual tags. Use the guarded repository workflow.
 
-- `CHANGELOG.md` heading `## vX.Y.Z …`
-- README bootstrap `VERSION="vX.Y.Z"` pins
-- `RELEASE-MANIFEST.txt` header comment `# … Manifest vX.Y.Z`
-- Regenerated `SHA256SUMS` after code/manifest edits:
+## Normal maintainer interface
 
 ```bash
-bash scripts/generate-release-checksums.sh
-./scripts/validate-release.sh
+scripts/repo-workflow.sh release status
+scripts/repo-workflow.sh release explain
 ```
 
----
+The status command reports canonical identity, expected branch and tag, branch
+synchronization, validation cache, pre-tag proof, local/remote tags, GitHub
+release state, blockers, and the next safe command.
 
-## Maintainer checklist (stable tag)
+## Prepare a beta
 
-1. **Land the work on `main`** (CI green on the commit you intend to tag).
-2. **Changelog** complete for the version; ROADMAP status updated if needed.
-   Keep README / ROADMAP / TESTING **Current release** banners and
-   `SCRIPT_VERSION` in sync (`scripts/check-release-doc-alignment.sh`).
-3. **Local gate:** `./scripts/validate-release.sh` passes on a clean tree.
-4. **Tag and push immediately after merge** (lightweight tags match project history).
-   Do not leave `main` advertising a new `SCRIPT_VERSION` for a long time without
-   a tag — the README install path follows `/releases/latest` (last *published*
-   Assets), but banners still show the in-tree version:
+Start from the intended release or proving branch defined by the release plan.
 
 ```bash
-git checkout main
+scripts/repo-workflow.sh release prepare-beta \
+  X.Y.Z-beta.N \
+  "Release title"
+```
+
+The transaction:
+
+1. requires a clean synchronized allowed branch;
+2. updates canonical version and release metadata;
+3. regenerates checksums;
+4. runs full release validation;
+5. restores the exact previous metadata if the transaction fails;
+6. leaves the successful metadata uncommitted for human review.
+
+Review:
+
+```bash
+git status --short
+git diff --stat
+git diff
+scripts/repo-workflow.sh release status
+```
+
+Publish only after the diff is reviewed:
+
+```bash
+scripts/repo-workflow.sh release publish \
+  --confirm-reviewed \
+  -m "Release: prepare X.Y.Z-beta.N"
+```
+
+Create the appropriate PR, then wait for required checks:
+
+```bash
+scripts/repo-workflow.sh pr create --base TARGET_BRANCH
+scripts/repo-workflow.sh pr checks --watch --required
+```
+
+Merge according to the release plan after CI and required beta acceptance pass.
+
+## Beta acceptance
+
+Before stable promotion, record:
+
+- Release Validation CI;
+- applicable disposable integration gates;
+- affected local native and Docker acceptance;
+- affected public native and Docker acceptance;
+- frontend asset readiness;
+- backup and restore/rehearsal;
+- upgrade and rollback;
+- reboot persistence;
+- known limitations.
+
+The current acceptance model is defined in
+[`TESTING.md`](../TESTING.md) and [`VALIDATION.md`](../VALIDATION.md).
+
+## Promote to stable
+
+On the matching stable release branch:
+
+```bash
+scripts/repo-workflow.sh release promote-stable \
+  X.Y.Z \
+  "Release title"
+```
+
+Stable promotion requires a matching beta or RC canonical version. It updates
+stable metadata transactionally, regenerates checksums, and validates the
+release tree. It does not create a tag.
+
+Review and publish:
+
+```bash
+git diff
+scripts/repo-workflow.sh release publish \
+  --confirm-reviewed \
+  -m "Release: promote X.Y.Z stable"
+```
+
+Create the stable PR to `main`, wait for required checks, and merge:
+
+```bash
+scripts/repo-workflow.sh pr create --base main
+scripts/repo-workflow.sh pr checks --watch --required
+scripts/repo-workflow.sh pr merge \
+  --admin \
+  --delete-branch
+```
+
+The explicit `--admin` option is for a reviewed solo-maintainer or emergency
+override after required checks pass.
+
+## Strict pre-tag proof
+
+After the stable PR is merged:
+
+```bash
+git switch main
 git pull --ff-only origin main
-git tag vX.Y.Z
-git push origin vX.Y.Z
+git status -sb
+
+scripts/repo-workflow.sh release pretag vX.Y.Z
 ```
 
-5. **Watch** the [Release workflow](https://github.com/ReyadWeb/erpnext-dev-toolkit/actions).
-6. **Approve** the `release-signing` environment deployment when prompted (signing
-   authority separation — see SECURITY.md). Stable tags **require** a successful
-   signature.
-7. **Do not announce the version until publish finishes.** Pushing the tag creates
-   a tag page immediately, but until `publish` completes the page may only show
-   GitHub’s automatic Source code archives (no `erpnext-dev-vX.Y.Z.tar.gz`).
-   `/releases/latest` is flipped only after Assets upload, so the README
-   “Start here” block keeps serving the previous good release until then.
-8. **Spot-check** the published GitHub Release assets (`erpnext-dev-vX.Y.Z.tar.gz`,
-   `SHA256SUMS`, `SHA256SUMS.asc`), that `/releases/latest` redirects to this tag,
-   and that `verify-signature` works from the extracted bundle:
+The strict gate requires:
+
+- clean working tree;
+- canonical/runtime/tag alignment;
+- allowed target branch;
+- synchronized upstream;
+- no local or remote target tag;
+- safe authoritative manifest;
+- exact checksums;
+- complete release validation;
+- successful bundle construction and clean extraction;
+- packaged version and toolkit integrity.
+
+A successful run records proof under `.git/erpnext-workflow/` for the exact tag,
+commit, and tree fingerprint. Any relevant change makes the proof stale.
+
+## Guarded annotated tag
+
+Create the tag only through:
 
 ```bash
-scripts/assert-github-release-assets.sh vX.Y.Z --require-latest
-scripts/resolve-latest-release-tag.sh   # should print vX.Y.Z
+scripts/repo-workflow.sh release tag \
+  --confirm vX.Y.Z
 ```
 
-The release workflow runs that assertion automatically after upload and marks
-the stable release with `gh release edit --latest`.
+The confirmation must exactly match the canonical tag. The command refuses an
+existing local or remote tag and never force-updates one.
 
----
+Tag creation is the irreversible boundary. Do not run it until pre-tag proof and
+release approval are complete.
 
-## Signing policy (summary)
+## Watch protected publication
 
-| Tag shape | Signing |
-| --- | --- |
-| Stable `vX.Y.Z` | **Required** — publish fails closed without key / signature |
-| Pre-release `vX.Y.Z-…` (e.g. `-unsigned`) | May publish unsigned as an escape hatch |
+```bash
+scripts/repo-workflow.sh release watch vX.Y.Z
+```
 
-GPG material lives in the **`release-signing` GitHub Environment** (not as
-ordinary repository secrets). Repository write access alone must not be enough
-to produce a signed release.
+The command locates the tag-triggered `release.yml` run, verifies its commit
+against the remote tag, waits for completion, and fails when the workflow does
+not succeed.
 
-Public verification key: [`docs/erpnext-dev-signing-key.asc`](erpnext-dev-signing-key.asc).
+Approve the protected `release-signing` environment when required. Stable tags
+must fail closed when the signing authority is unavailable.
 
----
+## Verify the published release
 
-## What integration must prove (high level)
+```bash
+scripts/repo-workflow.sh release verify vX.Y.Z
+```
 
-Exact jobs evolve; today the release-gating legs include:
+Verification covers:
 
-- Native install smoke (Ubuntu 24.04 hard gate; 26.04 may be preview)
-- Docker development (`pwd.yml`) smoke — hard gate
-- Docker production (`compose.yaml`) smoke — hard gate (backup/verify/rehearsal)
+- remote annotated tag identity;
+- release workflow commit and successful conclusion;
+- GitHub release state;
+- stable/prerelease classification;
+- required release assets;
+- Latest status for stable releases;
+- safe archive paths;
+- standalone/bundled asset equality;
+- canonical version identity;
+- whole-tree checksums;
+- pinned maintainer signing-key fingerprint;
+- detached checksum signature.
 
-Do not weaken these without an explicit ROADMAP decision.
+Do not announce the stable release until this command succeeds.
 
----
+## Signing policy
 
-## Hotfix / docs-only follow-ups
+| Tag | Policy |
+|---|---|
+| Stable `vX.Y.Z` | Detached checksum signature required |
+| Prerelease `vX.Y.Z-*` | Policy follows the protected workflow; unsigned status must be explicit |
 
-Small commits on `main` after a tag (banner/docs) are fine; they are **not** in
-the already-published tag. Ship them in the next patch (`vX.Y.Z+1`) if the
-signed bundle must include them.
+GPG material belongs in the protected `release-signing` GitHub Environment, not
+ordinary repository secrets. Repository write access alone must not be enough to
+produce a trusted stable release.
 
----
+## Recovery and failure handling
 
-## Related docs
+Before tagging, release metadata transactions restore their original files when
+they fail.
 
-- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — PR validation for contributors
-- [`docs/DEVELOPMENT.md`](DEVELOPMENT.md) — local development
-- [`SECURITY.md`](../SECURITY.md) — trust model and key rotation
-- [`VALIDATION.md`](../VALIDATION.md) — field go-live (not a substitute for CI)
+After a failed repository operation:
+
+```bash
+scripts/repo-workflow.sh status
+scripts/repo-workflow.sh resume
+```
+
+Before retrying tag publication, inspect:
+
+```bash
+scripts/repo-workflow.sh release status
+scripts/repo-workflow.sh release explain
+git tag --list 'vX.Y.Z*'
+git ls-remote --tags origin 'vX.Y.Z*'
+```
+
+Never delete, move, or force-push a published release tag as a routine recovery
+method. Correct the issue in a new version unless the project's documented
+security incident procedure requires otherwise.
+
+## Low-level diagnostic commands
+
+The wrapper delegates to hardened lower-level scripts. Use these for diagnosis
+or development, not as the normal release path:
+
+```text
+scripts/release-prepare-beta.sh
+scripts/release-promote-stable.sh
+scripts/release-pretag-check.sh
+scripts/release-version.sh
+scripts/generate-release-checksums.sh
+scripts/build-release-bundle.sh
+scripts/assert-github-release-assets.sh
+```
+
+## Related documents
+
+- [`RELEASE-AUTOMATION.md`](RELEASE-AUTOMATION.md)
+- [`REPOSITORY-WORKFLOW.md`](REPOSITORY-WORKFLOW.md)
+- [`../TESTING.md`](../TESTING.md)
+- [`../VALIDATION.md`](../VALIDATION.md)
+- [`security/RELEASE-TRUST.md`](security/RELEASE-TRUST.md)
+- [`../SECURITY.md`](../SECURITY.md)

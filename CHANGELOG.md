@@ -1,5 +1,7 @@
 ## Unreleased
 ### Added
+- Added `docs/TESTING-HISTORY.md` to preserve version-specific regression
+  notes and historical field evidence outside the active testing guide.
 - Added `scripts/repo-workflow.sh` as the routine repository interface for
   status, risk-based validation, automatic checksum regeneration, commit,
   push, validation caching, and resumable failures.
@@ -29,6 +31,9 @@
   proof validity.
 
 ### Changed
+- Consolidated active testing, real-machine validation, release process,
+  release automation, documentation navigation, and roadmap status around
+  the completed repository workflow and the v1.21.0 API foundation.
 - Extended release validation, ShellCheck coverage, release manifests, and
   packaged documentation to include the repository workflow foundation.
 - Extended the repository workflow documentation and release validation

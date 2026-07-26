@@ -1,7 +1,7 @@
 # ERPNext Developer Toolkit Roadmap
 
 **Current release:** v1.20.0
-**Current work:** Documentation consolidation on `docs/v1.20-documentation-refresh`
+**Current work:** v1.21.0 — Machine-readable API foundation
 **Next product milestone:** v1.21.0 — Machine-readable API foundation
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
 
@@ -88,8 +88,8 @@ The detailed release record is maintained in [CHANGELOG.md](CHANGELOG.md).
 ## Delivery sequence
 
 ```text
-Documentation consolidation     Current
-v1.21.0                         Machine-readable API foundation
+Documentation consolidation     Complete
+v1.21.0                         Current — Machine-readable API foundation
 v1.21.1                         Operation and job model
 v1.21.2                         Local privileged agent MVP
 v1.21.3                         External watchdog and heartbeat contract
@@ -101,79 +101,38 @@ v2.0.0                          Stable panel-ready node-agent contract
 
 Version assignments after v1.21.0 are planning targets. They may be adjusted through issues and pull requests when implementation evidence shows that a milestone should be split or delayed.
 
-# Now
+# Completed maintenance milestone
 
 ## Documentation consolidation
 
-**Status:** In progress after v1.20.0
-**Branch:** `docs/v1.20-documentation-refresh`
+**Status:** Completed after v1.20.0
 
-The documentation refresh is maintenance work on top of the v1.20.0 code foundation. It does not introduce a new product capability or require a version bump by itself.
+The documentation programme reorganised the project landing page, security
+policy, active roadmap, repository workflow, testing model, and real-machine
+validation guidance without changing the stable release identity.
 
-### D1 — README and documentation navigation
+Completed scope:
 
-**Status:** Completed on the documentation branch.
+- D1 — README and goal-based documentation navigation
+- D2 — current security policy plus focused architecture, trust, hardening, and
+  history documents
+- D3 — active roadmap reconciliation and preserved roadmap history
+- D4 — concise active testing guide, preserved testing history, real-machine
+  validation matrix, and release-workflow documentation alignment
 
-- Reorganise the README introduction.
-- Preserve the menu, major operational sections, screenshots, and architecture diagrams.
-- Add goal-based navigation.
-- Remove stale release-state claims.
-- Add `docs/README.md`.
+Documentation consistency automation remains a normal maintenance improvement
+and may be implemented alongside v1.21 work. It no longer blocks transition to
+the machine-readable API foundation.
 
-### D2 — Security documentation
+Completion evidence:
 
-**Status:** Completed on the documentation branch.
+- repository and release validation pass;
+- release manifest and checksums include the maintained documentation set;
+- active release guidance uses the guarded repository workflow;
+- version-specific testing evidence is preserved outside the active guide;
+- the roadmap and README identify v1.21.0 as current work.
 
-- Replace the mixed historical policy with a current security policy.
-- Separate security architecture, release trust, production hardening, and history.
-- Preserve private vulnerability reporting.
-- Clarify guarantees, trust boundaries, operator responsibilities, and limitations.
-- Retain canonical signed-release guidance and its regression test.
-
-### D3 — Roadmap reconciliation
-
-**Status:** In progress.
-
-- Make the root roadmap active-planning only.
-- Mark v1.20.0 as shipped.
-- Move superseded planning and historical detail into `docs/ROADMAP-HISTORY.md`.
-- Establish the machine API, agent, watchdog, validation, and panel-readiness sequence.
-- Remove subjective maturity scores from the active roadmap.
-
-### D4 — Testing and validation documentation
-
-**Status:** Planned next.
-
-- Turn `TESTING.md` into the current testing entry point.
-- Separate contributor checks, pull-request CI, beta acceptance, stable acceptance, local VM acceptance, VPS acceptance, Docker acceptance, and rollback testing.
-- Move version-specific evidence into focused release-validation records.
-- Keep `VALIDATION.md` as the production go-live and acceptance runbook.
-
-### D5 — Documentation consistency automation
-
-**Status:** Planned after D4.
-
-Add automated checks for:
-
-- Broken repository-relative Markdown links
-- Missing referenced files
-- Duplicate or invalid anchors where practical
-- Current-version banner disagreement
-- Unsupported installation examples
-- Obsolete active release claims
-- README, ROADMAP, TESTING, and manifest version disagreement
-- Packaged-document coverage
-
-### Documentation-refresh completion gate
-
-- [ ] D1–D5 are merged through one reviewed pull request.
-- [ ] Repository and release validation pass.
-- [ ] Published links and anchors are checked.
-- [ ] No current document points users to obsolete bootstrap guidance.
-- [ ] The active roadmap and project-status sections agree.
-- [ ] No tag or stable release is changed solely to rewrite documentation.
-
-# Next
+# Now
 
 ## v1.21.0 — Machine-readable API foundation
 

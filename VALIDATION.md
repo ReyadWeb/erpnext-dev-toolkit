@@ -1,264 +1,661 @@
-# Combined go-live validation runbook
+# Real-machine validation runbook
 
-**Applies to:** v1.14.0+ · **Scope:** one end-to-end go-live test that validates
-**both** deployment engines on real infrastructure:
+This is the authoritative field-acceptance runbook for ERPNext Developer
+Toolkit. It covers real local virtual machines and public servers across the
+native and Docker engines.
 
-- **Native engine** — ERPNext/Frappe installed directly on a fresh Ubuntu/Debian VPS.
-- **Docker production engine** — the production `compose.yaml` stack (`DOCKER_MODE=production`).
+Automated testing is defined in [`TESTING.md`](TESTING.md). Historical
+version-specific evidence is preserved in
+[`docs/TESTING-HISTORY.md`](docs/TESTING-HISTORY.md).
 
-This is the "full test" gate before declaring a release production-ready in the
-field. CI already gates every release (native `install-smoke`, Docker dev
-`docker-install-smoke`, and Docker `docker-production-smoke` are all hard gates);
-this runbook proves the same lifecycle on a **real VPS + real domain**, which CI
-cannot do (no public DNS, no ACME, no off-site targets).
+## Purpose and boundary
 
-> Execution is a manual operator task — it provisions real cloud resources and a
-> real domain. Follow it verbatim and record evidence in the sign-off table at
-> the end. Nothing in this file runs automatically.
+Use this runbook when a change or release must be proven on infrastructure that
+repository tests cannot reproduce reliably:
 
----
+- host and public DNS;
+- browser trust and public certificate issuance;
+- cloud firewall behaviour;
+- Docker port publication;
+- provider reboot and snapshot behaviour;
+- real off-VM and object-storage destinations;
+- production backup recovery;
+- upgrade and rollback.
 
-## 0. Prerequisites and safety
+This runbook does not replace protected CI. A release requires both automated
+gates and the applicable field-acceptance paths.
 
-| Item | Requirement |
-|------|-------------|
-| VPS | Fresh **Ubuntu 24.04 / 26.04 LTS** or **Debian 13**, 2 vCPU / 4 GB+ RAM, public IPv4 |
-| Domain | A real domain with two records you control, e.g. `erp.example.com` (native) and `erp-docker.example.com` (Docker production) |
-| DNS | `A` records pointing each hostname at the VPS public IP; confirm propagation (`dig +short erp.example.com`) before HTTPS steps |
-| Cloud firewall | Allow inbound `22`, `80`, `443` only; take a **provider snapshot** before you start so you can roll back the whole VM |
-| Off-site target | An SSH host for rsync (`user@host:/path`) **and/or** a configured `rclone` remote (`rclone config`) for object storage |
-| Access | `sudo` on the VPS; a browser to confirm the login page renders over HTTPS |
+## Acceptance matrix
 
-Recommended: run native and Docker production on **separate VPSs** (cleanest,
-no port contention). If you must reuse one VPS, run Phase A to completion, capture
-its evidence, then tear it down before Phase B, since both bind `:80/:443`.
+Select every path affected by the change:
 
-### 0.1 Integrity (do this first, on the VPS)
+| Path | Typical purpose | Engine | Access model |
+|---|---|---|---|
+| Local native VM | Development and native lifecycle acceptance | Native | VM IP, local hostname, optional trusted local HTTPS |
+| Local Docker VM | Container development acceptance | Docker | Published frontend port, local hostname, optional trusted local HTTPS |
+| Public native VPS | Production native acceptance | Native | Real domain and public HTTPS |
+| Public Docker VPS | Production Compose acceptance | Docker | Real domain, Traefik, public HTTPS |
+
+For release-wide reliability claims, validate all four paths. For a bounded
+change, document why unaffected paths were not rerun.
+
+## Safety prerequisites
+
+Before changing a real machine:
+
+- use a dedicated test VM/VPS;
+- take a provider or hypervisor snapshot;
+- confirm console or rescue access;
+- record the current toolkit and ERPNext/Frappe versions;
+- preserve existing backup and off-VM configuration;
+- confirm the intended firewall policy;
+- prepare a rollback decision point;
+- use a domain or local hostname that does not affect production traffic;
+- keep credentials out of terminal logs and public evidence.
+
+Recommended minimum public-server resources are 2 vCPU and 4 GB RAM. Production
+sizing still depends on workload, applications, users, database growth, and
+provider characteristics.
+
+## Install the published release safely
+
+Use the complete release archive. Do not install from GitHub's automatic source
+archives or from a raw entrypoint file.
 
 ```bash
-sudo apt-get update && sudo apt-get install -y curl ca-certificates tar
-VERSION="v1.14.0"
-BASE="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
-curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz"
-tar -xzf "erpnext-dev-${VERSION}.tar.gz" && cd "erpnext-dev-${VERSION}"
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates gnupg tar
+
+REPO="ReyadWeb/erpnext-dev-toolkit"
+VERSION="$(
+  curl -fsSL -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${REPO}/releases/latest" |
+  sed -n 's|.*/tag/\([^/]*\)$|\1|p'
+)"
+
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "Could not resolve the latest stable release." >&2
+  exit 1
+}
+
+workdir="$(mktemp -d /tmp/erpnext-dev-validation.XXXXXX)"
+cd "$workdir" || exit 1
+
+base="https://github.com/${REPO}/releases/download/${VERSION}"
+archive="erpnext-dev-${VERSION}.tar.gz"
+
+curl -fsSLO "${base}/${archive}"
+
+if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+  echo "Unsafe path detected in release archive." >&2
+  exit 1
+fi
+
+tar --no-same-owner --no-same-permissions -xzf "$archive"
+cd "erpnext-dev-${VERSION}" || exit 1
+
+sudo ./erpnext-dev.sh verify-signature
 sha256sum -c SHA256SUMS
-sudo ./erpnext-dev.sh verify-signature   # expect GOODSIG
-sudo ./erpnext-dev.sh verify-toolkit     # expect all modules OK
+sudo ./erpnext-dev.sh verify-toolkit
 ```
 
-**Pass:** checksums match, `GOODSIG` from the release signing key, all modules OK.
+Pass criteria:
 
----
+- the bundled signing key matches the pinned maintainer fingerprint;
+- the detached checksum signature verifies;
+- all checksums pass;
+- toolkit integrity reports every packaged module as expected;
+- `./erpnext-dev.sh version` reports the selected release.
 
-## Phase A — Native engine go-live
+## Baseline record
 
-Run on the native VPS. Use the hostname you pointed at it (examples use
-`erp.example.com`).
+Before installation or upgrade, record:
 
 ```bash
-export SITE_NAME=erp.example.com
-sudo -E ./erpnext-dev.sh install-preflight
-sudo -E ./erpnext-dev.sh public-vm-guided-setup    # guided; or public-vm-quickstart
-sudo -E ./erpnext-dev.sh engine-status              # expect: Engine = Native (VM)
+uname -a
+cat /etc/os-release
+ip -brief address
+ip route
+df -h /
+free -h
+date -u
 ```
 
-### A1. Runtime and access
-```bash
-sudo -E ./erpnext-dev.sh production-runtime-status  # supervisor RUNNING, no 'bench start'
-sudo -E ./erpnext-dev.sh verify-access
+Record separately:
+
+```text
+Validation date
+Operator
+Commit or tag
+Provider or hypervisor
+VM plan/resources
+OS image
+Deployment path
+Domain or local hostname
+Snapshot identifier
+Expected public ports
+Evidence location
 ```
-**Pass:** site reachable on the hostname; production runtime under supervisor.
 
-### A2. HTTPS
-```bash
-sudo -E ./erpnext-dev.sh production-ssl-wizard       # Let's Encrypt or Cloudflare Origin
-sudo -E ./erpnext-dev.sh production-ssl-status
-```
-**Pass:** `https://erp.example.com` loads a styled, working login; valid chain.
+Do not place secrets in this record.
 
-### A3. Diagnostics (engine-agnostic contract verb)
-```bash
-sudo -E ./erpnext-dev.sh engine-diagnostics --plain  # or --json for machine-readable
-```
-**Pass:** all critical checks OK; no secrets in the output.
+## Shared acceptance checks
 
-### A4. Backup, verify, restore (engine-agnostic)
-```bash
-sudo -E ./erpnext-dev.sh backup-files
-sudo -E ./erpnext-dev.sh backup-verify
-sudo -E ./erpnext-dev.sh engine-restore              # native restore flow (guided)
-```
-**Pass:** a complete, verified backup set exists; restore completes cleanly.
-
-### A5. Off-site shipment — pick one or both
-```bash
-# rsync off-VM
-sudo -E ./erpnext-dev.sh configure-rsync-backup-target
-sudo -E ./erpnext-dev.sh off-vm-backup-dry-run
-sudo -E ./erpnext-dev.sh run-off-vm-backup
-sudo -E ./erpnext-dev.sh off-vm-backup-status
-
-# object storage (rclone) — engine-agnostic, native parity (post-v1.11.0)
-sudo -E ./erpnext-dev.sh configure-object-backup
-sudo -E ./erpnext-dev.sh object-backup-dry-run
-sudo -E ./erpnext-dev.sh object-backup
-sudo -E ./erpnext-dev.sh object-status               # expect: last OK, rclone check verified
-```
-**Pass:** artifacts land off the VM and, for object storage, `rclone check` verifies them.
-
-### A6. Upgrade / rollback surface (contract verbs, non-destructive to review)
-```bash
-sudo -E ./erpnext-dev.sh update-preflight            # read-only readiness
-# sudo -E ./erpnext-dev.sh engine-upgrade            # guarded safe update (optional; backup first)
-# sudo -E ./erpnext-dev.sh engine-rollback           # only if an upgrade needs reverting
-```
-**Pass:** preflight reports readiness; contract verbs resolve for the native engine.
-
----
-
-## Phase B — Docker production go-live
-
-Run on the Docker VPS (or the same VPS after Phase A teardown). Uses the
-production `compose.yaml` path with immutable pins.
+Run the applicable commands after installation, restart, restore, and upgrade:
 
 ```bash
-export DEPLOYMENT_ENGINE=docker
-export DOCKER_MODE=production
-export SITE_NAME=erp-docker.example.com
-sudo -E ./erpnext-dev.sh docker-production-setup      # provisions compose.yaml + overrides + pins
-sudo -E ./erpnext-dev.sh engine-status                # Engine = Docker, mode = production, shows pins
+sudo erpnext-dev version
+sudo erpnext-dev where-installed
+sudo erpnext-dev verify-toolkit
+sudo erpnext-dev engine-status
+sudo erpnext-dev status
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+sudo erpnext-dev doctor --plain
+sudo erpnext-dev dashboard
 ```
-**Pass:** stack up; `engine-status` shows `frappe_docker` SHA + ERPNext image digest.
 
-### B1. Production HTTPS (Traefik)
-```bash
-sudo -E ./erpnext-dev.sh docker-https-wizard          # Let's Encrypt or Cloudflare Origin CA
-sudo -E ./erpnext-dev.sh docker-https-status
-```
-**Pass:** `https://erp-docker.example.com` loads a styled, working login.
+Pass criteria:
 
-### B2. Production exposure guardrail
-```bash
-sudo -E ./erpnext-dev.sh docker-production-exposure
-```
-**Pass:** only intended ports are published; guardrail reports no unexpected exposure.
+- canonical toolkit identity is correct;
+- the selected engine is correct;
+- required services or containers are healthy;
+- readiness includes HTTP and login-critical frontend assets;
+- the styled login page renders;
+- required CSS and JavaScript return successfully and are non-empty;
+- diagnostics do not expose secrets;
+- no unexpected degraded or critical condition remains.
 
-### B3. Backup, verify, restore rehearsal (DR — the P3 chain)
-```bash
-sudo -E ./erpnext-dev.sh backup-files                 # durable host artifact (routes to Docker)
-sudo -E ./erpnext-dev.sh backup-verify                # gzip/tar/json + SHA256SUMS integrity
-sudo -E ./erpnext-dev.sh docker-restore-rehearsal     # non-destructive restore to a throwaway site
-sudo -E ./erpnext-dev.sh docker-restore-evidence      # show recorded rehearsal evidence
-```
-**Pass:** durable artifact verified; rehearsal restores to a throwaway site and records evidence.
+## Path A — local native VM
 
-### B4. Off-site shipment — pick one or both
-```bash
-sudo -E ./erpnext-dev.sh docker-offvm-backup          # rsync durable artifacts off-VM
-sudo -E ./erpnext-dev.sh docker-offvm-status
-
-sudo -E ./erpnext-dev.sh configure-object-backup      # engine-agnostic; routes to Docker
-sudo -E ./erpnext-dev.sh object-backup
-sudo -E ./erpnext-dev.sh object-status
-```
-**Pass:** artifacts land off the VM; object-storage upload verified with `rclone check`.
-
-### B5. Diagnostics + upgrade/rollback surface
-```bash
-sudo -E ./erpnext-dev.sh engine-diagnostics --plain
-sudo -E ./erpnext-dev.sh engine-upgrade               # container-native immutable re-deploy guidance
-sudo -E ./erpnext-dev.sh engine-rollback              # redeploy previous pin / restore guidance
-```
-**Pass:** diagnostics clean; upgrade/rollback verbs print the container-native path.
-
----
-
-## 2. Cross-engine contract parity
-
-Confirm both engines answered the **same** lifecycle contract during the test:
-
-| Verb | Native | Docker production |
-|------|--------|-------------------|
-| `engine-status` | A0 | B0 |
-| `engine-diagnostics` | A3 | B5 |
-| `backup-files` + `backup-verify` | A4 | B3 |
-| `engine-restore` / restore rehearsal | A4 | B3 |
-| off-VM + `object-backup` / `object-status` | A5 | B4 |
-| `engine-upgrade` / `engine-rollback` | A6 | B5 |
-
-**Pass:** every row exercised on both engines with the documented result.
-
----
-
-## 3. Evidence bundle
-
-Collect, per engine, and attach to the go-live record:
+### A1. Install and direct access
 
 ```bash
-sudo -E ./erpnext-dev.sh engine-diagnostics --json > diagnostics-<engine>.json
-sudo -E ./erpnext-dev.sh support-bundle                 # redacted support archive
-sudo -E ./erpnext-dev.sh go-live-record                 # records go-live sign-off
-sudo -E ./erpnext-dev.sh go-live-status
+sudo ./erpnext-dev.sh local-dev-quickstart
+sudo erpnext-dev engine-status
+sudo erpnext-dev verify-access
 ```
 
-Keep: the two `diagnostics-*.json`, both support bundles, HTTPS screenshots for
-each hostname, `object-status` / `off-vm-backup-status` output, and the
-`docker-restore-evidence` record.
+Pass criteria:
 
----
+- the engine is native;
+- the site responds at the documented native development endpoint;
+- the local site name maps to the VM IP on the host;
+- `wait-ready` and `verify-frontend-assets` pass without requiring a reboot.
 
-## 4. Go-live sign-off
+### A2. Local hostname and HTTPS
 
-| # | Check | Native | Docker prod |
-|---|-------|:------:|:-----------:|
-| 1 | Integrity: `verify-signature` GOODSIG + `verify-toolkit` OK | ☐ | ☐ |
-| 2 | Install + runtime healthy | ☐ | ☐ |
-| 3 | Site reachable on hostname | ☐ | ☐ |
-| 4 | HTTPS valid + styled login | ☐ | ☐ |
-| 5 | `engine-diagnostics` clean | ☐ | ☐ |
-| 6 | Backup created + verified | ☐ | ☐ |
-| 7 | Restore / restore rehearsal succeeded | ☐ | ☐ |
-| 8 | Off-site (rsync and/or object storage) verified | ☐ | ☐ |
-| 9 | Exposure guardrail / firewall correct | ☐ | ☐ |
-| 10 | Upgrade/rollback contract verbs behave as documented | ☐ | ☐ |
-| 11 | Evidence bundle collected | ☐ | ☐ |
+Use the toolkit's local-domain and trusted-certificate workflow:
 
-**Abort / rollback criteria:** if any of checks 1–4 fail, stop and restore the
-provider snapshot. For checks 6–8 failures, do not declare go-live until backups
-are proven recoverable (restore or rehearsal must pass). Record the outcome with
-`go-live-record`.
+```bash
+sudo erpnext-dev local-ssl-wizard
+sudo erpnext-dev verify-local-ssl
+sudo erpnext-dev local-access-doctor
+```
 
----
+Pass criteria:
 
-See [`TESTING.md`](TESTING.md) for the broader per-feature test matrix and
-hermetic checks, and [`DEPLOYMENT-ARCHITECTURE.md`](DEPLOYMENT-ARCHITECTURE.md)
-§5 for the engine contract these commands implement.
+- host mapping is correct;
+- the certificate is trusted by the chosen browser/profile;
+- HTTPS loads the correct site;
+- HTTP redirect behaviour matches the configured policy;
+- no login CSS/JS request fails.
 
----
+### A3. Stable-IP and reboot acceptance
 
-## 5. Example provider sign-off (fictional / redacted)
+When static/stable IP behaviour is in scope:
 
-Use this as a template when filing a [compatibility report](https://github.com/ReyadWeb/erpnext-dev-toolkit/issues/new?template=compatibility-report.yml)
-or a Discussions → Show and tell installation report. **Never include secrets.**
+```bash
+sudo erpnext-dev local-ip-plan
+sudo erpnext-dev local-ip-status
+sudo erpnext-dev local-ip-drift-check
+```
 
-- **Provider:** DigitalOcean
-- **Plan:** Basic Droplet (2 vCPU / 4 GB RAM)
-- **OS:** Debian 13
-- **Engine:** Native
-- **Off-site:** Object storage via rclone (provider Spaces / S3-compatible)
-- **Toolkit:** v1.14.0+
-- **Outcome:** PASS (example only)
+Reboot the VM, then verify:
 
-| # | Check | Result |
-|---|-------|:------:|
-| 1 | Integrity: `verify-signature` GOODSIG + `verify-toolkit` OK | PASS |
-| 2 | Install + runtime healthy | PASS |
-| 3 | Site reachable on hostname | PASS |
-| 4 | HTTPS valid + styled login | PASS |
-| 5 | `engine-diagnostics` clean | PASS |
-| 6 | Backup created + verified | PASS |
-| 7 | Restore / restore rehearsal succeeded | PASS |
-| 8 | Off-site (rsync and/or object storage) verified | PASS |
-| 9 | Exposure guardrail / firewall correct | PASS |
-| 10 | Upgrade/rollback contract verbs behave as documented | PASS |
-| 11 | Evidence bundle collected | PASS |
+```bash
+sudo erpnext-dev status
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+sudo erpnext-dev local-ip-drift-check
+```
+
+Pass criteria:
+
+- the intended IP, default route, and DNS survive reboot;
+- ERPNext starts automatically;
+- the host mapping still reaches the correct site;
+- HTTPS and frontend assets remain healthy.
+
+## Path B — local Docker VM
+
+### B1. Install and published-port access
+
+Choose Docker during guided setup or set the engine explicitly for the
+documented install path.
+
+```bash
+sudo erpnext-dev engine-status
+sudo erpnext-dev status
+sudo erpnext-dev verify-access
+```
+
+Pass criteria:
+
+- the engine is Docker;
+- the direct frontend uses the configured published port, `8080` by default;
+- native `8000/9000` guidance is not presented as the Docker browser endpoint;
+- containers are healthy;
+- login assets pass.
+
+### B2. Local hostname, trusted HTTPS, and exposure
+
+```bash
+sudo erpnext-dev local-ssl-wizard
+sudo erpnext-dev verify-local-ssl
+sudo erpnext-dev local-firewall-status
+```
+
+Pass criteria:
+
+- the local hostname reaches the Docker frontend;
+- trusted HTTPS works;
+- the local Docker forwarding policy is active where required;
+- the published frontend is reachable only from the intended network scope;
+- no unexpected port is exposed.
+
+### B3. Container persistence
+
+Reboot the VM and verify:
+
+```bash
+sudo erpnext-dev engine-status
+sudo erpnext-dev status
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+```
+
+Pass criteria:
+
+- the intended Compose project returns automatically or through the documented
+  startup path;
+- volumes, credentials, site state, and installed applications persist;
+- frontend assets and login remain healthy.
+
+## Path C — public native VPS
+
+### C1. Provider and DNS gate
+
+Before installation:
+
+- create the intended DNS record;
+- verify it resolves to the server;
+- allow only the intended administrative and web ports at the cloud firewall;
+- do not expose development ports publicly;
+- take a provider snapshot.
+
+Record:
+
+```bash
+dig +short erp.example.com
+sudo ss -lntup
+```
+
+### C2. Guided production setup
+
+```bash
+sudo ./erpnext-dev.sh install-preflight
+sudo ./erpnext-dev.sh public-vm-guided-setup
+sudo erpnext-dev engine-status
+sudo erpnext-dev production-runtime-status
+```
+
+Pass criteria:
+
+- the engine is native;
+- production runtime is used instead of `bench start`;
+- boot autostart is enabled;
+- direct development ports are not publicly required.
+
+### C3. Public HTTPS and browser acceptance
+
+```bash
+sudo erpnext-dev production-ssl-wizard
+sudo erpnext-dev production-ssl-status
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+```
+
+Pass criteria:
+
+- the real domain serves a valid certificate chain;
+- HTTPS redirects and host routing are correct;
+- the styled login renders in a normal browser;
+- required CSS and JavaScript have no 404, empty body, or wrong-site response;
+- certificate renewal configuration is present.
+
+## Path D — public Docker VPS
+
+### D1. Production Compose setup
+
+Choose Docker before the public guided install, or use the documented Docker
+production setup command:
+
+```bash
+sudo erpnext-dev docker-production-setup
+sudo erpnext-dev engine-status
+sudo erpnext-dev status
+```
+
+Pass criteria:
+
+- production Compose, not the development stack, is active;
+- immutable image and source/version pins are recorded;
+- application-bearing services use the intended image;
+- credentials and durable volumes remain consistent.
+
+### D2. Traefik HTTPS and exposure guard
+
+```bash
+sudo erpnext-dev docker-https-wizard
+sudo erpnext-dev docker-https-status
+sudo erpnext-dev docker-production-exposure
+```
+
+Pass criteria:
+
+- the real domain serves valid HTTPS;
+- only intended public web ports are exposed;
+- the direct Docker frontend is not publicly exposed after production HTTPS;
+- container-internal application ports remain internal;
+- cloud firewall and host/container rules agree.
+
+### D3. Optional-application image consistency
+
+When optional applications are affected:
+
+- verify installed applications are represented in the desired production image;
+- verify backend, frontend, websocket, queue workers, and scheduler use the same
+  intended custom image;
+- verify application code exists in every required service;
+- verify application frontend assets and routes load;
+- reboot and confirm the image selection persists.
+
+## Frontend acceptance
+
+A release is not browser-ready merely because one HTTP request returns 200.
+
+For each affected path:
+
+```bash
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+```
+
+Then use a browser:
+
+1. open the documented login URL;
+2. hard refresh;
+3. confirm the expected site and branding;
+4. confirm the page is styled;
+5. inspect the network panel for required CSS/JS failures;
+6. confirm redirects do not switch to another hostname or port;
+7. repeat after restart, restore, and upgrade when applicable.
+
+When assets fail:
+
+```bash
+sudo erpnext-dev frappe-asset-checklist
+sudo erpnext-dev repair-frontend-assets
+sudo erpnext-dev verify-frontend-assets
+sudo erpnext-dev support-bundle
+```
+
+Preserve the first failure evidence before repair.
+
+## Security and exposure acceptance
+
+Validate both provider and host/container boundaries:
+
+- administrative access is limited to the intended source where practical;
+- public HTTP/HTTPS are open only when required;
+- development and internal service ports are not exposed publicly;
+- HTTPS is active before applying a production hardening profile that depends on
+  it;
+- credentials remain private;
+- support output is redacted;
+- security status contains no unexplained failure;
+- disabling a protection requires an explicit operator action.
+
+Useful commands include:
+
+```bash
+sudo erpnext-dev security-status
+sudo erpnext-dev production-ssl-status
+sudo erpnext-dev local-firewall-status
+sudo erpnext-dev docker-production-exposure
+sudo ss -lntup
+```
+
+Also test from a second machine or external scanner under your control. A
+localhost-only check cannot prove cloud exposure.
+
+## Backup, restore, and off-host acceptance
+
+### Backup creation and verification
+
+```bash
+sudo erpnext-dev backup-files
+sudo erpnext-dev backup-verify
+```
+
+Pass criteria:
+
+- the backup belongs to the intended site;
+- expected database, files, private files, and metadata are present as
+  applicable;
+- compression/archive and checksum verification pass;
+- the artifact is stored outside ephemeral containers.
+
+### Restore or restore rehearsal
+
+Use the engine-appropriate guided restore or rehearsal command. For Docker
+production:
+
+```bash
+sudo erpnext-dev docker-restore-rehearsal
+sudo erpnext-dev docker-restore-evidence
+```
+
+After restore:
+
+```bash
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+sudo erpnext-dev doctor --plain
+```
+
+Pass criteria:
+
+- restore completes to the intended target;
+- the site, runtime, and frontend are healthy;
+- the source environment remains safe when the rehearsal is documented as
+  non-destructive;
+- evidence identifies the backup and target.
+
+### Off-VM or object-storage copy
+
+Rsync path:
+
+```bash
+sudo erpnext-dev configure-rsync-backup-target
+sudo erpnext-dev off-vm-backup-dry-run
+sudo erpnext-dev run-off-vm-backup
+sudo erpnext-dev off-vm-backup-status
+```
+
+Object-storage path:
+
+```bash
+sudo erpnext-dev configure-object-backup
+sudo erpnext-dev object-backup-dry-run
+sudo erpnext-dev object-backup
+sudo erpnext-dev object-status
+```
+
+Pass criteria:
+
+- the remote destination receives the complete intended backup;
+- host-key or remote identity checks are enforced;
+- remote verification succeeds;
+- retention/deletion behaviour matches the configuration;
+- a remote artifact can be selected for recovery.
+
+## Upgrade and rollback acceptance
+
+Before upgrading:
+
+```bash
+sudo erpnext-dev update-preflight
+sudo erpnext-dev backup-files
+sudo erpnext-dev backup-verify
+sudo erpnext-dev version
+sudo erpnext-dev verify-toolkit
+```
+
+Perform the guarded update using the documented stable or beta channel. Then
+verify:
+
+```bash
+sudo erpnext-dev version
+sudo erpnext-dev verify-toolkit
+sudo erpnext-dev status
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+sudo erpnext-dev production-ssl-status
+```
+
+Test rollback:
+
+```bash
+sudo erpnext-dev toolkit-rollback
+sudo erpnext-dev version
+sudo erpnext-dev verify-toolkit
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+```
+
+Pass criteria:
+
+- update installs the exact expected release tree;
+- all packaged modules match;
+- application/runtime state remains healthy;
+- rollback returns to the previous complete slot;
+- restored release identity and module inventory are correct;
+- a subsequent restoration to the candidate release succeeds when required for
+  acceptance.
+
+## Reboot persistence
+
+Reboot every path for which boot persistence or network state matters.
+
+After reboot, verify:
+
+```bash
+sudo erpnext-dev engine-status
+sudo erpnext-dev status
+sudo erpnext-dev wait-ready
+sudo erpnext-dev verify-frontend-assets
+sudo erpnext-dev production-ssl-status
+sudo erpnext-dev backup-verify
+```
+
+Also confirm:
+
+- IP, routes, and DNS;
+- systemd/Supervisor or Compose autostart;
+- certificate and proxy configuration;
+- firewall/exposure policy;
+- optional applications;
+- scheduled backups and health timers;
+- off-VM configuration.
+
+## Evidence bundle
+
+Collect redacted evidence:
+
+```bash
+sudo erpnext-dev doctor --plain
+sudo erpnext-dev support-bundle
+sudo erpnext-dev go-live-record
+sudo erpnext-dev go-live-status
+```
+
+Recommended attachments:
+
+- validation matrix and sign-off;
+- command transcript with secrets removed;
+- browser screenshots;
+- failed and successful frontend network evidence;
+- service/container status;
+- firewall and exposure evidence;
+- backup verification output;
+- restore/rehearsal evidence;
+- upgrade and rollback identities;
+- reboot verification;
+- relevant GitHub CI and release workflow links.
+
+## Sign-off matrix
+
+| Gate | Local native | Local Docker | Public native | Public Docker |
+|---|:---:|:---:|:---:|:---:|
+| Signed toolkit and whole-tree integrity | ☐ | ☐ | ☐ | ☐ |
+| Install or upgrade completed | ☐ | ☐ | ☐ | ☐ |
+| Correct engine and runtime | ☐ | ☐ | ☐ | ☐ |
+| HTTP and styled login | ☐ | ☐ | ☐ | ☐ |
+| Required frontend assets | ☐ | ☐ | ☐ | ☐ |
+| HTTPS/domain or local trust | ☐ | ☐ | ☐ | ☐ |
+| Firewall/exposure policy | ☐ | ☐ | ☐ | ☐ |
+| Backup created and verified | ☐ | ☐ | ☐ | ☐ |
+| Restore or rehearsal passed | ☐ | ☐ | ☐ | ☐ |
+| Off-host copy verified | ☐ | ☐ | ☐ | ☐ |
+| Upgrade and rollback passed when applicable | ☐ | ☐ | ☐ | ☐ |
+| Reboot persistence | ☐ | ☐ | ☐ | ☐ |
+| Redacted evidence retained | ☐ | ☐ | ☐ | ☐ |
+
+Use `N/A` only with a written justification.
+
+## Abort and rollback criteria
+
+Stop the acceptance sequence when:
+
+- version, signature, checksum, or toolkit integrity fails;
+- the wrong site or domain is served;
+- required frontend assets fail;
+- a production runtime or database is unhealthy;
+- unexpected public exposure is detected;
+- no verified recovery point exists before a high-impact change;
+- restore/rehearsal fails;
+- upgrade identity is ambiguous;
+- a rollback cannot be completed safely.
+
+Preserve evidence, restore the snapshot or documented recovery point, and record
+the failure before retrying.
+
+## Production-ready decision
+
+A production-ready decision requires:
+
+- all required automated repository and integration gates;
+- all applicable real-machine paths;
+- valid HTTPS and browser readiness;
+- verified backup and restore evidence;
+- correct exposure controls;
+- upgrade/rollback evidence when affected;
+- reboot persistence;
+- published stable-release verification;
+- an explicit sign-off record.
+
+Passing this runbook proves the tested configuration and release under the
+recorded conditions. It is not a guarantee for every provider, custom
+application, workload, or future upstream change.

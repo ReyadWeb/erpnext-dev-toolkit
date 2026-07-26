@@ -23,7 +23,7 @@ health checks, diagnostics, signed updates, and rollback.
 | **Native hosts** | Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 |
 | **Main command** | `erpnext-dev` |
 | **Release protection** | Signed releases, whole-tree checksums, atomic updates, rollback slots |
-| **Current focus** | Documentation consolidation before the v1.21 machine-interface foundation |
+| **Current focus** | v1.21.0 machine-readable API foundation |
 
 ## Choose your path
 
@@ -1110,10 +1110,11 @@ whether you deploy natively or with Docker.
 | [`docs/COMMUNITY-BOARD.md`](docs/COMMUNITY-BOARD.md) | Community project board setup + seed issues |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history and release notes |
 | [`SECURITY.md`](SECURITY.md) | Threat model, credential handling, release signing |
-| [`TESTING.md`](TESTING.md) | Validation scenarios and QA commands |
+| [`TESTING.md`](TESTING.md) | Active automated and release testing guide |
+| [`docs/TESTING-HISTORY.md`](docs/TESTING-HISTORY.md) | Version-specific regression notes and historical field evidence |
 | [`docs/FRAPPE-FRONTEND-ASSETS.md`](docs/FRAPPE-FRONTEND-ASSETS.md) | Frappe-aligned login CSS/JS: official vs toolkit, diagnosis ladder |
-| [`VALIDATION.md`](VALIDATION.md) | Combined go-live runbook (native + Docker production) for a real VPS + domain |
-| [`ROADMAP.md`](ROADMAP.md) | v1.18–v1.23 plan + historical milestones |
+| [`VALIDATION.md`](VALIDATION.md) | Real local-VM and public-VPS acceptance matrix for native and Docker |
+| [`ROADMAP.md`](ROADMAP.md) | Active development priorities and acceptance criteria |
 | [Roadmap board](https://github.com/users/ReyadWeb/projects/3) | Public Todo / In Progress / Done tracking ([docs/ROADMAP-BOARD.md](docs/ROADMAP-BOARD.md)) |
 | [`RELEASE-MANIFEST.txt`](RELEASE-MANIFEST.txt) | Files expected in each release (validated in CI) |
 
@@ -1123,10 +1124,11 @@ whether you deploy natively or with Docker.
 
 This toolkit can prepare a production-candidate VM. After v1.9.0 the core path is
 CI-proven (install, backup/restore, production runtime, signed releases), but
-production readiness still requires **your** validation on a real VPS: domain/DNS,
-cloud firewall, off-VM backup target, restore rehearsal, snapshot policy,
-monitoring expectations, and an update process. Use the checklist in
-[`TESTING.md`](TESTING.md#vps-production-validation-v190) before calling the site live.
+production readiness still requires **your** validation on real infrastructure:
+domain/DNS or local host mapping, cloud and host firewalls, off-VM backup,
+restore rehearsal, snapshot policy, monitoring, reboot persistence, and an
+update/rollback process. Use [`VALIDATION.md`](VALIDATION.md) before calling a
+site live.
 
 ---
 
