@@ -11,6 +11,26 @@ Version-specific regression notes and historical field evidence are preserved in
 [`docs/TESTING-HISTORY.md`](docs/TESTING-HISTORY.md). The production acceptance
 procedure is maintained separately in [`VALIDATION.md`](VALIDATION.md).
 
+## v1.20.1 R1A release-state contract and audit
+
+R1A records the approved release-state model and adds a measurable baseline without
+changing runtime version semantics yet.
+
+```bash
+scripts/test-release-state-invariants.sh
+scripts/check-release-state-invariants.sh audit
+```
+
+Expected during R1A:
+
+- the negative fixture test passes;
+- audit mode reports the known gaps without failing the branch;
+- enforcement mode remains intentionally unwired until R1B removes the duplicate
+  runtime version, fixes workflow bypasses, derives channel from context, and adds
+  immutable build identity.
+
+The release candidate may not be approved while enforcement mode reports gaps.
+
 ## Testing principles
 
 1. Use the repository workflow instead of assembling long validation command

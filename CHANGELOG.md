@@ -1,5 +1,7 @@
 ## Unreleased
 ### Added
+- Added the formal `docs/RELEASE-STATE.md` REL-001 contract.
+- Added an executable release-state auditor and hermetic negative tests.
 - Added `docs/TESTING-HISTORY.md` to preserve version-specific regression
   notes and historical field evidence outside the active testing guide.
 - Added `scripts/repo-workflow.sh` as the routine repository interface for
@@ -31,6 +33,9 @@
   proof validity.
 
 ### Changed
+- Adopted the v1.20.x reliability sequence before v1.21 machine-interface work.
+- Corrected stale README and roadmap current-work wording while preserving
+  existing v1.20.0 runtime and release semantics for the R1A audit phase.
 - Consolidated active testing, real-machine validation, release process,
   release automation, documentation navigation, and roadmap status around
   the completed repository workflow and the v1.21.0 API foundation.

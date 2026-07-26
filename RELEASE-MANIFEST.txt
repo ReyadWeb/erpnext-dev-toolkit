@@ -129,3 +129,6 @@ scripts/release-pretag-check.sh
 scripts/test-release-promote-stable.sh
 scripts/test-release-pretag-check.sh
 scripts/test-release-bootstrap-guidance.sh
+docs/RELEASE-STATE.md
+scripts/check-release-state-invariants.sh
+scripts/test-release-state-invariants.sh
