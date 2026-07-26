@@ -51,6 +51,7 @@ targets=(
   scripts/test-repo-workflow-pr.sh
   scripts/test-repo-workflow-release.sh
   scripts/test-repo-workflow-release-transaction.sh
+  scripts/test-repo-workflow-release-finalize.sh
   scripts/release-version.sh
   scripts/test-release-version.sh
   scripts/release-manifest-files.sh

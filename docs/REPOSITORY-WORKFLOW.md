@@ -246,6 +246,44 @@ for the exact tag, commit, and repository fingerprint. The proof becomes stale
 automatically when the commit or packaged tree changes. W3.2 never creates or
 pushes a tag.
 
+## Guarded tag publication and release verification
+
+W3.3 completes the release lifecycle without weakening the protected GitHub
+release pipeline.
+
+After `release pretag` succeeds for the exact clean commit, create and push one
+annotated tag with an explicit confirmation:
+
+```bash
+scripts/repo-workflow.sh release tag --confirm v1.21.0
+```
+
+The command requires exact version alignment, the correct release branch, a
+clean synchronized upstream, no existing local or remote tag, and the W3.2
+pre-tag proof for the exact tag, commit, and tree fingerprint. It never
+force-updates or overwrites a tag.
+
+Watch the protected release workflow:
+
+```bash
+scripts/repo-workflow.sh release watch v1.21.0
+```
+
+After the workflow succeeds, verify the published release:
+
+```bash
+scripts/repo-workflow.sh release verify v1.21.0
+```
+
+Verification checks the remote annotated tag, workflow commit and conclusion,
+GitHub release state, required assets, stable Latest status, safe archive paths,
+standalone-to-bundle asset equality, canonical version identity, whole-tree
+checksums, the pinned maintainer fingerprint, and the detached checksum
+signature.
+
+Tagging remains a separate explicit irreversible boundary after metadata review,
+PR validation, merge, and strict pre-tag proof.
+
 ## Validation modes
 
 | Mode | Intended use | Local work |

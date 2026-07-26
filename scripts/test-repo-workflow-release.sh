@@ -153,7 +153,7 @@ assert_contains "${tmp}/published.out" "Remote tag                   exists"
 assert_contains "${tmp}/published.out" "GitHub release               published;"
 assert_contains "${tmp}/published.out" "Static readiness             complete"
 assert_contains "${tmp}/published.out" \
-  "No release action required for v1.20.0; the GitHub release is published."
+  "scripts/repo-workflow.sh release verify v1.20.0"
 
 git tag -d v1.20.0 >/dev/null
 git push origin :refs/tags/v1.20.0 >/dev/null 2>&1
