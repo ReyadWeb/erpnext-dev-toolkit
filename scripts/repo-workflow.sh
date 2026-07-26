@@ -48,6 +48,8 @@ Usage:
   scripts/repo-workflow.sh pr status
   scripts/repo-workflow.sh pr checks [--watch] [--required]
   scripts/repo-workflow.sh pr merge [--merge|--squash|--rebase] [--admin] [--delete-branch]
+  scripts/repo-workflow.sh release status [--offline]
+  scripts/repo-workflow.sh release explain [--offline]
   scripts/repo-workflow.sh resume
   scripts/repo-workflow.sh clean-cache
 
@@ -57,6 +59,7 @@ Commands:
   check        Regenerate checksums and run the minimum safe local validation.
   publish      Check, stage, commit, and push the current feature branch.
   pr           Create, inspect, check, and merge the current branch pull request.
+  release      Inspect release identity, synchronization, tags, and readiness.
   resume       Resume the last failed check or publish operation.
   clean-cache  Remove cached full-validation results and saved resume state.
 
@@ -143,7 +146,7 @@ risk_reason_for() {
     scripts/release-*.sh | scripts/test-release-*.sh)
       echo "release transaction or release regression path"
       ;;
-    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh)
+    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh)
       echo "repository workflow implementation"
       ;;
     SECURITY.md | docs/security/RELEASE-TRUST.md | docs/RELEASE-AUTOMATION.md | docs/RELEASE-PROCESS.md)
@@ -367,9 +370,10 @@ select_focused_tests() {
   declare -gA FOCUSED_TESTS=()
   for file in "${CHANGED_FILES[@]}"; do
     case "$file" in
-      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh)
+      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh)
         add_focused_test scripts/test-repo-workflow.sh
         add_focused_test scripts/test-repo-workflow-pr.sh
+        add_focused_test scripts/test-repo-workflow-release.sh
         ;;
       VERSION | erpnext-dev.sh | scripts/release-version.sh | scripts/test-release-version.sh)
         add_focused_test scripts/test-release-version.sh
@@ -894,6 +898,363 @@ cmd_pr() {
   esac
 }
 
+parse_release_read_options() {
+  RELEASE_OFFLINE=0
+
+  while (($# > 0)); do
+    case "$1" in
+      --offline) RELEASE_OFFLINE=1 ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown release status option: $1" ;;
+    esac
+    shift
+  done
+}
+
+release_expected_branch() {
+  local version="$1" channel="$2" base_version
+  base_version="${version%%-*}"
+
+  case "$channel" in
+    stable) printf '%s\n' "main" ;;
+    *) printf '%s\n' "release/v${base_version}" ;;
+  esac
+}
+
+release_refresh_remote() {
+  if [[ "$RELEASE_OFFLINE" == "1" ]]; then
+    RELEASE_REMOTE_REFRESH="skipped (--offline)"
+    return 0
+  fi
+
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    RELEASE_REMOTE_REFRESH="unavailable (origin is missing)"
+    return 0
+  fi
+
+  if git fetch --quiet origin --prune --tags; then
+    RELEASE_REMOTE_REFRESH="updated"
+  else
+    RELEASE_REMOTE_REFRESH="failed"
+  fi
+}
+
+release_collect_sync_state() {
+  local counts
+
+  RELEASE_UPSTREAM="$(
+    git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' \
+      2>/dev/null || true
+  )"
+  RELEASE_AHEAD="unknown"
+  RELEASE_BEHIND="unknown"
+  RELEASE_SYNC="no upstream"
+
+  if [[ -n "$RELEASE_UPSTREAM" ]]; then
+    counts="$(git rev-list --left-right --count "${RELEASE_UPSTREAM}...HEAD")"
+    RELEASE_BEHIND="${counts%%[[:space:]]*}"
+    RELEASE_AHEAD="${counts##*[[:space:]]}"
+    RELEASE_SYNC="${RELEASE_UPSTREAM}; ahead ${RELEASE_AHEAD}, behind ${RELEASE_BEHIND}"
+  fi
+}
+
+release_collect_remote_tag_state() {
+  local rc
+
+  if [[ "$RELEASE_OFFLINE" == "1" ]]; then
+    RELEASE_REMOTE_TAG="unchecked (--offline)"
+    return 0
+  fi
+
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    RELEASE_REMOTE_TAG="unavailable (origin is missing)"
+    return 0
+  fi
+
+  set +e
+  git ls-remote --exit-code --tags origin \
+    "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1
+  rc=$?
+  set -e
+
+  case "$rc" in
+    0) RELEASE_REMOTE_TAG="exists" ;;
+    2) RELEASE_REMOTE_TAG="missing" ;;
+    *) RELEASE_REMOTE_TAG="unavailable" ;;
+  esac
+}
+
+release_collect_github_release_state() {
+  local output rc url is_draft is_prerelease published_at state
+
+  if [[ "$RELEASE_OFFLINE" == "1" ]]; then
+    RELEASE_GITHUB_RELEASE="unchecked (--offline)"
+    RELEASE_GITHUB_RELEASE_STATE="unchecked"
+    return 0
+  fi
+
+  if ! command -v gh >/dev/null 2>&1; then
+    RELEASE_GITHUB_RELEASE="unavailable (gh is not installed)"
+    RELEASE_GITHUB_RELEASE_STATE="unavailable"
+    return 0
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    RELEASE_GITHUB_RELEASE="unavailable (gh is not authenticated)"
+    RELEASE_GITHUB_RELEASE_STATE="unavailable"
+    return 0
+  fi
+
+  set +e
+  output="$(
+    gh release view "$RELEASE_TAG" \
+      --json url,isDraft,isPrerelease,publishedAt \
+      --jq '"\(.url)|\(.isDraft)|\(.isPrerelease)|\(.publishedAt // "")"' \
+      2>/dev/null
+  )"
+  rc=$?
+  set -e
+
+  if ((rc != 0)); then
+    RELEASE_GITHUB_RELEASE="missing"
+    RELEASE_GITHUB_RELEASE_STATE="missing"
+    return 0
+  fi
+
+  IFS='|' read -r url is_draft is_prerelease published_at <<<"$output"
+  if [[ "$is_draft" == "true" ]]; then
+    state="draft"
+  elif [[ "$is_prerelease" == "true" ]]; then
+    state="prerelease"
+  else
+    state="published"
+  fi
+
+  RELEASE_GITHUB_RELEASE_STATE="$state"
+  RELEASE_GITHUB_RELEASE="${state}"
+  [[ -z "$published_at" ]] || RELEASE_GITHUB_RELEASE+="; ${published_at}"
+  [[ -z "$url" ]] || RELEASE_GITHUB_RELEASE+="; ${url}"
+}
+
+release_add_blocker() {
+  RELEASE_BLOCKERS+=("$1")
+}
+
+release_compute_next_action() {
+  local pretag_command
+
+  pretag_command="scripts/release-pretag-check.sh ${RELEASE_TAG}"
+  [[ "$RELEASE_OFFLINE" == "0" ]] || pretag_command+=" --offline"
+
+  if [[ "$RELEASE_GITHUB_RELEASE_STATE" == "published" ]]; then
+    RELEASE_READINESS="complete"
+    RELEASE_NEXT_ACTION="No release action required for ${RELEASE_TAG}; the GitHub release is published."
+    return 0
+  fi
+
+  if [[ "$RELEASE_REMOTE_TAG" == "exists" ]]; then
+    RELEASE_READINESS="tag exists; release verification required"
+    RELEASE_NEXT_ACTION="Inspect the existing ${RELEASE_TAG} tag and GitHub release; do not recreate the tag."
+    return 0
+  fi
+
+  if [[ "$RELEASE_LOCAL_TAG" == "exists" ]]; then
+    RELEASE_READINESS="local tag exists; blocked"
+    RELEASE_NEXT_ACTION="Inspect or remove the unpushed local ${RELEASE_TAG} tag before continuing."
+    return 0
+  fi
+
+  if ((${#RELEASE_BLOCKERS[@]} > 0)); then
+    RELEASE_READINESS="blocked (${#RELEASE_BLOCKERS[@]} condition(s))"
+
+    if [[ "$RELEASE_WORKTREE" != "clean" ]]; then
+      RELEASE_NEXT_ACTION='Publish or commit the current changes before release validation.'
+    elif [[ "$RELEASE_BRANCH" != "$RELEASE_EXPECTED_BRANCH" ]]; then
+      if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
+        RELEASE_NEXT_ACTION="Merge the current branch, then switch to synchronized main."
+      else
+        RELEASE_NEXT_ACTION="Switch to or create ${RELEASE_EXPECTED_BRANCH}."
+      fi
+    elif [[ "$RELEASE_UPSTREAM" == "" ]]; then
+      RELEASE_NEXT_ACTION="Push ${RELEASE_BRANCH} and configure origin/${RELEASE_BRANCH} as its upstream."
+    elif [[ "$RELEASE_BEHIND" != "0" || "$RELEASE_AHEAD" != "0" ]]; then
+      RELEASE_NEXT_ACTION="Synchronize ${RELEASE_BRANCH} with ${RELEASE_UPSTREAM}."
+    else
+      RELEASE_NEXT_ACTION="Resolve the blocking conditions listed by: ${PROGRAM} release explain"
+    fi
+    return 0
+  fi
+
+  if [[ "$RELEASE_OFFLINE" == "1" ]]; then
+    RELEASE_READINESS="offline static checks passed"
+  elif [[ "$RELEASE_REMOTE_TAG" == "unavailable" ||
+    "$RELEASE_REMOTE_REFRESH" == "failed" ]]; then
+    RELEASE_READINESS="remote state unavailable"
+    RELEASE_NEXT_ACTION="Restore access to origin, then rerun: ${PROGRAM} release status"
+    return 0
+  else
+    RELEASE_READINESS="static checks passed"
+  fi
+
+  RELEASE_NEXT_ACTION="$pretag_command"
+}
+
+release_collect_state() {
+  local changed_count fingerprint
+
+  [[ -x scripts/release-version.sh ]] \
+    || fail "scripts/release-version.sh is missing or not executable"
+
+  RELEASE_VERSION="$(scripts/release-version.sh read)"
+  RELEASE_RUNTIME_VERSION="$(scripts/release-version.sh script)"
+  RELEASE_CHANNEL="$(scripts/release-version.sh channel)"
+  RELEASE_TAG="$(scripts/release-version.sh tag)"
+  RELEASE_BRANCH="$(branch_name)"
+  RELEASE_EXPECTED_BRANCH="$(
+    release_expected_branch "$RELEASE_VERSION" "$RELEASE_CHANNEL"
+  )"
+
+  collect_changed_files
+  changed_count="${#CHANGED_FILES[@]}"
+  if ((changed_count == 0)); then
+    RELEASE_WORKTREE="clean"
+  else
+    RELEASE_WORKTREE="${changed_count} changed file(s)"
+  fi
+
+  if [[ "$RELEASE_VERSION" == "$RELEASE_RUNTIME_VERSION" ]]; then
+    RELEASE_VERSION_ALIGNMENT="OK"
+  else
+    RELEASE_VERSION_ALIGNMENT="MISMATCH"
+  fi
+
+  release_refresh_remote
+  release_collect_sync_state
+
+  if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+    RELEASE_LOCAL_TAG="exists"
+  else
+    RELEASE_LOCAL_TAG="missing"
+  fi
+
+  release_collect_remote_tag_state
+  release_collect_github_release_state
+
+  fingerprint="$(tree_fingerprint)"
+  if cache_matches full "$fingerprint"; then
+    RELEASE_FULL_VALIDATION="cached for exact tree"
+  else
+    RELEASE_FULL_VALIDATION="not cached for exact tree"
+  fi
+
+  RELEASE_BLOCKERS=()
+  [[ "$RELEASE_VERSION_ALIGNMENT" == "OK" ]] \
+    || release_add_blocker \
+      "VERSION ${RELEASE_VERSION} does not match SCRIPT_VERSION ${RELEASE_RUNTIME_VERSION}"
+  [[ "$RELEASE_WORKTREE" == "clean" ]] \
+    || release_add_blocker "working tree is not clean"
+  [[ -n "$RELEASE_BRANCH" ]] \
+    || release_add_blocker "repository is in detached HEAD state"
+  [[ "$RELEASE_BRANCH" == "$RELEASE_EXPECTED_BRANCH" ]] \
+    || release_add_blocker \
+      "current branch ${RELEASE_BRANCH:-detached HEAD} does not match expected ${RELEASE_EXPECTED_BRANCH}"
+
+  if [[ -z "$RELEASE_UPSTREAM" ]]; then
+    release_add_blocker "current branch has no upstream"
+  else
+    [[ "$RELEASE_UPSTREAM" == "origin/${RELEASE_BRANCH}" ]] \
+      || release_add_blocker \
+        "upstream ${RELEASE_UPSTREAM} is not origin/${RELEASE_BRANCH}"
+    [[ "$RELEASE_BEHIND" == "0" ]] \
+      || release_add_blocker \
+        "current branch is ${RELEASE_BEHIND} commit(s) behind ${RELEASE_UPSTREAM}"
+    [[ "$RELEASE_AHEAD" == "0" ]] \
+      || release_add_blocker \
+        "current branch is ${RELEASE_AHEAD} commit(s) ahead of ${RELEASE_UPSTREAM}"
+  fi
+
+  [[ "$RELEASE_LOCAL_TAG" == "missing" ]] \
+    || release_add_blocker "local tag already exists: ${RELEASE_TAG}"
+  if [[ "$RELEASE_OFFLINE" == "0" ]]; then
+    [[ "$RELEASE_REMOTE_TAG" != "exists" ]] \
+      || release_add_blocker "remote tag already exists: ${RELEASE_TAG}"
+  fi
+
+  release_compute_next_action
+}
+
+cmd_release_status() {
+  parse_release_read_options "$@"
+  release_collect_state
+
+  heading "Release Status"
+  info "Version" "$RELEASE_VERSION"
+  info "Runtime version" "$RELEASE_RUNTIME_VERSION"
+  info "Version alignment" "$RELEASE_VERSION_ALIGNMENT"
+  info "Channel" "$RELEASE_CHANNEL"
+  info "Expected tag" "$RELEASE_TAG"
+  info "Current branch" "${RELEASE_BRANCH:-detached HEAD}"
+  info "Expected branch" "$RELEASE_EXPECTED_BRANCH"
+  info "Working tree" "$RELEASE_WORKTREE"
+  info "Upstream" "${RELEASE_UPSTREAM:-none}"
+  info "Branch sync" "$RELEASE_SYNC"
+  info "Remote refresh" "$RELEASE_REMOTE_REFRESH"
+  info "Full validation" "$RELEASE_FULL_VALIDATION"
+  info "Local tag" "$RELEASE_LOCAL_TAG"
+  info "Remote tag" "$RELEASE_REMOTE_TAG"
+  info "GitHub release" "$RELEASE_GITHUB_RELEASE"
+  info "Static readiness" "$RELEASE_READINESS"
+  info "Next action" "$RELEASE_NEXT_ACTION"
+}
+
+cmd_release_explain() {
+  local blocker
+
+  parse_release_read_options "$@"
+  release_collect_state
+
+  heading "Release Readiness Explanation"
+  info "Version" "$RELEASE_VERSION"
+  info "Channel" "$RELEASE_CHANNEL"
+  info "Expected identity" "${RELEASE_TAG} from ${RELEASE_EXPECTED_BRANCH}"
+  info "Static readiness" "$RELEASE_READINESS"
+
+  echo
+  if [[ "$RELEASE_GITHUB_RELEASE_STATE" == "published" ]]; then
+    echo "The current canonical version already has a published GitHub release."
+  elif [[ "$RELEASE_REMOTE_TAG" == "exists" ]]; then
+    echo "The release tag already exists remotely. Tag recreation is blocked."
+  elif ((${#RELEASE_BLOCKERS[@]} == 0)); then
+    echo "No static release blockers were detected."
+    echo "The strict pre-tag validator must still verify the complete release tree."
+  else
+    echo "Blocking conditions:"
+    for blocker in "${RELEASE_BLOCKERS[@]}"; do
+      printf '  - %s\n' "$blocker"
+    done
+  fi
+
+  echo
+  info "Recommended next action" "$RELEASE_NEXT_ACTION"
+}
+
+cmd_release() {
+  local subcommand="${1:-status}"
+  if (($# > 0)); then
+    shift
+  fi
+
+  case "$subcommand" in
+    status) cmd_release_status "$@" ;;
+    explain) cmd_release_explain "$@" ;;
+    -h | --help | help) usage ;;
+    *) fail "unknown release command: $subcommand" ;;
+  esac
+}
+
 cmd_resume() {
   local action mode stage message branch
   action="$(state_value action)"
@@ -949,6 +1310,7 @@ main() {
     check) cmd_check "$@" ;;
     publish) cmd_publish "$@" ;;
     pr) cmd_pr "$@" ;;
+    release) cmd_release "$@" ;;
     resume) cmd_resume "$@" ;;
     clean-cache) cmd_clean_cache "$@" ;;
     -h | --help | help) usage ;;
