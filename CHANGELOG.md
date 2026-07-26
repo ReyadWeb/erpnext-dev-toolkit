@@ -11,12 +11,19 @@
   required-check watching, and explicit merge strategies to
   `scripts/repo-workflow.sh`.
 - Added hermetic pull-request workflow tests using a fake GitHub CLI.
+- Added read-only release status and explanation commands covering release
+  identity, branch policy, synchronization, exact-tree validation cache, tags,
+  GitHub release state, blockers, and the next safe action.
+- Added hermetic release-intelligence regression coverage for stable, beta,
+  offline, dirty-tree, existing-tag, and published-release states.
 
 ### Changed
 - Extended release validation, ShellCheck coverage, release manifests, and
   packaged documentation to include the repository workflow foundation.
 - Extended the repository workflow documentation and release validation
   to cover the pull-request lifecycle.
+- Extended the repository workflow, release manifest, validation, and documentation
+  with the W3.1 read-only release-intelligence foundation.
 
 ## v1.20.0 - Engine Stability and Reliability Foundation
 

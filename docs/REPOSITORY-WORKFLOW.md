@@ -149,6 +149,45 @@ scripts/repo-workflow.sh pr merge --delete-branch
 only after reviewing the successful required checks and confirming that the
 remaining restriction is an intentional solo-maintainer or emergency override.
 
+## Read-only release intelligence
+
+W3.1 adds read-only release inspection without changing release metadata,
+creating commits, or creating tags.
+
+Show the current release state:
+
+```bash
+scripts/repo-workflow.sh release status
+```
+
+Explain every blocking condition:
+
+```bash
+scripts/repo-workflow.sh release explain
+```
+
+Use local-only inspection when the network or GitHub CLI is unavailable:
+
+```bash
+scripts/repo-workflow.sh release status --offline
+scripts/repo-workflow.sh release explain --offline
+```
+
+The status includes:
+
+- Canonical and runtime versions
+- Release channel and expected tag
+- Current and expected release branches
+- Working-tree and upstream synchronization
+- Exact-tree full-validation cache state
+- Local and remote tag state
+- GitHub release state when `gh` is available and authenticated
+- Static readiness and the next safe command
+
+These commands are advisory. They do not replace
+`scripts/release-pretag-check.sh`, which remains the strict release-tree,
+bundle, checksum, runtime, branch, synchronization, and tag-availability gate.
+
 ## Validation modes
 
 | Mode | Intended use | Local work |
