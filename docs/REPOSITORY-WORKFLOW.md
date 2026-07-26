@@ -396,9 +396,11 @@ beta
 release/*
 ```
 
-Release preparation and tag publication continue to use the dedicated
-transactional release scripts and protected GitHub workflows. The repository
-workflow wrapper does not create or publish release tags.
+Routine publication remains separate from release publication. Release metadata
+uses the explicit reviewed `release publish` gate, and `release tag` creates one
+guarded annotated tag only after exact pre-tag proof. Protected GitHub workflows
+remain authoritative for integration, signing, publication, and release-asset
+verification.
 
 ## CI responsibility
 

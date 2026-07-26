@@ -12,6 +12,7 @@ focused documents.
 | Understand the toolkit and choose a deployment | [Project README](../README.md) |
 | Validate a local VM or public server | [Validation runbook](../VALIDATION.md) |
 | Test a change or release | [Testing guide](../TESTING.md) |
+| Review historical test evidence | [Testing history](TESTING-HISTORY.md) |
 | Review security policy and release trust | [Security policy](../SECURITY.md) |
 | See active development priorities | [Roadmap](../ROADMAP.md) |
 | Review release history | [Changelog](../CHANGELOG.md) |
@@ -42,9 +43,10 @@ quickstart and keeps the host mapping, HTTPS, host-OS, and stable-IP guidance vi
 - [Development guide](DEVELOPMENT.md)
 - [Release validation](../TESTING.md)
 
-Detailed engine-specific guides will be separated incrementally during the
-documentation refresh. Existing README anchors remain in place while content is
-moved, so established links do not break.
+The active testing guide defines automated validation, while the validation
+runbook defines real-machine acceptance for native and Docker deployments. The
+historical testing record is preserved separately so current guidance remains
+concise.
 
 ## Operations and reliability
 
@@ -98,6 +100,7 @@ installation slots.
 - [Release process](RELEASE-PROCESS.md)
 - [Active roadmap](../ROADMAP.md)
 - [Roadmap history](ROADMAP-HISTORY.md)
+- [Testing history](TESTING-HISTORY.md)
 - [Roadmap board](ROADMAP-BOARD.md)
 - [Community board](COMMUNITY-BOARD.md)
 
@@ -129,7 +132,7 @@ Supporting references:
 
 ## Documentation organisation
 
-The documentation refresh follows these rules:
+The documentation structure follows these rules:
 
 1. `README.md` remains the visual product landing page and quickstart.
 2. The README keeps its menu, major user-facing sections, screenshots, and diagrams.
