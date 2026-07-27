@@ -49,9 +49,12 @@ required=(
   "SHA256SUMS"
   "erpnext-dev.sh"
   "RELEASE-MANIFEST.txt"
+  "RELEASE-ASSETS.sha256"
+  "erpnext-dev-signing-key.asc"
+  "bootstrap-verify.sh"
 )
 if (( stable == 1 )); then
-  required+=("SHA256SUMS.asc")
+  required+=("SHA256SUMS.asc" "RELEASE-ASSETS.sha256.asc")
   [[ "$prerelease" == "false" ]] || note_fail "stable tag ${tag} must not be marked prerelease"
 fi
 

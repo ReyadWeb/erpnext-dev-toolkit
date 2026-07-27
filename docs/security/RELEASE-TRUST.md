@@ -12,10 +12,15 @@ A normal stable release publishes:
 
 ```text
 erpnext-dev-vX.Y.Z.tar.gz
+erpnext-dev-vX.Y.Z.BUILD-INFO.json
 erpnext-dev.sh
 RELEASE-MANIFEST.txt
 SHA256SUMS
 SHA256SUMS.asc
+RELEASE-ASSETS.sha256
+RELEASE-ASSETS.sha256.asc
+erpnext-dev-signing-key.asc
+bootstrap-verify.sh
 ```
 
 The `.tar.gz` archive is the supported complete toolkit. GitHub's automatically generated source archives are not the release bundle.
@@ -64,65 +69,35 @@ Ed25519 signing key
 
 The public key can travel with the release archive. The fingerprint is the trust anchor and should be checked through an independent trusted channel when establishing trust for the first time.
 
-## Verify a downloaded release
+## Verify a downloaded release before privilege
 
-Replace `vX.Y.Z` with the exact release tag.
+Replace `vX.Y.Z` with the exact release tag. The verifier runs as the ordinary
+user and does not execute toolkit code with `sudo`.
 
 ```bash
 VERSION="vX.Y.Z"
-workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
-cd "$workdir" || exit 1
-
-base="https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}"
-archive="erpnext-dev-${VERSION}.tar.gz"
-
-curl -fsSLO "${base}/${archive}"
-
-if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
-  echo "Unsafe path detected in release archive." >&2
-  exit 1
-fi
-
-tar --no-same-owner --no-same-permissions -xzf "$archive"
-cd "erpnext-dev-${VERSION}" || exit 1
-
-expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
-actual_fpr="$(
-  gpg --batch --with-colons \
-    --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null |
-  awk -F: '$1 == "fpr" { print $10; exit }'
-)"
-
-test "$actual_fpr" = "$expected_fpr"
-
-gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
-chmod 700 "$gnupg_home"
-
-GNUPGHOME="$gnupg_home" \
-  gpg --batch --quiet \
-  --import docs/erpnext-dev-signing-key.asc
-
-GNUPGHOME="$gnupg_home" \
-  gpg --batch \
-  --verify SHA256SUMS.asc SHA256SUMS
-
-sha256sum -c SHA256SUMS
-rm -rf "$gnupg_home"
+curl -fsSLO \
+  "https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}/bootstrap-verify.sh"
+chmod +x bootstrap-verify.sh
+./bootstrap-verify.sh "$VERSION"
 ```
 
-The archive contains its own signature, checksum inventory, manifest, public key, entrypoint, runtime modules, scripts, and packaged documentation.
+Before printing a privileged command, the verifier uses the already-installed
+system toolchain to check:
 
-## Verify with the toolkit
+1. the pinned signing-key fingerprint;
+2. the detached signature over `RELEASE-ASSETS.sha256`;
+3. the exact archive digest from that signed external inventory;
+4. archive paths and link policy;
+5. the extracted internal `SHA256SUMS`;
+6. immutable `BUILD-INFO.json` tag, channel, archive and payload identity.
 
-From the extracted archive:
+For first-use trust establishment, inspect `bootstrap-verify.sh` and confirm the
+pinned fingerprint through an independent trusted channel. The verifier itself
+never requests privilege. Only after verification succeeds should an operator
+review the extracted tree and run the required toolkit command explicitly.
 
-```bash
-sudo ./erpnext-dev.sh verify-signature
-sha256sum -c SHA256SUMS
-sudo ./erpnext-dev.sh verify-toolkit
-```
-
-From an installed toolkit:
+## Verify an already installed toolkit
 
 ```bash
 sudo erpnext-dev verify-toolkit

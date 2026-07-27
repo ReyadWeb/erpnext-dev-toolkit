@@ -55,6 +55,12 @@ pass() {
   || fail "scripts/test-release-pretag-check.sh is missing or not executable"
 [[ -x scripts/test-release-bootstrap-guidance.sh ]] \
   || fail "scripts/test-release-bootstrap-guidance.sh is missing or not executable"
+[[ -x scripts/release-asset-inventory.sh ]] \
+  || fail "scripts/release-asset-inventory.sh is missing or not executable"
+[[ -x scripts/bootstrap-verify.sh ]] \
+  || fail "scripts/bootstrap-verify.sh is missing or not executable"
+[[ -x scripts/test-release-asset-trust.sh ]] \
+  || fail "scripts/test-release-asset-trust.sh is missing or not executable"
 [[ -x scripts/repo-workflow.sh ]] \
   || fail "scripts/repo-workflow.sh is missing or not executable"
 [[ -x scripts/test-repo-workflow.sh ]] \
@@ -140,6 +146,9 @@ bash -n scripts/release-pretag-check.sh
 bash -n scripts/test-release-promote-stable.sh
 bash -n scripts/test-release-pretag-check.sh
 bash -n scripts/test-release-bootstrap-guidance.sh
+bash -n scripts/release-asset-inventory.sh
+bash -n scripts/bootstrap-verify.sh
+bash -n scripts/test-release-asset-trust.sh
 bash -n scripts/repo-workflow.sh
 bash -n scripts/test-repo-workflow.sh
 bash -n scripts/test-repo-workflow-work.sh
@@ -180,7 +189,10 @@ chmod +x \
   scripts/check-release-artifact-consistency.sh \
   scripts/test-release-manifest.sh \
   scripts/test-release-artifact-consistency.sh \
-  scripts/test-release-bootstrap-guidance.sh
+  scripts/test-release-bootstrap-guidance.sh \
+  scripts/release-asset-inventory.sh \
+  scripts/bootstrap-verify.sh \
+  scripts/test-release-asset-trust.sh
 chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-work.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh
 
 scripts/test-release-metadata.sh
@@ -197,6 +209,9 @@ pass "pre-tag repository gate tests passed"
 
 scripts/test-release-bootstrap-guidance.sh
 pass "signed release bootstrap guidance tests passed"
+
+scripts/test-release-asset-trust.sh
+pass "pre-privilege release asset trust tests passed"
 
 scripts/test-repo-workflow.sh
 pass "repository workflow transaction tests passed"
@@ -216,11 +231,17 @@ pass "repository release finalization workflow tests passed"
 scripts/check-module-consistency.sh
 pass "module consistency verified"
 
-if command -v shellcheck >/dev/null 2>&1; then
+if [[ "${SKIP_SHELLCHECK:-0}" == "1" ]]; then
+  command -v shellcheck >/dev/null 2>&1 \
+    || fail "SKIP_SHELLCHECK=1 requires shellcheck to be installed"
+  pass "shellcheck already completed by the calling strict workflow"
+elif command -v shellcheck >/dev/null 2>&1; then
   scripts/run-shellcheck.sh
   pass "shellcheck passed"
 else
-  pass "skipped shellcheck (not installed)"
+  [[ "${RELEASE_STRICT:-0}" != "1" ]] \
+    || fail "RELEASE_STRICT: shellcheck is required and may not be skipped"
+  pass "skipped shellcheck in contributor mode (not installed)"
 fi
 
 version_output="$(./erpnext-dev.sh version)"

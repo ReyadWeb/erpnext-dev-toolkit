@@ -1,4 +1,9 @@
 ## Unreleased
+
+### Security
+
+- Added a signed external release-asset inventory and a non-privileged bootstrap verifier so archive authenticity, digest, path safety, internal checksums, and immutable build identity are established before any toolkit code runs with `sudo`.
+- Removed the CI `curl | sudo tar` ShellCheck installation path and made strict release validation fail closed when ShellCheck is unavailable or falsely marked as skipped.
 ### Added
 - Added the formal `docs/RELEASE-STATE.md` REL-001 contract.
 - Added an executable release-state auditor and hermetic negative tests.

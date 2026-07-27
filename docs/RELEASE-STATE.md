@@ -186,11 +186,11 @@ system toolchain has verified:
 
 ### R1C — Pre-privilege trust and CI supply chain
 
-- Publish an external signed release-asset inventory.
-- Add a non-privileged bootstrap verifier.
-- Replace every `curl | sudo tar` or equivalent CI pattern with a pinned,
-  checksum-verified installer.
-- Make normal install, recovery install, README, SECURITY, and release notes use
+- [x] Publish an external signed release-asset inventory.
+- [x] Add a non-privileged bootstrap verifier.
+- [x] Replace every `curl | sudo tar` or equivalent CI pattern with a verified
+  package-manager or checksum-verified installer.
+- [x] Make normal install, recovery install, README, SECURITY, and release notes use
   one trust flow.
 
 ### R1D — Strict qualification and evidence
