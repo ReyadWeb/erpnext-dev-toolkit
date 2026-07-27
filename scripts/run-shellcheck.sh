@@ -46,8 +46,19 @@ targets=(
   lib/security.sh
   lib/update.sh
   scripts/validate-release.sh
+  scripts/repo-workflow.sh
+  scripts/test-repo-workflow.sh
+  scripts/test-repo-workflow-work.sh
+  scripts/test-repo-workflow-pr.sh
+  scripts/test-repo-workflow-release.sh
+  scripts/test-repo-workflow-release-transaction.sh
+  scripts/test-repo-workflow-release-finalize.sh
   scripts/release-version.sh
   scripts/test-release-version.sh
+  scripts/build-info.sh
+  scripts/test-build-info.sh
+  scripts/check-release-state-invariants.sh
+  scripts/test-release-state-invariants.sh
   scripts/release-manifest-files.sh
   scripts/check-release-artifact-consistency.sh
   scripts/test-release-manifest.sh

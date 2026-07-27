@@ -312,7 +312,7 @@ toolkit_link_into_current() {
   mv -T "$tmp" "${root}/erpnext-dev.sh"
   chmod 755 "${root}/erpnext-dev.sh" 2>/dev/null || true
 
-  for name in lib SHA256SUMS SHA256SUMS.asc RELEASE-MANIFEST.txt docs; do
+  for name in lib VERSION BUILD-INFO.json SHA256SUMS SHA256SUMS.asc RELEASE-MANIFEST.txt docs; do
     [[ -e "${root}/current/${name}" ]] || continue
     rm -rf "${root:?}/${name}"
     ln -sfn "current/${name}" "${root}/${name}"
@@ -460,6 +460,10 @@ update_toolkit() {
     curl -fsSL "${release_base}/SHA256SUMS" -o "${tree}/SHA256SUMS" || fail "Failed to download SHA256SUMS from ${mutable_branch}."
     checksum_file="${tree}/SHA256SUMS"
 
+    log "Downloading canonical VERSION"
+    curl -fsSL "${release_base}/VERSION" -o "${tree}/VERSION" || fail "Failed to download VERSION from ${mutable_branch}."
+    verify_release_file_checksum "$checksum_file" "VERSION" "${tree}/VERSION"
+
     log "Downloading erpnext-dev.sh"
     curl -fsSL "${release_base}/erpnext-dev.sh" -o "${tree}/erpnext-dev.sh" || fail "Failed to download erpnext-dev.sh from ${mutable_branch}."
     verify_release_file_checksum "$checksum_file" "erpnext-dev.sh" "${tree}/erpnext-dev.sh"
@@ -488,6 +492,16 @@ update_toolkit() {
     log "Verifying whole-tree checksums"
     ( cd "$tree" && sha256sum -c SHA256SUMS >/dev/null ) || fail "Checksum verification failed for the ${version} bundle."
     status_line "Checksums" "OK" "every packaged file matches SHA256SUMS"
+
+    [[ -x "${tree}/scripts/build-info.sh" ]] \
+      || fail "Release bundle is missing scripts/build-info.sh."
+    "${tree}/scripts/build-info.sh" verify \
+      --root "$tree" \
+      --archive "erpnext-dev-${version}.tar.gz" \
+      --expected-tag "$version" \
+      --expected-channel "$("${tree}/scripts/release-version.sh" channel-for-tag "$version")" >/dev/null \
+      || fail "Release bundle identity verification failed for ${version}."
+    status_line "Build identity" "OK" "version, tag, channel, archive, commit, and payload digest"
 
     command -v gpg >/dev/null 2>&1 || fail "gpg is required for stable release updates. Install gnupg (Ubuntu: sudo apt-get install -y gnupg)."
     status_line "Signature gate" "INFO" "SHA256SUMS.asc + pinned maintainer fingerprint required"

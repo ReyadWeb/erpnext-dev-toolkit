@@ -24,12 +24,13 @@ pass() {
 
 # Same checksum targets as generate-release-checksums.sh (release tree only).
 checksum_targets=(
-  erpnext-dev.sh
+  VERSION erpnext-dev.sh
   lib/common.sh lib/ui.sh lib/config.sh lib/access.sh lib/local_ip.sh lib/frappe.sh lib/support.sh
   lib/backup.sh lib/ssl.sh lib/firewall.sh lib/apps.sh lib/health.sh
   lib/storage.sh lib/service.sh lib/status.sh lib/docker.sh lib/engine.sh lib/install.sh lib/ops.sh
   lib/dashboard.sh lib/healing.sh lib/menu.sh lib/security.sh lib/update.sh
   scripts/validate-release.sh scripts/run-shellcheck.sh
+  scripts/release-version.sh scripts/build-info.sh
   scripts/check-module-consistency.sh scripts/build-release-bundle.sh
   RELEASE-MANIFEST.txt
 )
@@ -73,8 +74,16 @@ build_synthetic_bundle() {
 
   cp -a "$TEST_PUBKEY" "${bundle_dir}/docs/erpnext-dev-signing-key.asc"
 
-  sed -i "s/^SCRIPT_VERSION=\"[^\"]*\"/SCRIPT_VERSION=\"${ver_num}\"/" "${bundle_dir}/erpnext-dev.sh"
+  printf '%s\n' "$ver_num" >"${bundle_dir}/VERSION"
   regenerate_checksums_in_tree "$bundle_dir"
+  "${bundle_dir}/scripts/build-info.sh" generate \
+    --source-root "$ROOT_DIR" \
+    --stage-root "$bundle_dir" \
+    --archive "erpnext-dev-${tag}.tar.gz" \
+    --tag "$tag" \
+    --channel stable \
+    --commit "$(git -C "$ROOT_DIR" rev-parse HEAD)" \
+    --built-at 2026-07-27T00:00:00Z >/dev/null
   sign_checksums_in_tree "$bundle_dir"
 
   bundle_path="${srv_root}/releases/download/${tag}/erpnext-dev-${tag}.tar.gz"

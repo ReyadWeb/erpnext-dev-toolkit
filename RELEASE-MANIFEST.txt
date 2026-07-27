@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit Release Manifest v1.20.0-beta.2
+# ERPNext Developer Toolkit Release Manifest v1.20.1-beta.1
 # One repository-relative path per line. Blank lines and # comments are ignored.
 # validate-release.sh verifies every listed path exists before a tag is published.
 
@@ -13,12 +13,26 @@ SUPPORT.md
 CHANGELOG.md
 SECURITY.md
 TESTING.md
+docs/TESTING-HISTORY.md
 VALIDATION.md
 ROADMAP.md
+docs/README.md
+docs/security/README.md
+docs/security/SECURITY-ARCHITECTURE.md
+docs/security/RELEASE-TRUST.md
+docs/security/PRODUCTION-HARDENING.md
+docs/security/SECURITY-HISTORY.md
 docs/HEALTH-ARCHITECTURE.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
+docs/ROADMAP-HISTORY.md
 scripts/validate-release.sh
+scripts/repo-workflow.sh
+scripts/test-repo-workflow.sh
+scripts/test-repo-workflow-pr.sh
+scripts/test-repo-workflow-release.sh
+scripts/test-repo-workflow-release-transaction.sh
+scripts/test-repo-workflow-release-finalize.sh
 scripts/test-health-snapshot.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
@@ -84,6 +98,7 @@ scripts/test-update-channel.sh
 .github/ISSUE_TEMPLATE/docs-improvement.yml
 docs/erpnext-dev-signing-key.asc
 docs/DEVELOPMENT.md
+docs/REPOSITORY-WORKFLOW.md
 docs/RELEASE-PROCESS.md
 docs/COMMUNITY-BOARD.md
 docs/assets/erpnext_dev_toolkit_banner.png
@@ -97,9 +112,14 @@ docs/assets/health-json-example.md
 docs/assets/health-metrics-example.txt
 docs/assets/menu-ui-mockup.png
 scripts/assert-github-release-assets.sh
+scripts/bootstrap-verify.sh
+scripts/release-asset-inventory.sh
+scripts/test-release-asset-trust.sh
 VERSION
 scripts/release-version.sh
 scripts/test-release-version.sh
+scripts/test-build-info.sh
+scripts/build-info.sh
 docs/RELEASE-AUTOMATION.md
 scripts/release-manifest-files.sh
 scripts/check-release-artifact-consistency.sh
@@ -114,3 +134,7 @@ scripts/release-pretag-check.sh
 scripts/test-release-promote-stable.sh
 scripts/test-release-pretag-check.sh
 scripts/test-release-bootstrap-guidance.sh
+docs/RELEASE-STATE.md
+scripts/check-release-state-invariants.sh
+scripts/test-release-state-invariants.sh
+scripts/test-repo-workflow-work.sh

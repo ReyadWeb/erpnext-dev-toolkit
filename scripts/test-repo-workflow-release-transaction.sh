@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKFLOW_SOURCE="${ROOT_DIR}/scripts/repo-workflow.sh"
+
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
+
+assert_contains() {
+  local file="$1" expected="$2"
+  grep -Fq -- "$expected" "$file" || {
+    cat "$file" >&2
+    fail "missing expected output: $expected"
+  }
+}
+
+assert_log_contains() {
+  local expected="$1"
+  grep -Fq -- "$expected" "$RELEASE_FAKE_LOG" || {
+    cat "$RELEASE_FAKE_LOG" >&2
+    fail "missing expected release helper invocation: $expected"
+  }
+}
+
+[[ -x "$WORKFLOW_SOURCE" ]] || fail "workflow script is missing"
+
+tmp="$(mktemp -d /tmp/erpnext-repo-workflow-release-transaction-test.XXXXXX)"
+trap 'rm -rf "$tmp"' EXIT
+repo="${tmp}/repo"
+remote="${tmp}/remote.git"
+mkdir -p "$repo"
+git -c init.defaultBranch=main init --bare -q "$remote"
+git init -q -b main "$repo"
+
+cd "$repo"
+git config user.name "Workflow Release Transaction Test"
+git config user.email "workflow-release-transaction@example.invalid"
+git remote add origin "$remote"
+mkdir -p scripts docs
+cp "$WORKFLOW_SOURCE" scripts/repo-workflow.sh
+chmod +x scripts/repo-workflow.sh
+
+cat >VERSION <<'TXT'
+1.20.0
+TXT
+cat >erpnext-dev.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+SCRIPT_VERSION="1.20.0"
+SH_SCRIPT
+chmod +x erpnext-dev.sh
+
+cat >CHANGELOG.md <<'TXT'
+## v1.20.0
+TXT
+cat >README.md <<'TXT'
+Fixture
+TXT
+cat >ROADMAP.md <<'TXT'
+Fixture
+TXT
+cat >TESTING.md <<'TXT'
+Fixture
+TXT
+cat >RELEASE-MANIFEST.txt <<'TXT'
+VERSION
+erpnext-dev.sh
+CHANGELOG.md
+TXT
+: >SHA256SUMS
+
+cat >scripts/release-version.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+version="$(cat VERSION)"
+runtime="$(sed -nE 's/^SCRIPT_VERSION="([^"]+)".*/\1/p' erpnext-dev.sh | head -n1)"
+case "${1:-read}" in
+  read) echo "$version" ;;
+  script) echo "$runtime" ;;
+  tag) echo "v${version}" ;;
+  channel)
+    if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo stable
+    elif [[ "$version" == *-beta.* ]]; then
+      echo beta
+    elif [[ "$version" == *-rc.* ]]; then
+      echo rc
+    else
+      echo prerelease
+    fi
+    ;;
+  assert-script)
+    [[ "$version" == "$runtime" ]]
+    ;;
+  assert-tag)
+    [[ "${2:-}" == "v${version}" ]]
+    ;;
+  *) exit 2 ;;
+esac
+SH_SCRIPT
+chmod +x scripts/release-version.sh
+
+export RELEASE_FAKE_LOG="${tmp}/release-helper.log"
+: >"$RELEASE_FAKE_LOG"
+
+cat >scripts/release-prepare-beta.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'prepare-beta %q %q\n' "$1" "$2" >>"$RELEASE_FAKE_LOG"
+[[ "${RELEASE_FAKE_FAIL_PREPARE:-0}" != "1" ]] || exit 9
+printf '%s\n' "$1" >VERSION
+sed -i -E "s/^SCRIPT_VERSION=.*/SCRIPT_VERSION=\"$1\"/" erpnext-dev.sh
+printf '\n## v%s\n' "$1" >>CHANGELOG.md
+SH_SCRIPT
+chmod +x scripts/release-prepare-beta.sh
+
+cat >scripts/release-promote-stable.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'promote-stable %q %q\n' "$1" "$2" >>"$RELEASE_FAKE_LOG"
+printf '%s\n' "$1" >VERSION
+sed -i -E "s/^SCRIPT_VERSION=.*/SCRIPT_VERSION=\"$1\"/" erpnext-dev.sh
+printf '\n## v%s\n' "$1" >>CHANGELOG.md
+SH_SCRIPT
+chmod +x scripts/release-promote-stable.sh
+
+cat >scripts/release-pretag-check.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'pretag' >>"$RELEASE_FAKE_LOG"
+for arg in "$@"; do printf ' %q' "$arg" >>"$RELEASE_FAKE_LOG"; done
+printf '\n' >>"$RELEASE_FAKE_LOG"
+[[ -z "$(git status --porcelain --untracked-files=all)" ]]
+SH_SCRIPT
+chmod +x scripts/release-pretag-check.sh
+
+cat >scripts/build-release-bundle.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'build-bundle\n' >>"$RELEASE_FAKE_LOG"
+mkdir -p dist
+: >"dist/fixture.tar.gz"
+SH_SCRIPT
+chmod +x scripts/build-release-bundle.sh
+
+cat >scripts/generate-release-checksums.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+: >SHA256SUMS
+SH_SCRIPT
+cat >scripts/check-release-doc-alignment.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SH_SCRIPT
+cat >scripts/check-release-artifact-consistency.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SH_SCRIPT
+cat >scripts/validate-release.sh <<'SH_SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SH_SCRIPT
+chmod +x scripts/generate-release-checksums.sh \
+  scripts/check-release-doc-alignment.sh \
+  scripts/check-release-artifact-consistency.sh \
+  scripts/validate-release.sh
+
+git add -A
+git commit -m "Initial release transaction fixture" >/dev/null
+git push -u origin main >/dev/null 2>&1
+
+git switch -c feature/v1.21.0-workflow >/dev/null 2>&1
+git push -u origin feature/v1.21.0-workflow >/dev/null 2>&1
+
+scripts/repo-workflow.sh release prepare-beta \
+  1.21.0-beta.1 \
+  "Release transaction fixture" \
+  >"${tmp}/prepare.out"
+
+assert_contains "${tmp}/prepare.out" "Release Metadata Prepared"
+assert_contains "${tmp}/prepare.out" "review required before publication"
+assert_contains "${tmp}/prepare.out" "release publish --confirm-reviewed"
+assert_log_contains "prepare-beta 1.21.0-beta.1 Release\\ transaction\\ fixture"
+assert_log_contains "build-bundle"
+[[ "$(cat VERSION)" == "1.21.0-beta.1" ]] || fail "beta version was not prepared"
+[[ -n "$(git status --porcelain)" ]] || fail "beta preparation unexpectedly committed changes"
+
+set +e
+scripts/repo-workflow.sh release publish \
+  -m "Release: prepare v1.21.0-beta.1" \
+  >"${tmp}/publish-unconfirmed.out" 2>&1
+rc=$?
+set -e
+((rc != 0)) || fail "release publish succeeded without --confirm-reviewed"
+assert_contains "${tmp}/publish-unconfirmed.out" "requires --confirm-reviewed"
+
+scripts/repo-workflow.sh release publish \
+  --confirm-reviewed \
+  -m "Release: prepare v1.21.0-beta.1" \
+  >"${tmp}/publish.out"
+assert_contains "${tmp}/publish.out" "reviewed release metadata validated, committed, and pushed"
+[[ -z "$(git status --porcelain)" ]] || fail "release publish left a dirty tree"
+[[ "$(git log -1 --format=%s)" == "Release: prepare v1.21.0-beta.1" ]] \
+  || fail "unexpected beta release commit message"
+[[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/feature/v1.21.0-workflow)" ]] \
+  || fail "beta release branch was not pushed"
+
+git switch -c release/v1.21.0 >/dev/null 2>&1
+git push -u origin release/v1.21.0 >/dev/null 2>&1
+scripts/repo-workflow.sh release promote-stable \
+  1.21.0 \
+  "Release transaction fixture" \
+  >"${tmp}/promote.out"
+assert_contains "${tmp}/promote.out" "Release Metadata Prepared"
+assert_log_contains "promote-stable 1.21.0 Release\\ transaction\\ fixture"
+[[ "$(cat VERSION)" == "1.21.0" ]] || fail "stable version was not prepared"
+[[ -n "$(git status --porcelain)" ]] || fail "stable promotion unexpectedly committed changes"
+
+scripts/repo-workflow.sh release publish \
+  --confirm-reviewed \
+  -m "Release: promote v1.21.0 stable" \
+  >"${tmp}/stable-publish.out"
+[[ -z "$(git status --porcelain)" ]] || fail "stable publication left a dirty tree"
+[[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/release/v1.21.0)" ]] \
+  || fail "stable release branch was not pushed"
+
+scripts/repo-workflow.sh release pretag v1.21.0 --offline >"${tmp}/pretag.out"
+assert_contains "${tmp}/pretag.out" "Pre-Tag Proof Recorded"
+assert_contains "${tmp}/pretag.out" "no tag was created"
+assert_log_contains "pretag v1.21.0 --offline"
+[[ ! -e .git/refs/tags/v1.21.0 ]] || fail "W3.2 unexpectedly created a tag"
+[[ "$(cat .git/erpnext-workflow/release-pretag/tag)" == "v1.21.0" ]] \
+  || fail "pre-tag proof tag is incorrect"
+[[ "$(cat .git/erpnext-workflow/release-pretag/commit)" == "$(git rev-parse HEAD)" ]] \
+  || fail "pre-tag proof commit is incorrect"
+
+scripts/repo-workflow.sh release status --offline >"${tmp}/proof-release-branch.out"
+assert_contains "${tmp}/proof-release-branch.out" "Pre-tag proof                valid for exact commit"
+assert_contains "${tmp}/proof-release-branch.out" "Merge the current branch, then switch to synchronized main."
+
+git switch main >/dev/null 2>&1
+git merge --ff-only release/v1.21.0 >/dev/null 2>&1
+git push origin main >/dev/null 2>&1
+scripts/repo-workflow.sh release status --offline >"${tmp}/proof-main.out"
+assert_contains "${tmp}/proof-main.out" "Pre-tag proof                valid for exact commit"
+assert_contains "${tmp}/proof-main.out" "pre-tag validation passed for exact commit"
+
+echo "stale" >>README.md
+scripts/repo-workflow.sh release status --offline >"${tmp}/stale-status.out"
+assert_contains "${tmp}/stale-status.out" "Pre-tag proof                stale"
+git restore README.md
+
+: >"$RELEASE_FAKE_LOG"
+git switch -c feature/v1.22.0-failure >/dev/null 2>&1
+git push -u origin feature/v1.22.0-failure >/dev/null 2>&1
+export RELEASE_FAKE_FAIL_PREPARE=1
+set +e
+scripts/repo-workflow.sh release prepare-beta \
+  1.22.0-beta.1 \
+  "Failure fixture" \
+  >"${tmp}/prepare-fail.out" 2>&1
+rc=$?
+set -e
+((rc != 0)) || fail "failing beta helper unexpectedly succeeded"
+[[ -z "$(git status --porcelain)" ]] || fail "failed beta helper left repository changes"
+unset RELEASE_FAKE_FAIL_PREPARE
+
+echo "repo workflow release-transaction tests: all checks passed"

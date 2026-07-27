@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Fail if in-repo version banners disagree with SCRIPT_VERSION.
-# Does not call the network (safe during the release-PR → publish window).
-set -euo pipefail
+# Verify current project identity without conflating it with the latest
+# published release banner. Does not call the network.
+set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "${ROOT}"
+cd "$ROOT"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -12,23 +12,32 @@ fail() {
 }
 
 [[ -f VERSION ]] || fail "VERSION is missing"
+[[ -x scripts/release-version.sh ]] \
+  || fail "scripts/release-version.sh is missing or not executable"
 
-[[ -x scripts/release-version.sh ]] ||
-  fail "scripts/release-version.sh is missing or not executable"
+scripts/release-version.sh assert-runtime >/dev/null
 
-scripts/release-version.sh assert-script >/dev/null
+project_version="$(scripts/release-version.sh read)"
+project_tag="v${project_version}"
 
-script_version="$(scripts/release-version.sh read)"
-tag="$(scripts/release-version.sh tag)"
+current_release=""
+for file in README.md ROADMAP.md TESTING.md; do
+  banner="$(sed -nE 's/^\*\*Current release:\*\*[[:space:]]+(v[^[:space:]·.]+(\.[^[:space:]·.]+)*)[[:space:]·.]*$/\1/p' "$file" | head -n 1)"
+  [[ "$banner" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] \
+    || fail "${file} must contain one valid Current release banner"
+  if [[ -z "$current_release" ]]; then
+    current_release="$banner"
+  else
+    [[ "$banner" == "$current_release" ]] \
+      || fail "${file} Current release banner (${banner}) differs from ${current_release}"
+  fi
 
-grep -qE "^\*\*Current release:\*\* ${tag}( |$|\.|·)" README.md \
-  || fail "README.md Current release banner must be ${tag}"
-grep -qE "^\*\*Current release:\*\* ${tag}( |$|\.|·)" ROADMAP.md \
-  || fail "ROADMAP.md Current release banner must be ${tag}"
-grep -qE "^\*\*Current release:\*\* ${tag}( |$|\.|·)" TESTING.md \
-  || fail "TESTING.md Current release banner must be ${tag}"
-grep -q "Release Manifest ${tag}" RELEASE-MANIFEST.txt \
-  || fail "RELEASE-MANIFEST.txt header must be ${tag}"
+  grep -qE "^\*\*Current project version:\*\* ${project_tag}([[:space:]]|$|\.|·)" "$file" \
+    || fail "${file} Current project version must be ${project_tag}"
+done
+
+grep -q "Release Manifest ${project_tag}" RELEASE-MANIFEST.txt \
+  || fail "RELEASE-MANIFEST.txt header must be ${project_tag}"
 
 # Primary install path must resolve /releases/latest (never a hardcoded future tag).
 grep -q 'releases/latest' README.md \
@@ -36,10 +45,10 @@ grep -q 'releases/latest' README.md \
 grep -q 'url_effective' README.md \
   || fail "README.md must document url_effective latest-tag resolution"
 
-# Exact-pin example (reproducible installs) should match SCRIPT_VERSION when present.
+# Exact-pin examples describe the published release, not the development tree.
 if grep -qE '^VERSION="v[0-9]+\.[0-9]+\.[0-9]+"' README.md; then
-  grep -q "VERSION=\"${tag}\"" README.md \
-    || fail "README.md VERSION=\"...\" pin example must be ${tag} when present"
+  grep -q "VERSION=\"${current_release}\"" README.md \
+    || fail "README.md exact VERSION pin must match Current release ${current_release}"
 fi
 
-echo "OK: in-repo release docs aligned to ${tag}"
+echo "OK: project ${project_tag}; published release banner ${current_release}"

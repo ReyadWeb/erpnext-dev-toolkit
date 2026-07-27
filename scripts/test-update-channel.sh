@@ -50,6 +50,20 @@ TOOLKIT_UPDATE_CHANNEL=beta
 assert_eq "beta channel default slot" "beta" "$(resolve_toolkit_update_version)"
 assert_eq "beta channel branch ref" "beta" "$(toolkit_update_branch_name)"
 
+if ! grep -Fq 'curl -fsSL "${release_base}/VERSION" -o "${tree}/VERSION"' lib/security.sh; then
+  echo "FAIL: mutable branch updates do not download canonical VERSION" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: mutable branch downloads canonical VERSION"
+fi
+
+if ! grep -Fq 'verify_release_file_checksum "$checksum_file" "VERSION" "${tree}/VERSION"' lib/security.sh; then
+  echo "FAIL: mutable branch VERSION is not checksum-gated" >&2
+  fail=$((fail + 1))
+else
+  echo "OK: mutable branch verifies canonical VERSION"
+fi
+
 if ((fail > 0)); then
   echo "test-update-channel: ${fail} failure(s)" >&2
   exit 1

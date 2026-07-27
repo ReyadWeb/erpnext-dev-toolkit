@@ -27,13 +27,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install shellcheck
-        # Prefer the upstream static binary (faster/more consistent than apt).
+      - name: Install shellcheck from Ubuntu repositories
         run: |
           set -euo pipefail
-          sc_ver="v0.10.0"
-          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${sc_ver}/shellcheck-${sc_ver}.linux.x86_64.tar.xz" \
-            | sudo tar -xJ -C /usr/local/bin --strip-components=1 "shellcheck-${sc_ver}/shellcheck"
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends shellcheck
           shellcheck --version
           command -v shellcheck
 
@@ -44,6 +42,7 @@ jobs:
         # shellcheck already ran above; validate-release would otherwise re-run it.
         env:
           SKIP_SHELLCHECK: "1"
+          RELEASE_STRICT: "1"
         run: scripts/validate-release.sh
 
       - name: Bundle installs from a clean extract (quickstart path)
@@ -53,11 +52,24 @@ jobs:
         run: |
           set -euo pipefail
           scripts/build-release-bundle.sh
-          ver="v$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n1 | cut -d'"' -f2)"
+          label="$(scripts/build-info.sh artifact-label)"
+          channel="$(scripts/release-version.sh channel)"
+          archive="erpnext-dev-${label}.tar.gz"
           workdir="$(mktemp -d)"
-          tar -C "$workdir" -xzf "dist/erpnext-dev-${ver}.tar.gz"
-          cd "${workdir}/erpnext-dev-${ver}"
+          tar -C "$workdir" -xzf "dist/${archive}"
+          cd "${workdir}/erpnext-dev-${label}"
           sha256sum -c SHA256SUMS
+          verify_args=(
+            verify
+            --root .
+            --archive "$archive"
+            --expected-channel "$channel"
+            --expected-commit "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          )
+          if [[ "$channel" != "development" ]]; then
+            verify_args+=(--expected-tag "$(scripts/release-version.sh tag)")
+          fi
+          scripts/build-info.sh "${verify_args[@]}"
           ./erpnext-dev.sh version
           # Capture then grep — never pipe into grep -q under pipefail (SIGPIPE/141).
           ./erpnext-dev.sh verify-toolkit >/tmp/erpnext-dev-vt-positive.$$ 2>&1

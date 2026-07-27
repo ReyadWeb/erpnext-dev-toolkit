@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Update all canonical in-repository release metadata.
+# Update canonical in-repository release metadata; runtime reads VERSION.
 #
 # This internal helper performs deterministic file edits. The calling release
 # command is responsible for Git-state checks, backup/rollback, checksum
@@ -41,7 +41,6 @@ title="${2:-}"
 
 required_files=(
   VERSION
-  erpnext-dev.sh
   README.md
   ROADMAP.md
   TESTING.md
@@ -79,19 +78,19 @@ def replace_one(path: Path, pattern: str, replacement: str, label: str) -> None:
 
 write(root / "VERSION", f"{version}\n")
 
-replace_one(
-    root / "erpnext-dev.sh",
-    r'^SCRIPT_VERSION="[^"]+"$',
-    f'SCRIPT_VERSION="{version}"',
-    "SCRIPT_VERSION assignment",
-)
-
 for name in ("README.md", "ROADMAP.md", "TESTING.md"):
     replace_one(
         root / name,
         r'^(\*\*Current release:\*\*) v[0-9A-Za-z.-]+',
         rf'\1 {tag}',
         "Current release banner",
+    )
+
+    replace_one(
+        root / name,
+        r'^(\*\*Current project version:\*\*) v[0-9A-Za-z.-]+',
+        rf'\1 {tag}',
+        "Current project version",
     )
 
 replace_one(

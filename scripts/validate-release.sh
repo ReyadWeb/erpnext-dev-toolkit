@@ -19,6 +19,10 @@ pass() {
   || fail "scripts/release-version.sh is missing or not executable"
 [[ -x scripts/test-release-version.sh ]] \
   || fail "scripts/test-release-version.sh is missing or not executable"
+[[ -x scripts/build-info.sh ]] \
+  || fail "scripts/build-info.sh is missing or not executable"
+[[ -x scripts/test-build-info.sh ]] \
+  || fail "scripts/test-build-info.sh is missing or not executable"
 [[ -x scripts/release-manifest-files.sh ]] \
   || fail "scripts/release-manifest-files.sh is missing or not executable"
 [[ -x scripts/check-release-artifact-consistency.sh ]] \
@@ -51,10 +55,40 @@ pass() {
   || fail "scripts/test-release-pretag-check.sh is missing or not executable"
 [[ -x scripts/test-release-bootstrap-guidance.sh ]] \
   || fail "scripts/test-release-bootstrap-guidance.sh is missing or not executable"
+[[ -x scripts/release-asset-inventory.sh ]] \
+  || fail "scripts/release-asset-inventory.sh is missing or not executable"
+[[ -x scripts/bootstrap-verify.sh ]] \
+  || fail "scripts/bootstrap-verify.sh is missing or not executable"
+[[ -x scripts/test-release-asset-trust.sh ]] \
+  || fail "scripts/test-release-asset-trust.sh is missing or not executable"
+[[ -x scripts/repo-workflow.sh ]] \
+  || fail "scripts/repo-workflow.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow.sh ]] \
+  || fail "scripts/test-repo-workflow.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-work.sh ]] \
+  || fail "scripts/test-repo-workflow-work.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-pr.sh ]] \
+  || fail "scripts/test-repo-workflow-pr.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-release.sh ]] \
+  || fail "scripts/test-repo-workflow-release.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-release-transaction.sh ]] \
+  || fail "scripts/test-repo-workflow-release-transaction.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-release-finalize.sh ]] \
+  || fail "scripts/test-repo-workflow-release-finalize.sh is missing or not executable"
+
+[[ -x scripts/test-release-state-invariants.sh ]] \
+  || fail "scripts/test-release-state-invariants.sh is missing or not executable"
+
+[[ -x scripts/check-release-state-invariants.sh ]] \
+  || fail "scripts/check-release-state-invariants.sh is missing or not executable"
 
 bash -n erpnext-dev.sh
 bash -n scripts/release-version.sh
 bash -n scripts/test-release-version.sh
+bash -n scripts/build-info.sh
+bash -n scripts/test-build-info.sh
+bash -n scripts/check-release-state-invariants.sh
+bash -n scripts/test-release-state-invariants.sh
 bash -n scripts/release-manifest-files.sh
 bash -n scripts/check-release-artifact-consistency.sh
 bash -n scripts/test-release-manifest.sh
@@ -112,13 +146,35 @@ bash -n scripts/release-pretag-check.sh
 bash -n scripts/test-release-promote-stable.sh
 bash -n scripts/test-release-pretag-check.sh
 bash -n scripts/test-release-bootstrap-guidance.sh
+bash -n scripts/release-asset-inventory.sh
+bash -n scripts/bootstrap-verify.sh
+bash -n scripts/test-release-asset-trust.sh
+bash -n scripts/repo-workflow.sh
+bash -n scripts/test-repo-workflow.sh
+bash -n scripts/test-repo-workflow-work.sh
+bash -n scripts/test-repo-workflow-pr.sh
+bash -n scripts/test-repo-workflow-release.sh
+bash -n scripts/test-repo-workflow-release-transaction.sh
+bash -n scripts/test-repo-workflow-release-finalize.sh
 pass "bash syntax valid"
 
-scripts/release-version.sh assert-script
-pass "VERSION matches SCRIPT_VERSION"
+scripts/release-version.sh assert-runtime
+pass "VERSION matches runtime output"
 
 scripts/test-release-version.sh
 pass "canonical release version tests passed"
+
+scripts/build-info.sh assert-source-clean >/dev/null
+pass "source tree contains no generated build metadata"
+
+scripts/test-build-info.sh
+pass "immutable build identity tests passed"
+
+scripts/test-release-state-invariants.sh
+pass "release-state invariant detector tests passed"
+
+scripts/check-release-state-invariants.sh release-state
+pass "release-state invariants enforced"
 
 scripts/test-release-manifest.sh
 pass "release manifest parser tests passed"
@@ -126,14 +182,18 @@ pass "release manifest parser tests passed"
 scripts/test-release-artifact-consistency.sh
 pass "release artifact consistency tests passed"
 
-chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh scripts/release-update-metadata.sh scripts/release-prepare-beta.sh scripts/test-release-metadata.sh scripts/test-release-prepare-beta.sh scripts/release-promote-stable.sh scripts/release-pretag-check.sh scripts/test-release-promote-stable.sh scripts/test-release-pretag-check.sh
+chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-docker-access-routing.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh scripts/release-update-metadata.sh scripts/release-prepare-beta.sh scripts/test-release-metadata.sh scripts/test-release-prepare-beta.sh scripts/release-promote-stable.sh scripts/release-pretag-check.sh scripts/test-release-promote-stable.sh scripts/test-release-pretag-check.sh scripts/check-release-state-invariants.sh scripts/test-release-state-invariants.sh scripts/build-info.sh scripts/test-build-info.sh
 
 chmod +x \
   scripts/release-manifest-files.sh \
   scripts/check-release-artifact-consistency.sh \
   scripts/test-release-manifest.sh \
   scripts/test-release-artifact-consistency.sh \
-  scripts/test-release-bootstrap-guidance.sh
+  scripts/test-release-bootstrap-guidance.sh \
+  scripts/release-asset-inventory.sh \
+  scripts/bootstrap-verify.sh \
+  scripts/test-release-asset-trust.sh
+chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-work.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh
 
 scripts/test-release-metadata.sh
 pass "release metadata update tests passed"
@@ -150,6 +210,20 @@ pass "pre-tag repository gate tests passed"
 scripts/test-release-bootstrap-guidance.sh
 pass "signed release bootstrap guidance tests passed"
 
+scripts/test-release-asset-trust.sh
+pass "pre-privilege release asset trust tests passed"
+
+scripts/test-repo-workflow.sh
+pass "repository workflow transaction tests passed"
+scripts/test-repo-workflow-pr.sh
+pass "repository pull request workflow tests passed"
+scripts/test-repo-workflow-release.sh
+pass "repository release-status workflow tests passed"
+scripts/test-repo-workflow-release-transaction.sh
+pass "repository release transaction workflow tests passed"
+scripts/test-repo-workflow-release-finalize.sh
+pass "repository release finalization workflow tests passed"
+
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the
 # integrity/self-update chain, and catches dispatcher commands with no backing
@@ -157,11 +231,17 @@ pass "signed release bootstrap guidance tests passed"
 scripts/check-module-consistency.sh
 pass "module consistency verified"
 
-if command -v shellcheck >/dev/null 2>&1; then
+if [[ "${SKIP_SHELLCHECK:-0}" == "1" ]]; then
+  command -v shellcheck >/dev/null 2>&1 \
+    || fail "SKIP_SHELLCHECK=1 requires shellcheck to be installed"
+  pass "shellcheck already completed by the calling strict workflow"
+elif command -v shellcheck >/dev/null 2>&1; then
   scripts/run-shellcheck.sh
   pass "shellcheck passed"
 else
-  pass "skipped shellcheck (not installed)"
+  [[ "${RELEASE_STRICT:-0}" != "1" ]] \
+    || fail "RELEASE_STRICT: shellcheck is required and may not be skipped"
+  pass "skipped shellcheck in contributor mode (not installed)"
 fi
 
 version_output="$(./erpnext-dev.sh version)"
@@ -170,15 +250,24 @@ echo "$version_output"
 pass "version command works"
 
 tag_version="$(scripts/release-version.sh tag)"
+release_channel="$(scripts/release-version.sh channel)"
 
-grep -q "^## ${tag_version}" CHANGELOG.md || fail "CHANGELOG.md missing top entry for ${tag_version}"
-pass "CHANGELOG version matches SCRIPT_VERSION (${tag_version})"
+if [[ "$release_channel" == "development" ]]; then
+  grep -q '^## Unreleased' CHANGELOG.md \
+    || fail "development tree must contain an open ## Unreleased changelog section"
+  pass "CHANGELOG has an open development section"
+else
+  grep -q "^## ${tag_version}" CHANGELOG.md \
+    || fail "CHANGELOG.md missing release entry for ${tag_version}"
+  pass "CHANGELOG version matches release identity (${tag_version})"
+fi
 
-# Version discipline: a stable release must not be cut from a tree whose
-# CHANGELOG still has an open "## Unreleased" section, and the newest entry must
-# be the version being released. Enforced when RELEASE_STRICT=1 (set by the
-# release workflow); dev branches may keep an Unreleased section during work.
-if [[ "${RELEASE_STRICT:-0}" == "1" ]]; then
+# Version discipline: strict development CI remains fail-closed for required
+# tooling while retaining the open Unreleased section. Beta, RC, and stable
+# qualification must instead expose the exact release entry as the newest one.
+# release-pretag-check supplies an explicit validated tag/channel before the
+# Git tag exists.
+if [[ "${RELEASE_STRICT:-0}" == "1" && "$release_channel" != "development" ]]; then
   first_heading="$(grep -m1 -E '^## ' CHANGELOG.md || true)"
   if [[ "$first_heading" != "## ${tag_version}"* ]]; then
     fail "RELEASE_STRICT: newest CHANGELOG entry is '${first_heading}', expected '## ${tag_version}' (fold any Unreleased section into the release)"
@@ -195,7 +284,7 @@ rm -f /tmp/erpnext-dev-doc-align.$$
 pass "release doc banners + README latest-install path aligned (${tag_version})"
 
 grep -q "Release Manifest ${tag_version}" RELEASE-MANIFEST.txt || fail "RELEASE-MANIFEST.txt version header does not match ${tag_version}"
-pass "RELEASE-MANIFEST version matches SCRIPT_VERSION (${tag_version})"
+pass "RELEASE-MANIFEST version matches canonical project version (${tag_version})"
 
 scripts/check-release-artifact-consistency.sh
 pass "release manifest and SHA256SUMS are complete and valid"

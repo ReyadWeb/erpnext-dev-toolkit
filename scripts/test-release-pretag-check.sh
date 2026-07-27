@@ -16,6 +16,7 @@ fixture="${tmp_dir}/fixture"
 mkdir -p "${fixture}/scripts"
 
 cp scripts/release-version.sh "${fixture}/scripts/"
+cp scripts/build-info.sh "${fixture}/scripts/"
 cp scripts/release-pretag-check.sh "${fixture}/scripts/"
 
 for helper in \
@@ -31,22 +32,39 @@ cat >"${fixture}/scripts/build-release-bundle.sh" <<'EOF_BUILD'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-tag="$(scripts/release-version.sh tag)"
-stage="dist/erpnext-dev-${tag}"
-bundle="dist/erpnext-dev-${tag}.tar.gz"
+channel="$(scripts/release-version.sh channel)"
+label="$(scripts/build-info.sh artifact-label)"
+tag=""
+[[ "$channel" == "development" ]] || tag="$(scripts/release-version.sh tag)"
+stage="dist/erpnext-dev-${label}"
+archive="erpnext-dev-${label}.tar.gz"
+bundle="dist/${archive}"
+commit="$(git rev-parse HEAD)"
 
 rm -rf dist
 mkdir -p "${stage}/scripts"
 
 cp VERSION erpnext-dev.sh "${stage}/"
-cp scripts/release-version.sh "${stage}/scripts/"
+cp scripts/release-version.sh scripts/build-info.sh "${stage}/scripts/"
 
 (
   cd "$stage"
-  sha256sum VERSION erpnext-dev.sh scripts/release-version.sh >SHA256SUMS
+  sha256sum VERSION erpnext-dev.sh scripts/release-version.sh scripts/build-info.sh >SHA256SUMS
 )
 
-tar -C dist -czf "$bundle" "erpnext-dev-${tag}"
+args=(
+  generate
+  --source-root .
+  --stage-root "$stage"
+  --archive "$archive"
+  --channel "$channel"
+  --commit "$commit"
+  --built-at 2026-07-27T00:00:00Z
+)
+[[ -z "$tag" ]] || args+=(--tag "$tag")
+scripts/build-info.sh "${args[@]}" >/dev/null
+
+tar -C dist -czf "$bundle" "erpnext-dev-${label}"
 rm -rf "$stage"
 EOF_BUILD
 
@@ -57,11 +75,10 @@ printf '%s\n' '1.20.0-beta.1' >"${fixture}/VERSION"
 
 cat >"${fixture}/erpnext-dev.sh" <<'EOF_ENTRY'
 #!/usr/bin/env bash
-SCRIPT_VERSION="1.20.0-beta.1"
-
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${1:-}" in
   version)
-    echo "ERPNext Developer Toolkit v${SCRIPT_VERSION}"
+    printf 'ERPNext Developer Toolkit v%s\n' "$(tr -d '[:space:]' <"${root}/VERSION")"
     ;;
   verify-toolkit)
     echo "Active match                  OK"
@@ -137,19 +154,11 @@ import sys
 
 root = Path(sys.argv[1])
 (root / "VERSION").write_text("1.20.0\n")
-
-entry = root / "erpnext-dev.sh"
-entry.write_text(
-    entry.read_text().replace(
-        'SCRIPT_VERSION="1.20.0-beta.1"',
-        'SCRIPT_VERSION="1.20.0"',
-    )
-)
 PY_STABLE
 
 (
   cd "$fixture"
-  git add VERSION erpnext-dev.sh
+  git add VERSION
   git commit -qm "stable fixture"
 )
 

@@ -57,6 +57,7 @@ required_helpers=(
   scripts/check-release-artifact-consistency.sh
   scripts/validate-release.sh
   scripts/build-release-bundle.sh
+  scripts/build-info.sh
 )
 
 for helper in "${required_helpers[@]}"; do
@@ -68,9 +69,9 @@ target_tag="${target_tag:-$(scripts/release-version.sh tag)}"
 canonical_version="$(scripts/release-version.sh read)"
 base_version="${canonical_version%%-*}"
 series_version="${base_version%.*}"
-channel="$(scripts/release-version.sh channel)"
+channel="$(scripts/release-version.sh channel-for-tag "$target_tag")"
 
-scripts/release-version.sh assert-script
+scripts/release-version.sh assert-runtime
 scripts/release-version.sh assert-tag "$target_tag"
 
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -133,11 +134,16 @@ else
   echo "NOTE: remote tag and branch-synchronization checks skipped"
 fi
 
-RELEASE_STRICT=1 scripts/validate-release.sh
+ERPNEXT_RELEASE_TAG="$target_tag" \
+  ERPNEXT_RELEASE_CHANNEL="$channel" \
+  RELEASE_STRICT=1 \
+  scripts/validate-release.sh
 scripts/check-release-artifact-consistency.sh
 
 rm -rf dist
-scripts/build-release-bundle.sh
+ERPNEXT_RELEASE_TAG="$target_tag" \
+  ERPNEXT_RELEASE_CHANNEL="$channel" \
+  scripts/build-release-bundle.sh
 
 bundle="dist/erpnext-dev-${target_tag}.tar.gz"
 [[ -f "$bundle" ]] || fail "expected release bundle was not created: ${bundle}"
@@ -155,8 +161,14 @@ bundle_root="${extract_root}/erpnext-dev-${target_tag}"
   cd "$bundle_root"
 
   sha256sum -c SHA256SUMS
-  scripts/release-version.sh assert-script
+  scripts/release-version.sh assert-runtime
   scripts/release-version.sh assert-tag "$target_tag"
+  scripts/build-info.sh verify \
+    --root . \
+    --archive "erpnext-dev-${target_tag}.tar.gz" \
+    --expected-tag "$target_tag" \
+    --expected-channel "$channel" \
+    --expected-commit "$(git -C "$ROOT_DIR" rev-parse HEAD)" >/dev/null
 
   version_output="$(./erpnext-dev.sh version)"
   [[ "$version_output" == *"ERPNext Developer Toolkit v${canonical_version}"* ]] \

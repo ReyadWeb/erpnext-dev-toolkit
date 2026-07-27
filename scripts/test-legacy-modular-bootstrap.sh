@@ -20,9 +20,16 @@ fail() {
   exit 1
 }
 
-version="$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n1 | cut -d'"' -f2)"
-[[ -n "$version" ]] || fail "could not read SCRIPT_VERSION"
+project_version="$(scripts/release-version.sh read)"
+[[ -n "$project_version" ]] || fail "could not read canonical VERSION"
+
+# Legacy modular recovery intentionally accepts stable releases only. Keep this
+# hermetic fixture stable while beta or RC metadata is being qualified.
+version="${project_version%%-*}"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+  || fail "could not derive stable fixture version from ${project_version}"
 tag="v${version}"
+channel="stable"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-dev-legacy-bootstrap-test.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -32,11 +39,13 @@ release_root="${work}/release-server"
 release_tree="${work}/erpnext-dev-${tag}"
 release_download_dir="${release_root}/releases/download/${tag}"
 gpg_home="${work}/gnupg"
-mkdir -p "$legacy_root" "$release_tree/lib" "$release_tree/docs" "$release_download_dir" "$gpg_home"
+mkdir -p "$legacy_root" "$release_tree/lib" "$release_tree/docs" "$release_tree/scripts" "$release_download_dir" "$gpg_home"
 chmod 700 "$gpg_home"
 
 # Build a minimal-but-complete runtime release tree from the current checkout.
-cp erpnext-dev.sh "$release_tree/erpnext-dev.sh"
+cp erpnext-dev.sh "$release_tree/"
+printf '%s\n' "$version" >"${release_tree}/VERSION"
+cp scripts/build-info.sh scripts/release-version.sh "$release_tree/scripts/"
 cp -a lib/. "$release_tree/lib/"
 
 cat >"${work}/gpg-batch" <<GPG
@@ -56,10 +65,19 @@ GNUPGHOME="$gpg_home" gpg --batch --armor --export "$fingerprint" >"${release_tr
 (
   cd "$release_tree"
   {
-    sha256sum erpnext-dev.sh
+    sha256sum erpnext-dev.sh VERSION
+    sha256sum scripts/build-info.sh scripts/release-version.sh
     find lib -maxdepth 1 -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum
     sha256sum docs/erpnext-dev-signing-key.asc
   } >SHA256SUMS
+  scripts/build-info.sh generate \
+    --source-root "$ROOT_DIR" \
+    --stage-root . \
+    --archive "erpnext-dev-${tag}.tar.gz" \
+    --tag "$tag" \
+    --channel "$channel" \
+    --commit "$(git -C "$ROOT_DIR" rev-parse HEAD)" \
+    --built-at 2026-07-27T00:00:00Z >/dev/null
   GNUPGHOME="$gpg_home" gpg --batch --yes --armor --detach-sign --local-user "$fingerprint" --output SHA256SUMS.asc SHA256SUMS
 )
 
@@ -75,6 +93,7 @@ output="$(
     TOOLKIT_CLI_PATH="${legacy_root}/bin/erpnext-dev" \
     TOOLKIT_RELEASE_GITHUB="file://${release_root}" \
     TOOLKIT_BOOTSTRAP_SIGNING_FINGERPRINT="$fingerprint" \
+    TOOLKIT_BOOTSTRAP_VERSION="$version" \
     LOG_DIR="${legacy_root}/logs" \
     LOCK_DIR="${legacy_root}/locks" \
     "${legacy_root}/erpnext-dev.sh" version 2>&1

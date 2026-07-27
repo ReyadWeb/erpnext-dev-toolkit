@@ -115,6 +115,26 @@ jobs:
         # `erpnext-dev verify-signature` (and atomic update-toolkit) verify offline.
         run: scripts/build-release-bundle.sh
 
+      - name: Generate and sign external release-asset inventory
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          scripts/release-asset-inventory.sh generate \
+            --tag "$tag" \
+            --output RELEASE-ASSETS.sha256
+
+          if [[ -f SHA256SUMS.asc ]]; then
+            keyid="$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')"
+            [[ -n "$keyid" ]] || { echo "::error::Signing key is unavailable."; exit 1; }
+            sign_args=(--batch --yes --pinentry-mode loopback --local-user "$keyid"
+                       --armor --detach-sign --output RELEASE-ASSETS.sha256.asc)
+            if [[ -n "${GPG_PASSPHRASE:-}" ]]; then
+              sign_args=(--passphrase "$GPG_PASSPHRASE" "${sign_args[@]}")
+            fi
+            gpg "${sign_args[@]}" RELEASE-ASSETS.sha256
+            gpg --verify RELEASE-ASSETS.sha256.asc RELEASE-ASSETS.sha256
+          fi
+
       - name: Verify bundle installs from a clean extract
         run: |
           set -euo pipefail
@@ -123,6 +143,12 @@ jobs:
           tar -C "$workdir" -xzf "dist/erpnext-dev-${tag}.tar.gz"
           cd "${workdir}/erpnext-dev-${tag}"
           sha256sum -c SHA256SUMS
+          scripts/build-info.sh verify \
+            --root . \
+            --archive "erpnext-dev-${tag}.tar.gz" \
+            --expected-tag "$tag" \
+            --expected-channel "$(scripts/release-version.sh channel-for-tag "$tag")" \
+            --expected-commit "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
           ./erpnext-dev.sh version
           # Capture then grep — never pipe into grep -q under pipefail (SIGPIPE/141).
           ./erpnext-dev.sh verify-toolkit >/tmp/erpnext-dev-vt-positive.$$ 2>&1
@@ -138,8 +164,18 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          assets=(SHA256SUMS erpnext-dev.sh RELEASE-MANIFEST.txt "dist/erpnext-dev-${tag}.tar.gz")
+          assets=(
+            SHA256SUMS
+            erpnext-dev.sh
+            RELEASE-MANIFEST.txt
+            "dist/erpnext-dev-${tag}.tar.gz"
+            "dist/erpnext-dev-${tag}.BUILD-INFO.json"
+            RELEASE-ASSETS.sha256
+            docs/erpnext-dev-signing-key.asc
+            scripts/bootstrap-verify.sh
+          )
           [[ -f SHA256SUMS.asc ]] && assets+=(SHA256SUMS.asc)
+          [[ -f RELEASE-ASSETS.sha256.asc ]] && assets+=(RELEASE-ASSETS.sha256.asc)
 
           prerelease_flag=""
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -150,15 +186,16 @@ jobs:
 
           Install (self-contained bundle — includes all lib/ modules):
           \`\`\`
-          curl -fsSLO https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/erpnext-dev-${GITHUB_REF_NAME}.tar.gz
-          tar -xzf erpnext-dev-${GITHUB_REF_NAME}.tar.gz && cd erpnext-dev-${GITHUB_REF_NAME}
-          sha256sum -c SHA256SUMS
+          curl -fsSLO https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/bootstrap-verify.sh
+          chmod +x bootstrap-verify.sh
+          ./bootstrap-verify.sh ${GITHUB_REF_NAME}
+          cd erpnext-dev-${GITHUB_REF_NAME}
           sudo ./erpnext-dev.sh local-dev-quickstart   # or public-vm-guided-setup
           \`\`\`
 
-          Stronger (authenticity): run \`sudo ./erpnext-dev.sh verify-signature\` from the extracted
-          bundle (bundled key + pinned fingerprint), or \`gpg --verify SHA256SUMS.asc SHA256SUMS\`.
-          See SECURITY.md for the pinned key fingerprint."
+          The bootstrap runs without sudo and verifies the pinned signing-key fingerprint,
+          signed external asset inventory, archive digest, safe paths, internal checksums, and
+          immutable build identity before printing any privileged command. See SECURITY.md."
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber

@@ -41,10 +41,10 @@ EOF_VALIDATE
 chmod +x "${fixture}/scripts/"*.sh
 
 printf '%s\n' '1.19.22' >"${fixture}/VERSION"
-printf '%s\n' '#!/usr/bin/env bash' 'SCRIPT_VERSION="1.19.22"' >"${fixture}/erpnext-dev.sh"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' 'VERSION="v1.19.22"' >"${fixture}/README.md"
-printf '%s\n' '**Current release:** v1.19.22 (fixture)' >"${fixture}/ROADMAP.md"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' >"${fixture}/TESTING.md"
+printf '%s\n' '#!/usr/bin/env bash' '# runtime derives VERSION in the real tree' >"${fixture}/erpnext-dev.sh"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' 'VERSION="v1.19.22"' >"${fixture}/README.md"
+printf '%s\n' '**Current release:** v1.19.22 (fixture)' '**Current project version:** v1.19.22' >"${fixture}/ROADMAP.md"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' >"${fixture}/TESTING.md"
 printf '%s\n' '## v1.19.22 - Previous release' '' '- Previous.' >"${fixture}/CHANGELOG.md"
 printf '%s\n' '# ERPNext Developer Toolkit Release Manifest v1.19.22' 'VERSION' >"${fixture}/RELEASE-MANIFEST.txt"
 printf '%s\n' 'fixture' >"${fixture}/SHA256SUMS"

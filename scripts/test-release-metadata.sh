@@ -16,10 +16,18 @@ fixture="${tmp_dir}/fixture"
 mkdir -p "$fixture"
 
 printf '%s\n' '1.19.22' >"${fixture}/VERSION"
-printf '%s\n' '#!/usr/bin/env bash' 'SCRIPT_VERSION="1.19.22"' >"${fixture}/erpnext-dev.sh"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' 'VERSION="v1.19.22"' >"${fixture}/README.md"
-printf '%s\n' '**Current release:** v1.19.22 (fixture)' >"${fixture}/ROADMAP.md"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' >"${fixture}/TESTING.md"
+cat >"${fixture}/erpnext-dev.sh" <<'EOF_ENTRY'
+#!/usr/bin/env bash
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "${1:-}" in
+  version) printf 'ERPNext Developer Toolkit v%s\n' "$(tr -d '[:space:]' <"${root}/VERSION")" ;;
+  *) exit 2 ;;
+esac
+EOF_ENTRY
+chmod +x "${fixture}/erpnext-dev.sh"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' 'VERSION="v1.19.22"' >"${fixture}/README.md"
+printf '%s\n' '**Current release:** v1.19.22 (fixture)' '**Current project version:** v1.19.22' >"${fixture}/ROADMAP.md"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' >"${fixture}/TESTING.md"
 printf '%s\n' '## v1.19.22 - Previous release' '' '- Previous.' >"${fixture}/CHANGELOG.md"
 printf '%s\n' '# ERPNext Developer Toolkit Release Manifest v1.19.22' 'VERSION' >"${fixture}/RELEASE-MANIFEST.txt"
 
@@ -35,12 +43,17 @@ run_update \
 [[ "$(cat "${fixture}/VERSION")" == "1.20.0-beta.1" ]] \
   || fail "VERSION was not updated"
 
-grep -qx 'SCRIPT_VERSION="1.20.0-beta.1"' "${fixture}/erpnext-dev.sh" \
-  || fail "SCRIPT_VERSION was not updated"
+[[ "$("${fixture}/erpnext-dev.sh" version)" == "ERPNext Developer Toolkit v1.20.0-beta.1" ]] \
+  || fail "runtime did not derive the updated VERSION"
 
 for file in README.md ROADMAP.md TESTING.md; do
   grep -q '^\*\*Current release:\*\* v1.20.0-beta.1' "${fixture}/${file}" \
     || fail "${file} banner was not updated"
+done
+
+for file in README.md ROADMAP.md TESTING.md; do
+  grep -q '^\*\*Current project version:\*\* v1.20.0-beta.1' "${fixture}/${file}" \
+    || fail "${file} project version was not updated"
 done
 
 grep -qx 'VERSION="v1.20.0-beta.1"' "${fixture}/README.md" \
