@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- Isolated the release-version hermetic fixture from inherited pre-tag channel and tag context so strict beta qualification validates the fixture's own synthetic identity.
 - Corrected non-interactive pull-request creation in the consolidated maintainer workflow.
 - Scoped strict changelog enforcement to beta, release-candidate, and stable qualification while preserving an open development changelog.
 - Kept the legacy modular-bootstrap recovery fixture on a synthetic stable release during beta and release-candidate validation.
