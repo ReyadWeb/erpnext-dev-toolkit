@@ -57,6 +57,9 @@ targets=(
   scripts/test-release-version.sh
   scripts/build-info.sh
   scripts/test-build-info.sh
+  scripts/release-test-env.sh
+  scripts/test-release-test-env.sh
+  scripts/test-release-context-isolation.sh
   scripts/check-release-state-invariants.sh
   scripts/test-release-state-invariants.sh
   scripts/release-manifest-files.sh

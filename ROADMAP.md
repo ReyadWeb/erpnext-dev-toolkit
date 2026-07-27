@@ -179,8 +179,11 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 
 ### R4 — Strict qualification
 
-- [ ] Contributor mode may warn about optional local dependencies.
-- [ ] Required PR and release modes may not skip required checks.
+- [x] Contributor mode may warn about optional local dependencies.
+- [x] Required PR and release modes may not skip required checks.
+- [x] Release fixtures are isolated from ambient beta, RC, stable, strict-mode,
+  and build-root variables; beta preparation exercises the intended prerelease
+  context before publication.
 - [ ] High-risk paths require same-commit integration evidence.
 
 ### WF-001 — Workflow consolidation

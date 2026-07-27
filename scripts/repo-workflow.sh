@@ -389,6 +389,10 @@ select_focused_tests() {
         add_focused_test scripts/test-repo-workflow-release-transaction.sh
         add_focused_test scripts/test-repo-workflow-release-finalize.sh
         ;;
+      scripts/release-test-env.sh | scripts/test-release-test-env.sh | scripts/test-release-context-isolation.sh | scripts/build-info.sh | scripts/test-build-info.sh | scripts/release-prepare-beta.sh | scripts/test-release-prepare-beta.sh | scripts/release-pretag-check.sh | scripts/test-release-pretag-check.sh)
+        add_focused_test scripts/test-release-test-env.sh
+        add_focused_test scripts/test-release-context-isolation.sh
+        ;;
       VERSION | erpnext-dev.sh | scripts/release-version.sh | scripts/test-release-version.sh)
         add_focused_test scripts/test-release-version.sh
         ;;

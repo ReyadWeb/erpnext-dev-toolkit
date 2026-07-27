@@ -4,6 +4,10 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/release-test-env.sh
+source "${ROOT_DIR}/scripts/release-test-env.sh"
+release_test_env_reexec "$0" "$@"
+
 fail() {
   echo "FAIL: $*" >&2
   exit 1
@@ -166,5 +170,13 @@ grep -Fq \
   scripts/validate-release.sh \
   || fail "strict validation does not preserve the development changelog state"
 pass "strict development validation preserves the Unreleased changelog"
+
+grep -Fq 'scripts/test-release-context-isolation.sh' scripts/validate-release.sh \
+  || fail "complete release validation does not run the context-isolation matrix"
+grep -Fq 'ERPNEXT_RELEASE_TAG="$target_tag"' scripts/release-prepare-beta.sh \
+  || fail "beta preparation does not inject the intended prerelease tag"
+grep -Fq 'scripts/test-release-context-isolation.sh' scripts/release-prepare-beta.sh \
+  || fail "beta preparation does not run the pre-tag-context dry-run"
+pass "release qualification enforces hermetic fixture context isolation"
 
 echo "release-state invariant tests: all checks passed"

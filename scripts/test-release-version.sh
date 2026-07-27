@@ -5,6 +5,10 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/release-test-env.sh
+source "${ROOT_DIR}/scripts/release-test-env.sh"
+release_test_env_reexec "$0" "$@"
+
 fail() {
   echo "FAIL: $*" >&2
   exit 1

@@ -195,10 +195,13 @@ system toolchain has verified:
 
 ### R1D — Strict qualification and evidence
 
-- Required checks cannot skip in PR or release qualification.
-- High-risk paths require same-commit integration evidence.
-- Native, Docker, upgrade, rollback, and public-reporting acceptance evidence is
-  attached to the release candidate.
+- [x] Required checks cannot skip in PR or release qualification.
+- [x] Synthetic release fixtures re-execute through a canonical clean environment
+  boundary, and beta preparation runs the prerelease-context matrix before full
+  validation.
+- [ ] High-risk paths require same-commit integration evidence.
+- [ ] Native, Docker, upgrade, rollback, and public-reporting acceptance evidence
+  is attached to the release candidate.
 
 ## v1.20.x programme
 

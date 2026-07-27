@@ -6,6 +6,20 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/release-test-env.sh
+source "${ROOT_DIR}/scripts/release-test-env.sh"
+release_test_env_reexec "$0" "$@"
+
+identity_only=0
+case "${1:-}" in
+  "") ;;
+  --identity-only) identity_only=1 ;;
+  *)
+    echo "FAIL: unknown test option: $1" >&2
+    exit 2
+    ;;
+esac
+
 command -v gpg >/dev/null 2>&1 || {
   echo "SKIP: gpg is required for legacy modular bootstrap test"
   exit 0
@@ -30,6 +44,15 @@ version="${project_version%%-*}"
   || fail "could not derive stable fixture version from ${project_version}"
 tag="v${version}"
 channel="stable"
+
+if ((identity_only == 1)); then
+  [[ "$tag" == "v${project_version%%-*}" ]] \
+    || fail "stable fixture identity did not derive from canonical project version"
+  [[ "$channel" == "stable" ]] \
+    || fail "legacy recovery fixture is not stable"
+  printf 'OK: legacy bootstrap fixture identity is %s (%s)\n' "$tag" "$channel"
+  exit 0
+fi
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-dev-legacy-bootstrap-test.XXXXXX")"
 trap 'rm -rf "$work"' EXIT

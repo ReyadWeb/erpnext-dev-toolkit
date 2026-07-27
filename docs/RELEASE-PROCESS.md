@@ -60,9 +60,10 @@ The transaction:
 1. requires a clean synchronized allowed branch;
 2. updates canonical version and release metadata;
 3. regenerates checksums;
-4. runs full release validation;
-5. restores the exact previous metadata if the transaction fails;
-6. leaves the successful metadata uncommitted for human review.
+4. runs the hermetic release-fixture matrix under the intended beta tag/channel;
+5. runs full release validation;
+6. restores the exact previous metadata if either qualification stage fails;
+7. leaves the successful metadata uncommitted for human review.
 
 Review:
 
