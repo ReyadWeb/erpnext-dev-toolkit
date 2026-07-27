@@ -49,6 +49,8 @@ cd "$ROOT_DIR"
   || fail "scripts/generate-release-checksums.sh is missing or not executable"
 [[ -x scripts/validate-release.sh ]] \
   || fail "scripts/validate-release.sh is missing or not executable"
+[[ -x scripts/test-release-context-isolation.sh ]] \
+  || fail "scripts/test-release-context-isolation.sh is missing or not executable"
 
 if [[ -n "$(git status --porcelain)" ]]; then
   git status --short >&2
@@ -116,6 +118,11 @@ scripts/generate-release-checksums.sh
 scripts/release-version.sh assert-runtime
 scripts/check-release-doc-alignment.sh
 scripts/check-release-artifact-consistency.sh
+ERPNEXT_RELEASE_TAG="$target_tag" \
+  ERPNEXT_RELEASE_CHANNEL=beta \
+  RELEASE_STRICT=1 \
+  scripts/test-release-context-isolation.sh
+printf 'OK: prerelease test-context dry-run passed (%s)\n' "$target_tag"
 scripts/validate-release.sh
 
 committed=1

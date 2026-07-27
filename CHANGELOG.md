@@ -7,11 +7,13 @@
 
 ### Fixed
 
+- Isolated hermetic release fixtures from ambient beta, RC, stable, strict-mode, build-root, and fixture-control variables so pre-tag qualification cannot override synthetic test identity.
 - Kept the legacy modular-recovery fixture on a synthetic stable release while beta or RC metadata is qualified, matching the recovery path's stable-only security policy.
 - Made the legacy modular-bootstrap fixture derive its synthetic build channel from the release tag so beta and RC qualification no longer use stable-channel metadata.
 - Scoped versioned changelog enforcement to beta, RC, and stable qualification so strict development CI retains the open `## Unreleased` section without weakening fail-closed tooling checks.
 
 ### Added
+- Added a canonical release-test environment boundary, an injected development/beta/RC/stable regression matrix, and a beta-preparation pre-tag-context dry-run with transactional rollback.
 - Added the formal `docs/RELEASE-STATE.md` REL-001 contract.
 - Added an executable release-state auditor and hermetic negative tests.
 - Added `docs/TESTING-HISTORY.md` to preserve version-specific regression

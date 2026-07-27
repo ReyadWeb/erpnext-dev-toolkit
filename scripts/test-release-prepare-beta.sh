@@ -4,6 +4,10 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/release-test-env.sh
+source "${ROOT_DIR}/scripts/release-test-env.sh"
+release_test_env_reexec "$0" "$@"
+
 fail() {
   echo "FAIL: $*" >&2
   exit 1
@@ -37,6 +41,16 @@ cat >"${fixture}/scripts/validate-release.sh" <<'EOF_VALIDATE'
 #!/usr/bin/env bash
 exit "${FIXTURE_VALIDATE_EXIT:-0}"
 EOF_VALIDATE
+
+cat >"${fixture}/scripts/test-release-context-isolation.sh" <<'EOF_CONTEXT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+version="$(tr -d '[:space:]' <VERSION)"
+[[ "${ERPNEXT_RELEASE_CHANNEL:-}" == "beta" ]]
+[[ "${ERPNEXT_RELEASE_TAG:-}" == "v${version}" ]]
+[[ "${RELEASE_STRICT:-0}" == "1" ]]
+exit "${FIXTURE_CONTEXT_EXIT:-0}"
+EOF_CONTEXT
 
 chmod +x "${fixture}/scripts/"*.sh
 
@@ -100,6 +114,28 @@ before_hash="$(
     RELEASE-MANIFEST.txt \
     SHA256SUMS
 )"
+
+if FIXTURE_CONTEXT_EXIT=1 run_prepare \
+  1.20.0-beta.2 \
+  "Second beta" >/dev/null 2>&1; then
+  fail "prerelease test-context dry-run failure was accepted"
+fi
+
+context_hash="$(
+  cd "$fixture"
+  sha256sum \
+    VERSION \
+    erpnext-dev.sh \
+    README.md \
+    ROADMAP.md \
+    TESTING.md \
+    CHANGELOG.md \
+    RELEASE-MANIFEST.txt \
+    SHA256SUMS
+)"
+
+[[ "$before_hash" == "$context_hash" ]] \
+  || fail "failed test-context dry-run did not restore original files"
 
 if FIXTURE_VALIDATE_EXIT=1 run_prepare \
   1.20.0-beta.2 \
