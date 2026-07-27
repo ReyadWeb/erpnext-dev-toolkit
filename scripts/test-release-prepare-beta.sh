@@ -41,7 +41,7 @@ EOF_VALIDATE
 chmod +x "${fixture}/scripts/"*.sh
 
 printf '%s\n' '1.19.22' >"${fixture}/VERSION"
-printf '%s\n' '#!/usr/bin/env bash' 'SCRIPT_VERSION="1.19.22"' >"${fixture}/erpnext-dev.sh"
+printf '%s\n' '#!/usr/bin/env bash' '# runtime derives VERSION in the real tree' >"${fixture}/erpnext-dev.sh"
 printf '%s\n' '**Current release:** v1.19.22 · fixture' 'VERSION="v1.19.22"' >"${fixture}/README.md"
 printf '%s\n' '**Current release:** v1.19.22 (fixture)' >"${fixture}/ROADMAP.md"
 printf '%s\n' '**Current release:** v1.19.22 · fixture' >"${fixture}/TESTING.md"

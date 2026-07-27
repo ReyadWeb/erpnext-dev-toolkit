@@ -20,8 +20,8 @@ fail() {
   exit 1
 }
 
-version="$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n1 | cut -d'"' -f2)"
-[[ -n "$version" ]] || fail "could not read SCRIPT_VERSION"
+version="$(scripts/release-version.sh read)"
+[[ -n "$version" ]] || fail "could not read canonical VERSION"
 tag="v${version}"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-dev-legacy-bootstrap-test.XXXXXX")"
@@ -36,7 +36,7 @@ mkdir -p "$legacy_root" "$release_tree/lib" "$release_tree/docs" "$release_downl
 chmod 700 "$gpg_home"
 
 # Build a minimal-but-complete runtime release tree from the current checkout.
-cp erpnext-dev.sh "$release_tree/erpnext-dev.sh"
+cp erpnext-dev.sh VERSION "$release_tree/"
 cp -a lib/. "$release_tree/lib/"
 
 cat >"${work}/gpg-batch" <<GPG
@@ -56,7 +56,7 @@ GNUPGHOME="$gpg_home" gpg --batch --armor --export "$fingerprint" >"${release_tr
 (
   cd "$release_tree"
   {
-    sha256sum erpnext-dev.sh
+    sha256sum erpnext-dev.sh VERSION
     find lib -maxdepth 1 -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum
     sha256sum docs/erpnext-dev-signing-key.asc
   } >SHA256SUMS
@@ -75,6 +75,7 @@ output="$(
     TOOLKIT_CLI_PATH="${legacy_root}/bin/erpnext-dev" \
     TOOLKIT_RELEASE_GITHUB="file://${release_root}" \
     TOOLKIT_BOOTSTRAP_SIGNING_FINGERPRINT="$fingerprint" \
+    TOOLKIT_BOOTSTRAP_VERSION="$version" \
     LOG_DIR="${legacy_root}/logs" \
     LOCK_DIR="${legacy_root}/locks" \
     "${legacy_root}/erpnext-dev.sh" version 2>&1

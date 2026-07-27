@@ -31,6 +31,32 @@ Expected during R1A:
 
 The release candidate may not be approved while enforcement mode reports gaps.
 
+## v1.20.1 R1B-1 canonical runtime and channel tests
+
+R1B-1 removes duplicate runtime version ownership while retaining a derived
+`SCRIPT_VERSION` compatibility variable for existing modules.
+
+```bash
+scripts/test-release-version.sh
+scripts/test-release-metadata.sh
+scripts/test-release-prepare-beta.sh
+scripts/test-release-promote-stable.sh
+scripts/test-release-pretag-check.sh
+scripts/test-install-self-path.sh
+scripts/test-legacy-modular-bootstrap.sh
+scripts/check-release-state-invariants.sh audit
+```
+
+Expected R1B-1 audit baseline:
+
+- version format, duplicate-version ownership, workflow use, channel context,
+  README status, and roadmap status pass;
+- pre-sudo trust, CI binary integrity, and strict no-skip remain visible gaps for
+  R1C;
+- immutable `BUILD-INFO.json` and development-version advancement remain R1B-2.
+
+---
+
 ## Testing principles
 
 1. Use the repository workflow instead of assembling long validation command

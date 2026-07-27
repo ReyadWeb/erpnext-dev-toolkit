@@ -10,63 +10,96 @@ fail() {
   exit 1
 }
 
-tmp_dir="$(mktemp -d /tmp/erpnext-dev-version-test.XXXXXX)"
-trap 'rm -rf "$tmp_dir"' EXIT
+work="$(mktemp -d /tmp/erpnext-dev-version-test.XXXXXX)"
+trap 'rm -rf "$work"' EXIT
+fixture="${work}/fixture"
+mkdir -p "$fixture"
+cp scripts/release-version.sh "${fixture}/release-version.sh"
+chmod +x "${fixture}/release-version.sh"
 
-version_file="${tmp_dir}/VERSION"
-entrypoint="${tmp_dir}/erpnext-dev.sh"
-
-run_helper() {
-  ERPNEXT_VERSION_FILE="$version_file" \
-    ERPNEXT_ENTRYPOINT="$entrypoint" \
-    scripts/release-version.sh "$@"
+write_entrypoint() {
+  cat >"${fixture}/erpnext-dev.sh" <<'EOF_ENTRYPOINT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+version="$(tr -d '[:space:]' <"${root}/VERSION")"
+version="${ERPNEXT_TEST_RUNTIME_VERSION:-${version}}"
+case "${1:-}" in
+  version) printf 'ERPNext Developer Toolkit v%s\n' "$version" ;;
+  *) exit 2 ;;
+esac
+EOF_ENTRYPOINT
+  chmod +x "${fixture}/erpnext-dev.sh"
 }
 
-printf '%s\n' '1.20.0-beta.1' >"$version_file"
+run_helper() {
+  ERPNEXT_RELEASE_ROOT="$fixture" \
+    ERPNEXT_VERSION_FILE="${fixture}/VERSION" \
+    ERPNEXT_ENTRYPOINT="${fixture}/erpnext-dev.sh" \
+    ERPNEXT_GIT_ROOT="$fixture" \
+    "${fixture}/release-version.sh" "$@"
+}
 
-cat >"$entrypoint" <<'EOF_ENTRYPOINT'
-#!/usr/bin/env bash
-SCRIPT_VERSION="1.20.0-beta.1"
-EOF_ENTRYPOINT
+printf '%s\n' '1.20.1' >"${fixture}/VERSION"
+write_entrypoint
+(
+  cd "$fixture"
+  git init -q
+  git config user.name "Release Version Test"
+  git config user.email "release-version@example.invalid"
+  git add .
+  git commit -qm "development fixture"
+)
 
-[[ "$(run_helper read)" == "1.20.0-beta.1" ]] \
-  || fail "read did not return the canonical version"
+[[ "$(run_helper read)" == "1.20.1" ]] || fail "read did not return VERSION"
+[[ "$(run_helper runtime)" == "1.20.1" ]] || fail "runtime did not return entrypoint output"
+[[ "$(run_helper tag)" == "v1.20.1" ]] || fail "default tag was incorrect"
+[[ "$(run_helper channel)" == "development" ]] || fail "untagged tree was not development"
+run_helper assert-runtime >/dev/null
+run_helper assert-tag v1.20.1 >/dev/null
+run_helper assert-tag v1.20.1-beta.1 >/dev/null
+[[ "$(run_helper channel-for-tag v1.20.1)" == "stable" ]] \
+  || fail "stable target tag channel was not stable"
+[[ "$(run_helper channel-for-tag v1.20.1-beta.1)" == "beta" ]] \
+  || fail "beta target tag channel was not beta"
+[[ "$(run_helper channel-for-tag v1.20.1-rc.2)" == "rc" ]] \
+  || fail "RC target tag channel was not rc"
 
-[[ "$(run_helper tag)" == "v1.20.0-beta.1" ]] \
-  || fail "tag did not return the canonical tag"
+(
+  cd "$fixture"
+  git tag v1.20.1
+)
+[[ "$(run_helper channel)" == "stable" ]] || fail "exact stable tag was not stable"
 
-[[ "$(run_helper script)" == "1.20.0-beta.1" ]] \
-  || fail "script did not return SCRIPT_VERSION"
+(
+  cd "$fixture"
+  git tag -d v1.20.1 >/dev/null
+  git tag v1.20.1-beta.1
+)
+[[ "$(run_helper tag)" == "v1.20.1-beta.1" ]] || fail "exact beta tag was not selected"
+[[ "$(run_helper channel)" == "beta" ]] || fail "exact beta tag was not beta"
+run_helper assert-tag v1.20.1-beta.1 >/dev/null
 
-[[ "$(run_helper channel)" == "beta" ]] \
-  || fail "channel did not identify the beta version"
-
-run_helper assert-script >/dev/null
-run_helper assert-tag v1.20.0-beta.1 >/dev/null
-
-if run_helper assert-tag v1.20.0 >/dev/null 2>&1; then
-  fail "a mismatched tag was accepted"
+if run_helper assert-tag v1.20.2-beta.1 >/dev/null 2>&1; then
+  fail "tag for a different project version was accepted"
 fi
 
-sed -i \
-  's/1\.20\.0-beta\.1/1.20.0-beta.2/' \
-  "$entrypoint"
-
-if run_helper assert-script >/dev/null 2>&1; then
-  fail "a mismatched SCRIPT_VERSION was accepted"
+if ERPNEXT_TEST_RUNTIME_VERSION=1.20.1-beta.2 run_helper assert-runtime >/dev/null 2>&1; then
+  fail "mismatched runtime output was accepted"
 fi
 
-printf '%s\n' 'not-a-version' >"$version_file"
+[[ "$(ERPNEXT_RELEASE_CHANNEL=rc ERPNEXT_RELEASE_TAG=v1.20.1-rc.2 run_helper channel)" == "rc" ]] \
+  || fail "explicit validated RC context failed"
+if ERPNEXT_RELEASE_CHANNEL=stable ERPNEXT_RELEASE_TAG=v1.20.1-beta.1 run_helper channel >/dev/null 2>&1; then
+  fail "mismatched explicit release context was accepted"
+fi
 
+printf '%s\n' 'not-a-version' >"${fixture}/VERSION"
 if run_helper read >/dev/null 2>&1; then
   fail "invalid VERSION syntax was accepted"
 fi
 
-printf '%s\n\n%s\n' \
-  '1.20.0-beta.1' \
-  '1.20.0-beta.2' \
-  >"$version_file"
-
+printf '%s\n\n%s\n' '1.20.1' '1.20.2' >"${fixture}/VERSION"
 if run_helper read >/dev/null 2>&1; then
   fail "multiple VERSION values were accepted"
 fi

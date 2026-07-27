@@ -18,7 +18,7 @@ fail() {
 [[ -x scripts/check-release-artifact-consistency.sh ]] \
   || fail "scripts/check-release-artifact-consistency.sh is missing or not executable"
 
-scripts/release-version.sh assert-script >/dev/null
+scripts/release-version.sh assert-runtime >/dev/null
 scripts/check-release-artifact-consistency.sh >/dev/null
 
 tag="$(scripts/release-version.sh tag)"

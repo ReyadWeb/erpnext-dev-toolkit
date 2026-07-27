@@ -10,8 +10,60 @@ IFS=$'\n\t'
 # Mode: local dev (bench start) or production (supervisor: gunicorn + workers)
 # ============================================================
 
+# Resolve the real toolkit root before reading release identity. VERSION is the
+# only independently maintained project-version value; SCRIPT_VERSION remains a
+# compatibility variable derived from verified release metadata.
+_ERPNEXT_DEV_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+_ERPNEXT_DEV_ROOT="$(cd "$(dirname "${_ERPNEXT_DEV_REAL}")" && pwd)"
+ERPNEXT_DEV_ENTRY_SCRIPT="${_ERPNEXT_DEV_REAL}"
+
+_erpnext_dev_project_version() {
+  local version_file="${_ERPNEXT_DEV_ROOT}/VERSION"
+  local build_info="${_ERPNEXT_DEV_ROOT}/BUILD-INFO.json"
+  local file_version="" build_version="" selected=""
+
+  if [[ -f "$version_file" ]]; then
+    [[ "$(awk 'NF { count++ } END { print count + 0 }' "$version_file")" == "1" ]] || {
+      echo "ERROR: ${version_file} must contain exactly one non-empty version line." >&2
+      return 1
+    }
+    file_version="$(awk 'NF { print; exit }' "$version_file")"
+    file_version="${file_version#"${file_version%%[![:space:]]*}"}"
+    file_version="${file_version%"${file_version##*[![:space:]]}"}"
+  fi
+
+  if [[ -f "$build_info" ]]; then
+    build_version="$(
+      sed -nE \
+        's/^[[:space:]]*"project_version"[[:space:]]*:[[:space:]]*"([^"]+)"[[:space:]]*,?[[:space:]]*$/\1/p' \
+        "$build_info" \
+        | head -n 1
+    )"
+  fi
+
+  if [[ -n "$file_version" && -n "$build_version" && "$file_version" != "$build_version" ]]; then
+    echo "ERROR: VERSION (${file_version}) disagrees with BUILD-INFO.json (${build_version})." >&2
+    return 1
+  fi
+
+  selected="${build_version:-${file_version:-${ERPNEXT_DEV_VERSION_OVERRIDE:-}}}"
+  if [[ -z "$selected" ]]; then
+    # A legacy single-file installation may predate VERSION. Permit the signed
+    # recovery bridge to resolve a release, but never present unknown as a valid
+    # installed toolkit version after the complete tree is available.
+    printf '%s\n' unknown
+    return 0
+  fi
+
+  [[ "$selected" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] || {
+    echo "ERROR: Invalid toolkit project version: ${selected}" >&2
+    return 1
+  }
+  printf '%s\n' "$selected"
+}
+
 APP_NAME="ERPNext Developer Toolkit"
-SCRIPT_VERSION="1.20.0"
+SCRIPT_VERSION="$(_erpnext_dev_project_version)"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
@@ -206,13 +258,7 @@ RECOMMENDED_INSTALL_DISK_GB="${RECOMMENDED_INSTALL_DISK_GB:-60}"
 MIN_INSTALL_TMP_GB="${MIN_INSTALL_TMP_GB:-4}"
 ERPNEXT_ALLOW_UNSAFE_INSTALL="${ERPNEXT_ALLOW_UNSAFE_INSTALL:-false}"
 
-# Resolve the entry script through any symlinks (the /usr/local/bin/erpnext-dev
-# CLI symlink, and the /opt/erpnext-dev/current release symlink used by atomic
-# self-update) so lib/ is sourced from the REAL release directory, not from the
-# symlink's directory.
-_ERPNEXT_DEV_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
-_ERPNEXT_DEV_ROOT="$(cd "$(dirname "${_ERPNEXT_DEV_REAL}")" && pwd)"
-ERPNEXT_DEV_ENTRY_SCRIPT="${_ERPNEXT_DEV_REAL}"
+# Entry path and toolkit root were resolved before release identity was loaded.
 
 # Compatibility bridge for installations created by the legacy single-file
 # self-updater. That updater could replace /opt/erpnext-dev/erpnext-dev.sh with a
@@ -332,7 +378,25 @@ _erpnext_dev_recover_legacy_modular_install() {
     return 1
   }
 
-  version_tag="v${SCRIPT_VERSION}"
+  if [[ "$SCRIPT_VERSION" == "unknown" ]]; then
+    if [[ -n "${TOOLKIT_BOOTSTRAP_VERSION:-}" ]]; then
+      version_tag="${TOOLKIT_BOOTSTRAP_VERSION}"
+      [[ "$version_tag" == v* ]] || version_tag="v${version_tag}"
+    else
+      latest_url="${TOOLKIT_RELEASE_GITHUB:-https://github.com/ReyadWeb/erpnext-dev-toolkit}/releases/latest"
+      version_tag="$(
+        curl -fsSL -o /dev/null -w '%{url_effective}' "$latest_url" 2>/dev/null \
+          | sed -n 's|.*/tag/\([^/]*\)$|\1|p'
+      )"
+    fi
+    [[ "$version_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+      echo "ERROR: Could not resolve a stable release for legacy modular recovery." >&2
+      _erpnext_dev_bootstrap_failure_help "$missing"
+      return 1
+    }
+  else
+    version_tag="v${SCRIPT_VERSION}"
+  fi
   release_base="${TOOLKIT_RELEASE_GITHUB:-https://github.com/ReyadWeb/erpnext-dev-toolkit}/releases/download/${version_tag}"
   workdir="$(mktemp -d "${stable_root}/.legacy-bootstrap.XXXXXX")" || return 1
   bundle="${workdir}/erpnext-dev-${version_tag}.tar.gz"
@@ -348,7 +412,7 @@ _erpnext_dev_recover_legacy_modular_install() {
   # Reject absolute paths and traversal before extraction.
   while IFS= read -r tar_entry; do
     case "$tar_entry" in
-      /*|../*|*/../*|*/..)
+      /* | ../* | */../* | */..)
         rm -rf "$workdir"
         echo "ERROR: Unsafe path detected in recovery bundle: ${tar_entry}" >&2
         return 1
@@ -678,11 +742,27 @@ install_self_for_reuse() {
     warn "Could not copy toolkit lib/ tree to ${dest_root}/lib"
     return 1
   fi
-
+  if [[ ! -f "${src_root}/VERSION" ]]; then
+    warn "Could not install canonical version metadata: ${src_root}/VERSION is missing"
+    return 1
+  fi
+  cp -a "${src_root}/VERSION" "${dest_root}/VERSION" 2>/dev/null || {
+    warn "Could not copy VERSION to ${dest_root}"
+    return 1
+  }
+  chmod 0644 "${dest_root}/VERSION" 2>/dev/null || true
+  chown root:root "${dest_root}/VERSION" 2>/dev/null || true
+  if [[ -f "${src_root}/BUILD-INFO.json" ]]; then
+    cp -a "${src_root}/BUILD-INFO.json" "${dest_root}/BUILD-INFO.json" 2>/dev/null || {
+      warn "Could not copy BUILD-INFO.json to ${dest_root}"
+      return 1
+    }
+    chmod 0644 "${dest_root}/BUILD-INFO.json" 2>/dev/null || true
+    chown root:root "${dest_root}/BUILD-INFO.json" 2>/dev/null || true
+  fi
   install_toolkit_cli_entry 2>/dev/null || true
   return 0
 }
-
 
 show_where_installed() {
   local src stable_state cli_state cli_target config_state
@@ -749,22 +829,6 @@ show_toolkit_versions() {
   ui_box_end
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 show_advanced_installation_menu() {
   while true; do
     ui_submenu_header "Advanced > Installation & Repair" \
@@ -778,12 +842,21 @@ show_advanced_installation_menu() {
     local choice=""
     menu_read_choice choice
     case "$choice" in
-      1) run_install; pause_after_screen "Press Enter to return to Installation & Repair..." ;;
-      2) run_repair; pause_after_screen "Press Enter to return to Installation & Repair..." ;;
-      3) run_install_preflight; pause_after_screen "Press Enter to return to Installation & Repair..." ;;
+      1)
+        run_install
+        pause_after_screen "Press Enter to return to Installation & Repair..."
+        ;;
+      2)
+        run_repair
+        pause_after_screen "Press Enter to return to Installation & Repair..."
+        ;;
+      3)
+        run_install_preflight
+        pause_after_screen "Press Enter to return to Installation & Repair..."
+        ;;
       4) run_uninstall_menu ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -802,12 +875,24 @@ show_advanced_engine_menu() {
     local choice=""
     menu_read_choice choice
     case "$choice" in
-      1) show_engine_status; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
-      2) run_set_engine; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
-      3) show_environment_check; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
-      4) show_multi_environment_guide; pause_after_screen "Press Enter to return to Deployment Engine..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        show_engine_status
+        pause_after_screen "Press Enter to return to Deployment Engine..."
+        ;;
+      2)
+        run_set_engine
+        pause_after_screen "Press Enter to return to Deployment Engine..."
+        ;;
+      3)
+        show_environment_check
+        pause_after_screen "Press Enter to return to Deployment Engine..."
+        ;;
+      4)
+        show_multi_environment_guide
+        pause_after_screen "Press Enter to return to Deployment Engine..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -828,12 +913,24 @@ show_advanced_services_menu() {
     menu_read_choice choice
     case "$choice" in
       1) show_service_menu ;;
-      2) run_foreground_start; pause_after_screen "Press Enter to return to Services & Logs..." ;;
-      3) show_erpnext_service_logs; pause_after_screen "Press Enter to return to Services & Logs..." ;;
-      4) run_runtime_status; pause_after_screen "Press Enter to return to Services & Logs..." ;;
-      5) show_service_recovery_plan; pause_after_screen "Press Enter to return to Services & Logs..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      2)
+        run_foreground_start
+        pause_after_screen "Press Enter to return to Services & Logs..."
+        ;;
+      3)
+        show_erpnext_service_logs
+        pause_after_screen "Press Enter to return to Services & Logs..."
+        ;;
+      4)
+        run_runtime_status
+        pause_after_screen "Press Enter to return to Services & Logs..."
+        ;;
+      5)
+        show_service_recovery_plan
+        pause_after_screen "Press Enter to return to Services & Logs..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -851,11 +948,20 @@ show_advanced_storage_menu() {
     local choice=""
     menu_read_choice choice
     case "$choice" in
-      1) show_storage_status; pause_after_screen "Press Enter to return to Storage..." ;;
-      2) expand_root_storage; pause_after_screen "Press Enter to return to Storage..." ;;
-      3) verify_storage; pause_after_screen "Press Enter to return to Storage..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        show_storage_status
+        pause_after_screen "Press Enter to return to Storage..."
+        ;;
+      2)
+        expand_root_storage
+        pause_after_screen "Press Enter to return to Storage..."
+        ;;
+      3)
+        verify_storage
+        pause_after_screen "Press Enter to return to Storage..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -877,13 +983,25 @@ show_advanced_networking_menu() {
     menu_read_choice choice
     case "$choice" in
       1) show_access_menu ;;
-      2) show_network_status; pause_after_screen "Press Enter to return to Networking..." ;;
+      2)
+        show_network_status
+        pause_after_screen "Press Enter to return to Networking..."
+        ;;
       3) show_local_ip_menu ;;
-      4) show_kvm_fixed_ip_guide; pause_after_screen "Press Enter to return to Networking..." ;;
-      5) show_multi_environment_guide; pause_after_screen "Press Enter to return to Networking..." ;;
-      6) verify_access; pause_after_screen "Press Enter to return to Networking..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      4)
+        show_kvm_fixed_ip_guide
+        pause_after_screen "Press Enter to return to Networking..."
+        ;;
+      5)
+        show_multi_environment_guide
+        pause_after_screen "Press Enter to return to Networking..."
+        ;;
+      6)
+        verify_access
+        pause_after_screen "Press Enter to return to Networking..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -906,16 +1024,40 @@ show_advanced_diagnostics_menu() {
     local choice=""
     menu_read_choice choice
     case "$choice" in
-      1) run_full_status; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      2) run_app_status; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      3) show_environment_check; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      4) show_production_readiness; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      5) show_public_vm_readiness; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      6) show_next_step; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      7) verify_access; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      8) run_operations_dashboard; pause_after_screen "Press Enter to return to Diagnostics..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      1)
+        run_full_status
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      2)
+        run_app_status
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      3)
+        show_environment_check
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      4)
+        show_production_readiness
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      5)
+        show_public_vm_readiness
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      6)
+        show_next_step
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      7)
+        verify_access
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      8)
+        run_operations_dashboard
+        pause_after_screen "Press Enter to return to Diagnostics..."
+        ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -938,12 +1080,21 @@ show_advanced_developer_tools_menu() {
     case "$choice" in
       1) show_app_library_menu ;;
       2) run_app_install_wizard ;;
-      3) run_app_status; pause_after_screen "Press Enter to return to Developer Tools..." ;;
-      4) show_app_compatibility_matrix; pause_after_screen "Press Enter to return to Developer Tools..." ;;
-      5) show_app_rollback_guide; pause_after_screen "Press Enter to return to Developer Tools..." ;;
+      3)
+        run_app_status
+        pause_after_screen "Press Enter to return to Developer Tools..."
+        ;;
+      4)
+        show_app_compatibility_matrix
+        pause_after_screen "Press Enter to return to Developer Tools..."
+        ;;
+      5)
+        show_app_rollback_guide
+        pause_after_screen "Press Enter to return to Developer Tools..."
+        ;;
       6) show_advanced_app_tools_menu ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -977,8 +1128,8 @@ show_advanced_menu() {
       7) show_credentials_menu ;;
       8) show_advanced_diagnostics_menu ;;
       9) show_advanced_developer_tools_menu ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
+      b | B | "") return 0 ;;
+      q | Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -1039,7 +1190,7 @@ menu_navigation_self_test() {
       out="$(printf '%s\n' "$input" | timeout 5 "${invoke[@]}" "$script" "$action" 2>&1)"
       rc=$?
       set -e
-      if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
+      if ((rc != 0)) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
         failures=$((failures + 1))
         status_line "${action} ${input}" "FAIL" "q/Q did not exit cleanly"
       fi
@@ -1075,7 +1226,7 @@ menu_navigation_self_test() {
       out="$(printf '%s\nq\n' "$input" | timeout 5 "${invoke[@]}" "$script" "$action" 2>&1)"
       rc=$?
       set -e
-      if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
+      if ((rc != 0)) || printf '%s\n' "$out" | grep -Eqi 'Invalid option|command not found|unbound variable|syntax error'; then
         failures=$((failures + 1))
         status_line "${action} ${input}" "FAIL" "b/B did not return cleanly"
       fi
@@ -1103,20 +1254,20 @@ menu_navigation_self_test() {
   )
   local row root select quit
   for row in "${nested_tests[@]}"; do
-    IFS='|' read -r root select quit <<< "$row"
+    IFS='|' read -r root select quit <<<"$row"
     tested=$((tested + 1))
     set +e
     out="$(printf '%s\n%s\n' "$select" "$quit" | timeout 5 "${invoke[@]}" "$script" "$root" 2>&1)"
     rc=$?
     set -e
-    if (( rc != 0 )) || printf '%s\n' "$out" | grep -Eqi 'command not found|unbound variable|syntax error'; then
+    if ((rc != 0)) || printf '%s\n' "$out" | grep -Eqi 'command not found|unbound variable|syntax error'; then
       failures=$((failures + 1))
       status_line "${root}->${select}->${quit}" "FAIL" "nested menu quit failed"
     fi
   done
 
   status_line "Tests executed" "INFO" "$tested"
-  if (( failures == 0 )); then
+  if ((failures == 0)); then
     status_line "Menu navigation" "OK" "q/Q and b/B handled cleanly in tested menus"
   else
     status_line "Menu navigation" "FAIL" "${failures} failure(s) detected"
@@ -1416,7 +1567,7 @@ EOF_HELP
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -y|--yes)
+      -y | --yes)
         ASSUME_YES=1
         shift
         ;;
@@ -1448,7 +1599,7 @@ parse_args() {
           DASHBOARD_WATCH_SEC=5
         fi
         ;;
-      first-run|start-here|quickstart|setup-wizard|public-vm-quickstart|public-setup|public-vm-guided-setup|public-guided-setup|production-guided-setup|local-dev-quickstart|local-setup|install-preflight|environment-preflight|set-domain|show-config|guided-setup|setup|install|repair|status|status-menu|runtime-status|install-status|service-summary|doctor|support-bundle|support|support-bundle-audit|audit-support-bundle|support-bundle-audit-test|full-status|start|stop|uninstall|advanced|access|verify-access|access-info|education-access-info|portal-access-info|desk-url|credentials-info|credentials|login-info|credentials-show|show-credentials|credentials-file-status|credentials-secure|credentials-delete|credentials-menu|login-menu|reset-admin-password|admin-password-reset|next-step|local-ssl-menu|local-https|local-vm-ssl|local-ssl-wizard|ssl-wizard|trusted-mkcert-setup|mkcert-setup|access-menu|backup-menu|backup|backup-files|backup-status|backup-verify|verify-backups|off-vm-backup-guide|restore-rehearsal-guide|restore-rehearsal-status|restore-rehearsal-record|restore-rehearsal-report|go-live-record|go-live-status|cloud-firewall-checklist|cloudflare-checklist|restore-rehearsal-wizard|restore-key-setup|pull-off-vm-backup|backup-server-add-restore-key|backup-server-remove-restore-key|backup-server-list-restore-keys|production-checklist|release-readiness|final-qa|final-qa-wizard|command-audit|release-notes-guide|backup-hardening-wizard|backup-wizard|backup-schedule-plan|configure-backup-schedule|backup-schedule-status|scheduled-backup-status|disable-backup-schedule|scheduled-backups|backup-retention-plan|backup-retention-status|cleanup-old-backups|cleanup-old-backups-dry-run|backup-cleanup-dry-run|backup-cleanup|off-vm-backup-plan|off-vm-backup-guided-setup|generate-off-vm-backup-key|off-vm-backup-keygen|backup-server-setup|prepare-backup-server|off-vm-backup-server-setup|configure-rsync-backup-target|off-vm-trust-host-key|off-vm-verify-host-key|off-vm-strict-host-key-enable|off-vm-strict-host-key-disable|off-vm-backup-dry-run|run-off-vm-backup|off-vm-backup-status|disable-off-vm-backup|off-vm-backup-wizard|health-check|health-check-run-now|configure-health-check-timer|health-check-status|health-check-journal|disable-health-check-timer|health-monitoring-wizard|production-monitoring-wizard|dashboard|ops-dashboard-v2|health-snapshot|incidents|incident-show|health-history|health-metrics|openmetrics|healing-status|healing-policy|healing-history|healing-enable-safe|healing-disable|healing-unlock|service-recovery-plan|restore-preflight|production-ops-wizard|production-ops-dashboard|operations-wizard|operations-dashboard|ops-wizard|ops-dashboard|list-backups|backups|restore-db|restore-full|maintenance|migrate|build|clear-cache|restart|update-preflight|upgrade-preflight|safe-update|safe-update-wizard|update-erpnext|upgrade-erpnext|update-rollback|rollback-update|wait-ready|verify-frontend-assets|wait-frontend-assets|repair-frontend-assets|frappe-asset-checklist|frappe-frontend-assets|menu|help|-h|--help|version|--version|versions|version-matrix|toolchain|where-installed|verify-toolkit|toolkit-verify|verify-install|verify-signature|verify-release-signature|verify-sig|install-cli|repair-cli|update-toolkit|toolkit-rollback|update-toolkit-rollback|rollback-toolkit|clear-lock|unlock|force-unlock|menu-self-test|menu-navigation-self-test|menu-render-test|dashboard-render-test|foreground-start|enable-autostart|disable-autostart|service-start|service-stop|service-restart|service-status|setup-production-runtime|convert-to-production|production-runtime-setup|convert-to-dev-runtime|convert-to-development-runtime|production-runtime-status|runtime-mode-status|logs|logs-follow|kvm-guide|kvm-identify|network-status|local-domain-status|local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint|local-access-doctor|hosts-command|print-hosts-command|host-dns-guide|local-ip-menu|local-network|local-network-menu|local-ip-status|local-ip-plan|local-ip-drift-check|local-ip-save|local-static-ip-wizard|local-static-ip-rollback|local-fixed-ip-guide|fixed-ip-guide|kvm-fixed-ip-guide|host-test|ssl-roadmap|ssl-status|local-ssl-guide|mkcert-guide|trusted-local-ssl-guide|browser-trust-guide|trust-check-guide|ssl-rollback-guide|verify-ssl-rollback|verify-local-ssl|install-local-ssl-cert|replace-local-ssl-cert|create-self-signed-local-cert|self-signed-local-cert|configure-local-ssl|disable-local-ssl|environment-check|where-am-i|site-config|domain-config|change-local-domain|local-domain-wizard|rename-local-site|change-site-domain|set-host-os|host-os|choose-host-os|set-engine|engine|choose-engine|deployment-engine|engine-status|engine-restore|engine-upgrade|engine-rollback|engine-diagnostics|docker-production-setup|docker-prod-setup|docker-production|docker-backup|docker-backup-files|docker-backup-verify|docker-restore|docker-restore-full|docker-restore-db|docker-restore-rehearsal|docker-restore-evidence|docker-offvm-backup|docker-offvm-backup-dry-run|docker-offvm-status|docker-object-config|docker-object-backup-config|docker-object-backup|docker-object-backup-dry-run|docker-object-status|configure-object-backup|object-backup-config|object-config|object-backup|run-object-backup|object-backup-dry-run|object-status|object-backup-status|docker-https-wizard|docker-production-https|docker-https-menu|docker-enable-letsencrypt|docker-letsencrypt|docker-https-letsencrypt|docker-configure-cloudflare-origin|docker-cloudflare-origin|docker-https-cloudflare-origin|docker-https-status|docker-https-rollback|docker-disable-https|docker-production-exposure|docker-exposure-check|docker-custom-image-config|docker-custom-apps|docker-build-custom-image|docker-custom-image-build|docker-deploy-custom-image|docker-custom-image-deploy|docker-custom-image-status|docker-reconcile-app-image|storage-status|storage-debug|expand-root-storage|verify-storage|production-readiness|production-plan|prod-plan|production-domain-plan|prod-domain-plan|public-vm-readiness|public-readiness|production-ssl-plan|prod-ssl-plan|production-firewall-plan|prod-firewall-plan|firewall-hardening-status|firewall-status|hardening-status|vm-firewall-plan|ufw-plan|configure-vm-firewall|local-firewall-profile|local-security-profile|production-firewall-profile|production-security-profile|repair-local-access|firewall-rollback-snapshots|vm-firewall-status|ufw-status|configure-fail2ban|fail2ban-status|security-audit|security-audit-test|security-hardening-wizard|vm-firewall-wizard|ufw-ssh-admin-only|production-ssl-menu|production-https|production-https-menu|configure-production-ssl|production-ssl-wizard|ssl-provider-wizard|ssl-mode-status|ssl-mode-guide|ssl-compatibility|setup-effort-guide|setup-step-count|setup-lifecycle-plan|setup-order-plan|configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl|cloudflare-origin-ssl-status|cloudflare-origin-guide|production-ssl-status|disable-production-ssl|production-domain-guide|production-ssl-guide|repair-site-config|site-name-guide|custom-site-guide|multi-env-guide|app-library|apps|list-apps|app-status|app-compatibility|app-compat|app-preflight|install-crm|install-hrms|install-helpdesk|install-telephony|install-insights|install-payments|install-webshop|install-ecommerce|install-builder|install-lms|install-education|install-wiki|install-print-designer|install-drive|install-gameplan|install-lending|install-raven|install-india-compliance|install-gst|install-india-gst|advanced-app-tools|app-advanced-tools|custom-app-tools|install-custom-app|app-install-wizard|app-wizard|app-install-guide|app-rollback-guide|repair-app-registry)
+      first-run | start-here | quickstart | setup-wizard | public-vm-quickstart | public-setup | public-vm-guided-setup | public-guided-setup | production-guided-setup | local-dev-quickstart | local-setup | install-preflight | environment-preflight | set-domain | show-config | guided-setup | setup | install | repair | status | status-menu | runtime-status | install-status | service-summary | doctor | support-bundle | support | support-bundle-audit | audit-support-bundle | support-bundle-audit-test | full-status | start | stop | uninstall | advanced | access | verify-access | access-info | education-access-info | portal-access-info | desk-url | credentials-info | credentials | login-info | credentials-show | show-credentials | credentials-file-status | credentials-secure | credentials-delete | credentials-menu | login-menu | reset-admin-password | admin-password-reset | next-step | local-ssl-menu | local-https | local-vm-ssl | local-ssl-wizard | ssl-wizard | trusted-mkcert-setup | mkcert-setup | access-menu | backup-menu | backup | backup-files | backup-status | backup-verify | verify-backups | off-vm-backup-guide | restore-rehearsal-guide | restore-rehearsal-status | restore-rehearsal-record | restore-rehearsal-report | go-live-record | go-live-status | cloud-firewall-checklist | cloudflare-checklist | restore-rehearsal-wizard | restore-key-setup | pull-off-vm-backup | backup-server-add-restore-key | backup-server-remove-restore-key | backup-server-list-restore-keys | production-checklist | release-readiness | final-qa | final-qa-wizard | command-audit | release-notes-guide | backup-hardening-wizard | backup-wizard | backup-schedule-plan | configure-backup-schedule | backup-schedule-status | scheduled-backup-status | disable-backup-schedule | scheduled-backups | backup-retention-plan | backup-retention-status | cleanup-old-backups | cleanup-old-backups-dry-run | backup-cleanup-dry-run | backup-cleanup | off-vm-backup-plan | off-vm-backup-guided-setup | generate-off-vm-backup-key | off-vm-backup-keygen | backup-server-setup | prepare-backup-server | off-vm-backup-server-setup | configure-rsync-backup-target | off-vm-trust-host-key | off-vm-verify-host-key | off-vm-strict-host-key-enable | off-vm-strict-host-key-disable | off-vm-backup-dry-run | run-off-vm-backup | off-vm-backup-status | disable-off-vm-backup | off-vm-backup-wizard | health-check | health-check-run-now | configure-health-check-timer | health-check-status | health-check-journal | disable-health-check-timer | health-monitoring-wizard | production-monitoring-wizard | dashboard | ops-dashboard-v2 | health-snapshot | incidents | incident-show | health-history | health-metrics | openmetrics | healing-status | healing-policy | healing-history | healing-enable-safe | healing-disable | healing-unlock | service-recovery-plan | restore-preflight | production-ops-wizard | production-ops-dashboard | operations-wizard | operations-dashboard | ops-wizard | ops-dashboard | list-backups | backups | restore-db | restore-full | maintenance | migrate | build | clear-cache | restart | update-preflight | upgrade-preflight | safe-update | safe-update-wizard | update-erpnext | upgrade-erpnext | update-rollback | rollback-update | wait-ready | verify-frontend-assets | wait-frontend-assets | repair-frontend-assets | frappe-asset-checklist | frappe-frontend-assets | menu | help | -h | --help | version | --version | versions | version-matrix | toolchain | where-installed | verify-toolkit | toolkit-verify | verify-install | verify-signature | verify-release-signature | verify-sig | install-cli | repair-cli | update-toolkit | toolkit-rollback | update-toolkit-rollback | rollback-toolkit | clear-lock | unlock | force-unlock | menu-self-test | menu-navigation-self-test | menu-render-test | dashboard-render-test | foreground-start | enable-autostart | disable-autostart | service-start | service-stop | service-restart | service-status | setup-production-runtime | convert-to-production | production-runtime-setup | convert-to-dev-runtime | convert-to-development-runtime | production-runtime-status | runtime-mode-status | logs | logs-follow | kvm-guide | kvm-identify | network-status | local-domain-status | local-host-checkpoint | host-dns-checkpoint | host-mapping-checkpoint | local-access-doctor | hosts-command | print-hosts-command | host-dns-guide | local-ip-menu | local-network | local-network-menu | local-ip-status | local-ip-plan | local-ip-drift-check | local-ip-save | local-static-ip-wizard | local-static-ip-rollback | local-fixed-ip-guide | fixed-ip-guide | kvm-fixed-ip-guide | host-test | ssl-roadmap | ssl-status | local-ssl-guide | mkcert-guide | trusted-local-ssl-guide | browser-trust-guide | trust-check-guide | ssl-rollback-guide | verify-ssl-rollback | verify-local-ssl | install-local-ssl-cert | replace-local-ssl-cert | create-self-signed-local-cert | self-signed-local-cert | configure-local-ssl | disable-local-ssl | environment-check | where-am-i | site-config | domain-config | change-local-domain | local-domain-wizard | rename-local-site | change-site-domain | set-host-os | host-os | choose-host-os | set-engine | engine | choose-engine | deployment-engine | engine-status | engine-restore | engine-upgrade | engine-rollback | engine-diagnostics | docker-production-setup | docker-prod-setup | docker-production | docker-backup | docker-backup-files | docker-backup-verify | docker-restore | docker-restore-full | docker-restore-db | docker-restore-rehearsal | docker-restore-evidence | docker-offvm-backup | docker-offvm-backup-dry-run | docker-offvm-status | docker-object-config | docker-object-backup-config | docker-object-backup | docker-object-backup-dry-run | docker-object-status | configure-object-backup | object-backup-config | object-config | object-backup | run-object-backup | object-backup-dry-run | object-status | object-backup-status | docker-https-wizard | docker-production-https | docker-https-menu | docker-enable-letsencrypt | docker-letsencrypt | docker-https-letsencrypt | docker-configure-cloudflare-origin | docker-cloudflare-origin | docker-https-cloudflare-origin | docker-https-status | docker-https-rollback | docker-disable-https | docker-production-exposure | docker-exposure-check | docker-custom-image-config | docker-custom-apps | docker-build-custom-image | docker-custom-image-build | docker-deploy-custom-image | docker-custom-image-deploy | docker-custom-image-status | docker-reconcile-app-image | storage-status | storage-debug | expand-root-storage | verify-storage | production-readiness | production-plan | prod-plan | production-domain-plan | prod-domain-plan | public-vm-readiness | public-readiness | production-ssl-plan | prod-ssl-plan | production-firewall-plan | prod-firewall-plan | firewall-hardening-status | firewall-status | hardening-status | vm-firewall-plan | ufw-plan | configure-vm-firewall | local-firewall-profile | local-security-profile | production-firewall-profile | production-security-profile | repair-local-access | firewall-rollback-snapshots | vm-firewall-status | ufw-status | configure-fail2ban | fail2ban-status | security-audit | security-audit-test | security-hardening-wizard | vm-firewall-wizard | ufw-ssh-admin-only | production-ssl-menu | production-https | production-https-menu | configure-production-ssl | production-ssl-wizard | ssl-provider-wizard | ssl-mode-status | ssl-mode-guide | ssl-compatibility | setup-effort-guide | setup-step-count | setup-lifecycle-plan | setup-order-plan | configure-cloudflare-origin-ssl | install-cloudflare-origin-cert | switch-to-cloudflare-origin-ssl | cloudflare-origin-ssl-status | cloudflare-origin-guide | production-ssl-status | disable-production-ssl | production-domain-guide | production-ssl-guide | repair-site-config | site-name-guide | custom-site-guide | multi-env-guide | app-library | apps | list-apps | app-status | app-compatibility | app-compat | app-preflight | install-crm | install-hrms | install-helpdesk | install-telephony | install-insights | install-payments | install-webshop | install-ecommerce | install-builder | install-lms | install-education | install-wiki | install-print-designer | install-drive | install-gameplan | install-lending | install-raven | install-india-compliance | install-gst | install-india-gst | advanced-app-tools | app-advanced-tools | custom-app-tools | install-custom-app | app-install-wizard | app-wizard | app-install-guide | app-rollback-guide | repair-app-registry)
         ACTION="$1"
         shift
         ;;
@@ -1481,78 +1632,78 @@ main() {
   fi
 
   case "${ACTION:-menu}" in
-    ""|menu) show_menu ;;
-    version|--version) echo "${APP_NAME} v${SCRIPT_VERSION}" ;;
-    versions|version-matrix|toolchain) show_toolkit_versions ;;
+    "" | menu) show_menu ;;
+    version | --version) echo "${APP_NAME} v${SCRIPT_VERSION}" ;;
+    versions | version-matrix | toolchain) show_toolkit_versions ;;
     where-installed) show_where_installed ;;
-    verify-toolkit|toolkit-verify|verify-install) verify_toolkit_integrity ;;
-    verify-signature|verify-release-signature|verify-sig) verify_toolkit_signature ;;
+    verify-toolkit | toolkit-verify | verify-install) verify_toolkit_integrity ;;
+    verify-signature | verify-release-signature | verify-sig) verify_toolkit_signature ;;
     install-cli) install_toolkit_cli ;;
     repair-cli) repair_toolkit_cli ;;
     update-toolkit) update_toolkit ;;
-    toolkit-rollback|update-toolkit-rollback|rollback-toolkit) rollback_toolkit ;;
-    clear-lock|unlock|force-unlock) clear_toolkit_lock ;;
-    menu-self-test|menu-navigation-self-test) menu_navigation_self_test ;;
+    toolkit-rollback | update-toolkit-rollback | rollback-toolkit) rollback_toolkit ;;
+    clear-lock | unlock | force-unlock) clear_toolkit_lock ;;
+    menu-self-test | menu-navigation-self-test) menu_navigation_self_test ;;
     menu-render-test) menu_render_test ;;
     dashboard-render-test) dashboard_render_test ;;
-    first-run|start-here|quickstart|setup-wizard) run_first_run_wizard ;;
-    public-vm-guided-setup|public-guided-setup|production-guided-setup) run_public_vm_guided_setup ;;
-    public-vm-quickstart|public-setup) run_public_vm_quickstart ;;
-    local-dev-quickstart|local-setup) run_local_dev_quickstart ;;
-    install-preflight|environment-preflight) run_install_preflight ;;
+    first-run | start-here | quickstart | setup-wizard) run_first_run_wizard ;;
+    public-vm-guided-setup | public-guided-setup | production-guided-setup) run_public_vm_guided_setup ;;
+    public-vm-quickstart | public-setup) run_public_vm_quickstart ;;
+    local-dev-quickstart | local-setup) run_local_dev_quickstart ;;
+    install-preflight | environment-preflight) run_install_preflight ;;
     set-domain) prompt_and_save_public_domain ;;
     show-config) show_config_summary ;;
     guided-setup) run_guided_setup ;;
-    setup|install) run_install ;;
+    setup | install) run_install ;;
     repair) run_repair ;;
     status) run_status ;;
     status-menu) show_status_menu ;;
     runtime-status) run_runtime_status ;;
     install-status) run_installation_status ;;
     service-summary) run_service_summary ;;
-    doctor|full-status)
+    doctor | full-status)
       case "$DOCTOR_FORMAT" in
         plain) run_doctor_plain ;;
         json) run_doctor_json ;;
         *) run_full_status ;;
       esac
       ;;
-    support-bundle|support) create_support_bundle ;;
-    support-bundle-audit|audit-support-bundle|support-bundle-audit-test) support_bundle_audit_archive ;;
+    support-bundle | support) create_support_bundle ;;
+    support-bundle-audit | audit-support-bundle | support-bundle-audit-test) support_bundle_audit_archive ;;
     start) run_start ;;
     stop) run_stop ;;
     uninstall) run_uninstall_menu ;;
     advanced) show_advanced_menu ;;
-    access|access-menu) show_access_menu ;;
+    access | access-menu) show_access_menu ;;
     verify-access) verify_access ;;
-    access-info|desk-url) show_access_info ;;
-    education-access-info|portal-access-info) show_education_access_info ;;
-    credentials-info|credentials|login-info) show_credentials_info ;;
-    credentials-show|show-credentials) credentials_show ;;
+    access-info | desk-url) show_access_info ;;
+    education-access-info | portal-access-info) show_education_access_info ;;
+    credentials-info | credentials | login-info) show_credentials_info ;;
+    credentials-show | show-credentials) credentials_show ;;
     credentials-file-status) show_credentials_file_status ;;
     credentials-secure) credentials_secure ;;
     credentials-delete) credentials_delete ;;
-    credentials-menu|login-menu) show_credentials_menu ;;
-    reset-admin-password|admin-password-reset) reset_admin_password ;;
+    credentials-menu | login-menu) show_credentials_menu ;;
+    reset-admin-password | admin-password-reset) reset_admin_password ;;
     next-step) show_next_step ;;
-    local-ssl-menu|local-https|local-vm-ssl) show_local_ssl_menu main ;;
-    local-ssl-wizard|ssl-wizard) run_local_ssl_wizard main ;;
+    local-ssl-menu | local-https | local-vm-ssl) show_local_ssl_menu main ;;
+    local-ssl-wizard | ssl-wizard) run_local_ssl_wizard main ;;
     backup-menu) run_backup_maintenance_menu ;;
-    app-library|apps) show_app_library_menu ;;
-    app-install-wizard|app-wizard) run_app_install_wizard ;;
+    app-library | apps) show_app_library_menu ;;
+    app-install-wizard | app-wizard) run_app_install_wizard ;;
     app-install-guide) show_app_install_guide ;;
     app-rollback-guide) show_app_rollback_guide ;;
-    advanced-app-tools|app-advanced-tools|custom-app-tools) show_advanced_app_tools_menu ;;
+    advanced-app-tools | app-advanced-tools | custom-app-tools) show_advanced_app_tools_menu ;;
     list-apps) show_installed_apps ;;
     app-status) run_app_status ;;
-    app-compatibility|app-compat|app-preflight) show_app_compatibility_matrix ;;
+    app-compatibility | app-compat | app-preflight) show_app_compatibility_matrix ;;
     install-crm) install_app_profile crm ;;
     install-hrms) install_app_profile hrms ;;
     install-helpdesk) install_app_profile helpdesk ;;
     install-telephony) install_app_profile telephony ;;
     install-insights) install_app_profile insights ;;
     install-payments) install_app_profile payments ;;
-    install-webshop|install-ecommerce) install_app_profile webshop ;;
+    install-webshop | install-ecommerce) install_app_profile webshop ;;
     install-builder) install_app_profile builder ;;
     install-lms) install_app_profile lms ;;
     install-education) install_app_profile education ;;
@@ -1562,13 +1713,13 @@ main() {
     install-gameplan) install_app_profile gameplan ;;
     install-lending) install_app_profile lending ;;
     install-raven) install_app_profile raven ;;
-    install-india-compliance|install-gst|install-india-gst) install_app_profile india_compliance ;;
+    install-india-compliance | install-gst | install-india-gst) install_app_profile india_compliance ;;
     install-custom-app) install_custom_app_interactive ;;
     repair-app-registry) repair_app_registry ;;
     backup) engine_backup false ;;
     backup-files) engine_backup true ;;
     backup-status) show_backup_status ;;
-    backup-verify|verify-backups) verify_latest_backup_set ;;
+    backup-verify | verify-backups) verify_latest_backup_set ;;
     off-vm-backup-guide) show_off_vm_backup_guide ;;
     restore-rehearsal-guide) show_restore_rehearsal_guide ;;
     restore-rehearsal-status) show_restore_rehearsal_status ;;
@@ -1582,20 +1733,20 @@ main() {
     release-readiness) show_release_readiness ;;
     command-audit) show_command_audit ;;
     release-notes-guide) show_release_notes_guide ;;
-    final-qa|final-qa-wizard) final_qa_wizard ;;
-    backup-hardening-wizard|backup-wizard) backup_hardening_wizard ;;
-    backup-schedule-plan|scheduled-backups) show_backup_schedule_plan ;;
+    final-qa | final-qa-wizard) final_qa_wizard ;;
+    backup-hardening-wizard | backup-wizard) backup_hardening_wizard ;;
+    backup-schedule-plan | scheduled-backups) show_backup_schedule_plan ;;
     configure-backup-schedule) configure_backup_schedule ;;
-    backup-schedule-status|scheduled-backup-status) show_backup_schedule_status ;;
+    backup-schedule-status | scheduled-backup-status) show_backup_schedule_status ;;
     disable-backup-schedule) disable_backup_schedule ;;
     backup-retention-plan) show_backup_retention_plan ;;
     backup-retention-status) show_backup_retention_status ;;
-    cleanup-old-backups|backup-cleanup) cleanup_old_backups prompt ;;
-    cleanup-old-backups-dry-run|backup-cleanup-dry-run) cleanup_old_backups dry-run ;;
+    cleanup-old-backups | backup-cleanup) cleanup_old_backups prompt ;;
+    cleanup-old-backups-dry-run | backup-cleanup-dry-run) cleanup_old_backups dry-run ;;
     off-vm-backup-plan) show_off_vm_backup_plan ;;
     off-vm-backup-guided-setup) off_vm_backup_guided_setup ;;
-    generate-off-vm-backup-key|off-vm-backup-keygen) generate_off_vm_backup_key ;;
-    backup-server-setup|prepare-backup-server|off-vm-backup-server-setup) backup_server_setup ;;
+    generate-off-vm-backup-key | off-vm-backup-keygen) generate_off_vm_backup_key ;;
+    backup-server-setup | prepare-backup-server | off-vm-backup-server-setup) backup_server_setup ;;
     configure-rsync-backup-target) configure_rsync_backup_target ;;
     off-vm-trust-host-key) off_vm_trust_host_key ;;
     off-vm-verify-host-key) off_vm_verify_host_key ;;
@@ -1606,24 +1757,27 @@ main() {
     off-vm-backup-status) show_off_vm_backup_status ;;
     disable-off-vm-backup) disable_off_vm_backup ;;
     off-vm-backup-wizard) off_vm_backup_wizard ;;
-    health-check|health-check-run-now) run_health_check ;;
+    health-check | health-check-run-now) run_health_check ;;
     configure-health-check-timer) configure_health_check_timer ;;
     health-check-status) show_health_check_status ;;
     health-check-journal) show_health_check_journal ;;
     disable-health-check-timer) disable_health_check_timer ;;
-    dashboard|ops-dashboard-v2) run_operations_dashboard ;;
-    health-snapshot) DASHBOARD_FORMAT=json; run_operations_dashboard ;;
+    dashboard | ops-dashboard-v2) run_operations_dashboard ;;
+    health-snapshot)
+      DASHBOARD_FORMAT=json
+      run_operations_dashboard
+      ;;
     incidents) show_health_incidents ;;
     incident-show) show_health_incident "${ACTION_ARG:-}" ;;
     health-history) show_health_history "${ACTION_ARG:-20}" ;;
-    health-metrics|openmetrics) health_emit_openmetrics ;;
+    health-metrics | openmetrics) health_emit_openmetrics ;;
     healing-status) show_healing_status ;;
     healing-policy) show_healing_policy ;;
     healing-history) show_healing_history "${ACTION_ARG:-20}" ;;
     healing-enable-safe) healing_enable_safe ;;
     healing-disable) healing_disable ;;
     healing-unlock) healing_unlock ;;
-    health-monitoring-wizard|production-monitoring-wizard) health_monitoring_wizard ;;
+    health-monitoring-wizard | production-monitoring-wizard) health_monitoring_wizard ;;
     service-recovery-plan) show_service_recovery_plan ;;
     restore-preflight) show_restore_preflight ;;
     restore-rehearsal-wizard) restore_rehearsal_wizard ;;
@@ -1632,15 +1786,15 @@ main() {
     backup-server-add-restore-key) backup_server_add_restore_key ;;
     backup-server-remove-restore-key) backup_server_remove_restore_key ;;
     backup-server-list-restore-keys) backup_server_list_restore_keys ;;
-    production-ops-wizard|production-ops-dashboard|operations-wizard|operations-dashboard|ops-wizard|ops-dashboard) production_ops_wizard ;;
-    list-backups|backups) list_site_backups ;;
+    production-ops-wizard | production-ops-dashboard | operations-wizard | operations-dashboard | ops-wizard | ops-dashboard) production_ops_wizard ;;
+    list-backups | backups) list_site_backups ;;
     restore-db) restore_site_database ;;
     restore-full) restore_site_full ;;
     maintenance) run_maintenance_menu ;;
     migrate) maintenance_migrate ;;
-    update-preflight|upgrade-preflight) run_update_preflight ;;
-    safe-update|safe-update-wizard|update-erpnext|upgrade-erpnext) run_safe_update_wizard ;;
-    update-rollback|rollback-update) run_update_rollback ;;
+    update-preflight | upgrade-preflight) run_update_preflight ;;
+    safe-update | safe-update-wizard | update-erpnext | upgrade-erpnext) run_safe_update_wizard ;;
+    update-rollback | rollback-update) run_update_rollback ;;
     build) maintenance_build ;;
     clear-cache) maintenance_clear_cache ;;
     restart) maintenance_restart ;;
@@ -1648,7 +1802,7 @@ main() {
     verify-frontend-assets) verify_frontend_assets ;;
     wait-frontend-assets) wait_frontend_assets ;;
     repair-frontend-assets) repair_frontend_assets ;;
-    frappe-asset-checklist|frappe-frontend-assets) run_frappe_asset_checklist ;;
+    frappe-asset-checklist | frappe-frontend-assets) run_frappe_asset_checklist ;;
     foreground-start) run_foreground_start ;;
     enable-autostart) enable_autostart_service ;;
     disable-autostart) disable_autostart_service ;;
@@ -1656,123 +1810,123 @@ main() {
     service-stop) stop_erpnext_service ;;
     service-restart) restart_erpnext_service ;;
     service-status) show_erpnext_service_status ;;
-    setup-production-runtime|convert-to-production|production-runtime-setup) run_setup_production_runtime ;;
-    convert-to-dev-runtime|convert-to-development-runtime) run_convert_to_dev_runtime ;;
-    production-runtime-status|runtime-mode-status) show_production_runtime_status ;;
+    setup-production-runtime | convert-to-production | production-runtime-setup) run_setup_production_runtime ;;
+    convert-to-dev-runtime | convert-to-development-runtime) run_convert_to_dev_runtime ;;
+    production-runtime-status | runtime-mode-status) show_production_runtime_status ;;
     logs) show_erpnext_service_logs ;;
     logs-follow) follow_erpnext_service_logs ;;
-    local-ip-menu|local-network|local-network-menu) show_local_ip_menu main ;;
+    local-ip-menu | local-network | local-network-menu) show_local_ip_menu main ;;
     local-ip-status) show_local_ip_status ;;
     local-ip-plan) show_local_ip_plan ;;
     local-ip-drift-check) run_local_ip_drift_check ;;
     local-ip-save) local_ip_save_mapping ;;
     local-static-ip-wizard) run_local_static_ip_wizard ;;
     local-static-ip-rollback) run_local_static_ip_rollback ;;
-    local-fixed-ip-guide|fixed-ip-guide) show_local_fixed_ip_guide ;;
-    kvm-guide|kvm-fixed-ip-guide) show_kvm_fixed_ip_guide ;;
+    local-fixed-ip-guide | fixed-ip-guide) show_local_fixed_ip_guide ;;
+    kvm-guide | kvm-fixed-ip-guide) show_kvm_fixed_ip_guide ;;
     kvm-identify) show_kvm_vm_identification_guide ;;
     network-status) show_network_status ;;
     local-domain-status) show_local_domain_status ;;
-    local-host-checkpoint|host-dns-checkpoint|host-mapping-checkpoint) show_local_host_mapping_checkpoint ;;
+    local-host-checkpoint | host-dns-checkpoint | host-mapping-checkpoint) show_local_host_mapping_checkpoint ;;
     local-access-doctor) local_access_doctor ;;
-    hosts-command|print-hosts-command|host-dns-guide) show_host_hosts_command ;;
+    hosts-command | print-hosts-command | host-dns-guide) show_host_hosts_command ;;
     host-test) show_host_access_test_guide ;;
     ssl-roadmap) show_ssl_roadmap_guide ;;
     ssl-status) show_ssl_status ;;
     local-ssl-guide) show_local_ssl_guide ;;
-    mkcert-guide|trusted-local-ssl-guide) show_mkcert_local_ssl_guide ;;
-    trusted-mkcert-setup|mkcert-setup) run_trusted_mkcert_setup ;;
-    browser-trust-guide|trust-check-guide) show_browser_trust_check_guide ;;
+    mkcert-guide | trusted-local-ssl-guide) show_mkcert_local_ssl_guide ;;
+    trusted-mkcert-setup | mkcert-setup) run_trusted_mkcert_setup ;;
+    browser-trust-guide | trust-check-guide) show_browser_trust_check_guide ;;
     ssl-rollback-guide) show_ssl_rollback_guide ;;
     verify-ssl-rollback) verify_ssl_rollback ;;
     verify-local-ssl) verify_local_ssl ;;
-    install-local-ssl-cert|replace-local-ssl-cert) install_local_ssl_cert ;;
-    create-self-signed-local-cert|self-signed-local-cert) create_self_signed_local_cert ;;
+    install-local-ssl-cert | replace-local-ssl-cert) install_local_ssl_cert ;;
+    create-self-signed-local-cert | self-signed-local-cert) create_self_signed_local_cert ;;
     configure-local-ssl) configure_local_ssl ;;
     disable-local-ssl) disable_local_ssl ;;
-    environment-check|where-am-i) show_environment_check ;;
+    environment-check | where-am-i) show_environment_check ;;
     site-config) show_site_config ;;
     storage-status) show_storage_status ;;
     storage-debug) storage_debug ;;
     expand-root-storage) expand_root_storage ;;
     verify-storage) verify_storage ;;
     domain-config) show_domain_config ;;
-    change-local-domain|local-domain-wizard|rename-local-site|change-site-domain) change_local_domain_wizard ;;
-    set-host-os|host-os|choose-host-os) run_set_host_os ;;
-    set-engine|engine|choose-engine|deployment-engine) run_set_engine ;;
+    change-local-domain | local-domain-wizard | rename-local-site | change-site-domain) change_local_domain_wizard ;;
+    set-host-os | host-os | choose-host-os) run_set_host_os ;;
+    set-engine | engine | choose-engine | deployment-engine) run_set_engine ;;
     engine-status) show_engine_status ;;
     engine-restore) engine_restore ;;
     engine-upgrade) engine_upgrade ;;
     engine-rollback) engine_rollback ;;
     engine-diagnostics) engine_diagnostics "$DOCTOR_FORMAT" ;;
-    docker-production-setup|docker-prod-setup|docker-production) run_docker_production_setup ;;
+    docker-production-setup | docker-prod-setup | docker-production) run_docker_production_setup ;;
     docker-backup) docker_backup false ;;
     docker-backup-files) docker_backup true ;;
     docker-backup-verify) docker_backup_verify ;;
-    docker-restore|docker-restore-full) docker_restore full ;;
+    docker-restore | docker-restore-full) docker_restore full ;;
     docker-restore-db) docker_restore db ;;
     docker-restore-rehearsal) docker_restore_rehearsal ;;
     docker-restore-evidence) docker_show_restore_evidence ;;
     docker-offvm-backup) run_off_vm_backup_rsync run ;;
     docker-offvm-backup-dry-run) run_off_vm_backup_rsync dry-run ;;
     docker-offvm-status) show_off_vm_backup_status ;;
-    docker-object-config|docker-object-backup-config) configure_docker_object_backup ;;
+    docker-object-config | docker-object-backup-config) configure_docker_object_backup ;;
     docker-object-backup) run_docker_object_backup run ;;
     docker-object-backup-dry-run) run_docker_object_backup dry-run ;;
     docker-object-status) show_docker_object_backup_status ;;
-    configure-object-backup|object-backup-config|object-config) run_configure_object_backup ;;
-    object-backup|run-object-backup) run_engine_object_backup run ;;
+    configure-object-backup | object-backup-config | object-config) run_configure_object_backup ;;
+    object-backup | run-object-backup) run_engine_object_backup run ;;
     object-backup-dry-run) run_engine_object_backup dry-run ;;
-    object-status|object-backup-status) show_engine_object_backup_status ;;
-    docker-https-wizard|docker-production-https|docker-https-menu) docker_https_wizard ;;
-    docker-enable-letsencrypt|docker-letsencrypt|docker-https-letsencrypt) docker_enable_letsencrypt ;;
-    docker-configure-cloudflare-origin|docker-cloudflare-origin|docker-https-cloudflare-origin) docker_configure_cloudflare_origin ;;
+    object-status | object-backup-status) show_engine_object_backup_status ;;
+    docker-https-wizard | docker-production-https | docker-https-menu) docker_https_wizard ;;
+    docker-enable-letsencrypt | docker-letsencrypt | docker-https-letsencrypt) docker_enable_letsencrypt ;;
+    docker-configure-cloudflare-origin | docker-cloudflare-origin | docker-https-cloudflare-origin) docker_configure_cloudflare_origin ;;
     docker-https-status) docker_https_status ;;
-    docker-https-rollback|docker-disable-https) docker_https_rollback ;;
-    docker-production-exposure|docker-exposure-check) docker_production_exposure ;;
-    docker-custom-image-config|docker-custom-apps) docker_custom_image_config ;;
-    docker-build-custom-image|docker-custom-image-build) docker_build_custom_image ;;
-    docker-deploy-custom-image|docker-custom-image-deploy) docker_deploy_custom_image ;;
+    docker-https-rollback | docker-disable-https) docker_https_rollback ;;
+    docker-production-exposure | docker-exposure-check) docker_production_exposure ;;
+    docker-custom-image-config | docker-custom-apps) docker_custom_image_config ;;
+    docker-build-custom-image | docker-custom-image-build) docker_build_custom_image ;;
+    docker-deploy-custom-image | docker-custom-image-deploy) docker_deploy_custom_image ;;
     docker-custom-image-status) docker_custom_image_status ;;
     docker-reconcile-app-image) docker_reconcile_app_image ;;
     production-readiness) show_production_readiness ;;
-    production-plan|prod-plan) show_production_plan ;;
-    production-domain-plan|prod-domain-plan) show_production_domain_plan ;;
-    public-vm-readiness|public-readiness) show_public_vm_readiness ;;
-    production-ssl-plan|prod-ssl-plan) show_production_ssl_plan ;;
-    production-firewall-plan|prod-firewall-plan) show_production_firewall_plan ;;
-    firewall-hardening-status|firewall-status|hardening-status) show_firewall_hardening_status ;;
-    vm-firewall-plan|ufw-plan) vm_firewall_plan ;;
+    production-plan | prod-plan) show_production_plan ;;
+    production-domain-plan | prod-domain-plan) show_production_domain_plan ;;
+    public-vm-readiness | public-readiness) show_public_vm_readiness ;;
+    production-ssl-plan | prod-ssl-plan) show_production_ssl_plan ;;
+    production-firewall-plan | prod-firewall-plan) show_production_firewall_plan ;;
+    firewall-hardening-status | firewall-status | hardening-status) show_firewall_hardening_status ;;
+    vm-firewall-plan | ufw-plan) vm_firewall_plan ;;
     security-mode-status) security_mode_status ;;
     configure-vm-firewall) configure_vm_firewall ;;
-    local-firewall-profile|local-security-profile) configure_local_vm_firewall ;;
-    production-firewall-profile|production-security-profile) configure_production_vm_firewall ;;
+    local-firewall-profile | local-security-profile) configure_local_vm_firewall ;;
+    production-firewall-profile | production-security-profile) configure_production_vm_firewall ;;
     repair-local-access) repair_local_access ;;
     firewall-rollback-snapshots) show_firewall_rollback_snapshots ;;
-    vm-firewall-status|ufw-status) show_vm_firewall_status ;;
+    vm-firewall-status | ufw-status) show_vm_firewall_status ;;
     configure-fail2ban) configure_fail2ban ;;
     fail2ban-status) show_fail2ban_status ;;
-    security-audit|security-audit-test) run_security_audit ;;
-    security-hardening-wizard|vm-firewall-wizard) security_hardening_wizard ;;
+    security-audit | security-audit-test) run_security_audit ;;
+    security-hardening-wizard | vm-firewall-wizard) security_hardening_wizard ;;
     ufw-ssh-admin-only) configure_ufw_ssh_admin_only ;;
-    production-ssl-menu|production-https|production-https-menu) show_production_ssl_menu main ;;
-    production-ssl-wizard|ssl-provider-wizard) production_ssl_wizard ;;
+    production-ssl-menu | production-https | production-https-menu) show_production_ssl_menu main ;;
+    production-ssl-wizard | ssl-provider-wizard) production_ssl_wizard ;;
     configure-production-ssl) configure_production_ssl ;;
-    configure-cloudflare-origin-ssl|install-cloudflare-origin-cert|switch-to-cloudflare-origin-ssl) configure_cloudflare_origin_ssl ;;
+    configure-cloudflare-origin-ssl | install-cloudflare-origin-cert | switch-to-cloudflare-origin-ssl) configure_cloudflare_origin_ssl ;;
     cloudflare-origin-ssl-status) show_cloudflare_origin_ssl_status ;;
     cloudflare-origin-guide) show_cloudflare_origin_guide ;;
     production-ssl-status) show_production_ssl_status ;;
     ssl-mode-status) show_ssl_mode_status ;;
-    ssl-mode-guide|ssl-compatibility) show_ssl_mode_guide ;;
-    setup-effort-guide|setup-step-count) show_setup_effort_guide ;;
-    setup-lifecycle-plan|setup-order-plan) show_setup_lifecycle_plan ;;
+    ssl-mode-guide | ssl-compatibility) show_ssl_mode_guide ;;
+    setup-effort-guide | setup-step-count) show_setup_effort_guide ;;
+    setup-lifecycle-plan | setup-order-plan) show_setup_lifecycle_plan ;;
     disable-production-ssl) disable_production_ssl ;;
     production-domain-guide) show_production_domain_guide ;;
     production-ssl-guide) show_production_ssl_guide ;;
     repair-site-config) repair_site_config ;;
-    site-name-guide|custom-site-guide) show_site_name_guide ;;
+    site-name-guide | custom-site-guide) show_site_name_guide ;;
     multi-env-guide) show_multi_environment_guide ;;
-    help|-h|--help) show_help ;;
+    help | -h | --help) show_help ;;
     *) fail "Unknown action: ${ACTION}" ;;
   esac
 }

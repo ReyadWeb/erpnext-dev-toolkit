@@ -68,9 +68,9 @@ target_tag="${target_tag:-$(scripts/release-version.sh tag)}"
 canonical_version="$(scripts/release-version.sh read)"
 base_version="${canonical_version%%-*}"
 series_version="${base_version%.*}"
-channel="$(scripts/release-version.sh channel)"
+channel="$(scripts/release-version.sh channel-for-tag "$target_tag")"
 
-scripts/release-version.sh assert-script
+scripts/release-version.sh assert-runtime
 scripts/release-version.sh assert-tag "$target_tag"
 
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -155,7 +155,7 @@ bundle_root="${extract_root}/erpnext-dev-${target_tag}"
   cd "$bundle_root"
 
   sha256sum -c SHA256SUMS
-  scripts/release-version.sh assert-script
+  scripts/release-version.sh assert-runtime
   scripts/release-version.sh assert-tag "$target_tag"
 
   version_output="$(./erpnext-dev.sh version)"
