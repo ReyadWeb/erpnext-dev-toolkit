@@ -13,6 +13,7 @@ health checks, diagnostics, signed updates, and rollback.
 > This is a community project and is not an official Frappe Technologies product.
 
 **Current release:** v1.20.0
+**Current project version:** v1.20.1
 **Current development programme:** v1.20.1–v1.20.5 reliability foundations before v1.21.0.
 
 ## At a glance
@@ -23,7 +24,7 @@ health checks, diagnostics, signed updates, and rollback.
 | **Deployment engines** | Native and Docker |
 | **Native hosts** | Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 |
 | **Main command** | `erpnext-dev` |
-| **Release protection** | Signed releases, whole-tree checksums, atomic updates, rollback slots |
+| **Release protection** | Build identity, whole-tree checksums, signed releases, atomic updates, rollback slots |
 | **Current focus** | v1.20.1 release-state, trust, and strict-validation foundation |
 
 ## Choose your path
@@ -265,7 +266,10 @@ release ships as a **single self-contained bundle**, `erpnext-dev-<version>.tar.
 containing the complete tree.
 
 - `sha256sum -c SHA256SUMS` (run from the extracted directory) verifies **every**
-  packaged file against the release checksum list.
+  tracked payload file against the release checksum list.
+- Generated `BUILD-INFO.json` binds that inventory to the project version, channel,
+  exact commit, archive name, and build time. The matching standalone sidecar lets
+  publication verification compare metadata before and after extraction.
 - For production, also verify the maintainer **signature** before running as root.
   The signed bundle already includes `SHA256SUMS.asc`:
 
@@ -968,13 +972,15 @@ sudo erpnext-dev toolkit-rollback # switch back to the previous release
 sudo erpnext-dev command-audit   # list available commands
 ```
 
-`update-toolkit` downloads the signed release bundle, verifies its checksums and
-signature, extracts it to `/opt/erpnext-dev/releases/<ver>/`, then flips the
+`update-toolkit` downloads the signed release bundle, verifies its checksums,
+generated build identity, and signature, extracts it to
+`/opt/erpnext-dev/releases/<ver>/`, then flips the
 `/opt/erpnext-dev/current` symlink in a single atomic step. The previous release
 is kept on disk, so `toolkit-rollback` restores it instantly.
 
 **Field-test from `main` (no new tag):** unsigned raw-file channel for trying
-unreleased fixes on a non-production / local VM. Installs into
+unreleased fixes on a non-production / local VM. It downloads the checksum-gated
+canonical `VERSION` together with the runtime tree and installs into
 `/opt/erpnext-dev/releases/main` (does **not** overwrite a signed `vX.Y.Z` slot).
 
 If your installed toolkit is still **v1.17.4** (before the slot fix), set an

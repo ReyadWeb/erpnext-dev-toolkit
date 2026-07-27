@@ -80,7 +80,18 @@ case "${1:-}:${2:-}" in
    if [[ "${GH_PR_EXISTS:-0}" == 1 ]]; then
      if printf '%s' "$*" | grep -Fq '.[0].number'; then echo 42; else echo https://example.invalid/pr/42; fi
    fi ;;
- pr:create) echo https://example.invalid/pr/42 ;;
+ pr:create)
+   gh_args="$(printf '%s\n' "$@")"
+   if ! grep -Fxq -- '--fill' <<<"$gh_args"; then
+     grep -Fxq -- '--title' <<<"$gh_args" \
+       || { echo "missing --title or --fill for non-interactive PR creation" >&2; exit 2; }
+     if ! grep -Eq -- '^--body(-file)?$' <<<"$gh_args"; then
+       echo "missing --body/--body-file or --fill for non-interactive PR creation" >&2
+       exit 2
+     fi
+   fi
+   echo https://example.invalid/pr/42
+   ;;
  pr:checks) echo "All checks were successful" ;;
  pr:view)
    if printf '%s' "$*" | grep -Fq '\"'; then

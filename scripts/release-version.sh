@@ -11,6 +11,7 @@ ROOT_DIR="${ERPNEXT_RELEASE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pw
 VERSION_FILE="${ERPNEXT_VERSION_FILE:-${ROOT_DIR}/VERSION}"
 ENTRYPOINT="${ERPNEXT_ENTRYPOINT:-${ROOT_DIR}/erpnext-dev.sh}"
 BUILD_INFO_FILE="${ERPNEXT_BUILD_INFO_FILE:-${ROOT_DIR}/BUILD-INFO.json}"
+BUILD_INFO_HELPER="${ERPNEXT_BUILD_INFO_HELPER:-${ROOT_DIR}/scripts/build-info.sh}"
 GIT_ROOT="${ERPNEXT_GIT_ROOT:-${ROOT_DIR}}"
 
 fail() {
@@ -44,13 +45,19 @@ read_canonical_version() {
   printf '%s\n' "$version"
 }
 
+verify_build_info_metadata() {
+  [[ -f "$BUILD_INFO_FILE" ]] || return 0
+  [[ -x "$BUILD_INFO_HELPER" ]] \
+    || fail "BUILD-INFO.json exists but build-info helper is unavailable: ${BUILD_INFO_HELPER}"
+  ERPNEXT_RELEASE_ROOT="$ROOT_DIR" \
+    "$BUILD_INFO_HELPER" verify --root "$ROOT_DIR" --metadata-only >/dev/null
+}
+
 read_build_field() {
   local field="$1"
   [[ -f "$BUILD_INFO_FILE" ]] || return 1
-  sed -nE \
-    's/^[[:space:]]*"'"$field"'"[[:space:]]*:[[:space:]]*"([^"]*)"[[:space:]]*,?[[:space:]]*$/\1/p' \
-    "$BUILD_INFO_FILE" \
-    | head -n 1
+  verify_build_info_metadata
+  "$BUILD_INFO_HELPER" field "$field" --root "$ROOT_DIR"
 }
 
 runtime_version() {
@@ -77,6 +84,7 @@ runtime_version() {
 
 assert_runtime_match() {
   local canonical runtime
+  verify_build_info_metadata
   canonical="$(read_canonical_version)"
   runtime="$(runtime_version)"
   [[ "$canonical" == "$runtime" ]] \

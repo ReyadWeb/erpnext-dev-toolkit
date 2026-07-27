@@ -30,6 +30,7 @@ checksum_targets=(
   lib/storage.sh lib/service.sh lib/status.sh lib/docker.sh lib/engine.sh lib/install.sh lib/ops.sh
   lib/dashboard.sh lib/healing.sh lib/menu.sh lib/security.sh lib/update.sh
   scripts/validate-release.sh scripts/run-shellcheck.sh
+  scripts/release-version.sh scripts/build-info.sh
   scripts/check-module-consistency.sh scripts/build-release-bundle.sh
   RELEASE-MANIFEST.txt
 )
@@ -75,6 +76,14 @@ build_synthetic_bundle() {
 
   printf '%s\n' "$ver_num" >"${bundle_dir}/VERSION"
   regenerate_checksums_in_tree "$bundle_dir"
+  "${bundle_dir}/scripts/build-info.sh" generate \
+    --source-root "$ROOT_DIR" \
+    --stage-root "$bundle_dir" \
+    --archive "erpnext-dev-${tag}.tar.gz" \
+    --tag "$tag" \
+    --channel stable \
+    --commit "$(git -C "$ROOT_DIR" rev-parse HEAD)" \
+    --built-at 2026-07-27T00:00:00Z >/dev/null
   sign_checksums_in_tree "$bundle_dir"
 
   bundle_path="${srv_root}/releases/download/${tag}/erpnext-dev-${tag}.tar.gz"

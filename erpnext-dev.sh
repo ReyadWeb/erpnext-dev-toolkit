@@ -33,6 +33,13 @@ _erpnext_dev_project_version() {
   fi
 
   if [[ -f "$build_info" ]]; then
+    if [[ -x "${_ERPNEXT_DEV_ROOT}/scripts/build-info.sh" ]]; then
+      "${_ERPNEXT_DEV_ROOT}/scripts/build-info.sh" verify \
+        --root "${_ERPNEXT_DEV_ROOT}" --metadata-only >/dev/null || {
+        echo "ERROR: BUILD-INFO.json verification failed." >&2
+        return 1
+      }
+    fi
     build_version="$(
       sed -nE \
         's/^[[:space:]]*"project_version"[[:space:]]*:[[:space:]]*"([^"]+)"[[:space:]]*,?[[:space:]]*$/\1/p' \
@@ -439,6 +446,17 @@ _erpnext_dev_recover_legacy_modular_install() {
     return 1
   fi
 
+  if [[ ! -x "${tree}/scripts/build-info.sh" ]] ||
+    ! "${tree}/scripts/build-info.sh" verify \
+      --root "$tree" \
+      --archive "erpnext-dev-${version_tag}.tar.gz" \
+      --expected-tag "$version_tag" \
+      --expected-channel "$("${tree}/scripts/release-version.sh" channel-for-tag "$version_tag")" >/dev/null; then
+    rm -rf "$workdir"
+    echo "ERROR: Recovery bundle build identity verification failed." >&2
+    return 1
+  fi
+
   if ! _erpnext_dev_bootstrap_signature_ok "$tree"; then
     rm -rf "$workdir"
     echo "ERROR: Recovery bundle signature verification failed." >&2
@@ -486,7 +504,7 @@ _erpnext_dev_recover_legacy_modular_install() {
   ln -sfn "current/erpnext-dev.sh" "$entry_tmp"
   mv -T "$entry_tmp" "${stable_root}/erpnext-dev.sh"
 
-  for name in lib SHA256SUMS SHA256SUMS.asc RELEASE-MANIFEST.txt docs; do
+  for name in lib VERSION BUILD-INFO.json SHA256SUMS SHA256SUMS.asc RELEASE-MANIFEST.txt docs; do
     [[ -e "${stable_root}/current/${name}" ]] || continue
     rm -rf "${stable_root:?}/${name}"
     ln -sfn "current/${name}" "${stable_root}/${name}"

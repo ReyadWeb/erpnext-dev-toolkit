@@ -32,11 +32,12 @@ release_root="${work}/release-server"
 release_tree="${work}/erpnext-dev-${tag}"
 release_download_dir="${release_root}/releases/download/${tag}"
 gpg_home="${work}/gnupg"
-mkdir -p "$legacy_root" "$release_tree/lib" "$release_tree/docs" "$release_download_dir" "$gpg_home"
+mkdir -p "$legacy_root" "$release_tree/lib" "$release_tree/docs" "$release_tree/scripts" "$release_download_dir" "$gpg_home"
 chmod 700 "$gpg_home"
 
 # Build a minimal-but-complete runtime release tree from the current checkout.
 cp erpnext-dev.sh VERSION "$release_tree/"
+cp scripts/build-info.sh scripts/release-version.sh "$release_tree/scripts/"
 cp -a lib/. "$release_tree/lib/"
 
 cat >"${work}/gpg-batch" <<GPG
@@ -57,9 +58,18 @@ GNUPGHOME="$gpg_home" gpg --batch --armor --export "$fingerprint" >"${release_tr
   cd "$release_tree"
   {
     sha256sum erpnext-dev.sh VERSION
+    sha256sum scripts/build-info.sh scripts/release-version.sh
     find lib -maxdepth 1 -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum
     sha256sum docs/erpnext-dev-signing-key.asc
   } >SHA256SUMS
+  scripts/build-info.sh generate \
+    --source-root "$ROOT_DIR" \
+    --stage-root . \
+    --archive "erpnext-dev-${tag}.tar.gz" \
+    --tag "$tag" \
+    --channel stable \
+    --commit "$(git -C "$ROOT_DIR" rev-parse HEAD)" \
+    --built-at 2026-07-27T00:00:00Z >/dev/null
   GNUPGHOME="$gpg_home" gpg --batch --yes --armor --detach-sign --local-user "$fingerprint" --output SHA256SUMS.asc SHA256SUMS
 )
 

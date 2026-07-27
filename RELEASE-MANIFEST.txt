@@ -1,4 +1,4 @@
-# ERPNext Developer Toolkit Release Manifest v1.20.0
+# ERPNext Developer Toolkit Release Manifest v1.20.1
 # One repository-relative path per line. Blank lines and # comments are ignored.
 # validate-release.sh verifies every listed path exists before a tag is published.
 
@@ -115,6 +115,8 @@ scripts/assert-github-release-assets.sh
 VERSION
 scripts/release-version.sh
 scripts/test-release-version.sh
+scripts/test-build-info.sh
+scripts/build-info.sh
 docs/RELEASE-AUTOMATION.md
 scripts/release-manifest-files.sh
 scripts/check-release-artifact-consistency.sh

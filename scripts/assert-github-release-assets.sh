@@ -45,6 +45,7 @@ note_fail() {
 
 required=(
   "erpnext-dev-${tag}.tar.gz"
+  "erpnext-dev-${tag}.BUILD-INFO.json"
   "SHA256SUMS"
   "erpnext-dev.sh"
   "RELEASE-MANIFEST.txt"

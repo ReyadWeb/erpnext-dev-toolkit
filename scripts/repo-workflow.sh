@@ -151,7 +151,7 @@ risk_reason_for() {
     lib/security.sh | lib/update.sh)
       echo "release trust or self-update path"
       ;;
-    scripts/validate-release.sh | scripts/build-release-bundle.sh | scripts/generate-release-checksums.sh | scripts/release-manifest-files.sh | scripts/check-release-artifact-consistency.sh)
+    scripts/validate-release.sh | scripts/build-release-bundle.sh | scripts/build-info.sh | scripts/test-build-info.sh | scripts/generate-release-checksums.sh | scripts/release-manifest-files.sh | scripts/check-release-artifact-consistency.sh)
       echo "release integrity implementation"
       ;;
     scripts/release-*.sh | scripts/test-release-*.sh)
@@ -381,9 +381,10 @@ select_focused_tests() {
   declare -gA FOCUSED_TESTS=()
   for file in "${CHANGED_FILES[@]}"; do
     case "$file" in
-      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh)
+      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-work.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh)
         add_focused_test scripts/test-repo-workflow.sh
         add_focused_test scripts/test-repo-workflow-pr.sh
+        add_focused_test scripts/test-repo-workflow-work.sh
         add_focused_test scripts/test-repo-workflow-release.sh
         add_focused_test scripts/test-repo-workflow-release-transaction.sh
         add_focused_test scripts/test-repo-workflow-release-finalize.sh
@@ -796,7 +797,7 @@ cmd_work_finish() {
   [[ "$WORK_NO_CACHE" == "0" ]] || publish_args+=(--no-cache)
   cmd_publish "${publish_args[@]}"
 
-  pr_args=(--base "$WORK_BASE" --title "$WORK_PR_TITLE" --no-fill)
+  pr_args=(--base "$WORK_BASE" --title "$WORK_PR_TITLE")
   [[ -z "$WORK_PR_BODY" ]] || pr_args+=(--body "$WORK_PR_BODY")
   [[ -z "$WORK_PR_BODY_FILE" ]] || pr_args+=(--body-file "$WORK_PR_BODY_FILE")
   cmd_pr_create "${pr_args[@]}"
@@ -2030,7 +2031,9 @@ cmd_release_verify() {
   fi
 
   archive="${verify_dir}/erpnext-dev-${target_tag}.tar.gz"
+  build_info_asset="${verify_dir}/erpnext-dev-${target_tag}.BUILD-INFO.json"
   [[ -f "$archive" ]] || fail "published release archive is missing"
+  [[ -f "$build_info_asset" ]] || fail "published BUILD-INFO sidecar is missing"
   [[ -f "${verify_dir}/SHA256SUMS" ]] || fail "published SHA256SUMS is missing"
   [[ -f "${verify_dir}/erpnext-dev.sh" ]] || fail "published entrypoint asset is missing"
   [[ -f "${verify_dir}/RELEASE-MANIFEST.txt" ]] || fail "published release manifest asset is missing"
@@ -2050,6 +2053,7 @@ cmd_release_verify() {
   cmp -s "${verify_dir}/SHA256SUMS" "${root}/SHA256SUMS" || fail "standalone and bundled SHA256SUMS differ"
   cmp -s "${verify_dir}/erpnext-dev.sh" "${root}/erpnext-dev.sh" || fail "standalone and bundled entrypoints differ"
   cmp -s "${verify_dir}/RELEASE-MANIFEST.txt" "${root}/RELEASE-MANIFEST.txt" || fail "standalone and bundled manifests differ"
+  cmp -s "$build_info_asset" "${root}/BUILD-INFO.json" || fail "standalone and bundled BUILD-INFO differ"
   if [[ -f "${verify_dir}/SHA256SUMS.asc" ]]; then
     cmp -s "${verify_dir}/SHA256SUMS.asc" "${root}/SHA256SUMS.asc" || fail "standalone and bundled signatures differ"
   fi
@@ -2058,6 +2062,12 @@ cmd_release_verify() {
     cd "$root"
     scripts/release-version.sh assert-script
     scripts/release-version.sh assert-tag "$target_tag"
+    scripts/build-info.sh verify \
+      --root . \
+      --archive "erpnext-dev-${target_tag}.tar.gz" \
+      --expected-tag "$target_tag" \
+      --expected-channel "$(scripts/release-version.sh channel-for-tag "$target_tag")" \
+      --expected-commit "$remote_commit"
     sha256sum -c SHA256SUMS
   )
   ok "release bundle checksums verified"

@@ -55,6 +55,8 @@ targets=(
   scripts/test-repo-workflow-release-finalize.sh
   scripts/release-version.sh
   scripts/test-release-version.sh
+  scripts/build-info.sh
+  scripts/test-build-info.sh
   scripts/check-release-state-invariants.sh
   scripts/test-release-state-invariants.sh
   scripts/release-manifest-files.sh
