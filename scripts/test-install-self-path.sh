@@ -18,7 +18,7 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 fake_root="${tmpdir}/fake-repo"
 mkdir -p "${fake_root}/lib"
-cp erpnext-dev.sh "${fake_root}/"
+cp erpnext-dev.sh VERSION "${fake_root}/"
 cp -a lib/. "${fake_root}/lib/"
 
 # Simulate bootstrap resolution when readlink -f would fail on a relative path.
@@ -49,6 +49,7 @@ install_self_for_reuse() {
   mkdir -p "$dest_root" || return 1
   cp "$src" "$dest" || return 1
   sync_toolkit_lib_tree "$src_root" "$dest_root" || return 1
+  cp -a "${src_root}/VERSION" "${dest_root}/VERSION" || return 1
   return 0
 }
 
@@ -60,6 +61,7 @@ fi
 
 [[ -f "${INSTALLER_CANONICAL_PATH}" ]] || note_fail "missing ${INSTALLER_CANONICAL_PATH}"
 [[ -f "${TOOLKIT_INSTALL_DIR}/lib/common.sh" ]] || note_fail "missing lib/common.sh under /opt"
+[[ -f "${TOOLKIT_INSTALL_DIR}/VERSION" ]] || note_fail "missing VERSION under /opt"
 
 if ((failures > 0)); then
   echo "install-self path tests: ${failures} failure(s)" >&2

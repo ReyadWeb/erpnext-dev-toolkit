@@ -113,7 +113,7 @@ done
 scripts/release-update-metadata.sh "$target_version" "$release_title"
 scripts/generate-release-checksums.sh
 
-scripts/release-version.sh assert-script
+scripts/release-version.sh assert-runtime
 scripts/check-release-doc-alignment.sh
 scripts/check-release-artifact-consistency.sh
 scripts/validate-release.sh

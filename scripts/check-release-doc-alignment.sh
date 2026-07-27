@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fail if in-repo version banners disagree with SCRIPT_VERSION.
+# Fail if in-repo release surfaces disagree with canonical project identity.
 # Does not call the network (safe during the release-PR → publish window).
 set -euo pipefail
 
@@ -13,12 +13,12 @@ fail() {
 
 [[ -f VERSION ]] || fail "VERSION is missing"
 
-[[ -x scripts/release-version.sh ]] ||
-  fail "scripts/release-version.sh is missing or not executable"
+[[ -x scripts/release-version.sh ]] \
+  || fail "scripts/release-version.sh is missing or not executable"
 
-scripts/release-version.sh assert-script >/dev/null
+scripts/release-version.sh assert-runtime >/dev/null
 
-script_version="$(scripts/release-version.sh read)"
+project_version="$(scripts/release-version.sh read)"
 tag="$(scripts/release-version.sh tag)"
 
 grep -qE "^\*\*Current release:\*\* ${tag}( |$|\.|·)" README.md \
@@ -36,7 +36,7 @@ grep -q 'releases/latest' README.md \
 grep -q 'url_effective' README.md \
   || fail "README.md must document url_effective latest-tag resolution"
 
-# Exact-pin example (reproducible installs) should match SCRIPT_VERSION when present.
+# Exact-pin example remains aligned with the current release surface.
 if grep -qE '^VERSION="v[0-9]+\.[0-9]+\.[0-9]+"' README.md; then
   grep -q "VERSION=\"${tag}\"" README.md \
     || fail "README.md VERSION=\"...\" pin example must be ${tag} when present"

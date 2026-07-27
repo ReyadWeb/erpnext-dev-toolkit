@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           scripts/build-release-bundle.sh
-          ver="v$(grep -E '^SCRIPT_VERSION=' erpnext-dev.sh | head -n1 | cut -d'"' -f2)"
+          ver="$(scripts/release-version.sh tag)"
           workdir="$(mktemp -d)"
           tar -C "$workdir" -xzf "dist/erpnext-dev-${ver}.tar.gz"
           cd "${workdir}/erpnext-dev-${ver}"

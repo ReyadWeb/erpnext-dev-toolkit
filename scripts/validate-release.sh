@@ -140,8 +140,8 @@ bash -n scripts/test-repo-workflow-release-transaction.sh
 bash -n scripts/test-repo-workflow-release-finalize.sh
 pass "bash syntax valid"
 
-scripts/release-version.sh assert-script
-pass "VERSION matches SCRIPT_VERSION"
+scripts/release-version.sh assert-runtime
+pass "VERSION matches runtime output"
 
 scripts/test-release-version.sh
 pass "canonical release version tests passed"
@@ -216,7 +216,7 @@ pass "version command works"
 tag_version="$(scripts/release-version.sh tag)"
 
 grep -q "^## ${tag_version}" CHANGELOG.md || fail "CHANGELOG.md missing top entry for ${tag_version}"
-pass "CHANGELOG version matches SCRIPT_VERSION (${tag_version})"
+pass "CHANGELOG version matches canonical project version (${tag_version})"
 
 # Version discipline: a stable release must not be cut from a tree whose
 # CHANGELOG still has an open "## Unreleased" section, and the newest entry must
@@ -239,7 +239,7 @@ rm -f /tmp/erpnext-dev-doc-align.$$
 pass "release doc banners + README latest-install path aligned (${tag_version})"
 
 grep -q "Release Manifest ${tag_version}" RELEASE-MANIFEST.txt || fail "RELEASE-MANIFEST.txt version header does not match ${tag_version}"
-pass "RELEASE-MANIFEST version matches SCRIPT_VERSION (${tag_version})"
+pass "RELEASE-MANIFEST version matches canonical project version (${tag_version})"
 
 scripts/check-release-artifact-consistency.sh
 pass "release manifest and SHA256SUMS are complete and valid"

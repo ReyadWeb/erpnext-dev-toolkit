@@ -57,11 +57,10 @@ printf '%s\n' '1.20.0-beta.1' >"${fixture}/VERSION"
 
 cat >"${fixture}/erpnext-dev.sh" <<'EOF_ENTRY'
 #!/usr/bin/env bash
-SCRIPT_VERSION="1.20.0-beta.1"
-
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${1:-}" in
   version)
-    echo "ERPNext Developer Toolkit v${SCRIPT_VERSION}"
+    printf 'ERPNext Developer Toolkit v%s\n' "$(tr -d '[:space:]' <"${root}/VERSION")"
     ;;
   verify-toolkit)
     echo "Active match                  OK"
@@ -137,19 +136,11 @@ import sys
 
 root = Path(sys.argv[1])
 (root / "VERSION").write_text("1.20.0\n")
-
-entry = root / "erpnext-dev.sh"
-entry.write_text(
-    entry.read_text().replace(
-        'SCRIPT_VERSION="1.20.0-beta.1"',
-        'SCRIPT_VERSION="1.20.0"',
-    )
-)
 PY_STABLE
 
 (
   cd "$fixture"
-  git add VERSION erpnext-dev.sh
+  git add VERSION
   git commit -qm "stable fixture"
 )
 

@@ -24,7 +24,7 @@ pass() {
 
 # Same checksum targets as generate-release-checksums.sh (release tree only).
 checksum_targets=(
-  erpnext-dev.sh
+  VERSION erpnext-dev.sh
   lib/common.sh lib/ui.sh lib/config.sh lib/access.sh lib/local_ip.sh lib/frappe.sh lib/support.sh
   lib/backup.sh lib/ssl.sh lib/firewall.sh lib/apps.sh lib/health.sh
   lib/storage.sh lib/service.sh lib/status.sh lib/docker.sh lib/engine.sh lib/install.sh lib/ops.sh
@@ -73,7 +73,7 @@ build_synthetic_bundle() {
 
   cp -a "$TEST_PUBKEY" "${bundle_dir}/docs/erpnext-dev-signing-key.asc"
 
-  sed -i "s/^SCRIPT_VERSION=\"[^\"]*\"/SCRIPT_VERSION=\"${ver_num}\"/" "${bundle_dir}/erpnext-dev.sh"
+  printf '%s\n' "$ver_num" >"${bundle_dir}/VERSION"
   regenerate_checksums_in_tree "$bundle_dir"
   sign_checksums_in_tree "$bundle_dir"
 

@@ -41,7 +41,15 @@ EOF_VALIDATE
 chmod +x "${fixture}/scripts/"*.sh
 
 printf '%s\n' '1.20.0-beta.1' >"${fixture}/VERSION"
-printf '%s\n' '#!/usr/bin/env bash' 'SCRIPT_VERSION="1.20.0-beta.1"' >"${fixture}/erpnext-dev.sh"
+cat >"${fixture}/erpnext-dev.sh" <<'EOF_ENTRY'
+#!/usr/bin/env bash
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "${1:-}" in
+  version) printf 'ERPNext Developer Toolkit v%s\n' "$(tr -d '[:space:]' <"${root}/VERSION")" ;;
+  *) exit 2 ;;
+esac
+EOF_ENTRY
+chmod +x "${fixture}/erpnext-dev.sh"
 printf '%s\n' '**Current release:** v1.20.0-beta.1 · fixture' 'VERSION="v1.20.0-beta.1"' >"${fixture}/README.md"
 printf '%s\n' '**Current release:** v1.20.0-beta.1 (fixture)' >"${fixture}/ROADMAP.md"
 printf '%s\n' '**Current release:** v1.20.0-beta.1 · fixture' >"${fixture}/TESTING.md"
@@ -127,8 +135,8 @@ run_promote 1.20.0 "Stable release" >/dev/null
 [[ "$(cat "${fixture}/VERSION")" == "1.20.0" ]] \
   || fail "stable promotion did not update VERSION"
 
-grep -qx 'SCRIPT_VERSION="1.20.0"' "${fixture}/erpnext-dev.sh" \
-  || fail "stable promotion did not update SCRIPT_VERSION"
+[[ "$("${fixture}/erpnext-dev.sh" version)" == "ERPNext Developer Toolkit v1.20.0" ]] \
+  || fail "stable promotion runtime did not derive VERSION"
 
 first_heading="$(grep -m1 '^## ' "${fixture}/CHANGELOG.md")"
 [[ "$first_heading" == "## v1.20.0 - Stable release" ]] \

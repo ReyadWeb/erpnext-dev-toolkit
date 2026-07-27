@@ -33,6 +33,9 @@
   proof validity.
 
 ### Changed
+- Removed `SCRIPT_VERSION` as an independently maintained release value; runtime identity now derives from canonical metadata.
+- Classified ordinary untagged source trees as `development` while retaining exact-tag beta, RC, and stable channels.
+- Updated CI, release tooling, legacy recovery, and self-install fixtures to use or propagate canonical `VERSION` metadata.
 - Adopted the v1.20.x reliability sequence before v1.21 machine-interface work.
 - Corrected stale README and roadmap current-work wording while preserving
   existing v1.20.0 runtime and release semantics for the R1A audit phase.

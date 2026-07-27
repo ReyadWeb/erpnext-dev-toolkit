@@ -151,11 +151,11 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 
 - [x] Adopt the formal release-state contract.
 - [x] Add measurable audit checks and negative tests.
-- [ ] Remove `SCRIPT_VERSION` as an independently maintained literal.
-- [ ] Derive channel from Git tag, release context, or immutable build metadata.
+- [x] Remove `SCRIPT_VERSION` as an independently maintained literal; the compatibility variable now derives canonical metadata.
+- [x] Derive source channel from exact Git tag or validated release context; immutable bundle context follows in R1B-2.
 - [ ] Generate immutable bundle metadata containing version, tag, channel, commit,
   tree digest, and build time.
-- [ ] Make every workflow use `scripts/release-version.sh`.
+- [x] Make workflows use `scripts/release-version.sh` for release identity.
 - [ ] Distinguish current development from latest published stable in every active
   document and generated surface.
 
