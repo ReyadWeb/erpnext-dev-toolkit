@@ -82,7 +82,13 @@ case "${1:-}:${2:-}" in
    fi ;;
  pr:create) echo https://example.invalid/pr/42 ;;
  pr:checks) echo "All checks were successful" ;;
- pr:view) echo 'OPEN|CLEAN|' ;;
+ pr:view)
+   if printf '%s' "$*" | grep -Fq '\"'; then
+     echo "invalid escaped quote in --jq filter" >&2
+     exit 2
+   fi
+   echo 'OPEN|CLEAN|'
+   ;;
  repo:view) echo 'ReyadWeb/erpnext-dev-toolkit' ;;
  api) echo true ;;
  pr:merge)

@@ -855,7 +855,7 @@ cmd_work_land() {
 
   IFS='|' read -r state merge_status review < <(
     gh pr view "$number" --json state,mergeStateStatus,reviewDecision \
-      --jq '"\(.state)|\(.mergeStateStatus)|\(.reviewDecision // \"\")"'
+      --jq '"\(.state)|\(.mergeStateStatus)|\(.reviewDecision // "")"'
   )
   [[ "$state" == "OPEN" ]] || fail "pull request is not open: ${state}"
   if [[ "$review" == "REVIEW_REQUIRED" ]]; then
