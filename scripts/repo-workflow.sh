@@ -44,6 +44,9 @@ Usage:
   scripts/repo-workflow.sh explain
   scripts/repo-workflow.sh check [--fast|--full|--mode auto|fast|full] [--no-cache]
   scripts/repo-workflow.sh publish -m "Commit message" [--fast|--full] [--dry-run] [--no-push]
+  scripts/repo-workflow.sh work start BRANCH [--base main]
+  scripts/repo-workflow.sh work finish -m "Commit message" [--pr-title TEXT] [--pr-body TEXT|--pr-body-file PATH] [--base main] [--fast|--full] [--no-cache] [--no-watch] [--dry-run]
+  scripts/repo-workflow.sh work land --confirm [--delete-branch] [--base main]
   scripts/repo-workflow.sh pr create [--base main] [--title TEXT] [--body TEXT|--body-file PATH] [--draft]
   scripts/repo-workflow.sh pr status
   scripts/repo-workflow.sh pr checks [--watch] [--required]
@@ -65,6 +68,7 @@ Commands:
   explain      Explain why the current tree selects fast or full validation.
   check        Regenerate checksums and run the minimum safe local validation.
   publish      Check, stage, commit, and push the current feature branch.
+  work         Consolidated start, finish, and land workflow for routine changes.
   pr           Create, inspect, check, and merge the current branch pull request.
   release      Inspect, prepare, tag, watch, and verify protected releases.
   resume       Resume the last failed check or publish operation.
@@ -658,6 +662,243 @@ cmd_publish() {
   info "Commit" "$(git rev-parse --short HEAD)"
   info "Upstream" "origin/${branch}"
   ok "validated, committed, and pushed"
+}
+
+cmd_work_start() {
+  local branch="${1:-}" base="main"
+  [[ -n "$branch" ]] || fail "work start requires a branch name"
+  shift || true
+
+  while (($# > 0)); do
+    case "$1" in
+      --base)
+        shift
+        (($# > 0)) || fail "--base requires a branch name"
+        base="$1"
+        ;;
+      -h | --help)
+        usage
+        return 0
+        ;;
+      *) fail "unknown work start option: $1" ;;
+    esac
+    shift
+  done
+
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree must be clean before starting work"
+  is_protected_branch "$branch" \
+    && fail "work branch must not be protected: ${branch}"
+
+  heading "Start Work"
+  git fetch --prune origin
+  git switch "$base"
+  git pull --ff-only origin "$base"
+
+  if git show-ref --verify --quiet "refs/heads/${branch}"; then
+    fail "local branch already exists: ${branch}"
+  fi
+  if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+    fail "remote branch already exists: origin/${branch}"
+  fi
+
+  git switch -c "$branch"
+  heading "Work Branch Ready"
+  info "Branch" "$branch"
+  info "Base" "$base"
+  info "Validation" "automatic risk-based selection"
+  ok "start making changes, then run: ${PROGRAM} work finish -m \"Commit message\""
+}
+
+parse_work_finish_options() {
+  WORK_MESSAGE=""
+  WORK_PR_TITLE=""
+  WORK_PR_BODY=""
+  WORK_PR_BODY_FILE=""
+  WORK_BASE="main"
+  WORK_MODE="auto"
+  WORK_NO_CACHE=0
+  WORK_NO_WATCH=0
+  WORK_DRY_RUN=0
+
+  while (($# > 0)); do
+    case "$1" in
+      -m | --message)
+        shift
+        (($# > 0)) || fail "$1 requires text"
+        WORK_MESSAGE="$1"
+        ;;
+      --pr-title)
+        shift
+        (($# > 0)) || fail "--pr-title requires text"
+        WORK_PR_TITLE="$1"
+        ;;
+      --pr-body)
+        shift
+        (($# > 0)) || fail "--pr-body requires text"
+        WORK_PR_BODY="$1"
+        ;;
+      --pr-body-file)
+        shift
+        (($# > 0)) || fail "--pr-body-file requires a path"
+        WORK_PR_BODY_FILE="$1"
+        ;;
+      --base)
+        shift
+        (($# > 0)) || fail "--base requires a branch name"
+        WORK_BASE="$1"
+        ;;
+      --fast) WORK_MODE="fast" ;;
+      --full) WORK_MODE="full" ;;
+      --mode)
+        shift
+        (($# > 0)) || fail "--mode requires auto, fast, or full"
+        WORK_MODE="$1"
+        ;;
+      --no-cache) WORK_NO_CACHE=1 ;;
+      --no-watch) WORK_NO_WATCH=1 ;;
+      --dry-run) WORK_DRY_RUN=1 ;;
+      -h | --help)
+        usage
+        return 0
+        ;;
+      *) fail "unknown work finish option: $1" ;;
+    esac
+    shift
+  done
+
+  [[ -n "$WORK_MESSAGE" ]] || fail "work finish requires -m \"Commit message\""
+  [[ -z "$WORK_PR_BODY" || -z "$WORK_PR_BODY_FILE" ]] \
+    || fail "--pr-body and --pr-body-file cannot be used together"
+  [[ -z "$WORK_PR_BODY_FILE" || -f "$WORK_PR_BODY_FILE" ]] \
+    || fail "PR body file does not exist: $WORK_PR_BODY_FILE"
+  case "$WORK_MODE" in auto | fast | full) ;; *) fail "invalid validation mode: $WORK_MODE" ;; esac
+  [[ -n "$WORK_PR_TITLE" ]] || WORK_PR_TITLE="$WORK_MESSAGE"
+}
+
+cmd_work_finish() {
+  local -a check_args publish_args pr_args
+  parse_work_finish_options "$@"
+
+  heading "Finish Work"
+  if [[ "$WORK_DRY_RUN" == "1" ]]; then
+    info "Mode" "$WORK_MODE"
+    info "Commit" "$WORK_MESSAGE"
+    info "PR title" "$WORK_PR_TITLE"
+    check_args=(--mode "$WORK_MODE")
+    [[ "$WORK_NO_CACHE" == "0" ]] || check_args+=(--no-cache)
+    cmd_check "${check_args[@]}"
+    ok "dry run complete; no commit, push, or pull request was created"
+    return 0
+  fi
+
+  publish_args=(--mode "$WORK_MODE" -m "$WORK_MESSAGE")
+  [[ "$WORK_NO_CACHE" == "0" ]] || publish_args+=(--no-cache)
+  cmd_publish "${publish_args[@]}"
+
+  pr_args=(--base "$WORK_BASE" --title "$WORK_PR_TITLE" --no-fill)
+  [[ -z "$WORK_PR_BODY" ]] || pr_args+=(--body "$WORK_PR_BODY")
+  [[ -z "$WORK_PR_BODY_FILE" ]] || pr_args+=(--body-file "$WORK_PR_BODY_FILE")
+  cmd_pr_create "${pr_args[@]}"
+
+  if [[ "$WORK_NO_WATCH" == "0" ]]; then
+    cmd_pr_checks --watch --required
+  fi
+
+  heading "Work Ready to Land"
+  info "Branch" "$(branch_name)"
+  info "Commit" "$(git rev-parse --short HEAD)"
+  info "Next" "${PROGRAM} work land --confirm --delete-branch"
+  ok "publication and pull-request workflow completed"
+}
+
+repository_name_with_owner() {
+  gh repo view --json nameWithOwner --jq '.nameWithOwner'
+}
+
+branch_requires_linear_history() {
+  local repo="$1" base="$2" value
+  value="$(gh api "repos/${repo}/branches/${base}/protection" --jq '.required_linear_history.enabled // false' 2>/dev/null || printf 'false')"
+  [[ "$value" == "true" ]]
+}
+
+cmd_work_land() {
+  local confirm=0 delete_branch=0 base="main" branch number repo strategy="merge" state merge_status review
+  while (($# > 0)); do
+    case "$1" in
+      --confirm) confirm=1 ;;
+      --delete-branch) delete_branch=1 ;;
+      --base)
+        shift
+        (($# > 0)) || fail "--base requires a branch name"
+        base="$1"
+        ;;
+      -h | --help)
+        usage
+        return 0
+        ;;
+      *) fail "unknown work land option: $1" ;;
+    esac
+    shift
+  done
+  [[ "$confirm" == "1" ]] || fail "work land requires --confirm"
+
+  require_gh
+  branch="$(branch_name)"
+  ensure_pr_branch "$branch"
+  ensure_clean_tree_for_pr
+  number="$(require_open_pr_number "$branch")"
+
+  heading "Land Work"
+  gh pr checks "$number" --required \
+    || fail "required pull request checks are not successful; rerun: ${PROGRAM} pr checks --watch --required"
+
+  IFS='|' read -r state merge_status review < <(
+    gh pr view "$number" --json state,mergeStateStatus,reviewDecision \
+      --jq '"\(.state)|\(.mergeStateStatus)|\(.reviewDecision // \"\")"'
+  )
+  [[ "$state" == "OPEN" ]] || fail "pull request is not open: ${state}"
+  if [[ "$review" == "REVIEW_REQUIRED" ]]; then
+    fail "pull request still requires an independent review; adjust the documented single-maintainer policy or obtain approval"
+  fi
+  case "$merge_status" in
+    BLOCKED | DIRTY | BEHIND)
+      fail "pull request cannot be landed yet (merge status: ${merge_status})"
+      ;;
+  esac
+
+  repo="$(repository_name_with_owner)"
+  if branch_requires_linear_history "$repo" "$base"; then
+    strategy="squash"
+  fi
+
+  local -a merge_args=(pr merge "$number" "--${strategy}")
+  [[ "$delete_branch" == "0" ]] || merge_args+=(--delete-branch)
+  gh "${merge_args[@]}"
+
+  git switch "$base"
+  git pull --ff-only origin "$base"
+  git fetch --prune origin
+
+  heading "Work Landed"
+  info "PR" "#${number}"
+  info "Strategy" "$strategy"
+  info "Branch" "$base"
+  info "Commit" "$(git rev-parse --short HEAD)"
+  ok "pull request merged and local ${base} synchronized"
+}
+
+cmd_work() {
+  local subcommand="${1:-}"
+  [[ -n "$subcommand" ]] || fail "work requires start, finish, or land"
+  shift || true
+  case "$subcommand" in
+    start) cmd_work_start "$@" ;;
+    finish) cmd_work_finish "$@" ;;
+    land) cmd_work_land "$@" ;;
+    -h | --help | help) usage ;;
+    *) fail "unknown work command: $subcommand" ;;
+  esac
 }
 
 require_gh() {
@@ -1920,6 +2161,7 @@ main() {
     explain) cmd_explain "$@" ;;
     check) cmd_check "$@" ;;
     publish) cmd_publish "$@" ;;
+    work) cmd_work "$@" ;;
     pr) cmd_pr "$@" ;;
     release) cmd_release "$@" ;;
     resume) cmd_resume "$@" ;;
