@@ -180,6 +180,12 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 - [ ] Required PR and release modes may not skip required checks.
 - [ ] High-risk paths require same-commit integration evidence.
 
+### WF-001 — Workflow consolidation
+
+- [x] Add consolidated routine work commands over the existing safe primitives.
+- [x] Keep advanced commands available for recovery and diagnosis.
+- [x] Refuse implicit administrator merge bypass.
+
 ### R5 — Package and public-testing alignment
 
 - [ ] Ship W1–W3 repository workflow and D1–D4 documentation in v1.20.1.

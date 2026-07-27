@@ -441,3 +441,15 @@ scripts/repo-workflow.sh explain
 
 The low-level scripts remain available for diagnosis, but normal branch work
 should use `repo-workflow.sh` instead of assembling long manual command blocks.
+## Consolidated routine workflow
+
+The recommended maintainer path is now:
+
+```bash
+scripts/repo-workflow.sh work start feature/my-change
+# edit files
+scripts/repo-workflow.sh work finish -m "Fix: description" --pr-title "Fix: description"
+scripts/repo-workflow.sh work land --confirm --delete-branch
+```
+
+`work finish` performs risk selection, validation, checksum regeneration, commit, push, idempotent PR creation, and required-check monitoring. `work land` refuses administrator bypasses, selects squash when linear history is required, merges, deletes the branch when requested, and synchronizes local `main`. The existing low-level `check`, `publish`, and `pr` commands remain available for advanced recovery and debugging.

@@ -33,6 +33,8 @@
   proof validity.
 
 ### Changed
+
+- Add consolidated `work start`, `work finish`, and `work land` maintainer commands while preserving the existing advanced workflow primitives.
 - Removed `SCRIPT_VERSION` as an independently maintained release value; runtime identity now derives from canonical metadata.
 - Classified ordinary untagged source trees as `development` while retaining exact-tag beta, RC, and stable channels.
 - Updated CI, release tooling, legacy recovery, and self-install fixtures to use or propagate canonical `VERSION` metadata.

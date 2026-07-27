@@ -55,6 +55,8 @@ pass() {
   || fail "scripts/repo-workflow.sh is missing or not executable"
 [[ -x scripts/test-repo-workflow.sh ]] \
   || fail "scripts/test-repo-workflow.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-work.sh ]] \
+  || fail "scripts/test-repo-workflow-work.sh is missing or not executable"
 [[ -x scripts/test-repo-workflow-pr.sh ]] \
   || fail "scripts/test-repo-workflow-pr.sh is missing or not executable"
 [[ -x scripts/test-repo-workflow-release.sh ]] \
@@ -134,6 +136,7 @@ bash -n scripts/test-release-pretag-check.sh
 bash -n scripts/test-release-bootstrap-guidance.sh
 bash -n scripts/repo-workflow.sh
 bash -n scripts/test-repo-workflow.sh
+bash -n scripts/test-repo-workflow-work.sh
 bash -n scripts/test-repo-workflow-pr.sh
 bash -n scripts/test-repo-workflow-release.sh
 bash -n scripts/test-repo-workflow-release-transaction.sh
@@ -166,7 +169,7 @@ chmod +x \
   scripts/test-release-manifest.sh \
   scripts/test-release-artifact-consistency.sh \
   scripts/test-release-bootstrap-guidance.sh
-chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh
+chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-work.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh
 
 scripts/test-release-metadata.sh
 pass "release metadata update tests passed"
