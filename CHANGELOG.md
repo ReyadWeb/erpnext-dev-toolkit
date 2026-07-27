@@ -1,3 +1,33 @@
+## v1.20.1-beta.1 - Release engineering foundation
+
+### Added
+
+- Consolidated maintainer workflow commands for starting, finishing, validating, publishing, and landing routine repository work.
+- Canonical project and runtime version ownership through the repository `VERSION` file.
+- Immutable generated `BUILD-INFO.json` metadata recording version, channel, tag, commit, archive identity, payload digest, and build timestamp.
+- Standalone build-identity metadata for release bundles and published release assets.
+- Signed external release-asset inventory and non-privileged bootstrap verification before toolkit installation.
+
+### Security
+
+- Added pre-privilege verification of release signatures, signing-key fingerprints, archive checksums, internal manifests, and immutable build metadata.
+- Removed CI download patterns that piped network content directly into privileged consumers.
+- Made strict release validation fail closed when required ShellCheck validation is unavailable.
+
+### Fixed
+
+- Corrected non-interactive pull-request creation in the consolidated maintainer workflow.
+- Scoped strict changelog enforcement to beta, release-candidate, and stable qualification while preserving an open development changelog.
+- Kept the legacy modular-bootstrap recovery fixture on a synthetic stable release during beta and release-candidate validation.
+- Made synthetic bootstrap fixture channels derive consistently from their release identities.
+
+### Validation
+
+- Full release validation completed successfully before beta metadata publication.
+- Release-state audit passed with 12 controls and 0 gaps.
+- Build identity, artifact consistency, signed asset trust, bootstrap recovery, workflow transaction, ShellCheck, shfmt, adversarial-input, and release metadata tests passed.
+- Published-artifact testing across native, Docker, upgrade, rollback, backup, restore, reboot, HTTPS, and frontend-readiness environments remains part of beta acceptance.
+
 ## Unreleased
 
 ### Security
