@@ -262,10 +262,12 @@ else
   pass "CHANGELOG version matches release identity (${tag_version})"
 fi
 
-# Version discipline: a strict beta/RC/stable qualification must not use an
-# open Unreleased section as the newest entry. release-pretag-check supplies an
-# explicit validated tag/channel before the Git tag exists.
-if [[ "${RELEASE_STRICT:-0}" == "1" ]]; then
+# Version discipline: strict development CI remains fail-closed for required
+# tooling while retaining the open Unreleased section. Beta, RC, and stable
+# qualification must instead expose the exact release entry as the newest one.
+# release-pretag-check supplies an explicit validated tag/channel before the
+# Git tag exists.
+if [[ "${RELEASE_STRICT:-0}" == "1" && "$release_channel" != "development" ]]; then
   first_heading="$(grep -m1 -E '^## ' CHANGELOG.md || true)"
   if [[ "$first_heading" != "## ${tag_version}"* ]]; then
     fail "RELEASE_STRICT: newest CHANGELOG entry is '${first_heading}', expected '## ${tag_version}' (fold any Unreleased section into the release)"
