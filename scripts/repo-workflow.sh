@@ -381,9 +381,10 @@ select_focused_tests() {
   declare -gA FOCUSED_TESTS=()
   for file in "${CHANGED_FILES[@]}"; do
     case "$file" in
-      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh)
+      scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-work.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh)
         add_focused_test scripts/test-repo-workflow.sh
         add_focused_test scripts/test-repo-workflow-pr.sh
+        add_focused_test scripts/test-repo-workflow-work.sh
         add_focused_test scripts/test-repo-workflow-release.sh
         add_focused_test scripts/test-repo-workflow-release-transaction.sh
         add_focused_test scripts/test-repo-workflow-release-finalize.sh
@@ -796,7 +797,7 @@ cmd_work_finish() {
   [[ "$WORK_NO_CACHE" == "0" ]] || publish_args+=(--no-cache)
   cmd_publish "${publish_args[@]}"
 
-  pr_args=(--base "$WORK_BASE" --title "$WORK_PR_TITLE" --no-fill)
+  pr_args=(--base "$WORK_BASE" --title "$WORK_PR_TITLE")
   [[ -z "$WORK_PR_BODY" ]] || pr_args+=(--body "$WORK_PR_BODY")
   [[ -z "$WORK_PR_BODY_FILE" ]] || pr_args+=(--body-file "$WORK_PR_BODY_FILE")
   cmd_pr_create "${pr_args[@]}"
