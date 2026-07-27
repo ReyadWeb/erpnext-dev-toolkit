@@ -84,6 +84,35 @@ Expected R1B-2 result:
 
 ---
 
+## v1.20.1 R1D release-test context isolation
+
+Release qualification exports an explicit channel, tag, strict-mode flag, and
+other build context. Synthetic fixtures must never inherit those values unless a
+test adds them deliberately after isolation.
+
+```bash
+scripts/test-release-test-env.sh
+scripts/test-release-context-isolation.sh
+
+ERPNEXT_RELEASE_CHANNEL=beta \
+ERPNEXT_RELEASE_TAG=v1.20.1-beta.1 \
+RELEASE_STRICT=1 \
+  scripts/test-build-info.sh
+```
+
+Expected R1D result:
+
+- every release fixture re-executes through `scripts/release-test-env.sh`;
+- development, beta, RC, and stable ambient contexts do not change synthetic
+  version or build-identity expectations;
+- legacy modular recovery remains a stable-only fixture during prerelease
+  qualification;
+- beta preparation runs the isolation matrix under the exact intended beta tag
+  before the normal full validator;
+- an isolation failure restores the pre-preparation metadata transactionally.
+
+---
+
 ## Testing principles
 
 1. Use the repository workflow instead of assembling long validation command

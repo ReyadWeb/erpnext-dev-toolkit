@@ -5,9 +5,9 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# Keep this fixture hermetic when validate-release.sh is invoked by pre-tag
-# qualification with an explicit release channel and tag in the environment.
-unset ERPNEXT_RELEASE_CHANNEL ERPNEXT_RELEASE_TAG
+# shellcheck source=scripts/release-test-env.sh
+source "${ROOT_DIR}/scripts/release-test-env.sh"
+release_test_env_reexec "$0" "$@"
 
 fail() {
   echo "FAIL: $*" >&2

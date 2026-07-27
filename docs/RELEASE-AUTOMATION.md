@@ -97,7 +97,13 @@ scripts/repo-workflow.sh release promote-stable \
 ```
 
 The underlying transactions back up release metadata before editing. On any
-metadata, checksum, or validation failure, the original files are restored.
+metadata, checksum, release-test context-isolation, or validation failure, the
+original files are restored.
+
+Beta preparation injects the intended prerelease tag and channel into
+`scripts/test-release-context-isolation.sh` before the normal full validator.
+This reproduces the environment used by strict pre-tag qualification while the
+transaction can still roll back safely.
 
 A successful preparation intentionally leaves changes uncommitted. This creates
 a review boundary before publication.
@@ -229,6 +235,8 @@ scripts/test-release-promote-stable.sh
 scripts/test-release-pretag-check.sh
 scripts/test-release-manifest.sh
 scripts/test-release-artifact-consistency.sh
+scripts/test-release-test-env.sh
+scripts/test-release-context-isolation.sh
 
 scripts/test-repo-workflow-release.sh
 scripts/test-repo-workflow-release-transaction.sh

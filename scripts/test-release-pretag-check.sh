@@ -4,15 +4,14 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/release-test-env.sh
+source "${ROOT_DIR}/scripts/release-test-env.sh"
+release_test_env_reexec "$0" "$@"
+
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
-
-ERPNEXT_RELEASE_CHANNEL=beta \
-  ERPNEXT_RELEASE_TAG=v1.20.1-beta.1 \
-  scripts/test-release-version.sh >/dev/null \
-  || fail "release-version tests were influenced by inherited pre-tag context"
 
 tmp_dir="$(mktemp -d /tmp/erpnext-dev-pretag-test.XXXXXX)"
 trap 'rm -rf "$tmp_dir"' EXIT
