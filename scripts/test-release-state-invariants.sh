@@ -161,4 +161,10 @@ if run_check enforce >/dev/null 2>&1; then
 fi
 pass "realistic strict-mode skip weakness is detected"
 
+grep -Fq \
+  'if [[ "${RELEASE_STRICT:-0}" == "1" && "$release_channel" != "development" ]]; then' \
+  scripts/validate-release.sh \
+  || fail "strict validation does not preserve the development changelog state"
+pass "strict development validation preserves the Unreleased changelog"
+
 echo "release-state invariant tests: all checks passed"

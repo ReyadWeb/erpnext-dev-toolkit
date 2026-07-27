@@ -128,7 +128,7 @@ fi
 tar --no-same-owner --no-same-permissions -xzf "$archive"
 cd "erpnext-dev-${VERSION}" || exit 1
 
-sudo ./erpnext-dev.sh verify-signature
+./scripts/bootstrap-verify.sh vX.Y.Z
 sha256sum -c SHA256SUMS
 ```
 
@@ -275,7 +275,7 @@ containing the complete tree.
 
 ```bash
 # Via the toolkit (bundled key + pinned fingerprint, throwaway keyring):
-sudo ./erpnext-dev.sh verify-signature
+./scripts/bootstrap-verify.sh vX.Y.Z
 # or manually, after importing the maintainer key:
 gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum -c SHA256SUMS
 ```

@@ -150,6 +150,9 @@ erpnext-dev.sh
 RELEASE-MANIFEST.txt
 SHA256SUMS
 SHA256SUMS.asc
+RELEASE-ASSETS.sha256
+RELEASE-ASSETS.sha256.asc
+bootstrap-verify.sh
 ```
 
 Use an exact release tag when referring to the complete published archive:
@@ -171,19 +174,25 @@ Machine-readable fingerprint: `BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`
 
 The public key is stored at [`docs/erpnext-dev-signing-key.asc`](docs/erpnext-dev-signing-key.asc).
 
-### Verifying release signatures
+### Pre-privilege release verification
 
-From an extracted release archive:
+Do not ask downloaded toolkit code to verify itself under `sudo`. Use the
+non-privileged release verifier first:
 
 ```bash
-sudo ./erpnext-dev.sh verify-signature
-sha256sum -c SHA256SUMS
-sudo ./erpnext-dev.sh verify-toolkit
+VERSION="vX.Y.Z"
+curl -fsSLO \
+  "https://github.com/ReyadWeb/erpnext-dev-toolkit/releases/download/${VERSION}/bootstrap-verify.sh"
+chmod +x bootstrap-verify.sh
+./bootstrap-verify.sh "$VERSION"
 ```
 
-`verify-signature` uses a temporary GnuPG home, verifies the detached signature, and requires the bundled public key to match the pinned fingerprint.
+The verifier checks the pinned fingerprint, signed external asset inventory,
+archive digest, safe archive paths, internal whole-tree checksums, and immutable
+build identity before it prints any privileged command. Review the extracted
+tree before running the selected command with `sudo`.
 
-The complete manual verification workflow is in [Release trust](docs/security/RELEASE-TRUST.md).
+The complete verification workflow is in [Release trust](docs/security/RELEASE-TRUST.md).
 
 ### Signing authority separation
 
