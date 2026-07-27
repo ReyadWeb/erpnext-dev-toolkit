@@ -23,6 +23,7 @@ fail() {
 version="$(scripts/release-version.sh read)"
 [[ -n "$version" ]] || fail "could not read canonical VERSION"
 tag="v${version}"
+channel="$(scripts/release-version.sh channel-for-tag "$tag")"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-dev-legacy-bootstrap-test.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -67,7 +68,7 @@ GNUPGHOME="$gpg_home" gpg --batch --armor --export "$fingerprint" >"${release_tr
     --stage-root . \
     --archive "erpnext-dev-${tag}.tar.gz" \
     --tag "$tag" \
-    --channel stable \
+    --channel "$channel" \
     --commit "$(git -C "$ROOT_DIR" rev-parse HEAD)" \
     --built-at 2026-07-27T00:00:00Z >/dev/null
   GNUPGHOME="$gpg_home" gpg --batch --yes --armor --detach-sign --local-user "$fingerprint" --output SHA256SUMS.asc SHA256SUMS
