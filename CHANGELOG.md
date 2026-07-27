@@ -7,6 +7,7 @@
 
 ### Fixed
 
+- Kept the legacy modular-recovery fixture on a synthetic stable release while beta or RC metadata is qualified, matching the recovery path's stable-only security policy.
 - Made the legacy modular-bootstrap fixture derive its synthetic build channel from the release tag so beta and RC qualification no longer use stable-channel metadata.
 - Scoped versioned changelog enforcement to beta, RC, and stable qualification so strict development CI retains the open `## Unreleased` section without weakening fail-closed tooling checks.
 

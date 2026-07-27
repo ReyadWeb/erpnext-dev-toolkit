@@ -20,10 +20,16 @@ fail() {
   exit 1
 }
 
-version="$(scripts/release-version.sh read)"
-[[ -n "$version" ]] || fail "could not read canonical VERSION"
+project_version="$(scripts/release-version.sh read)"
+[[ -n "$project_version" ]] || fail "could not read canonical VERSION"
+
+# Legacy modular recovery intentionally accepts stable releases only. Keep this
+# hermetic fixture stable while beta or RC metadata is being qualified.
+version="${project_version%%-*}"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+  || fail "could not derive stable fixture version from ${project_version}"
 tag="v${version}"
-channel="$(scripts/release-version.sh channel-for-tag "$tag")"
+channel="stable"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-dev-legacy-bootstrap-test.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -37,7 +43,8 @@ mkdir -p "$legacy_root" "$release_tree/lib" "$release_tree/docs" "$release_tree/
 chmod 700 "$gpg_home"
 
 # Build a minimal-but-complete runtime release tree from the current checkout.
-cp erpnext-dev.sh VERSION "$release_tree/"
+cp erpnext-dev.sh "$release_tree/"
+printf '%s\n' "$version" >"${release_tree}/VERSION"
 cp scripts/build-info.sh scripts/release-version.sh "$release_tree/scripts/"
 cp -a lib/. "$release_tree/lib/"
 
