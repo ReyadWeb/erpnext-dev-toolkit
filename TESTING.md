@@ -1,6 +1,7 @@
 # Testing guide
 
 **Current release:** v1.20.0
+**Current project version:** v1.20.1
 
 This is the active entry point for testing ERPNext Developer Toolkit changes and
 releases. It describes the current validation layers, the evidence required at
@@ -52,8 +53,34 @@ Expected R1B-1 audit baseline:
 - version format, duplicate-version ownership, workflow use, channel context,
   README status, and roadmap status pass;
 - pre-sudo trust, CI binary integrity, and strict no-skip remain visible gaps for
-  R1C;
-- immutable `BUILD-INFO.json` and development-version advancement remain R1B-2.
+  R1C.
+
+## v1.20.1 R1B-2 immutable bundle identity tests
+
+R1B-2 advances the development tree to `1.20.1` and generates `BUILD-INFO.json`
+only inside staged bundles. The metadata records the project version, channel,
+release tag when applicable, exact commit, SHA-256 digest of `SHA256SUMS`, archive
+name, and UTC build time. A byte-identical sidecar is written beside the archive.
+
+```bash
+scripts/test-build-info.sh
+scripts/test-release-version.sh
+scripts/test-release-state-invariants.sh
+scripts/test-release-pretag-check.sh
+scripts/test-atomic-update.sh
+scripts/build-release-bundle.sh
+scripts/check-release-state-invariants.sh release-state
+```
+
+Expected R1B-2 result:
+
+- source trees contain no committed `BUILD-INFO.json`;
+- untagged development bundles use `v1.20.1-development` artifact identity;
+- release bundles require matching version, tag, channel, commit, archive name,
+  and payload-inventory digest;
+- packaged and standalone build metadata must be byte-identical;
+- release-state enforcement passes while the three separately tracked R1C gaps
+  remain visible in audit mode.
 
 ---
 

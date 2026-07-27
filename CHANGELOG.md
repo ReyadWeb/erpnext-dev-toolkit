@@ -33,6 +33,12 @@
   proof validity.
 
 ### Changed
+- Advanced the canonical development version to `1.20.1` while preserving
+  `v1.20.0` as the latest published stable release.
+- Added generated immutable bundle identity with exact project version, channel,
+  tag, commit, payload digest, archive name, and UTC build time.
+- Separated current project-version alignment from published-release banners in
+  release-document validation.
 
 - Add consolidated `work start`, `work finish`, and `work land` maintainer commands while preserving the existing advanced workflow primitives.
 - Removed `SCRIPT_VERSION` as an independently maintained release value; runtime identity now derives from canonical metadata.

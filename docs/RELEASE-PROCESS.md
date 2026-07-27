@@ -166,6 +166,9 @@ The strict gate requires:
 - exact checksums;
 - complete release validation;
 - successful bundle construction and clean extraction;
+- generated `BUILD-INFO.json` matching project version, proposed tag, channel,
+  exact commit, archive name, and payload-inventory digest;
+- byte-identical standalone and bundled build metadata;
 - packaged version and toolkit integrity.
 
 A successful run records proof under `.git/erpnext-workflow/` for the exact tag,
@@ -214,8 +217,8 @@ Verification covers:
 - required release assets;
 - Latest status for stable releases;
 - safe archive paths;
-- standalone/bundled asset equality;
-- canonical version identity;
+- standalone/bundled checksum and build-identity equality;
+- canonical version, tag, channel, commit, archive, and payload identity;
 - whole-tree checksums;
 - pinned maintainer signing-key fingerprint;
 - detached checksum signature.

@@ -292,6 +292,11 @@ PR validation, merge, and strict pre-tag proof.
 | `full` | Security, release, update, workflow, manifest, or broad automation changes | Fast checks, canonical release validator, release-bundle construction |
 | `auto` | Normal use | Selects `fast` or `full` from the changed paths |
 
+Full validation builds an independently verified development artifact named
+`erpnext-dev-vX.Y.Z-development.tar.gz`. Release context replaces the development
+label with the exact beta, RC, or stable tag. Each archive has a matching generated
+`.BUILD-INFO.json` sidecar.
+
 Full mode is selected automatically when changes include areas such as:
 
 ```text

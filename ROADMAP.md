@@ -1,6 +1,7 @@
 # ERPNext Developer Toolkit Roadmap
 
 **Current release:** v1.20.0
+**Current project version:** v1.20.1
 **Current work:** v1.20.1 — Release Coherence and Public Testing Foundation
 **Next product milestone:** v1.20.1 — Release Coherence and Public Testing Foundation
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
@@ -152,12 +153,14 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 - [x] Adopt the formal release-state contract.
 - [x] Add measurable audit checks and negative tests.
 - [x] Remove `SCRIPT_VERSION` as an independently maintained literal; the compatibility variable now derives canonical metadata.
-- [x] Derive source channel from exact Git tag or validated release context; immutable bundle context follows in R1B-2.
-- [ ] Generate immutable bundle metadata containing version, tag, channel, commit,
-  tree digest, and build time.
+- [x] Derive source channel from exact Git tag, validated release context, or generated bundle metadata.
+- [x] Generate and verify bundle metadata containing version, tag, channel, commit,
+  payload-inventory digest, archive name, and UTC build time.
+- [x] Publish the same `BUILD-INFO.json` as a standalone release sidecar and verify
+  exact sidecar-to-bundle equality.
 - [x] Make workflows use `scripts/release-version.sh` for release identity.
-- [ ] Distinguish current development from latest published stable in every active
-  document and generated surface.
+- [x] Distinguish current development from latest published stable in active
+  documents and generated artifact names.
 
 ### R2 — Authenticity before privilege
 

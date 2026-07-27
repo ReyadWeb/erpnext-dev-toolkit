@@ -86,6 +86,13 @@ for name in ("README.md", "ROADMAP.md", "TESTING.md"):
         "Current release banner",
     )
 
+    replace_one(
+        root / name,
+        r'^(\*\*Current project version:\*\*) v[0-9A-Za-z.-]+',
+        rf'\1 {tag}',
+        "Current project version",
+    )
+
 replace_one(
     root / "RELEASE-MANIFEST.txt",
     r'^(# ERPNext Developer Toolkit Release Manifest )v[0-9A-Za-z.-]+',

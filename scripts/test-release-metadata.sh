@@ -25,9 +25,9 @@ case "${1:-}" in
 esac
 EOF_ENTRY
 chmod +x "${fixture}/erpnext-dev.sh"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' 'VERSION="v1.19.22"' >"${fixture}/README.md"
-printf '%s\n' '**Current release:** v1.19.22 (fixture)' >"${fixture}/ROADMAP.md"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' >"${fixture}/TESTING.md"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' 'VERSION="v1.19.22"' >"${fixture}/README.md"
+printf '%s\n' '**Current release:** v1.19.22 (fixture)' '**Current project version:** v1.19.22' >"${fixture}/ROADMAP.md"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' >"${fixture}/TESTING.md"
 printf '%s\n' '## v1.19.22 - Previous release' '' '- Previous.' >"${fixture}/CHANGELOG.md"
 printf '%s\n' '# ERPNext Developer Toolkit Release Manifest v1.19.22' 'VERSION' >"${fixture}/RELEASE-MANIFEST.txt"
 
@@ -49,6 +49,11 @@ run_update \
 for file in README.md ROADMAP.md TESTING.md; do
   grep -q '^\*\*Current release:\*\* v1.20.0-beta.1' "${fixture}/${file}" \
     || fail "${file} banner was not updated"
+done
+
+for file in README.md ROADMAP.md TESTING.md; do
+  grep -q '^\*\*Current project version:\*\* v1.20.0-beta.1' "${fixture}/${file}" \
+    || fail "${file} project version was not updated"
 done
 
 grep -qx 'VERSION="v1.20.0-beta.1"' "${fixture}/README.md" \

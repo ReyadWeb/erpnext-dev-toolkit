@@ -16,6 +16,7 @@ fixture="${tmp_dir}/fixture"
 mkdir -p "${fixture}/scripts"
 
 cp scripts/release-version.sh "${fixture}/scripts/"
+cp scripts/build-info.sh "${fixture}/scripts/"
 cp scripts/release-pretag-check.sh "${fixture}/scripts/"
 
 for helper in \
@@ -31,22 +32,39 @@ cat >"${fixture}/scripts/build-release-bundle.sh" <<'EOF_BUILD'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-tag="$(scripts/release-version.sh tag)"
-stage="dist/erpnext-dev-${tag}"
-bundle="dist/erpnext-dev-${tag}.tar.gz"
+channel="$(scripts/release-version.sh channel)"
+label="$(scripts/build-info.sh artifact-label)"
+tag=""
+[[ "$channel" == "development" ]] || tag="$(scripts/release-version.sh tag)"
+stage="dist/erpnext-dev-${label}"
+archive="erpnext-dev-${label}.tar.gz"
+bundle="dist/${archive}"
+commit="$(git rev-parse HEAD)"
 
 rm -rf dist
 mkdir -p "${stage}/scripts"
 
 cp VERSION erpnext-dev.sh "${stage}/"
-cp scripts/release-version.sh "${stage}/scripts/"
+cp scripts/release-version.sh scripts/build-info.sh "${stage}/scripts/"
 
 (
   cd "$stage"
-  sha256sum VERSION erpnext-dev.sh scripts/release-version.sh >SHA256SUMS
+  sha256sum VERSION erpnext-dev.sh scripts/release-version.sh scripts/build-info.sh >SHA256SUMS
 )
 
-tar -C dist -czf "$bundle" "erpnext-dev-${tag}"
+args=(
+  generate
+  --source-root .
+  --stage-root "$stage"
+  --archive "$archive"
+  --channel "$channel"
+  --commit "$commit"
+  --built-at 2026-07-27T00:00:00Z
+)
+[[ -z "$tag" ]] || args+=(--tag "$tag")
+scripts/build-info.sh "${args[@]}" >/dev/null
+
+tar -C dist -czf "$bundle" "erpnext-dev-${label}"
 rm -rf "$stage"
 EOF_BUILD
 

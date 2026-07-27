@@ -7,14 +7,15 @@ cd "$ROOT_DIR"
 
 mode="${1:-audit}"
 case "$mode" in
-  audit | enforce) ;;
+  audit | release-state | enforce) ;;
   *)
-    echo "Usage: scripts/check-release-state-invariants.sh [audit|enforce]" >&2
+    echo "Usage: scripts/check-release-state-invariants.sh [audit|release-state|enforce]" >&2
     exit 2
     ;;
 esac
 
 gaps=0
+rel_gaps=0
 passes=0
 
 pass() {
@@ -25,6 +26,9 @@ pass() {
 gap() {
   printf 'GAP:  %-34s %s\n' "$1" "$2"
   gaps=$((gaps + 1))
+  if [[ "$1" == REL001_* ]]; then
+    rel_gaps=$((rel_gaps + 1))
+  fi
 }
 
 require_file() {
@@ -96,6 +100,23 @@ else
   gap "REL001_CHANNEL_CONTEXT" "release-version.sh is unavailable"
 fi
 
+if [[ -e BUILD-INFO.json ]]; then
+  gap "REL001_BUILD_INFO_SOURCE" "generated BUILD-INFO.json is present in the source tree"
+else
+  pass "REL001_BUILD_INFO_SOURCE" "generated build metadata is absent from source"
+fi
+
+if [[ -x scripts/build-info.sh && -x scripts/test-build-info.sh ]] &&
+  grep -Fq 'scripts/build-info.sh' scripts/build-release-bundle.sh 2>/dev/null &&
+  { grep -Fq 'generate_args=(' scripts/build-release-bundle.sh 2>/dev/null ||
+    grep -Fq 'scripts/build-info.sh generate' scripts/build-release-bundle.sh 2>/dev/null; } &&
+  { grep -Fq 'verify_args=(' scripts/build-release-bundle.sh 2>/dev/null ||
+    grep -Fq 'scripts/build-info.sh verify' scripts/build-release-bundle.sh 2>/dev/null; }; then
+  pass "REL001_BUILD_INFO_TOOLING" "bundle generation and verification use the canonical helper"
+else
+  gap "REL001_BUILD_INFO_TOOLING" "canonical generated build identity is incomplete"
+fi
+
 if [[ -f README.md ]] && grep -Fq 'v1.20.1 release-state' README.md; then
   pass "REL001_README_STATUS" "README identifies v1.20.1 reliability work"
 else
@@ -106,6 +127,19 @@ if [[ -f ROADMAP.md ]] && grep -Fq '**Current work:** v1.20.1' ROADMAP.md; then
   pass "REL001_ROADMAP_STATUS" "roadmap identifies v1.20.1 as current work"
 else
   gap "REL001_ROADMAP_STATUS" "roadmap does not identify v1.20.1 as current work"
+fi
+
+project_tag="v${version}"
+project_docs_ok=1
+for file in README.md ROADMAP.md TESTING.md; do
+  if [[ ! -f "$file" ]] || ! grep -qE "^\*\*Current project version:\*\* ${project_tag}([[:space:]]|$|\.|·)" "$file"; then
+    project_docs_ok=0
+  fi
+done
+if [[ "$project_docs_ok" == "1" ]]; then
+  pass "REL001_PROJECT_DOCS" "active documents identify project version ${project_tag}"
+else
+  gap "REL001_PROJECT_DOCS" "active documents do not agree with project version ${project_tag}"
 fi
 
 unsafe_bootstrap=""
@@ -209,6 +243,9 @@ fi
 
 printf '\nRelease-state audit: %d pass(es), %d gap(s).\n' "$passes" "$gaps"
 
+if [[ "$mode" == "release-state" && "$rel_gaps" -ne 0 ]]; then
+  exit 1
+fi
 if [[ "$mode" == "enforce" && "$gaps" -ne 0 ]]; then
   exit 1
 fi

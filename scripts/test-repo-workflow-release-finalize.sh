@@ -74,10 +74,24 @@ case "${1:-read}" in
     [[ "${2:-}" == "v${version}" ]]
     echo "OK: tag matches canonical version (v${version})"
     ;;
+  channel-for-tag)
+    [[ "${2:-}" == "v${version}" ]]
+    echo stable
+    ;;
   *) exit 2 ;;
 esac
 SH2
 chmod +x scripts/release-version.sh
+
+cat >scripts/build-info.sh <<'SH2'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "${1:-}" in
+  verify) echo "OK: BUILD-INFO.json verified (stable)" ;;
+  *) exit 0 ;;
+esac
+SH2
+chmod +x scripts/build-info.sh
 
 cat >scripts/release-pretag-check.sh <<'SH2'
 #!/usr/bin/env bash
@@ -91,7 +105,7 @@ cat >scripts/assert-github-release-assets.sh <<'SH2'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 [[ "${1:-}" == "v1.2.3" ]]
-echo "assert-github-release-assets: v1.2.3 OK (5 assets)"
+echo "assert-github-release-assets: v1.2.3 OK (6 assets)"
 SH2
 chmod +x scripts/assert-github-release-assets.sh
 
@@ -99,6 +113,7 @@ cat >RELEASE-MANIFEST.txt <<'TXT'
 erpnext-dev.sh
 VERSION
 scripts/release-version.sh
+scripts/build-info.sh
 docs/erpnext-dev-signing-key.asc
 TXT
 
@@ -138,11 +153,24 @@ cp VERSION "$bundle_root/VERSION"
 cp erpnext-dev.sh "$bundle_root/erpnext-dev.sh"
 cp RELEASE-MANIFEST.txt "$bundle_root/RELEASE-MANIFEST.txt"
 cp scripts/release-version.sh "$bundle_root/scripts/release-version.sh"
+cp scripts/build-info.sh "$bundle_root/scripts/build-info.sh"
 cp docs/erpnext-dev-signing-key.asc "$bundle_root/docs/erpnext-dev-signing-key.asc"
-chmod +x "$bundle_root/erpnext-dev.sh" "$bundle_root/scripts/release-version.sh"
+chmod +x "$bundle_root/erpnext-dev.sh" "$bundle_root/scripts/release-version.sh" "$bundle_root/scripts/build-info.sh"
+cat >"$bundle_root/BUILD-INFO.json" <<'JSON'
+{
+  "archive": "erpnext-dev-v1.2.3.tar.gz",
+  "built_at": "2026-07-27T00:00:00Z",
+  "channel": "stable",
+  "commit": "0000000000000000000000000000000000000000",
+  "project_version": "1.2.3",
+  "schema_version": 1,
+  "tag": "v1.2.3",
+  "tree_digest": "fixture"
+}
+JSON
 (
   cd "$bundle_root"
-  sha256sum erpnext-dev.sh VERSION scripts/release-version.sh docs/erpnext-dev-signing-key.asc >SHA256SUMS
+  sha256sum erpnext-dev.sh VERSION scripts/release-version.sh scripts/build-info.sh docs/erpnext-dev-signing-key.asc >SHA256SUMS
 )
 echo 'FAKE DETACHED SIGNATURE' >"$bundle_root/SHA256SUMS.asc"
 
@@ -151,6 +179,7 @@ cp "$bundle_root/SHA256SUMS" "$assets/SHA256SUMS"
 cp "$bundle_root/SHA256SUMS.asc" "$assets/SHA256SUMS.asc"
 cp "$bundle_root/erpnext-dev.sh" "$assets/erpnext-dev.sh"
 cp "$bundle_root/RELEASE-MANIFEST.txt" "$assets/RELEASE-MANIFEST.txt"
+cp "$bundle_root/BUILD-INFO.json" "$assets/erpnext-dev-v1.2.3.BUILD-INFO.json"
 
 cat >"${bin}/gpg" <<'SH2'
 #!/usr/bin/env bash

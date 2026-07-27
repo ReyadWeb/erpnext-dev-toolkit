@@ -44,7 +44,12 @@ The Git tag is the canonical version prefixed by `v`.
 - every tracked file copied into the release archive;
 - every artifact represented in `SHA256SUMS`.
 
-`SHA256SUMS` is packaged but does not checksum itself.
+`SHA256SUMS` is packaged but does not checksum itself. Generated
+`BUILD-INFO.json` is deliberately outside that inventory to avoid a checksum cycle.
+Instead, its `tree_digest` is the SHA-256 digest of the exact `SHA256SUMS` bytes.
+The bundle builder writes the same metadata as a standalone `.BUILD-INFO.json`
+sidecar and independently verifies the extracted archive. Development bundles use
+`vX.Y.Z-development`; beta, RC, and stable bundles use their exact release tag.
 
 The manifest parser rejects duplicate, missing, absolute, traversing,
 whitespace-unsafe, directory, and symbolic-link entries.
