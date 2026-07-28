@@ -1,3 +1,32 @@
+## v1.20.1 - Release engineering foundation
+
+### Added
+
+- Added a consolidated maintainer workflow for routine work, pull requests, beta preparation, stable promotion, pre-tag proof, guarded tagging, publication monitoring, and release verification.
+- Established `VERSION` as the canonical project and runtime version source.
+- Added immutable `BUILD-INFO.json` metadata and standalone release build identity.
+- Added signed external release-asset inventories and non-privileged bootstrap verification.
+
+### Security
+
+- Added pre-privilege verification of signing-key fingerprints, signatures, archive digests, safe paths, internal checksums, and immutable build identity.
+- Removed privileged download-pipe patterns and made strict release validation fail closed when required tooling is unavailable.
+- Enabled release validation, security scanning, CodeQL, Gitleaks, shfmt, and pinned-action checks for pull requests targeting `release/**`.
+
+### Fixed
+
+- Isolated hermetic release fixtures from inherited release channel, tag, lifecycle phase, source tag, strict-mode, and fixture-control context.
+- Added controlled `stable-promotion` and `stable-pretag` phases for validating stable metadata before the stable tag exists.
+- Required stable promotion to originate from a matching beta or RC tag pointing exactly at `HEAD` on the expected release branch.
+- Rejected missing, stale, mismatched, wrong-branch, dirty-tree, and pre-existing target-tag qualification states.
+
+### Validation
+
+- Full release validation completed successfully before stable metadata publication.
+- Release-state enforcement passed with 12 controls and 0 gaps.
+- `v1.20.1-beta.2` was published, signed, and independently verified at commit `9745d4dc7f04d84ab1570ef3e55de2850811cb39`.
+- Stable-promotion, stable-pretag, context-isolation, manifest, artifact-consistency, ShellCheck, shfmt, security, repository-workflow, install, frontend-readiness, backup, restore, and rollback gates passed.
+- Stable artifact publication, signing, and independent verification remain required before announcement.
 ## v1.20.1-beta.2 - Stable qualification lifecycle hardening
 
 ### Fixed
