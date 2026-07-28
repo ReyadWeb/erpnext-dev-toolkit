@@ -27,6 +27,8 @@ run_poisoned() {
   if env \
     ERPNEXT_RELEASE_CHANNEL="$channel" \
     ERPNEXT_RELEASE_TAG="$tag" \
+    ERPNEXT_RELEASE_PHASE=stable-promotion \
+    ERPNEXT_RELEASE_SOURCE_TAG=v9.9.9-beta.1 \
     ERPNEXT_RELEASE_ROOT=/nonexistent/release-root \
     ERPNEXT_VERSION_FILE=/nonexistent/VERSION \
     ERPNEXT_ENTRYPOINT=/nonexistent/erpnext-dev.sh \

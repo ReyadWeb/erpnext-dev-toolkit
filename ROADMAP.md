@@ -1,6 +1,6 @@
 # ERPNext Developer Toolkit Roadmap
 
-**Current release:** v1.20.0
+**Current release:** v1.20.1
 **Current project version:** v1.20.1
 **Current work:** v1.20.1 — Release Coherence and Public Testing Foundation
 **Next product milestone:** v1.20.1 — Release Coherence and Public Testing Foundation

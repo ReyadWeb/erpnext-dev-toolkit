@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, beta ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, 'release/**' ]
   # Callable from release.yml so a release is GATED on the same lint/validate/
   # bundle checks. Not triggered directly on tags anymore (release.yml invokes it).
   workflow_call: {}

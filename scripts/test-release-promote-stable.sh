@@ -39,6 +39,14 @@ done
 
 cat >"${fixture}/scripts/validate-release.sh" <<'EOF_VALIDATE'
 #!/usr/bin/env bash
+set -Eeuo pipefail
+
+[[ "${ERPNEXT_RELEASE_PHASE:-}" == "stable-promotion" ]] || exit 21
+[[ "${ERPNEXT_RELEASE_SOURCE_TAG:-}" == "v1.20.0-beta.1" ]] || exit 22
+[[ "${ERPNEXT_RELEASE_CHANNEL:-}" == "stable" ]] || exit 23
+[[ "${ERPNEXT_RELEASE_TAG:-}" == "v1.20.0" ]] || exit 24
+[[ "${RELEASE_STRICT:-0}" == "1" ]] || exit 25
+
 exit "${FIXTURE_VALIDATE_EXIT:-0}"
 EOF_VALIDATE
 
@@ -68,6 +76,7 @@ printf '%s\n' 'fixture' >"${fixture}/SHA256SUMS"
   git config user.email "release-test@example.invalid"
   git add .
   git commit -qm "beta fixture"
+  git tag v1.20.0-beta.1
   git switch -qc wrong-branch
 )
 
@@ -83,6 +92,30 @@ fi
 (
   cd "$fixture"
   git switch -qc release/v1.20.0
+)
+
+(
+  cd "$fixture"
+  git tag -d v1.20.0-beta.1 >/dev/null
+)
+
+if run_promote 1.20.0 "Stable release" >/dev/null 2>&1; then
+  fail "missing source prerelease tag was accepted"
+fi
+
+(
+  cd "$fixture"
+  git tag v1.20.0-beta.1
+  git commit --allow-empty -qm "advance beyond prerelease tag"
+)
+
+if run_promote 1.20.0 "Stable release" >/dev/null 2>&1; then
+  fail "source prerelease tag on another commit was accepted"
+fi
+
+(
+  cd "$fixture"
+  git reset --hard HEAD~1 >/dev/null
 )
 
 before_hash="$(

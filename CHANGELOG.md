@@ -1,3 +1,80 @@
+## v1.20.1 - Release engineering foundation
+
+### Added
+
+- Added a consolidated maintainer workflow for routine work, pull requests, beta preparation, stable promotion, pre-tag proof, guarded tagging, publication monitoring, and release verification.
+- Established `VERSION` as the canonical project and runtime version source.
+- Added immutable `BUILD-INFO.json` metadata and standalone release build identity.
+- Added signed external release-asset inventories and non-privileged bootstrap verification.
+
+### Security
+
+- Added pre-privilege verification of signing-key fingerprints, signatures, archive digests, safe paths, internal checksums, and immutable build identity.
+- Removed privileged download-pipe patterns and made strict release validation fail closed when required tooling is unavailable.
+- Enabled release validation, security scanning, CodeQL, Gitleaks, shfmt, and pinned-action checks for pull requests targeting `release/**`.
+
+### Fixed
+
+- Isolated hermetic release fixtures from inherited release channel, tag, lifecycle phase, source tag, strict-mode, and fixture-control context.
+- Added controlled `stable-promotion` and `stable-pretag` phases for validating stable metadata before the stable tag exists.
+- Required stable promotion to originate from a matching beta or RC tag pointing exactly at `HEAD` on the expected release branch.
+- Rejected missing, stale, mismatched, wrong-branch, dirty-tree, and pre-existing target-tag qualification states.
+
+### Validation
+
+- Full release validation completed successfully before stable metadata publication.
+- Release-state enforcement passed with 12 controls and 0 gaps.
+- `v1.20.1-beta.2` was published, signed, and independently verified at commit `9745d4dc7f04d84ab1570ef3e55de2850811cb39`.
+- Stable-promotion, stable-pretag, context-isolation, manifest, artifact-consistency, ShellCheck, shfmt, security, repository-workflow, install, frontend-readiness, backup, restore, and rollback gates passed.
+- Stable artifact publication, signing, and independent verification remain required before announcement.
+## v1.20.1-beta.2 - Stable qualification lifecycle hardening
+
+### Fixed
+
+- Added controlled `stable-promotion` and `stable-pretag` qualification phases so stable metadata can be validated safely before the stable tag exists.
+- Required stable promotion to originate from a matching beta or RC tag pointing exactly at `HEAD` on the expected release branch.
+- Rejected missing, stale, mismatched, wrong-branch, dirty-tree, and pre-existing target-tag qualification states.
+- Extended release-test isolation to remove inherited lifecycle-phase and source-tag context.
+- Enabled Release validation, Security, and Security analysis workflows for pull requests targeting `release/**`.
+
+### Validation
+
+- Full release validation completed successfully before beta metadata publication.
+- Release-state enforcement passed with 12 controls and 0 gaps.
+- Stable-promotion, stable-pretag, context-isolation, manifest, artifact-consistency, ShellCheck, shfmt, security, and repository-workflow tests passed.
+- Published beta artifact verification remains required before stable promotion.
+
+## v1.20.1-beta.1 - Release engineering foundation
+
+### Added
+
+- Consolidated maintainer workflow commands for starting, finishing, validating, publishing, and landing routine repository work.
+- Canonical project and runtime version ownership through the repository `VERSION` file.
+- Immutable generated `BUILD-INFO.json` metadata recording version, channel, tag, commit, archive identity, payload digest, and build timestamp.
+- Standalone build-identity metadata for release bundles and published release assets.
+- Signed external release-asset inventory and non-privileged bootstrap verification before toolkit installation.
+
+### Security
+
+- Added pre-privilege verification of release signatures, signing-key fingerprints, archive checksums, internal manifests, and immutable build metadata.
+- Removed CI download patterns that piped network content directly into privileged consumers.
+- Made strict release validation fail closed when required ShellCheck validation is unavailable.
+
+### Fixed
+
+- Isolated the release-version hermetic fixture from inherited pre-tag channel and tag context so strict beta qualification validates the fixture's own synthetic identity.
+- Corrected non-interactive pull-request creation in the consolidated maintainer workflow.
+- Scoped strict changelog enforcement to beta, release-candidate, and stable qualification while preserving an open development changelog.
+- Kept the legacy modular-bootstrap recovery fixture on a synthetic stable release during beta and release-candidate validation.
+- Made synthetic bootstrap fixture channels derive consistently from their release identities.
+
+### Validation
+
+- Full release validation completed successfully before beta metadata publication.
+- Release-state audit passed with 12 controls and 0 gaps.
+- Build identity, artifact consistency, signed asset trust, bootstrap recovery, workflow transaction, ShellCheck, shfmt, adversarial-input, and release metadata tests passed.
+- Published-artifact testing across native, Docker, upgrade, rollback, backup, restore, reboot, HTTPS, and frontend-readiness environments remains part of beta acceptance.
+
 ## Unreleased
 
 ### Security
@@ -7,6 +84,9 @@
 
 ### Fixed
 
+- Added explicit, strict `stable-promotion` and `stable-pretag` qualification phases so stable metadata can be validated before the stable tag exists without weakening normal exact-tag enforcement.
+- Required stable promotion to originate from an exact beta or RC tag pointing at `HEAD`, and rejected missing, stale, mismatched, or already-published tag states.
+- Extended hermetic release-test isolation to remove inherited lifecycle-phase and source-tag context.
 - Isolated hermetic release fixtures from ambient beta, RC, stable, strict-mode, build-root, and fixture-control variables so pre-tag qualification cannot override synthetic test identity.
 - Kept the legacy modular-recovery fixture on a synthetic stable release while beta or RC metadata is qualified, matching the recovery path's stable-only security policy.
 - Made the legacy modular-bootstrap fixture derive its synthetic build channel from the release tag so beta and RC qualification no longer use stable-channel metadata.

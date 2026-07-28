@@ -23,20 +23,51 @@ cp scripts/release-version.sh "${fixture}/scripts/"
 cp scripts/build-info.sh "${fixture}/scripts/"
 cp scripts/release-pretag-check.sh "${fixture}/scripts/"
 
-for helper in \
-  validate-release.sh \
-  check-release-artifact-consistency.sh; do
-  cat >"${fixture}/scripts/${helper}" <<'EOF_PASS'
+cat >"${fixture}/scripts/validate-release.sh" <<'EOF_VALIDATE'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+channel="${ERPNEXT_RELEASE_CHANNEL:-}"
+tag="${ERPNEXT_RELEASE_TAG:-}"
+phase="${ERPNEXT_RELEASE_PHASE:-}"
+
+case "$channel" in
+  stable)
+    [[ "$tag" == "v1.20.0" ]] || exit 21
+    [[ "$phase" == "stable-pretag" ]] || exit 22
+    [[ "${RELEASE_STRICT:-0}" == "1" ]] || exit 23
+    ;;
+  beta)
+    [[ "$tag" == "v1.20.0-beta.1" ]] || exit 24
+    [[ -z "$phase" ]] || exit 25
+    [[ "${RELEASE_STRICT:-0}" == "1" ]] || exit 26
+    ;;
+  *)
+    exit 27
+    ;;
+esac
+EOF_VALIDATE
+
+cat >"${fixture}/scripts/check-release-artifact-consistency.sh" <<'EOF_PASS'
 #!/usr/bin/env bash
 exit 0
 EOF_PASS
-done
 
 cat >"${fixture}/scripts/build-release-bundle.sh" <<'EOF_BUILD'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
 channel="$(scripts/release-version.sh channel)"
+phase="${ERPNEXT_RELEASE_PHASE:-}"
+
+case "$channel" in
+  stable)
+    [[ "$phase" == "stable-pretag" ]] || exit 31
+    ;;
+  beta)
+    [[ -z "$phase" ]] || exit 32
+    ;;
+esac
 label="$(scripts/build-info.sh artifact-label)"
 tag=""
 [[ "$channel" == "development" ]] || tag="$(scripts/release-version.sh tag)"

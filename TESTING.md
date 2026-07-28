@@ -1,6 +1,6 @@
 # Testing guide
 
-**Current release:** v1.20.0
+**Current release:** v1.20.1
 **Current project version:** v1.20.1
 
 This is the active entry point for testing ERPNext Developer Toolkit changes and
@@ -110,6 +110,30 @@ Expected R1D result:
 - beta preparation runs the isolation matrix under the exact intended beta tag
   before the normal full validator;
 - an isolation failure restores the pre-preparation metadata transactionally.
+
+---
+
+## v1.20.1 R1E stable qualification lifecycle
+
+Stable metadata must be validated before the stable tag exists, while
+ordinary untagged stable trees remain invalid.
+
+```bash
+scripts/test-release-test-env.sh
+scripts/test-release-context-isolation.sh
+scripts/test-release-state-invariants.sh
+scripts/test-release-promote-stable.sh
+scripts/test-release-pretag-check.sh
+```
+
+Expected results:
+
+- promotion requires strict mode, the matching release branch, and an exact
+  beta or RC source tag pointing at `HEAD`;
+- stable pre-tag qualification requires a clean `main` tree;
+- missing, stale, mismatched, and existing target tags are rejected;
+- lifecycle context is removed by the hermetic test boundary;
+- failed promotion restores the original prerelease metadata.
 
 ---
 
