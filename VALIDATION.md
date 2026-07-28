@@ -266,19 +266,32 @@ Pass criteria:
 
 ### B3. Container persistence
 
+For a stack created before v1.20.2-beta.2, reconcile the persistence policy
+once before rebooting:
+
+```bash
+sudo erpnext-dev docker-reconcile-restart-policy
+sudo erpnext-dev doctor
+```
+
 Reboot the VM and verify:
 
 ```bash
 sudo erpnext-dev engine-status
-sudo erpnext-dev status
+sudo erpnext-dev doctor
+sudo docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 sudo erpnext-dev wait-ready
 sudo erpnext-dev verify-frontend-assets
 ```
 
 Pass criteria:
 
-- the intended Compose project returns automatically or through the documented
-  startup path;
+- Doctor reports all nine required services ready and all nine persistent
+  services using `unless-stopped`;
+- the intended Compose project returns automatically without a manual
+  `erpnext-dev start`;
+- no required service is missing, exited, restarting, health-starting, or
+  unhealthy;
 - volumes, credentials, site state, and installed applications persist;
 - frontend assets and login remain healthy.
 

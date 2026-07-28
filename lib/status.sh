@@ -441,12 +441,17 @@ run_full_status() {
   require_sudo
 
   if deployment_engine_is_docker; then
+    local docker_runtime docker_access_rc=0
+    docker_runtime="$(runtime_state)"
     echo
     echo "============================================================"
     echo "ERPNext Developer Full Health Report (Docker)"
     echo "============================================================"
     status_line "Install" "INFO" "$(install_state)"
-    status_line "Runtime" "INFO" "$(runtime_state)"
+    case "$docker_runtime" in
+      Running*) status_line "Runtime" "OK" "$docker_runtime" ;;
+      *) status_line "Runtime" "FAIL" "$docker_runtime" ;;
+    esac
     status_line "Mode" "INFO" "$(docker_mode_label)"
     status_line "Site" "INFO" "$(docker_site_name)"
     if docker_is_production; then
@@ -457,14 +462,14 @@ run_full_status() {
     fi
     echo "============================================================"
     echo
-    docker_verify_access || true
+    docker_verify_access || docker_access_rc=$?
     if docker_is_production; then
       echo
       docker_https_status || true
       echo
       docker_production_exposure || true
     fi
-    return 0
+    return "$docker_access_rc"
   fi
 
   echo
