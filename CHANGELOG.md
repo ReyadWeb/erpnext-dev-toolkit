@@ -1,3 +1,20 @@
+## v1.20.1-beta.2 - Stable qualification lifecycle hardening
+
+### Fixed
+
+- Added controlled `stable-promotion` and `stable-pretag` qualification phases so stable metadata can be validated safely before the stable tag exists.
+- Required stable promotion to originate from a matching beta or RC tag pointing exactly at `HEAD` on the expected release branch.
+- Rejected missing, stale, mismatched, wrong-branch, dirty-tree, and pre-existing target-tag qualification states.
+- Extended release-test isolation to remove inherited lifecycle-phase and source-tag context.
+- Enabled Release validation, Security, and Security analysis workflows for pull requests targeting `release/**`.
+
+### Validation
+
+- Full release validation completed successfully before beta metadata publication.
+- Release-state enforcement passed with 12 controls and 0 gaps.
+- Stable-promotion, stable-pretag, context-isolation, manifest, artifact-consistency, ShellCheck, shfmt, security, and repository-workflow tests passed.
+- Published beta artifact verification remains required before stable promotion.
+
 ## v1.20.1-beta.1 - Release engineering foundation
 
 ### Added
