@@ -105,6 +105,21 @@ Beta preparation injects the intended prerelease tag and channel into
 This reproduces the environment used by strict pre-tag qualification while the
 transaction can still roll back safely.
 
+Stable promotion validates the temporary untagged stable tree through the
+strict `stable-promotion` lifecycle phase. The source beta or RC tag must exist,
+match the target version, and point exactly at `HEAD`. The stable target tag must
+not already exist.
+
+Stable pre-tag validation uses the strict `stable-pretag` lifecycle phase while
+the proposed stable tag is still absent. It requires clean `main`; branch
+synchronisation and remote-tag checks remain enforced by the pre-tag wrapper.
+
+Outside these controlled lifecycle phases, an untagged stable tree remains
+invalid.
+
+The lifecycle phase and source prerelease tag are removed by the canonical
+release-test environment boundary before synthetic fixtures execute.
+
 A successful preparation intentionally leaves changes uncommitted. This creates
 a review boundary before publication.
 

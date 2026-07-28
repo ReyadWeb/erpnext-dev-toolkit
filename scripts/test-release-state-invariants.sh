@@ -37,11 +37,28 @@ write_compliant_fixture() {
 
   cat >"${fixture}/scripts/release-version.sh" <<'EOF_RELEASE_HELPER'
 #!/usr/bin/env bash
+set -Eeuo pipefail
+
+version="$(tr -d '[:space:]' <VERSION)"
+expected_tag="v${version}"
+
 case "${1:-read}" in
-  read) cat VERSION ;;
-  channel) echo development ;;
-  tag) printf 'v%s\n' "$(cat VERSION)" ;;
-  *) exit 2 ;;
+  read)
+    printf '%s\n' "$version"
+    ;;
+  channel)
+    printf '%s\n' "${ERPNEXT_RELEASE_CHANNEL:-development}"
+    ;;
+  tag)
+    explicit="${ERPNEXT_RELEASE_TAG:-}"
+    if [[ -n "$explicit" && "$explicit" != "$expected_tag" ]]; then
+      exit 1
+    fi
+    printf '%s\n' "${explicit:-$expected_tag}"
+    ;;
+  *)
+    exit 2
+    ;;
 esac
 EOF_RELEASE_HELPER
   chmod +x "${fixture}/scripts/release-version.sh"
@@ -178,5 +195,188 @@ grep -Fq 'ERPNEXT_RELEASE_TAG="$target_tag"' scripts/release-prepare-beta.sh \
 grep -Fq 'scripts/test-release-context-isolation.sh' scripts/release-prepare-beta.sh \
   || fail "beta preparation does not run the pre-tag-context dry-run"
 pass "release qualification enforces hermetic fixture context isolation"
+
+for workflow in .github/workflows/ci.yml .github/workflows/security.yml .github/workflows/security-analysis.yml; do
+  grep -A2 -E '^[[:space:]]*pull_request:' "$workflow" \
+    | grep -Eq "branches:.*release/\*\*" || fail "release-branch pull requests do not trigger ${workflow}"
+done
+pass "release-branch pull requests trigger required workflows"
+
+write_compliant_fixture
+
+(
+  cd "$fixture"
+  rm -rf .git
+  git init -q
+  git config user.name "Release Test"
+  git config user.email "release-test@example.invalid"
+  git add .
+  git commit -qm "stable qualification fixture"
+  git tag v1.20.1-rc.1
+  git commit --allow-empty -qm "qualification head"
+  git switch -qc release/v1.20.1
+  git tag v1.20.1-beta.1
+)
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "untagged stable context without a qualification phase was accepted"
+fi
+pass "untagged stable context requires an authorised qualification phase"
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-promotion \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-promotion without strict mode was accepted"
+fi
+pass "stable-promotion requires strict mode"
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.2 \
+  ERPNEXT_RELEASE_PHASE=stable-promotion \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-promotion with a mismatched target tag was accepted"
+fi
+pass "stable qualification rejects a mismatched target tag"
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-promotion \
+  ERPNEXT_RELEASE_SOURCE_TAG=v1.20.1-beta.2 \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-promotion accepted a missing source prerelease tag"
+fi
+pass "stable-promotion rejects a missing source prerelease tag"
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-promotion \
+  ERPNEXT_RELEASE_SOURCE_TAG=v1.20.1-rc.1 \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-promotion accepted a source tag from another commit"
+fi
+pass "stable-promotion rejects a source tag from another commit"
+
+(
+  cd "$fixture"
+  git switch -qc feature/wrong-stable-branch
+)
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-promotion \
+  ERPNEXT_RELEASE_SOURCE_TAG=v1.20.1-beta.1 \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-promotion accepted the wrong branch"
+fi
+pass "stable-promotion rejects the wrong branch"
+
+(
+  cd "$fixture"
+  git switch -q release/v1.20.1
+  git tag v1.20.1 HEAD^
+)
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-promotion \
+  ERPNEXT_RELEASE_SOURCE_TAG=v1.20.1-beta.1 \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-promotion accepted an existing target tag"
+fi
+pass "stable-promotion rejects an existing target tag"
+
+(
+  cd "$fixture"
+  git tag -d v1.20.1 >/dev/null
+)
+
+ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-promotion \
+  ERPNEXT_RELEASE_SOURCE_TAG=v1.20.1-beta.1 \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null \
+  || fail "valid stable-promotion context was rejected"
+pass "valid stable-promotion context is accepted"
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-pretag \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-pretag accepted a non-main branch"
+fi
+pass "stable-pretag rejects a non-main branch"
+
+(
+  cd "$fixture"
+  git switch -qc main
+  printf '%s\n' dirty >>README.md
+)
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-pretag \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-pretag accepted a dirty working tree"
+fi
+pass "stable-pretag rejects a dirty working tree"
+
+(
+  cd "$fixture"
+  git reset --hard -q HEAD
+  git tag v1.20.1 HEAD^
+)
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-pretag \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "stable-pretag accepted an existing target tag"
+fi
+pass "stable-pretag rejects an existing target tag"
+
+(
+  cd "$fixture"
+  git tag -d v1.20.1 >/dev/null
+)
+
+ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=stable-pretag \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null \
+  || fail "valid stable-pretag context was rejected"
+pass "valid stable-pretag context is accepted"
+
+if ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  ERPNEXT_RELEASE_PHASE=unknown-phase \
+  RELEASE_STRICT=1 \
+  run_check release-state >/dev/null 2>&1; then
+  fail "unknown stable qualification phase was accepted"
+fi
+pass "unknown stable qualification phase is rejected"
+
+(
+  cd "$fixture"
+  git tag v1.20.1
+)
+
+ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG=v1.20.1 \
+  run_check release-state >/dev/null \
+  || fail "exact stable tag on HEAD was rejected"
+pass "exact stable tag is accepted without a qualification phase"
 
 echo "release-state invariant tests: all checks passed"

@@ -134,14 +134,21 @@ else
   echo "NOTE: remote tag and branch-synchronization checks skipped"
 fi
 
-ERPNEXT_RELEASE_TAG="$target_tag" \
+validation_phase=""
+if [[ "$channel" == "stable" ]]; then
+  validation_phase="stable-pretag"
+fi
+
+ERPNEXT_RELEASE_PHASE="$validation_phase" \
+  ERPNEXT_RELEASE_TAG="$target_tag" \
   ERPNEXT_RELEASE_CHANNEL="$channel" \
   RELEASE_STRICT=1 \
   scripts/validate-release.sh
 scripts/check-release-artifact-consistency.sh
 
 rm -rf dist
-ERPNEXT_RELEASE_TAG="$target_tag" \
+ERPNEXT_RELEASE_PHASE="$validation_phase" \
+  ERPNEXT_RELEASE_TAG="$target_tag" \
   ERPNEXT_RELEASE_CHANNEL="$channel" \
   scripts/build-release-bundle.sh
 

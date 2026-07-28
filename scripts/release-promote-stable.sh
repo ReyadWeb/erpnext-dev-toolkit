@@ -68,6 +68,14 @@ current_version="$(scripts/release-version.sh read)"
   "$current_version" == "${target_version}-rc."* ]] \
   || fail "current version ${current_version} is not a matching beta or RC for ${target_version}"
 
+source_tag="v${current_version}"
+
+git rev-parse -q --verify "refs/tags/${source_tag}" >/dev/null \
+  || fail "source prerelease tag does not exist: ${source_tag}"
+
+git tag --points-at HEAD | grep -Fxq "$source_tag" \
+  || fail "source prerelease tag ${source_tag} does not point exactly at HEAD"
+
 if git rev-parse -q --verify "refs/tags/${target_tag}" >/dev/null; then
   fail "local stable tag already exists: ${target_tag}"
 fi
@@ -119,7 +127,13 @@ scripts/generate-release-checksums.sh
 scripts/release-version.sh assert-runtime
 scripts/check-release-doc-alignment.sh
 scripts/check-release-artifact-consistency.sh
-RELEASE_STRICT=1 scripts/validate-release.sh
+
+ERPNEXT_RELEASE_PHASE=stable-promotion \
+  ERPNEXT_RELEASE_SOURCE_TAG="$source_tag" \
+  ERPNEXT_RELEASE_CHANNEL=stable \
+  ERPNEXT_RELEASE_TAG="$target_tag" \
+  RELEASE_STRICT=1 \
+  scripts/validate-release.sh
 
 promotion_complete=1
 rm -rf "$backup_dir"
@@ -128,6 +142,7 @@ trap - EXIT
 echo
 echo "Stable metadata promotion completed successfully."
 echo "Previous: ${current_version}"
+echo "Source:   ${source_tag}"
 echo "Current:  ${target_version}"
 echo "Tag:      ${target_tag}"
 echo "Branch:   ${branch}"

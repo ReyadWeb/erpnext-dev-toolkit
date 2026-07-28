@@ -113,6 +113,30 @@ Expected R1D result:
 
 ---
 
+## v1.20.1 R1E stable qualification lifecycle
+
+Stable metadata must be validated before the stable tag exists, while
+ordinary untagged stable trees remain invalid.
+
+```bash
+scripts/test-release-test-env.sh
+scripts/test-release-context-isolation.sh
+scripts/test-release-state-invariants.sh
+scripts/test-release-promote-stable.sh
+scripts/test-release-pretag-check.sh
+```
+
+Expected results:
+
+- promotion requires strict mode, the matching release branch, and an exact
+  beta or RC source tag pointing at `HEAD`;
+- stable pre-tag qualification requires a clean `main` tree;
+- missing, stale, mismatched, and existing target tags are rejected;
+- lifecycle context is removed by the hermetic test boundary;
+- failed promotion restores the original prerelease metadata.
+
+---
+
 ## Testing principles
 
 1. Use the repository workflow instead of assembling long validation command

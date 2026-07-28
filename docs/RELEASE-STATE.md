@@ -113,6 +113,25 @@ and the explicit artifact label `vX.Y.Z-development`.
 - A beta channel requires an exact `vX.Y.Z-beta.N` tag.
 - An RC channel requires an exact `vX.Y.Z-rc.N` tag.
 
+### REL-001-B1 — Controlled stable qualification phases
+
+Stable metadata preparation and stable pre-tag proof occur before the stable tag
+exists. These states are authorised only through explicit strict lifecycle
+phases:
+
+- `stable-promotion`
+- `stable-pretag`
+
+`stable-promotion` requires strict mode, the matching `release/vX.Y.Z` branch,
+an explicit stable target tag, and a matching beta or RC source tag pointing
+exactly at `HEAD`. The stable target tag must not already exist.
+
+`stable-pretag` requires strict mode, the matching stable target tag, clean
+`main`, and an absent stable target tag.
+
+Outside these controlled phases, an untagged stable tree remains invalid. An
+exact stable tag pointing at `HEAD` remains valid without a qualification phase.
+
 ### REL-001-C — Exact release identity
 
 For any published bundle, these values must agree:
