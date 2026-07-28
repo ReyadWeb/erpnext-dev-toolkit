@@ -84,6 +84,19 @@
 
 ### Fixed
 
+- Aligned stable release status, pre-tag validation, and tag publication on
+  synchronized `main`, while stable metadata promotion remains on
+  `release/vX.Y.Z`.
+- Persisted validated release lifecycle context under Git-private workflow
+  state so stable publication retries no longer depend on manually exported
+  phase, source-tag, channel, target-tag, or strict-mode variables.
+- Made preparation, publication, pre-tag proof, tag publication, workflow
+  watching, and published-release verification safe to repeat when the
+  observed commit and release identity already match.
+- Corrected pull-request status rendering, separated all reported, required,
+  and informational check counts, and added compatibility with GitHub CLI
+  2.45 installations that emit tab-separated check rows instead of exposing
+  JSON output for `gh pr checks`.
 - Added explicit, strict `stable-promotion` and `stable-pretag` qualification phases so stable metadata can be validated before the stable tag exists without weakening normal exact-tag enforcement.
 - Required stable promotion to originate from an exact beta or RC tag pointing at `HEAD`, and rejected missing, stale, mismatched, or already-published tag states.
 - Extended hermetic release-test isolation to remove inherited lifecycle-phase and source-tag context.
@@ -93,6 +106,12 @@
 - Scoped versioned changelog enforcement to beta, RC, and stable qualification so strict development CI retains the open `## Unreleased` section without weakening fail-closed tooling checks.
 
 ### Added
+- Added authoritative `release doctor` diagnostics, phase-aware next actions,
+  dedicated `release recover` retry/rollback handling, and explicit
+  `release beta` / `release stable` orchestration commands.
+- Added hermetic regression coverage for persisted stable context, interrupted
+  publication recovery, stable branch transitions, idempotent preparation and
+  tagging, already-completed workflow monitoring, and repeat verification.
 - Added a canonical release-test environment boundary, an injected development/beta/RC/stable regression matrix, and a beta-preparation pre-tag-context dry-run with transactional rollback.
 - Added the formal `docs/RELEASE-STATE.md` REL-001 contract.
 - Added an executable release-state auditor and hermetic negative tests.

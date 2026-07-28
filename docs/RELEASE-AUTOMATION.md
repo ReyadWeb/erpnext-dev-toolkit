@@ -66,13 +66,17 @@ scripts/check-release-artifact-consistency.sh
 |---|---|
 | `release status` | Read-only release state and next action |
 | `release explain` | Explain blockers and branch/tag policy |
+| `release doctor` | Authoritative phase, source, branch, proof, tag, publication, and next-action diagnosis |
 | `release prepare-beta` | Transactionally prepare beta metadata |
 | `release promote-stable` | Transactionally convert matching beta/RC metadata to stable |
 | `release publish --confirm-reviewed` | Validate, commit, and push reviewed release metadata |
+| `release recover` | Safely resume validation, publication, push, or workflow monitoring; stop before final verification |
 | `release pretag` | Strict exact-tree validation and pre-tag proof |
 | `release tag --confirm` | Create and push one guarded annotated tag |
 | `release watch` | Watch the protected tag-triggered workflow |
 | `release verify` | Verify the published tag, workflow, assets, checksums, and signature |
+| `release beta` | Phase-aware beta orchestration with explicit human gates |
+| `release stable` | Phase-aware stable orchestration with explicit review, merge, and tag gates |
 
 Read-only commands may use `--offline` when remote inspection is intentionally
 unavailable. Offline status does not replace remote synchronization or tag checks
@@ -117,6 +121,12 @@ synchronisation and remote-tag checks remain enforced by the pre-tag wrapper.
 Outside these controlled lifecycle phases, an untagged stable tree remains
 invalid.
 
+The wrapper persists the validated lifecycle context under
+`.git/erpnext-workflow/release-state`. Publication and recovery automatically
+restore the strict phase, source tag, channel, target tag, and strict-mode
+environment from that state. The file is never sourced as executable shell
+input.
+
 The lifecycle phase and source prerelease tag are removed by the canonical
 release-test environment boundary before synthetic fixtures execute.
 
@@ -137,6 +147,18 @@ pushes the branch.
 
 Routine `publish` remains blocked on protected and release branches so a release
 cannot bypass the explicit review confirmation.
+
+An interrupted confirmed publication resumes with:
+
+```bash
+scripts/repo-workflow.sh release recover
+```
+
+or, for the exact prepared-metadata path:
+
+```bash
+scripts/repo-workflow.sh release publish --resume-prepared
+```
 
 ## Exact-tree validation and proof
 
@@ -168,12 +190,33 @@ Safety properties:
 - exact canonical confirmation;
 - clean synchronized expected branch;
 - exact pre-tag proof;
-- no local or remote target tag;
+- a missing tag is created once;
+- an existing annotated tag is accepted only when it points to the exact
+  approved commit;
+- mismatched or lightweight tags fail closed;
 - annotated tag only;
 - no force update;
 - remote tag must peel to the exact release commit;
 - a failed push with no remote tag removes the newly created local tag so the
   guarded command can be retried.
+
+## High-level orchestration
+
+```bash
+scripts/repo-workflow.sh release beta \
+  X.Y.Z-beta.N \
+  "Release title"
+
+scripts/repo-workflow.sh release stable \
+  X.Y.Z \
+  --from vX.Y.Z-beta.N \
+  "Release title"
+```
+
+Each command reads the saved phase and advances only to the next human gate.
+Release-note review, metadata publication confirmation, PR merge approval,
+exact tag confirmation, protected signing approval, and final
+published-asset verification remain explicit.
 
 ## Protected GitHub workflow
 

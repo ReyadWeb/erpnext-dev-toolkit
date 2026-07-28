@@ -70,7 +70,7 @@ printf '%s\n' 'fixture' >"${fixture}/SHA256SUMS"
   git config user.email "release-test@example.invalid"
   git add .
   git commit -qm "fixture"
-  git switch -qc feature/v1.20-release-reliability
+  git switch -qc release/v1.20.0
 )
 
 run_prepare() {

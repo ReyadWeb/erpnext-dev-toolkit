@@ -92,7 +92,17 @@ case "${1:-}:${2:-}" in
    fi
    echo https://example.invalid/pr/42
    ;;
- pr:checks) echo "All checks were successful" ;;
+ pr:checks)
+   if printf '%s\n' "$*" | grep -Fq -- '--json bucket'; then
+     if printf '%s\n' "$*" | grep -Fq -- '--required'; then
+       printf '7\t7\t0\t0\t0\n'
+     else
+       printf '8\t8\t0\t0\t0\n'
+     fi
+   else
+     echo "All checks were successful"
+   fi
+   ;;
  pr:view)
    if printf '%s' "$*" | grep -Fq '\"'; then
      echo "invalid escaped quote in --jq filter" >&2
@@ -109,7 +119,27 @@ case "${1:-}:${2:-}" in
 esac
 EOF
 chmod +x "$bin/gh"
+cat >"$bin/shellcheck" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${SHELLCHECK_FAKE_FAIL:-0}" == "1" ]]; then
+  echo "simulated ShellCheck failure" >&2
+  exit 1
+fi
+exit 0
+EOF
+chmod +x "$bin/shellcheck"
 export PATH="$bin:$PATH" GH_FAKE_LOG="$tmp/gh.log" GH_PR_EXISTS=0 TEST_REMOTE="$remote"
+
+echo "# lint-failure fixture" >>scripts/release-version.sh
+export SHELLCHECK_FAKE_FAIL=1
+set +e
+scripts/repo-workflow.sh work finish --dry-run --fast --no-cache -m "Test: lint failure" \
+  --pr-title "Lint Failure PR" >"$tmp/lint-failure.out" 2>&1
+rc=$?
+set -e
+((rc != 0)) || fail "changed-file ShellCheck failure was ignored"
+contains "$tmp/lint-failure.out" "FAILED: Changed shell lint"
+export SHELLCHECK_FAKE_FAIL=0
 
 scripts/repo-workflow.sh work finish --dry-run --fast --no-cache -m "Test: dry run" --pr-title "Dry Run PR" >"$tmp/dry-run.out"
 contains "$tmp/dry-run.out" "dry run complete"

@@ -37,7 +37,6 @@ release_title="${2:-}"
   || fail "beta version must use X.Y.Z-beta.N with N greater than zero"
 
 base_version="${BASH_REMATCH[1]}"
-series_version="${base_version%.*}"
 target_tag="v${target_version}"
 
 cd "$ROOT_DIR"
@@ -58,14 +57,8 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 branch="$(git branch --show-current)"
-case "$branch" in
-  "release/v${base_version}" | \
-    "feature/v${base_version}-"* | \
-    "feature/v${series_version}-"*) ;;
-  *)
-    fail "beta ${target_version} must be prepared on release/v${base_version} or feature/v${base_version}-*; current branch is ${branch}"
-    ;;
-esac
+[[ "$branch" == "release/v${base_version}" ]] \
+  || fail "beta ${target_version} must be prepared on release/v${base_version}; current branch is ${branch}"
 
 if git rev-parse -q --verify "refs/tags/${target_tag}" >/dev/null; then
   fail "local tag already exists: ${target_tag}"
