@@ -113,9 +113,9 @@ assert_contains "${tmp}/main-status.out" \
 git tag -a v1.20.0 -m "Existing local release"
 scripts/repo-workflow.sh release status --offline >"${tmp}/local-tag.out"
 assert_contains "${tmp}/local-tag.out" "Local tag                    exists"
-assert_contains "${tmp}/local-tag.out" "local tag exists; blocked"
+assert_contains "${tmp}/local-tag.out" "matching local tag is ready to push"
 assert_contains "${tmp}/local-tag.out" \
-  "Inspect or remove the unpushed local v1.20.0 tag before continuing."
+  "scripts/repo-workflow.sh release tag --confirm v1.20.0"
 git tag -d v1.20.0 >/dev/null
 
 cat >"${bin}/gh" <<'SH'

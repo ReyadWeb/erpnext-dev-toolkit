@@ -21,6 +21,14 @@ assert_contains() {
   }
 }
 
+assert_not_contains() {
+  local file="$1" unexpected="$2"
+  if grep -Fq -- "$unexpected" "$file"; then
+    cat "$file" >&2
+    fail_test "unexpected output: $unexpected"
+  fi
+}
+
 [[ -x "$WORKFLOW_SOURCE" ]] || fail_test "workflow script is missing"
 
 tmp="$(mktemp -d /tmp/erpnext-repo-release-finalize-test.XXXXXX)"
@@ -146,12 +154,10 @@ head_commit="$(git rev-parse HEAD)"
 remote_commit="$(git ls-remote origin 'refs/tags/v1.2.3^{}' | awk 'NR == 1 {print $1}')"
 [[ "$remote_commit" == "$head_commit" ]] || fail_test "remote annotated tag does not peel to HEAD"
 
-set +e
 scripts/repo-workflow.sh release tag --confirm v1.2.3 >"${tmp}/duplicate.out" 2>&1
-rc=$?
-set -e
-((rc != 0)) || fail_test "duplicate tag creation unexpectedly succeeded"
-assert_contains "${tmp}/duplicate.out" "local tag already exists"
+assert_contains "${tmp}/duplicate.out" "Release Tag Already Published"
+assert_contains "${tmp}/duplicate.out" \
+  "v1.2.3 already exists and points to the approved commit; no action required"
 
 cp VERSION "$bundle_root/VERSION"
 cp erpnext-dev.sh "$bundle_root/erpnext-dev.sh"
@@ -240,6 +246,7 @@ export GH_FAKE_HEAD_SHA="$head_commit"
 export GH_FAKE_ASSET_DIR="$assets"
 
 scripts/repo-workflow.sh release watch v1.2.3 --interval 1 --attempts 2 >"${tmp}/watch.out"
+assert_contains "${tmp}/watch.out" "Protected Release Workflow Already Complete"
 assert_contains "${tmp}/watch.out" "release workflow completed successfully"
 assert_contains "${tmp}/watch.out" "release verify v1.2.3"
 
@@ -247,5 +254,18 @@ scripts/repo-workflow.sh release verify v1.2.3 >"${tmp}/verify.out"
 assert_contains "${tmp}/verify.out" "published release v1.2.3 verified"
 assert_contains "${tmp}/verify.out" "maintainer signing-key fingerprint verified"
 assert_contains "${tmp}/verify.out" "release bundle checksums verified"
+
+scripts/repo-workflow.sh release verify v1.2.3 >"${tmp}/verify-again.out"
+assert_contains "${tmp}/verify-again.out" \
+  "v1.2.3 was already verified at this exact commit; rechecking published assets safely"
+assert_contains "${tmp}/verify-again.out" "published release v1.2.3 verified"
+
+sed -i 's/^phase=stable-verified$/phase=stable-published/' \
+  .git/erpnext-workflow/release-state
+scripts/repo-workflow.sh release recover >"${tmp}/recover-published.out"
+assert_contains "${tmp}/recover-published.out" \
+  "no action taken before final published-asset verification"
+assert_contains "${tmp}/recover-published.out" "release verify v1.2.3"
+assert_not_contains "${tmp}/recover-published.out" "Published Release Verified"
 
 echo "repo workflow release-finalization tests: all checks passed"

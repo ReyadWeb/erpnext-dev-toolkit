@@ -12,6 +12,34 @@ Version-specific regression notes and historical field evidence are preserved in
 [`docs/TESTING-HISTORY.md`](docs/TESTING-HISTORY.md). The production acceptance
 procedure is maintained separately in [`VALIDATION.md`](VALIDATION.md).
 
+## v1.20.2 workflow-hardening regression
+
+The v1.20.2 release-engineering patch makes lifecycle state durable, derives
+branch policy from the actual phase, and makes safe repeats explicit.
+
+```bash
+scripts/test-repo-workflow-pr.sh
+scripts/test-repo-workflow-work.sh
+scripts/test-repo-workflow-release.sh
+scripts/test-repo-workflow-release-transaction.sh
+scripts/test-repo-workflow-release-finalize.sh
+```
+
+Expected results:
+
+- stable promotion requires `release/vX.Y.Z`, while stable pre-tag and tag require
+  `main`;
+- a failed publication can recover from persisted context without reconstructing
+  release environment variables;
+- matching prepared metadata, commits, tags, workflow runs, and verification
+  receipts are successful no-ops;
+- conflicting existing state still fails closed;
+- `release doctor` reports the phase-derived expected branch and next safe action;
+- PR output renders actual values and separately counts all, required, and
+  informational checks;
+- beta and stable orchestration stop at metadata review, PR merge, tag creation,
+  signing approval, and final verification gates.
+
 ## v1.20.1 R1A release-state contract and audit
 
 R1A records the approved release-state model and adds a measurable baseline without
@@ -389,23 +417,25 @@ commands, results, and evidence location.
 On the intended release branch:
 
 ```bash
-scripts/repo-workflow.sh release status
-
-scripts/repo-workflow.sh release prepare-beta \
+scripts/repo-workflow.sh release doctor
+scripts/repo-workflow.sh release beta \
   X.Y.Z-beta.N \
   "Release title"
 ```
 
-Review the metadata diff, then use the explicit review gate:
+The first run prepares metadata and stops for review. Continue through the
+explicit review gate:
 
 ```bash
-scripts/repo-workflow.sh release publish \
-  --confirm-reviewed \
-  -m "Release: prepare X.Y.Z-beta.N"
+scripts/repo-workflow.sh release beta \
+  X.Y.Z-beta.N \
+  "Release title" \
+  --confirm-reviewed
 ```
 
-Create the appropriate PR, wait for required CI, and complete any real-machine
-beta acceptance identified by the change risk.
+After CI and acceptance approve the exact commit, pass
+`--confirm-tag vX.Y.Z-beta.N`. The command creates the guarded tag and watches
+publication, then stops before the independent final verification gate.
 
 A beta is acceptable only when:
 
@@ -420,32 +450,44 @@ A beta is acceptable only when:
 Promote only a validated beta or RC:
 
 ```bash
-scripts/repo-workflow.sh release promote-stable \
+scripts/repo-workflow.sh release stable \
   X.Y.Z \
+  --from vX.Y.Z-beta.N \
   "Release title"
 ```
 
-Review and publish the stable metadata, merge its PR, update the required target
-branch, and run the strict pre-tag gate:
+The first run prepares stable metadata on `release/vX.Y.Z` and stops for review.
+Continue with `--confirm-reviewed`; the workflow publishes the release branch,
+creates or reuses the PR, and stops before merge approval. Continue with
+`--confirm-merge` only after required checks and acceptance approve the PR.
 
 ```bash
-scripts/repo-workflow.sh release pretag vX.Y.Z
+scripts/repo-workflow.sh release stable \
+  X.Y.Z \
+  --from vX.Y.Z-beta.N \
+  "Release title" \
+  --confirm-reviewed \
+  --confirm-merge
 ```
 
-The pre-tag proof is bound to the exact tag, commit, and repository tree. Any
-change invalidates it.
+The merge continuation synchronizes `main` and runs the strict pre-tag gate.
+The proof is bound to the exact tag, commit, and repository tree. Any change
+invalidates it.
 
 Create the guarded annotated tag only after pre-tag proof succeeds:
 
 ```bash
-scripts/repo-workflow.sh release tag \
-  --confirm vX.Y.Z
+scripts/repo-workflow.sh release stable \
+  X.Y.Z \
+  --from vX.Y.Z-beta.N \
+  "Release title" \
+  --confirm-tag vX.Y.Z
 ```
 
-Then watch and independently verify publication:
+The orchestration watches publication but leaves signing-environment approval and
+final asset verification as explicit human gates. Complete the release with:
 
 ```bash
-scripts/repo-workflow.sh release watch vX.Y.Z
 scripts/repo-workflow.sh release verify vX.Y.Z
 ```
 
@@ -517,8 +559,13 @@ When a workflow command fails:
 ```bash
 scripts/repo-workflow.sh status
 scripts/repo-workflow.sh resume
+scripts/repo-workflow.sh release doctor
+scripts/repo-workflow.sh release recover
 ```
 
+`release recover` inspects persisted lifecycle state and chooses the next safe
+reversible action. It never supplies a missing review, merge, tag, or final asset
+verification confirmation.
 Use `resume` only after correcting the reported cause. Clear local workflow state
 when the saved operation is no longer relevant:
 
@@ -526,11 +573,12 @@ when the saved operation is no longer relevant:
 scripts/repo-workflow.sh clean-cache
 ```
 
-Do not repeatedly rerun an irreversible operation such as tag creation. Inspect
-the local and remote state first with:
+Release commands are idempotent when existing state matches the approved commit.
+Conflicting tags, commits, or artifacts fail closed. Inspect the local and remote
+state with:
 
 ```bash
-scripts/repo-workflow.sh release status
+scripts/repo-workflow.sh release doctor
 scripts/repo-workflow.sh release explain
 ```
 

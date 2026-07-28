@@ -184,6 +184,32 @@ system toolchain has verified:
 4. safe archive paths;
 5. the extracted internal whole-tree checksum inventory.
 
+### REL-001-H — Durable lifecycle state
+
+The repository workflow persists non-secret release context in:
+
+```text
+.git/erpnext-workflow/release-state
+```
+
+The state is parsed as data, never sourced as shell code. It records the lifecycle
+phase, channel, target version and tag, source tag and commit, release branch,
+prepared-tree fingerprint, publication commit, workflow run, and verification
+commit when those values become known.
+
+Expected branches derive from the saved phase:
+
+| Lifecycle phase | Expected branch |
+|---|---|
+| Beta preparation, publication, pre-tag, and tag | `release/vX.Y.Z` |
+| Stable promotion and release PR | `release/vX.Y.Z` |
+| Stable pre-tag, tag, publication, and verification | `main` |
+
+Retries restore the validated release context from this state. Correct existing
+state is a successful no-op; conflicting state fails closed. Human confirmation
+remains mandatory for metadata review, PR merge, tag creation, protected signing
+approval, and final published-asset verification.
+
 ## Migration sequence
 
 ### R1A — Contract and measurable baseline
@@ -218,6 +244,11 @@ system toolchain has verified:
 - [x] Synthetic release fixtures re-execute through a canonical clean environment
   boundary, and beta preparation runs the prerelease-context matrix before full
   validation.
+- [x] Release lifecycle context persists across shell sessions and safe retries.
+- [x] Stable branch policy is phase-aware and consistent across status, pre-tag,
+  and tag operations.
+- [x] Release operations recognize matching existing state and reject conflicts.
+- [x] Recovery and orchestration retain every irreversible human gate.
 - [ ] High-risk paths require same-commit integration evidence.
 - [ ] Native, Docker, upgrade, rollback, and public-reporting acceptance evidence
   is attached to the release candidate.

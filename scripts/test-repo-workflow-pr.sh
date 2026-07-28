@@ -84,15 +84,25 @@ case "${1:-}:${2:-}" in
     ;;
   pr:view)
     cat <<'TXT'
-PR #42: Test pull request
-URL: https://github.example.invalid/example/repo/pull/42
-State: OPEN
-Draft: false
-Merge status: CLEAN
-Branch: feature/test -> main
+42
+Test pull request
+https://github.example.invalid/example/repo/pull/42
+OPEN
+false
+CLEAN
+feature/test
+main
 TXT
     ;;
   pr:checks)
+    if printf '%s\n' "$*" | grep -Fq -- '--json bucket'; then
+      if printf '%s\n' "$*" | grep -Fq -- '--required'; then
+        printf '7\t7\t0\t0\t0\n'
+      else
+        printf '8\t8\t0\t0\t0\n'
+      fi
+      exit 0
+    fi
     if [[ "${GH_FAKE_CHECKS_FAIL:-0}" == "1" ]]; then
       echo "Required checks are not successful" >&2
       exit 1
@@ -143,6 +153,11 @@ fi
 : >"$GH_FAKE_LOG"
 scripts/repo-workflow.sh pr status >"${tmp}/status.out"
 assert_contains "${tmp}/status.out" "PR #42: Test pull request"
+assert_contains "${tmp}/status.out" "8 passed, 0 pending, 0 failed"
+assert_contains "${tmp}/status.out" "7 passed, 0 pending, 0 failed"
+assert_contains "${tmp}/status.out" "Informational checks         1 reported"
+assert_contains "${tmp}/status.out" "Branch                       feature/test → main"
+assert_contains "${tmp}/status.out" "Next action                  scripts/repo-workflow.sh pr merge --delete-branch"
 assert_log_contains "pr view 42"
 
 : >"$GH_FAKE_LOG"

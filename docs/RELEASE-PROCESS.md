@@ -39,11 +39,29 @@ Do not create lightweight or manual tags. Use the guarded repository workflow.
 ```bash
 scripts/repo-workflow.sh release status
 scripts/repo-workflow.sh release explain
+scripts/repo-workflow.sh release doctor
 ```
 
 The status command reports canonical identity, expected branch and tag, branch
 synchronization, validation cache, pre-tag proof, local/remote tags, GitHub
 release state, blockers, and the next safe command.
+
+For the normal path, use the high-level phase-aware commands:
+
+```bash
+scripts/repo-workflow.sh release beta \
+  X.Y.Z-beta.N \
+  "Release title"
+
+scripts/repo-workflow.sh release stable \
+  X.Y.Z \
+  --from vX.Y.Z-beta.N \
+  "Release title"
+```
+
+Rerun the same command with the exact `--confirm-reviewed`,
+`--confirm-merge`, or `--confirm-tag` gate printed by the previous phase.
+Final `release verify` remains separate.
 
 ## Prepare a beta
 
@@ -261,6 +279,14 @@ After a failed repository operation:
 ```bash
 scripts/repo-workflow.sh status
 scripts/repo-workflow.sh resume
+scripts/repo-workflow.sh release doctor
+scripts/repo-workflow.sh release recover
+```
+
+Confirmed prepared metadata can also be resumed directly:
+
+```bash
+scripts/repo-workflow.sh release publish --resume-prepared
 ```
 
 Before retrying tag publication, inspect:

@@ -123,6 +123,10 @@ Show the current branch pull request:
 scripts/repo-workflow.sh pr status
 ```
 
+The status output reports the PR title and branch correctly, then separates
+all reported checks, required checks, and informational checks. This avoids
+confusing a successful informational check with a missing required gate.
+
 Show checks once or watch them until completion:
 
 ```bash
@@ -166,16 +170,24 @@ Explain every blocking condition:
 scripts/repo-workflow.sh release explain
 ```
 
+Show the authoritative lifecycle diagnosis and next safe command:
+
+```bash
+scripts/repo-workflow.sh release doctor
+```
+
 Use local-only inspection when the network or GitHub CLI is unavailable:
 
 ```bash
 scripts/repo-workflow.sh release status --offline
 scripts/repo-workflow.sh release explain --offline
+scripts/repo-workflow.sh release doctor --offline
 ```
 
 The status includes:
 
 - Canonical and runtime versions
+- Persisted lifecycle phase and verified source prerelease
 - Release channel and expected tag
 - Current and expected release branches
 - Working-tree and upstream synchronization
@@ -184,7 +196,15 @@ The status includes:
 - GitHub release state when `gh` is available and authenticated
 - Static readiness and the next safe command
 
-These commands are advisory. They do not replace
+`release doctor` derives the expected branch from the lifecycle phase:
+
+| Lifecycle phase | Required branch |
+|---|---|
+| Beta preparation, pre-tag, and tag | `release/vX.Y.Z` |
+| Stable promotion and stable PR | `release/vX.Y.Z` |
+| Stable pre-tag and stable tag | `main` |
+
+These commands do not replace
 `scripts/release-pretag-check.sh`, which remains the strict release-tree,
 bundle, checksum, runtime, branch, synchronization, and tag-availability gate.
 
@@ -219,6 +239,12 @@ Both commands:
 4. Leave the metadata uncommitted so the changelog and release identity can be
    reviewed.
 
+They also persist the validated lifecycle context in
+`.git/erpnext-workflow/release-state`. The file is Git-private, permission
+restricted, parsed as data rather than sourced as shell code, and records the
+phase, target identity, source prerelease identity, exact source commit,
+prepared-tree fingerprint, review state, and publication progress.
+
 After reviewing the diff, publish the release metadata through the explicit
 review gate:
 
@@ -228,10 +254,25 @@ scripts/repo-workflow.sh release publish \
   -m "Release: prepare v1.21.0-beta.1"
 ```
 
-`release publish` is limited to `release/v*`, `feature/v*`, and `beta` branches.
+`release publish` is limited to the phase-matched `release/vX.Y.Z` branch.
 It regenerates checksums, validates the exact tree, stages all release changes,
 creates the commit, and pushes the branch. Routine `publish` remains blocked on
 release branches.
+
+If a confirmed publication is interrupted, resume the saved prepared tree:
+
+```bash
+scripts/repo-workflow.sh release publish --resume-prepared
+scripts/repo-workflow.sh release recover
+```
+
+`release recover` may repeat validation, finish a push, reuse an exact proof, or
+watch an existing workflow. It prints the verification command after
+publication instead of crossing the final human verification gate. It never
+merges a PR or creates a tag without a new explicit human confirmation.
+Discarding uncommitted prepared metadata requires an unchanged saved
+fingerprint plus both
+`--rollback-prepared` and `--confirm`.
 
 Run the strict pre-tag gate after the release PR has been merged and the target
 branch is clean and synchronized:
@@ -259,9 +300,52 @@ scripts/repo-workflow.sh release tag --confirm v1.21.0
 ```
 
 The command requires exact version alignment, the correct release branch, a
-clean synchronized upstream, no existing local or remote tag, and the W3.2
-pre-tag proof for the exact tag, commit, and tree fingerprint. It never
+clean synchronized upstream, and the W3.2 pre-tag proof for the exact tag,
+commit, and tree fingerprint. A matching existing annotated tag is accepted as
+complete; a mismatched or lightweight tag fails closed. The command never
 force-updates or overwrites a tag.
+
+## High-level release orchestration
+
+The normal beta path is phase-aware and pauses at review, tag confirmation, and
+final verification:
+
+```bash
+scripts/repo-workflow.sh release beta \
+  1.20.2-beta.1 \
+  "Release title"
+```
+
+Repeat the same command with the exact gate printed by the previous phase:
+
+```bash
+scripts/repo-workflow.sh release beta \
+  1.20.2-beta.1 \
+  "Release title" \
+  --confirm-reviewed
+
+scripts/repo-workflow.sh release beta \
+  1.20.2-beta.1 \
+  "Release title" \
+  --confirm-tag v1.20.2-beta.1
+```
+
+Stable orchestration starts on `release/vX.Y.Z`, verifies the exact accepted
+beta/RC, publishes and checks the stable PR, pauses for merge approval, moves
+to synchronized `main`, records the stable pre-tag proof, and pauses again
+before the stable tag:
+
+```bash
+scripts/repo-workflow.sh release stable \
+  1.20.2 \
+  --from v1.20.2-beta.2 \
+  "Release title"
+```
+
+The explicit continuation gates are `--confirm-reviewed`, `--confirm-merge`,
+and `--confirm-tag v1.20.2`. `--admin` is accepted only together with
+`--confirm-merge`. The final `release verify vX.Y.Z` remains a separate human
+verification gate.
 
 Watch the protected release workflow:
 
