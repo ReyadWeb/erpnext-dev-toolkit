@@ -196,6 +196,12 @@ grep -Fq 'scripts/test-release-context-isolation.sh' scripts/release-prepare-bet
   || fail "beta preparation does not run the pre-tag-context dry-run"
 pass "release qualification enforces hermetic fixture context isolation"
 
+for workflow in .github/workflows/ci.yml .github/workflows/security.yml .github/workflows/security-analysis.yml; do
+  grep -A2 -E '^[[:space:]]*pull_request:' "$workflow" \
+    | grep -Eq "branches:.*release/\*\*" || fail "release-branch pull requests do not trigger ${workflow}"
+done
+pass "release-branch pull requests trigger required workflows"
+
 write_compliant_fixture
 
 (
