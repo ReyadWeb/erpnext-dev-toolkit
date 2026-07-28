@@ -51,8 +51,8 @@ run_update \
   || fail "runtime did not derive the updated VERSION"
 
 for file in README.md ROADMAP.md TESTING.md; do
-  grep -q '^\*\*Current release:\*\* v1.20.0-beta.1' "${fixture}/${file}" \
-    || fail "${file} banner was not updated"
+  grep -q '^\*\*Current release:\*\* v1.19.22' "${fixture}/${file}" \
+    || fail "${file} published release banner changed during beta preparation"
 done
 
 for file in README.md ROADMAP.md TESTING.md; do
@@ -60,8 +60,8 @@ for file in README.md ROADMAP.md TESTING.md; do
     || fail "${file} project version was not updated"
 done
 
-grep -qx 'VERSION="v1.20.0-beta.1"' "${fixture}/README.md" \
-  || fail "README exact pin was not updated"
+grep -qx 'VERSION="v1.19.22"' "${fixture}/README.md" \
+  || fail "README stable exact pin changed during beta preparation"
 
 grep -qx '# ERPNext Developer Toolkit Release Manifest v1.20.0-beta.1' \
   "${fixture}/RELEASE-MANIFEST.txt" \
@@ -80,6 +80,31 @@ heading_count="$(
 )"
 [[ "$heading_count" == "1" ]] \
   || fail "metadata update was not idempotent"
+
+run_update \
+  1.20.0 \
+  "Stable release" >/dev/null
+
+[[ "$(cat "${fixture}/VERSION")" == "1.20.0" ]] \
+  || fail "stable VERSION was not updated"
+
+for file in README.md ROADMAP.md TESTING.md; do
+  grep -q '^\*\*Current release:\*\* v1.20.0' "${fixture}/${file}" \
+    || fail "${file} published release banner was not advanced for stable"
+  grep -q '^\*\*Current project version:\*\* v1.20.0' "${fixture}/${file}" \
+    || fail "${file} project version was not advanced for stable"
+done
+
+grep -qx 'VERSION="v1.20.0"' "${fixture}/README.md" \
+  || fail "README exact pin was not advanced for stable"
+
+grep -qx '# ERPNext Developer Toolkit Release Manifest v1.20.0' \
+  "${fixture}/RELEASE-MANIFEST.txt" \
+  || fail "stable manifest header was not updated"
+
+first_heading="$(grep -m1 '^## ' "${fixture}/CHANGELOG.md")"
+[[ "$first_heading" == "## v1.20.0 - Stable release" ]] \
+  || fail "stable changelog heading was not added at the top"
 
 if run_update invalid-version "Invalid" >/dev/null 2>&1; then
   fail "invalid version was accepted"

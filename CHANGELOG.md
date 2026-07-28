@@ -1,3 +1,42 @@
+## v1.20.2-beta.1 - Workflow hardening and maintainer reliability
+
+### Added
+
+- Added phase-aware `release beta` and `release stable` orchestration with
+  explicit metadata-review, merge, tag, signing, and final-verification gates.
+- Added authoritative `release doctor` diagnostics, durable Git-private
+  lifecycle state, and `release recover` handling for interrupted operations.
+- Added hermetic coverage for lifecycle recovery, branch transitions,
+  idempotent retries, pull-request status, and release finalization.
+
+### Changed
+
+- Standardized beta and stable-metadata work on `release/vX.Y.Z`, while stable
+  pre-tag validation and tag publication now require synchronized `main`.
+- Made matching preparation, publication, proof, tag, workflow-watch, and
+  verification operations safe to repeat without weakening conflict checks.
+- Separated all, required, and informational pull-request check counts and
+  reported the next safe maintainer action.
+
+### Fixed
+
+- Added GitHub CLI 2.45 compatibility by parsing its tab-separated check output
+  when `gh pr checks --json` is unavailable.
+- Made changed-file ShellCheck failures stop `work finish` instead of being
+  treated as successful validation.
+- Preserved published-stable banners and the README stable pin while beta or RC
+  project metadata advances; stable promotion advances both identities.
+- Replaced hard-coded v1.20.1 release-state status checks with current-programme
+  checks derived from the canonical project version.
+
+### Validation
+
+- PR #153 passed all seven required checks and all eight reported checks.
+- Live GitHub CLI 2.45 acceptance confirmed seven required and one
+  informational check were classified correctly.
+- Exact-tree validation, guarded tag publication, and published-asset
+  verification remain mandatory release gates.
+
 ## v1.20.1 - Release engineering foundation
 
 ### Added
