@@ -89,8 +89,67 @@ if [[ -x scripts/release-version.sh ]]; then
     fi
   fi
 
+  release_phase="${ERPNEXT_RELEASE_PHASE:-}"
+  strict_mode="${RELEASE_STRICT:-0}"
+  source_tag="${ERPNEXT_RELEASE_SOURCE_TAG:-}"
+  current_branch=""
+  target_tag_exists=0
+
+  if [[ -d .git ]]; then
+    current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+    if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
+      target_tag_exists=1
+    fi
+  fi
+
+  stable_qualification=0
+  stable_qualification_reason="missing authorised strict qualification phase"
+
   if [[ "$channel" == "stable" && "$exact_tag" -ne 1 ]]; then
-    gap "REL001_CHANNEL_CONTEXT" "untagged/non-exact tree reports stable (${tag})"
+    if [[ "$strict_mode" != "1" ]]; then
+      stable_qualification_reason="strict mode is required"
+    elif [[ -z "${ERPNEXT_RELEASE_TAG:-}" ||
+      "${ERPNEXT_RELEASE_TAG}" != "$tag" ]]; then
+      stable_qualification_reason="explicit stable target tag does not match ${tag}"
+    elif [[ "$target_tag_exists" -eq 1 ]]; then
+      stable_qualification_reason="stable target tag already exists: ${tag}"
+    else
+      case "$release_phase" in
+        stable-promotion)
+          version_regex="${version//./\\.}"
+
+          if [[ "$current_branch" != "release/v${version}" ]]; then
+            stable_qualification_reason="stable promotion requires branch release/v${version}"
+          elif [[ ! "$source_tag" =~ ^v${version_regex}-(beta|rc)\.[0-9]+$ ]]; then
+            stable_qualification_reason="source tag is not a matching beta or RC tag"
+          elif ! git rev-parse -q --verify "refs/tags/${source_tag}" >/dev/null 2>&1; then
+            stable_qualification_reason="source prerelease tag does not exist: ${source_tag}"
+          elif ! git tag --points-at HEAD 2>/dev/null | grep -Fxq "$source_tag"; then
+            stable_qualification_reason="source prerelease tag does not point exactly at HEAD"
+          else
+            stable_qualification=1
+          fi
+          ;;
+        stable-pretag)
+          if [[ "$current_branch" != "main" ]]; then
+            stable_qualification_reason="stable pre-tag qualification requires main"
+          elif [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+            stable_qualification_reason="stable pre-tag qualification requires a clean working tree"
+          else
+            stable_qualification=1
+          fi
+          ;;
+        *)
+          stable_qualification_reason="unknown or missing qualification phase"
+          ;;
+      esac
+    fi
+  fi
+
+  if [[ "$channel" == "stable" && "$exact_tag" -ne 1 && "$stable_qualification" -ne 1 ]]; then
+    gap "REL001_CHANNEL_CONTEXT" "untagged/non-exact stable tree failed qualification (${tag}): ${stable_qualification_reason}"
+  elif [[ "$channel" == "stable" && "$stable_qualification" -eq 1 ]]; then
+    pass "REL001_CHANNEL_CONTEXT" "channel=${channel}; tag=${tag}; phase=${release_phase}"
   elif [[ "$channel" =~ ^(development|beta|rc|stable)$ ]]; then
     pass "REL001_CHANNEL_CONTEXT" "channel=${channel}; tag=${tag}"
   else

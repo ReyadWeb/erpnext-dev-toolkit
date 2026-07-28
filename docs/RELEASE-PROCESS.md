@@ -118,9 +118,19 @@ scripts/repo-workflow.sh release promote-stable \
   "Release title"
 ```
 
-Stable promotion requires a matching beta or RC canonical version. It updates
-stable metadata transactionally, regenerates checksums, and validates the
-release tree. It does not create a tag.
+Stable promotion requires a matching beta or RC canonical version and an exact
+matching prerelease tag pointing at `HEAD`. It rejects a missing source tag, a
+source tag on another commit, the wrong release branch, or an existing stable
+target tag.
+
+The temporary untagged stable tree is validated under the strict
+`stable-promotion` lifecycle phase. This permits stable metadata qualification
+before the stable tag exists without treating ordinary untagged stable trees as
+valid.
+
+The command updates stable metadata transactionally, regenerates checksums, and
+validates the release tree. It does not create a tag. Any failure restores the
+original prerelease metadata.
 
 Review and publish:
 
@@ -155,6 +165,10 @@ git status -sb
 
 scripts/repo-workflow.sh release pretag vX.Y.Z
 ```
+
+Stable pre-tag proof runs under the controlled `stable-pretag` lifecycle phase.
+The phase requires strict validation on clean synchronized `main`, before the
+proposed stable tag exists.
 
 The strict gate requires:
 

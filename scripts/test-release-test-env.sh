@@ -19,6 +19,8 @@ helper="${ROOT_DIR}/scripts/release-test-env.sh"
 poisoned_variables=(
   ERPNEXT_RELEASE_CHANNEL
   ERPNEXT_RELEASE_TAG
+  ERPNEXT_RELEASE_PHASE
+  ERPNEXT_RELEASE_SOURCE_TAG
   ERPNEXT_RELEASE_ROOT
   ERPNEXT_VERSION_FILE
   ERPNEXT_ENTRYPOINT
@@ -77,12 +79,16 @@ release_test_env_reexec "\$0" "\$@"
 [[ "\${ERPNEXT_RELEASE_TEST_ISOLATED:-0}" == "1" ]]
 [[ -z "\${ERPNEXT_RELEASE_CHANNEL+x}" ]]
 [[ -z "\${ERPNEXT_RELEASE_TAG+x}" ]]
+[[ -z "\${ERPNEXT_RELEASE_PHASE+x}" ]]
+[[ -z "\${ERPNEXT_RELEASE_SOURCE_TAG+x}" ]]
 [[ -z "\${RELEASE_STRICT+x}" ]]
 EOF_PROBE
 chmod +x "$probe"
 
 ERPNEXT_RELEASE_CHANNEL=stable \
   ERPNEXT_RELEASE_TAG=v9.9.9 \
+  ERPNEXT_RELEASE_PHASE=stable-pretag \
+  ERPNEXT_RELEASE_SOURCE_TAG=v9.9.9-beta.1 \
   RELEASE_STRICT=1 \
   "$probe" || fail "test re-execution did not isolate inherited release context"
 pass "test re-execution isolates inherited release context"

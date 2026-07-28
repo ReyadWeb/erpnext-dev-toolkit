@@ -38,6 +38,9 @@
 
 ### Fixed
 
+- Added explicit, strict `stable-promotion` and `stable-pretag` qualification phases so stable metadata can be validated before the stable tag exists without weakening normal exact-tag enforcement.
+- Required stable promotion to originate from an exact beta or RC tag pointing at `HEAD`, and rejected missing, stale, mismatched, or already-published tag states.
+- Extended hermetic release-test isolation to remove inherited lifecycle-phase and source-tag context.
 - Isolated hermetic release fixtures from ambient beta, RC, stable, strict-mode, build-root, and fixture-control variables so pre-tag qualification cannot override synthetic test identity.
 - Kept the legacy modular-recovery fixture on a synthetic stable release while beta or RC metadata is qualified, matching the recovery path's stable-only security policy.
 - Made the legacy modular-bootstrap fixture derive its synthetic build channel from the release tag so beta and RC qualification no longer use stable-channel metadata.
