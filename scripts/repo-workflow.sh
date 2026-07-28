@@ -1043,6 +1043,77 @@ require_open_pr_number() {
   printf '%s\n' "$number"
 }
 
+pr_check_counts_from_text() {
+  local output="$1" line name state remainder
+  local cancelled=0 failed=0 passed=0 skipped=0 pending=0 total=0
+
+  while IFS= read -r line; do
+    [[ "$line" == *$'\t'* ]] || continue
+    IFS=$'\t' read -r name state remainder <<<"$line"
+    [[ -n "$name" && -n "$remainder" ]] || continue
+
+    case "${state,,}" in
+      pass)
+        passed=$((passed + 1))
+        ;;
+      pending)
+        pending=$((pending + 1))
+        ;;
+      fail)
+        failed=$((failed + 1))
+        ;;
+      cancel)
+        cancelled=$((cancelled + 1))
+        ;;
+      skipping)
+        skipped=$((skipped + 1))
+        ;;
+      *)
+        continue
+        ;;
+    esac
+    total=$((total + 1))
+  done <<<"$output"
+
+  if ((total > 0)); then
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+      "$total" "$passed" "$pending" "$((cancelled + failed))" "$skipped"
+    return 0
+  fi
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^([0-9]+)[[:space:]]+cancelled,[[:space:]]+([0-9]+)[[:space:]]+failing,[[:space:]]+([0-9]+)[[:space:]]+successful,[[:space:]]+([0-9]+)[[:space:]]+skipped,[[:space:]]+and[[:space:]]+([0-9]+)[[:space:]]+pending[[:space:]]+checks?$ ]]; then
+      cancelled="${BASH_REMATCH[1]}"
+      failed="${BASH_REMATCH[2]}"
+      passed="${BASH_REMATCH[3]}"
+      skipped="${BASH_REMATCH[4]}"
+      pending="${BASH_REMATCH[5]}"
+      total=$((cancelled + failed + passed + skipped + pending))
+      printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$total" "$passed" "$pending" "$((cancelled + failed))" "$skipped"
+      return 0
+    fi
+
+    if [[ "$line" =~ ^([0-9]+)[[:space:]]+failing,[[:space:]]+([0-9]+)[[:space:]]+successful,[[:space:]]+([0-9]+)[[:space:]]+skipped,[[:space:]]+and[[:space:]]+([0-9]+)[[:space:]]+pending[[:space:]]+checks?$ ]]; then
+      failed="${BASH_REMATCH[1]}"
+      passed="${BASH_REMATCH[2]}"
+      skipped="${BASH_REMATCH[3]}"
+      pending="${BASH_REMATCH[4]}"
+      total=$((failed + passed + skipped + pending))
+      printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$total" "$passed" "$pending" "$failed" "$skipped"
+      return 0
+    fi
+
+    if [[ "${line,,}" == *"no checks reported"* ]]; then
+      printf '0\t0\t0\t0\t0\n'
+      return 0
+    fi
+  done <<<"$output"
+
+  return 1
+}
+
 pr_check_counts() {
   local number="$1" scope="$2" output
   local -a args=(
@@ -1056,9 +1127,16 @@ pr_check_counts() {
   )
   [[ "$scope" == "all" ]] || args+=(--required)
   output="$(gh "${args[@]}" 2>/dev/null || true)"
-  [[ "$output" =~ ^[0-9]+$'\t'[0-9]+$'\t'[0-9]+$'\t'[0-9]+$'\t'[0-9]+$ ]] \
+  if [[ "$output" =~ ^[0-9]+$'\t'[0-9]+$'\t'[0-9]+$'\t'[0-9]+$'\t'[0-9]+$ ]]; then
+    printf '%s\n' "$output"
+    return 0
+  fi
+
+  args=(pr checks "$number")
+  [[ "$scope" == "all" ]] || args+=(--required)
+  output="$(NO_COLOR=1 LC_ALL=C gh "${args[@]}" 2>&1 || true)"
+  pr_check_counts_from_text "$output" \
     || fail "could not calculate ${scope} pull request check counts"
-  printf '%s\n' "$output"
 }
 
 pr_show_check_summary() {

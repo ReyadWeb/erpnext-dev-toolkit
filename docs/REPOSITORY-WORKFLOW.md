@@ -125,7 +125,10 @@ scripts/repo-workflow.sh pr status
 
 The status output reports the PR title and branch correctly, then separates
 all reported checks, required checks, and informational checks. This avoids
-confusing a successful informational check with a missing required gate.
+confusing a successful informational check with a missing required gate. The
+counter uses structured output when the installed GitHub CLI supports it and
+falls back to the tab-separated check rows emitted by GitHub CLI 2.45. Summary
+output is also accepted when available.
 
 Show checks once or watch them until completion:
 

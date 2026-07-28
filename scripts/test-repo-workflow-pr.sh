@@ -96,6 +96,10 @@ TXT
     ;;
   pr:checks)
     if printf '%s\n' "$*" | grep -Fq -- '--json bucket'; then
+      if [[ "${GH_FAKE_CHECKS_JSON:-1}" != "1" ]]; then
+        echo "unknown flag: --json" >&2
+        exit 1
+      fi
       if printf '%s\n' "$*" | grep -Fq -- '--required'; then
         printf '7\t7\t0\t0\t0\n'
       else
@@ -107,7 +111,23 @@ TXT
       echo "Required checks are not successful" >&2
       exit 1
     fi
+    if [[ "${GH_FAKE_CHECKS_TABLE:-0}" == "1" ]]; then
+      check_count=8
+      if printf '%s\n' "$*" | grep -Fq -- '--required'; then
+        check_count=7
+      fi
+      for ((check_number = 1; check_number <= check_count; check_number++)); do
+        printf 'Check %s\tpass\t7s\thttps://github.example.invalid/check/%s\t\n' \
+          "$check_number" "$check_number"
+      done
+      exit 0
+    fi
     echo "All checks were successful"
+    if printf '%s\n' "$*" | grep -Fq -- '--required'; then
+      echo "0 cancelled, 0 failing, 7 successful, 0 skipped, and 0 pending checks"
+    else
+      echo "0 cancelled, 0 failing, 8 successful, 0 skipped, and 0 pending checks"
+    fi
     ;;
   pr:merge)
     echo "Merged pull request #42"
@@ -124,6 +144,8 @@ export PATH="${bin}:${PATH}"
 export GH_FAKE_LOG="${tmp}/gh.log"
 export GH_FAKE_PR_EXISTS=0
 export GH_FAKE_CHECKS_FAIL=0
+export GH_FAKE_CHECKS_JSON=1
+export GH_FAKE_CHECKS_TABLE=0
 
 : >"$GH_FAKE_LOG"
 scripts/repo-workflow.sh pr create \
@@ -159,6 +181,19 @@ assert_contains "${tmp}/status.out" "Informational checks         1 reported"
 assert_contains "${tmp}/status.out" "Branch                       feature/test → main"
 assert_contains "${tmp}/status.out" "Next action                  scripts/repo-workflow.sh pr merge --delete-branch"
 assert_log_contains "pr view 42"
+
+export GH_FAKE_CHECKS_JSON=0
+export GH_FAKE_CHECKS_TABLE=1
+: >"$GH_FAKE_LOG"
+scripts/repo-workflow.sh pr status >"${tmp}/legacy-status.out"
+assert_contains "${tmp}/legacy-status.out" "PR #42: Test pull request"
+assert_contains "${tmp}/legacy-status.out" "8 passed, 0 pending, 0 failed"
+assert_contains "${tmp}/legacy-status.out" "7 passed, 0 pending, 0 failed"
+assert_contains "${tmp}/legacy-status.out" "Informational checks         1 reported"
+assert_log_contains "pr checks 42 --json bucket"
+assert_log_contains "pr checks 42 --required"
+export GH_FAKE_CHECKS_JSON=1
+export GH_FAKE_CHECKS_TABLE=0
 
 : >"$GH_FAKE_LOG"
 scripts/repo-workflow.sh pr checks --watch --required >"${tmp}/checks.out"

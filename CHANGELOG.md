@@ -93,8 +93,10 @@
 - Made preparation, publication, pre-tag proof, tag publication, workflow
   watching, and published-release verification safe to repeat when the
   observed commit and release identity already match.
-- Corrected pull-request status rendering and separated all reported,
-  required, and informational check counts.
+- Corrected pull-request status rendering, separated all reported, required,
+  and informational check counts, and added compatibility with GitHub CLI
+  2.45 installations that emit tab-separated check rows instead of exposing
+  JSON output for `gh pr checks`.
 - Added explicit, strict `stable-promotion` and `stable-pretag` qualification phases so stable metadata can be validated before the stable tag exists without weakening normal exact-tag enforcement.
 - Required stable promotion to originate from an exact beta or RC tag pointing at `HEAD`, and rejected missing, stale, mismatched, or already-published tag states.
 - Extended hermetic release-test isolation to remove inherited lifecycle-phase and source-tag context.
