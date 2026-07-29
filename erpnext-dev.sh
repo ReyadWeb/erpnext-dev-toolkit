@@ -694,17 +694,10 @@ install_toolkit_cli() {
   local cli_path="${TOOLKIT_CLI_PATH:-/usr/local/bin/erpnext-dev}"
   local dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
 
-  if [[ ! -f "$dest" ]]; then
-    warn "Toolkit is not installed at ${dest} yet."
-    echo "Run a quickstart or 'setup' first so the toolkit lives in a stable location,"
-    echo "then re-run '$(basename "$0") install-cli'."
-    return 1
-  fi
-
-  if install_toolkit_cli_entry; then
+  if install_self_for_reuse; then
     ok "Installed the erpnext-dev command at ${cli_path} -> ${dest}"
   else
-    fail "Could not create ${cli_path}. Re-run with sudo, or check permissions on $(dirname "$cli_path")."
+    fail "Could not install the toolkit to ${dest}"
   fi
 }
 
@@ -715,7 +708,7 @@ repair_toolkit_cli() {
 install_self_for_reuse() {
   # One-command quickstart runs from a temporary /tmp bootstrap file. Copy the active
   # toolkit into /opt and expose the short erpnext-dev command for future use.
-  local src dest src_root dest_root
+  local src dest src_root dest_root src_root_real dest_root_real
   dest="${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
 
   # Prefer the path resolved at bootstrap. Re-resolving BASH_SOURCE[0] with
@@ -743,6 +736,22 @@ install_self_for_reuse() {
     warn "Could not create ${dest_root}"
     return 1
   }
+
+  src_root_real="$(cd "$src_root" && pwd -P)" || {
+    warn "Could not resolve toolkit source directory: ${src_root}"
+    return 1
+  }
+  dest_root_real="$(cd "$dest_root" && pwd -P)" || {
+    warn "Could not resolve toolkit install directory: ${dest_root}"
+    return 1
+  }
+
+  if [[ "$src_root_real" == "$dest_root_real" ]]; then
+    chmod 755 "$dest" 2>/dev/null || true
+    chown root:root "$dest" 2>/dev/null || true
+    install_toolkit_cli_entry 2>/dev/null || true
+    return 0
+  fi
 
   if [[ "$src" != "$dest" ]]; then
     if ! cp "$src" "$dest" 2>/dev/null; then
