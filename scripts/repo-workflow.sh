@@ -2188,7 +2188,7 @@ cmd_release_publish() {
   publication_commit="$(release_state_value publication_commit)"
   [[ "$canonical_tag" == "$target_tag" && "v${target_version}" == "$target_tag" ]] \
     || fail "prepared release identity is inconsistent: VERSION ${canonical_tag}, transaction ${target_tag}"
-  [[ "$(scripts/release-version.sh channel)" == "$channel" ]] \
+  [[ "$(scripts/release-version.sh channel-for-tag "$canonical_tag")" == "$channel" ]] \
     || fail "prepared release channel does not match the working tree"
   expected_branch="$(release_expected_branch "$target_version" "$channel" "$phase")"
   [[ "$branch" == "$expected_branch" ]] \

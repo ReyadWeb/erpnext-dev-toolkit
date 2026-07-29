@@ -13,7 +13,7 @@ health checks, diagnostics, signed updates, and rollback.
 > This is a community project and is not an official Frappe Technologies product.
 
 **Current release:** v1.20.3
-**Current project version:** v1.20.3
+**Current project version:** v1.20.4-beta.1
 **Current development programme:** v1.20.1–v1.20.5 reliability foundations before v1.21.0.
 
 ## At a glance
@@ -25,7 +25,7 @@ health checks, diagnostics, signed updates, and rollback.
 | **Native hosts** | Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 |
 | **Main command** | `erpnext-dev` |
 | **Release protection** | Build identity, whole-tree checksums, signed releases, atomic updates, rollback slots |
-| **Current focus** | v1.20.3 one-command setup and Debian native-install reliability |
+| **Current focus** | v1.20.4 menu status refresh and update safety |
 
 ## Choose your path
 
@@ -278,8 +278,8 @@ sudo erpnext-dev doctor
 | Native installation | Ubuntu 24.04 and 26.04 release-tested; Debian 13 field-validated |
 | Docker installation | Development and production Compose paths covered by integration testing |
 | Release integrity | Canonical versioning, authoritative manifest, signed checksums, atomic updates, rollback |
-| Current work | v1.20.3 one-command setup and Debian native-install reliability |
-| Next product milestone | v1.20.x reliability programme; v1.21 machine-readable interface follows |
+| Current work | v1.20.4 menu status refresh and update safety |
+| Next product milestone | v1.20.5 transaction journal MVP; v1.21 machine-readable interface follows |
 
 Detailed validation evidence belongs in [`TESTING.md`](TESTING.md),
 [`VALIDATION.md`](VALIDATION.md), and [`CHANGELOG.md`](CHANGELOG.md). Active planning
