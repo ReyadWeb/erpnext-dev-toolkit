@@ -176,16 +176,21 @@ else
   gap "REL001_BUILD_INFO_TOOLING" "canonical generated build identity is incomplete"
 fi
 
-if [[ -f README.md ]] && grep -Fq 'v1.20.1 release-state' README.md; then
-  pass "REL001_README_STATUS" "README identifies v1.20.1 reliability work"
+programme_version="${version%%-*}"
+programme_tag="v${programme_version}"
+
+if [[ -f README.md ]] &&
+  grep -qE "^\| \*\*Current focus\*\* \| ${programme_tag}([[:space:]]|$)" README.md; then
+  pass "REL001_README_STATUS" "README identifies ${programme_tag} as current focus"
 else
-  gap "REL001_README_STATUS" "README current focus is not the v1.20.1 reliability programme"
+  gap "REL001_README_STATUS" "README current focus does not match ${programme_tag}"
 fi
 
-if [[ -f ROADMAP.md ]] && grep -Fq '**Current work:** v1.20.1' ROADMAP.md; then
-  pass "REL001_ROADMAP_STATUS" "roadmap identifies v1.20.1 as current work"
+if [[ -f ROADMAP.md ]] &&
+  grep -qE "^\*\*Current work:\*\* ${programme_tag}([[:space:]]|$)" ROADMAP.md; then
+  pass "REL001_ROADMAP_STATUS" "roadmap identifies ${programme_tag} as current work"
 else
-  gap "REL001_ROADMAP_STATUS" "roadmap does not identify v1.20.1 as current work"
+  gap "REL001_ROADMAP_STATUS" "roadmap current work does not match ${programme_tag}"
 fi
 
 project_tag="v${version}"

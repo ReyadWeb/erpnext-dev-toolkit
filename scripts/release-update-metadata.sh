@@ -62,6 +62,7 @@ root = Path(sys.argv[1])
 version = sys.argv[2]
 title = sys.argv[3]
 tag = f"v{version}"
+is_prerelease = "-" in version
 
 
 def write(path: Path, text: str) -> None:
@@ -79,12 +80,15 @@ def replace_one(path: Path, pattern: str, replacement: str, label: str) -> None:
 write(root / "VERSION", f"{version}\n")
 
 for name in ("README.md", "ROADMAP.md", "TESTING.md"):
-    replace_one(
-        root / name,
-        r'^(\*\*Current release:\*\*) v[0-9A-Za-z.-]+',
-        rf'\1 {tag}',
-        "Current release banner",
-    )
+    # A prerelease advances the repository identity without claiming that the
+    # beta/RC is the latest published stable release.
+    if not is_prerelease:
+        replace_one(
+            root / name,
+            r'^(\*\*Current release:\*\*) v[0-9A-Za-z.-]+',
+            rf'\1 {tag}',
+            "Current release banner",
+        )
 
     replace_one(
         root / name,
@@ -100,17 +104,20 @@ replace_one(
     "release manifest header",
 )
 
-readme = root / "README.md"
-readme_text = readme.read_text()
-readme_updated, pin_count = re.subn(
-    r'^VERSION="v[0-9A-Za-z.-]+"$',
-    f'VERSION="{tag}"',
-    readme_text,
-    flags=re.MULTILINE,
-)
-if pin_count > 1:
-    raise SystemExit(f"{readme}: expected at most one exact VERSION pin, found {pin_count}")
-write(readme, readme_updated)
+if not is_prerelease:
+    readme = root / "README.md"
+    readme_text = readme.read_text()
+    readme_updated, pin_count = re.subn(
+        r'^VERSION="v[0-9A-Za-z.-]+"$',
+        f'VERSION="{tag}"',
+        readme_text,
+        flags=re.MULTILINE,
+    )
+    if pin_count > 1:
+        raise SystemExit(
+            f"{readme}: expected at most one exact VERSION pin, found {pin_count}"
+        )
+    write(readme, readme_updated)
 
 changelog = root / "CHANGELOG.md"
 changelog_text = changelog.read_text()

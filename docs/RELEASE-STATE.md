@@ -257,7 +257,7 @@ approval, and final published-asset verification.
 
 ```text
 v1.20.1  Release coherence, pre-sudo trust, current workflow/docs, public testing
-v1.20.2  Promotion governance, attestations, immutable release evidence
+v1.20.2  Workflow hardening, durable recovery, phase-aware release orchestration
 v1.20.3  Typed configuration and argument-safe execution boundaries
 v1.20.4  Shared transaction journal for toolkit update and restore
 v1.20.5  Declarative command registry and standard result model

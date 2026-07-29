@@ -126,6 +126,23 @@ write_compliant_fixture
 run_check enforce >/dev/null || fail "compliant fixture was rejected"
 pass "compliant release-state fixture"
 
+write_compliant_fixture
+printf '%s\n' '1.20.2-beta.1' >"${fixture}/VERSION"
+sed -i \
+  -e 's/Current project version:\*\* v1\.20\.1/Current project version:** v1.20.2-beta.1/' \
+  -e 's/v1\.20\.1 release-state/v1.20.2 workflow-hardening/' \
+  "${fixture}/README.md"
+sed -i \
+  -e 's/Current project version:\*\* v1\.20\.1/Current project version:** v1.20.2-beta.1/' \
+  -e 's/Current work:\*\* v1\.20\.1/Current work:** v1.20.2/' \
+  "${fixture}/ROADMAP.md"
+sed -i \
+  's/Current project version:\*\* v1\.20\.1/Current project version:** v1.20.2-beta.1/' \
+  "${fixture}/TESTING.md"
+run_check enforce >/dev/null \
+  || fail "prerelease fixture with matching programme status was rejected"
+pass "prerelease programme status derives from the canonical project version"
+
 printf '%s\n' 'SCRIPT_VERSION="1.20.1"' >>"${fixture}/erpnext-dev.sh"
 if run_check enforce >/dev/null 2>&1; then
   fail "duplicate runtime version literal was accepted"

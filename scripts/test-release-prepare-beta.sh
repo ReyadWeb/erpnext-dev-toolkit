@@ -85,6 +85,17 @@ run_prepare \
 [[ "$(cat "${fixture}/VERSION")" == "1.20.0-beta.1" ]] \
   || fail "beta preparation did not update VERSION"
 
+for file in README.md ROADMAP.md TESTING.md; do
+  grep -q '^\*\*Current release:\*\* v1.19.22' "${fixture}/${file}" \
+    || fail "${file} published release banner changed during beta preparation"
+  grep -q '^\*\*Current project version:\*\* v1.20.0-beta.1' \
+    "${fixture}/${file}" \
+    || fail "${file} beta project version was not updated"
+done
+
+grep -qx 'VERSION="v1.19.22"' "${fixture}/README.md" \
+  || fail "README stable exact pin changed during beta preparation"
+
 (
   cd "$fixture"
   git add .

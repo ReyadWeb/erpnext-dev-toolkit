@@ -84,6 +84,7 @@ targets=(
   scripts/test-install-self-path.sh
   scripts/test-legacy-modular-bootstrap.sh
   scripts/test-engine-select.sh
+  scripts/test-docker-reliability.sh
   scripts/test-ui-render.sh
   scripts/test-dashboard-render.sh
   scripts/test-static-asset-probe.sh

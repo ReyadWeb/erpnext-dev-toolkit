@@ -1,3 +1,96 @@
+## v1.20.2-beta.3 - Workflow hardening and maintainer reliability
+
+### Fixed
+
+- Reapply persistent Docker restart policies immediately after `docker compose up` and before waiting for site creation, preventing new installations from retaining the temporary `on-failure` policy.
+
+### Validation
+
+- Passed Docker shell syntax validation, the Docker reliability test suite, checksum regeneration, and Git diff validation.
+
+## v1.20.2-beta.2 - Docker reboot and slow-install reliability
+
+### Added
+
+- Added a toolkit-owned Compose restart-policy overlay covering the nine
+  persistent ERPNext services in both Docker modes while leaving one-shot
+  `configurator` and `create-site` jobs unchanged.
+- Added `docker-reconcile-restart-policy` to repair containers created by
+  earlier releases without starting, stopping, or recreating them.
+- Added hermetic Docker reliability coverage for reboot policies, incomplete
+  service sets, stopped/restarting/unhealthy containers, slow site creation,
+  timeout races, and genuinely idle jobs.
+
+### Changed
+
+- Docker Doctor now inspects every required service and its container health
+  instead of accepting any Compose project with one running service.
+- Docker runtime status now reports a degraded stack when any required service
+  is missing or not ready, and the human Doctor command exits non-zero.
+- Site creation now treats 900 seconds as an inactivity threshold, refreshes
+  that deadline when container logs advance, retains a two-hour absolute
+  safety ceiling, and performs a final exit-code inspection before reporting a
+  timeout.
+
+### Fixed
+
+- Fixed clean host reboots leaving MariaDB, Redis, backend, and workers stopped
+  because upstream `restart: on-failure` ignored their normal exit code `0`.
+- Fixed frontend/websocket crash loops and resulting `502 Bad Gateway` responses
+  after reboot when their dependencies remained stopped.
+- Fixed slow but successful ERPNext site creation being reported as failed
+  after the previous fixed 900-second total deadline.
+- Fixed Doctor reporting `Containers OK` when only one Compose service was
+  running.
+
+### Validation
+
+- `scripts/test-docker-reliability.sh` passes the persistence, strict-health,
+  reconciliation, progress, and timeout-race regression matrix.
+- The existing Docker access, HTTPS, credentials, firewall, custom-image, and
+  core-version pinning regression suite remains green.
+- Full release validation and clean-VM `beta.2` acceptance remain required
+  before stable promotion.
+
+## v1.20.2-beta.1 - Workflow hardening and maintainer reliability
+
+### Added
+
+- Added phase-aware `release beta` and `release stable` orchestration with
+  explicit metadata-review, merge, tag, signing, and final-verification gates.
+- Added authoritative `release doctor` diagnostics, durable Git-private
+  lifecycle state, and `release recover` handling for interrupted operations.
+- Added hermetic coverage for lifecycle recovery, branch transitions,
+  idempotent retries, pull-request status, and release finalization.
+
+### Changed
+
+- Standardized beta and stable-metadata work on `release/vX.Y.Z`, while stable
+  pre-tag validation and tag publication now require synchronized `main`.
+- Made matching preparation, publication, proof, tag, workflow-watch, and
+  verification operations safe to repeat without weakening conflict checks.
+- Separated all, required, and informational pull-request check counts and
+  reported the next safe maintainer action.
+
+### Fixed
+
+- Added GitHub CLI 2.45 compatibility by parsing its tab-separated check output
+  when `gh pr checks --json` is unavailable.
+- Made changed-file ShellCheck failures stop `work finish` instead of being
+  treated as successful validation.
+- Preserved published-stable banners and the README stable pin while beta or RC
+  project metadata advances; stable promotion advances both identities.
+- Replaced hard-coded v1.20.1 release-state status checks with current-programme
+  checks derived from the canonical project version.
+
+### Validation
+
+- PR #153 passed all seven required checks and all eight reported checks.
+- Live GitHub CLI 2.45 acceptance confirmed seven required and one
+  informational check were classified correctly.
+- Exact-tree validation, guarded tag publication, and published-asset
+  verification remain mandatory release gates.
+
 ## v1.20.1 - Release engineering foundation
 
 ### Added

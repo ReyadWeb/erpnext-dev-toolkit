@@ -242,6 +242,11 @@ Both commands:
 4. Leave the metadata uncommitted so the changelog and release identity can be
    reviewed.
 
+Beta and RC preparation advances `Current project version`, `VERSION`, and the
+release-manifest identity while preserving the latest published stable
+`Current release` banners and README exact-pin example. Stable promotion
+advances both identities together.
+
 They also persist the validated lifecycle context in
 `.git/erpnext-workflow/release-state`. The file is Git-private, permission
 restricted, parsed as data rather than sourced as shell code, and records the

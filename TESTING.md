@@ -1,7 +1,7 @@
 # Testing guide
 
 **Current release:** v1.20.1
-**Current project version:** v1.20.1
+**Current project version:** v1.20.2-beta.3
 
 This is the active entry point for testing ERPNext Developer Toolkit changes and
 releases. It describes the current validation layers, the evidence required at
@@ -11,6 +11,34 @@ acceptance.
 Version-specific regression notes and historical field evidence are preserved in
 [`docs/TESTING-HISTORY.md`](docs/TESTING-HISTORY.md). The production acceptance
 procedure is maintained separately in [`VALIDATION.md`](VALIDATION.md).
+
+## v1.20.2-beta.2 Docker reliability regression
+
+The second beta closes the three Docker defects found during clean Ubuntu 26.04
+acceptance: clean-reboot persistence, false-positive Doctor health, and a false
+site-creation timeout while ERPNext was still progressing.
+
+```bash
+scripts/test-docker-reliability.sh
+scripts/test-docker-access-routing.sh
+```
+
+Expected results:
+
+- all nine persistent services use `restart: unless-stopped`, while one-shot
+  initialization jobs remain excluded;
+- an existing stack can be reconciled without container recreation;
+- missing, exited, restarting, health-starting, or unhealthy required services
+  fail strict Docker health;
+- Doctor prints the exact persistence repair command when an old
+  `on-failure` policy remains;
+- create-site log progress refreshes the inactivity deadline;
+- a successful exit observed at the timeout boundary passes;
+- a job with no observable progress still fails within the bounded policy.
+
+Real-machine acceptance remains mandatory: test both a `beta.1 → beta.2`
+upgrade/reconciliation on the retained VM and a fresh `beta.2` Docker install,
+then reboot each VM and rerun Doctor before stable promotion.
 
 ## v1.20.2 workflow-hardening regression
 

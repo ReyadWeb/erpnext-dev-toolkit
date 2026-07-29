@@ -1,9 +1,9 @@
 # ERPNext Developer Toolkit Roadmap
 
 **Current release:** v1.20.1
-**Current project version:** v1.20.1
-**Current work:** v1.20.1 — Release Coherence and Public Testing Foundation
-**Next product milestone:** v1.20.1 — Release Coherence and Public Testing Foundation
+**Current project version:** v1.20.2-beta.3
+**Current work:** v1.20.2 — Workflow Hardening and Maintainer Reliability
+**Next product milestone:** v1.20.2 — Workflow Hardening and Maintainer Reliability
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
 
 The active roadmap contains current priorities and forward-looking commitments only. Completed plans and superseded sequencing are preserved in [Roadmap history](docs/ROADMAP-HISTORY.md), [CHANGELOG.md](CHANGELOG.md), and Git history.

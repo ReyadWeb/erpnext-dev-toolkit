@@ -1127,19 +1127,14 @@ install_state() {
 }
 
 runtime_state() {
-  local ready_count cid state
+  local ready_count stack_detail
   if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
     if declare -F docker_compose >/dev/null 2>&1; then
-      cid="$(docker_compose ps -q frontend 2>/dev/null | tail -n1 || true)"
-      if [[ -n "$cid" ]]; then
-        state="$(${SUDO:-} docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo unknown)"
-        if [[ "$state" == "running" ]]; then
-          echo "Running via Docker ($(docker_mode_label 2>/dev/null || echo stack))"
-        else
-          echo "Stopped (Docker; frontend ${state})"
-        fi
+      if declare -F docker_required_stack_status >/dev/null 2>&1 \
+        && stack_detail="$(docker_required_stack_status)"; then
+        echo "Running via Docker ($(docker_mode_label 2>/dev/null || echo stack))"
       else
-        echo "Stopped (Docker)"
+        echo "Degraded (Docker; ${stack_detail:-required services unavailable})"
       fi
     else
       echo "Stopped (Docker; Compose unavailable)"
