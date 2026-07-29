@@ -1,3 +1,13 @@
+## v1.20.4-beta.1 - Menu status refresh and update safety
+
+### Added
+
+- Release notes pending final review.
+
+### Validation
+
+- Release validation pending.
+
 ## Unreleased
 
 ### Added

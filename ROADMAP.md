@@ -1,7 +1,7 @@
 # ERPNext Developer Toolkit Roadmap
 
 **Current release:** v1.20.3
-**Current project version:** v1.20.3
+**Current project version:** v1.20.4-beta.1
 **Current work:** v1.20.4 — Menu status refresh and update safety
 **Next product milestone:** v1.20.5 — Transaction journal MVP
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
