@@ -1,9 +1,21 @@
+## Unreleased
+
+### Added
+
+- Added `protect-local-app-changes` and an Operations > Updates > Protect local changes menu action to save dirty app working trees before ERPNext/Frappe updates.
+
+### Fixed
+
+- Refreshed the main menu runtime badge from the live runtime state so it updates immediately after install/start instead of waiting for the dashboard to refresh cached health metrics.
+- Improved Safe Update when app repositories have local changes: it can now guide the operator through Git-stashing dirty app work, rerun preflight, and continue only when blockers are cleared.
+
 ## v1.20.3 - One-command setup and Debian native-install reliability
 
 ### Added
 
 - Added a README one-command setup flow that downloads the latest stable bundle, verifies the signed checksums with the pinned signing key, installs the toolkit, creates the `erpnext-dev` command, and opens `sudo erpnext-dev first-run`.
 - Added regression coverage for the canonical signed bootstrap guidance and the Debian-safe nvm bootstrap path.
+- Added Toolkit update, verification, and CLI repair actions to Advanced > Installation & Repair so users can update from the menu instead of memorizing direct commands.
 
 ### Fixed
 
