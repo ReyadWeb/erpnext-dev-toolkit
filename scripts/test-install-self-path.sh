@@ -59,6 +59,12 @@ else
   note_fail "install_self_for_reuse failed"
 fi
 
+if sync_toolkit_lib_tree "$TOOLKIT_INSTALL_DIR" "$TOOLKIT_INSTALL_DIR"; then
+  pass "sync_toolkit_lib_tree skipped same source/destination lib path"
+else
+  note_fail "sync_toolkit_lib_tree failed when source and destination lib paths matched"
+fi
+
 [[ -f "${INSTALLER_CANONICAL_PATH}" ]] || note_fail "missing ${INSTALLER_CANONICAL_PATH}"
 [[ -f "${TOOLKIT_INSTALL_DIR}/lib/common.sh" ]] || note_fail "missing lib/common.sh under /opt"
 [[ -f "${TOOLKIT_INSTALL_DIR}/VERSION" ]] || note_fail "missing VERSION under /opt"

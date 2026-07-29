@@ -9,6 +9,7 @@
 
 - Replaced the native installer's nvm `raw.githubusercontent.com` install-script pipe with a pinned `git clone` from `https://github.com/nvm-sh/nvm.git`.
 - Skipped probing Ubuntu-only `software-properties-common` on Debian so native Debian installs no longer show that misleading optional-package warning.
+- Made `install-cli` and `first-run` idempotent when launched from the already-installed `/opt/erpnext-dev` tree, avoiding a same-path `lib/` copy failure.
 
 ### Validation
 
