@@ -1,9 +1,9 @@
 # ERPNext Developer Toolkit Roadmap
 
-**Current release:** v1.20.2
-**Current project version:** v1.20.2
-**Current work:** v1.20.2 — Workflow Hardening and Maintainer Reliability
-**Next product milestone:** v1.20.2 — Workflow Hardening and Maintainer Reliability
+**Current release:** v1.20.3
+**Current project version:** v1.20.3
+**Current work:** v1.20.3 — One-command setup and Debian native-install reliability
+**Next product milestone:** v1.20.3 — One-command setup and Debian native-install reliability
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
 
 The active roadmap contains current priorities and forward-looking commitments only. Completed plans and superseded sequencing are preserved in [Roadmap history](docs/ROADMAP-HISTORY.md), [CHANGELOG.md](CHANGELOG.md), and Git history.
@@ -90,9 +90,9 @@ The detailed release record is maintained in [CHANGELOG.md](CHANGELOG.md).
 
 ```text
 Documentation consolidation     Complete after v1.20.0
-v1.20.1                         Current — release coherence and pre-sudo trust
-v1.20.2                         Promotion governance and release evidence
-v1.20.3                         Configuration and execution boundaries
+v1.20.1                         Release coherence and pre-sudo trust
+v1.20.2                         Shipped — workflow hardening and maintainer reliability
+v1.20.3                         One-command setup and Debian native-install reliability
 v1.20.4                         Transaction journal MVP
 v1.20.5                         Declarative command architecture
 v1.21.0                         Machine-readable API foundation
@@ -201,20 +201,24 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 
 ## v1.20.2 — Promotion governance and release evidence
 
-**Status:** Planned after v1.20.1
+**Status:** Shipped in v1.20.2
 
 - Exact-commit beta-to-stable promotion where practical.
 - Formally defined same-runtime-payload digest otherwise.
 - Artifact attestation, provenance, immutable-release verification, and protected
   release-environment review.
 
-## v1.20.3 — Configuration and execution safety
+## v1.20.3 — One-command setup and Debian native-install reliability
 
-**Status:** Planned
+**Status:** Current
 
-- Typed configuration registry and data classification.
-- Ownership, mode, canonical-path, and symlink policy.
-- Argument-safe execution wrappers and adversarial argument tests.
+- Add a README first-run command that verifies the latest stable bundle, installs
+  the toolkit command, and opens the setup wizard.
+- Replace the native nvm install-script download from `raw.githubusercontent.com`
+  with a pinned `git clone` of the `nvm-sh/nvm` release tag.
+- Avoid misleading Debian warnings for Ubuntu-only optional packages.
+- Require focused regression coverage and a fresh Debian 13 VM acceptance test
+  before stable promotion.
 
 ## v1.20.4 — Transaction journal MVP
 

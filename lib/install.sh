@@ -277,7 +277,11 @@ install_system_packages() {
 
   log "Installing optional packages"
   # Ubuntu convenience package only; absent on Debian 13 (and unused by us).
-  install_optional_package "software-properties-common"
+  if [[ "$os_id" == "debian" ]]; then
+    ok "Skipped Ubuntu-only optional package on Debian: software-properties-common"
+  else
+    install_optional_package "software-properties-common"
+  fi
   install_optional_package "wkhtmltopdf"
 
   $SUDO systemctl enable --now mariadb
@@ -732,13 +736,26 @@ echo "==> Installing nvm / Node ${NODE_VERSION} / Yarn"
 # script, the systemd unit, frappe.sh, apps.sh) all source \$HOME/.nvm/nvm.sh.
 export NVM_DIR="\$HOME/.nvm"
 if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
-  # Pre-create NVM_DIR. With XDG_CONFIG_HOME set, nvm's "default install dir"
-  # is \$XDG_CONFIG_HOME/nvm, and the installer only auto-creates NVM_DIR when
-  # it matches that default. Since we force \$HOME/.nvm, the installer would
-  # otherwise abort with "that directory does not exist"; creating it first
-  # makes the installer clone straight into it.
-  mkdir -p "\$NVM_DIR"
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | NVM_DIR="\$NVM_DIR" bash
+  if [[ -e "\$NVM_DIR" ]]; then
+    if [[ -d "\$NVM_DIR/.git" ]]; then
+      git -C "\$NVM_DIR" fetch --depth 1 origin "v${NVM_VERSION}"
+      git -C "\$NVM_DIR" checkout --detach "FETCH_HEAD"
+    elif [[ -z "\$(find "\$NVM_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+      rmdir "\$NVM_DIR"
+      git clone --depth 1 --branch "v${NVM_VERSION}" https://github.com/nvm-sh/nvm.git "\$NVM_DIR"
+    else
+      echo "ERROR: \$NVM_DIR exists but does not contain nvm.sh or a git checkout."
+      echo "Move it aside or install nvm there manually, then rerun the toolkit."
+      exit 1
+    fi
+  else
+    git clone --depth 1 --branch "v${NVM_VERSION}" https://github.com/nvm-sh/nvm.git "\$NVM_DIR"
+  fi
+
+  if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
+    echo "ERROR: nvm v${NVM_VERSION} was not installed correctly at \$NVM_DIR."
+    exit 1
+  fi
 fi
 
 # shellcheck disable=SC1091

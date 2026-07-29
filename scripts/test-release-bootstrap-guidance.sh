@@ -40,6 +40,21 @@ if grep -Eq 'raw\.githubusercontent\.com/.*/erpnext-dev\.sh' <<<"$rendered"; the
   test_fail "rendered bootstrap still downloads the entrypoint from raw.githubusercontent.com"
 fi
 
+grep -Fq "Install and open the setup wizard with one command" README.md \
+  || test_fail "README is missing the one-command setup heading"
+grep -Fq "sudo env TOOLKIT_UPDATE_VERSION=\"\$VERSION\" ./erpnext-dev.sh update-toolkit" README.md \
+  || test_fail "README one-command setup does not install the verified toolkit"
+grep -Fq "sudo erpnext-dev first-run" README.md \
+  || test_fail "README one-command setup does not open the setup wizard"
+grep -Fq "https://github.com/nvm-sh/nvm.git" lib/install.sh \
+  || test_fail "native installer must fetch nvm from the pinned GitHub repository"
+grep -Fq "git clone --depth 1 --branch \"v\${NVM_VERSION}\"" lib/install.sh \
+  || test_fail "native installer must pin the nvm git tag"
+
+if grep -Fq "raw.githubusercontent.com/nvm-sh/nvm" lib/install.sh; then
+  test_fail "native installer still depends on raw.githubusercontent.com for nvm"
+fi
+
 active_guidance_files=(
   erpnext-dev.sh
   lib/backup.sh

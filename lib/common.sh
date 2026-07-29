@@ -398,12 +398,20 @@ print_two_column_menu() {
 sync_toolkit_lib_tree() {
   local src_root="$1"
   local dest_root="$2"
+  local src_lib dest_lib
 
   if [[ ! -d "${src_root}/lib" ]]; then
     return 0
   fi
 
   mkdir -p "${dest_root}/lib" || return 1
+
+  src_lib="$(cd "${src_root}/lib" && pwd -P)" || return 1
+  dest_lib="$(cd "${dest_root}/lib" && pwd -P)" || return 1
+  if [[ "$src_lib" == "$dest_lib" ]]; then
+    return 0
+  fi
+
   cp -a "${src_root}/lib/." "${dest_root}/lib/" || return 1
   return 0
 }

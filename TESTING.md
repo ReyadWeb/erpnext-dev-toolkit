@@ -1,7 +1,7 @@
 # Testing guide
 
-**Current release:** v1.20.2
-**Current project version:** v1.20.2
+**Current release:** v1.20.3
+**Current project version:** v1.20.3
 
 This is the active entry point for testing ERPNext Developer Toolkit changes and
 releases. It describes the current validation layers, the evidence required at
@@ -11,6 +11,32 @@ acceptance.
 Version-specific regression notes and historical field evidence are preserved in
 [`docs/TESTING-HISTORY.md`](docs/TESTING-HISTORY.md). The production acceptance
 procedure is maintained separately in [`VALIDATION.md`](VALIDATION.md).
+
+## v1.20.3 Debian and setup bootstrap regression
+
+v1.20.3 keeps the patch narrow: the README exposes one command that verifies the
+stable bundle, installs the toolkit command, and opens the setup wizard, while
+the native Debian path no longer depends on the nvm installer hosted on
+`raw.githubusercontent.com`.
+
+```bash
+scripts/test-release-bootstrap-guidance.sh
+scripts/check-release-doc-alignment.sh
+scripts/check-release-artifact-consistency.sh
+./erpnext-dev.sh verify-toolkit
+```
+
+Expected results:
+
+- README contains the one-command setup path and opens `sudo erpnext-dev first-run`;
+- the native installer clones the pinned `nvm-sh/nvm` tag with Git;
+- `lib/install.sh` contains no `raw.githubusercontent.com/nvm-sh/nvm` dependency;
+- Debian skips the Ubuntu-only `software-properties-common` optional probe;
+- checksum and release-document alignment remain exact.
+
+Real-machine acceptance remains mandatory before stable promotion: run a fresh
+Debian 13 native install through the setup wizard and confirm Node, Yarn, Bench,
+Frappe, and ERPNext install past the previous nvm failure point.
 
 ## v1.20.2-beta.2 Docker reliability regression
 

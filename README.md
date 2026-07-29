@@ -12,8 +12,8 @@ health checks, diagnostics, signed updates, and rollback.
 
 > This is a community project and is not an official Frappe Technologies product.
 
-**Current release:** v1.20.2
-**Current project version:** v1.20.2
+**Current release:** v1.20.3
+**Current project version:** v1.20.3
 **Current development programme:** v1.20.1–v1.20.5 reliability foundations before v1.21.0.
 
 ## At a glance
@@ -25,7 +25,7 @@ health checks, diagnostics, signed updates, and rollback.
 | **Native hosts** | Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 |
 | **Main command** | `erpnext-dev` |
 | **Release protection** | Build identity, whole-tree checksums, signed releases, atomic updates, rollback slots |
-| **Current focus** | v1.20.2 workflow hardening and Docker reliability qualification |
+| **Current focus** | v1.20.3 one-command setup and Debian native-install reliability |
 
 ## Choose your path
 
@@ -90,7 +90,44 @@ of the selected path or engine.
 
 ## Start here
 
-### 1. Download the latest published stable release
+### 1. Install and open the setup wizard with one command
+
+This command downloads the latest published stable bundle, verifies the bundled
+checksums and maintainer signature with the pinned key fingerprint, installs the
+toolkit into `/opt/erpnext-dev`, creates the `erpnext-dev` command, and opens the
+setup wizard.
+
+```bash
+bash -c 'set -Eeuo pipefail
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates gnupg tar
+REPO="ReyadWeb/erpnext-dev-toolkit"
+VERSION="$(curl -fsSL -o /dev/null -w "%{url_effective}" "https://github.com/${REPO}/releases/latest" | sed -n "s|.*/tag/\\([^/]*\\)$|\\1|p")"
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve the latest stable release." >&2; exit 1; }
+workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
+gnupg_home=""
+cleanup() { rm -rf "$workdir"; [[ -z "${gnupg_home:-}" ]] || rm -rf "$gnupg_home"; }
+trap cleanup EXIT
+cd "$workdir"
+base="https://github.com/${REPO}/releases/download/${VERSION}"
+archive="erpnext-dev-${VERSION}.tar.gz"
+curl -fsSLO "${base}/${archive}"
+if tar -tzf "$archive" | grep -Eq "(^/|(^|/)\\.\\.(/|$))"; then echo "Unsafe path detected in release archive." >&2; exit 1; fi
+tar --no-same-owner --no-same-permissions -xzf "$archive"
+cd "erpnext-dev-${VERSION}"
+expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
+actual_fpr="$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '"'"'$1 == "fpr" { print $10; exit }'"'"')"
+test "$actual_fpr" = "$expected_fpr"
+gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
+chmod 700 "$gnupg_home"
+GNUPGHOME="$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
+GNUPGHOME="$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
+sha256sum -c SHA256SUMS
+sudo env TOOLKIT_UPDATE_VERSION="$VERSION" ./erpnext-dev.sh update-toolkit
+sudo erpnext-dev first-run'
+```
+
+### 2. Manual verified download
 
 Use the release asset named `erpnext-dev-vX.Y.Z.tar.gz`. Do not install from
 GitHub's automatically generated source archives because they are not the supported
@@ -142,10 +179,10 @@ Why this block resolves `/releases/latest` through `url_effective`:
 To pin the current stable release explicitly:
 
 ```bash
-VERSION="v1.20.2"
+VERSION="v1.20.3"
 ```
 
-### 2. Run the workflow for your environment
+### 3. Run the workflow for your environment
 
 | I want to… | Command | Notes |
 |---|---|---|
@@ -158,7 +195,7 @@ VERSION="v1.20.2"
 Run interactive commands on their own line. Do not append unrelated commands to a
 wizard invocation.
 
-### 3. Verify the installed toolkit
+### 4. Verify the installed toolkit
 
 ```bash
 erpnext-dev version
@@ -241,7 +278,7 @@ sudo erpnext-dev doctor
 | Native installation | Ubuntu 24.04 and 26.04 release-tested; Debian 13 field-validated |
 | Docker installation | Development and production Compose paths covered by integration testing |
 | Release integrity | Canonical versioning, authoritative manifest, signed checksums, atomic updates, rollback |
-| Current work | v1.20.2 workflow hardening and Docker reliability qualification |
+| Current work | v1.20.3 one-command setup and Debian native-install reliability |
 | Next product milestone | v1.20.x reliability programme; v1.21 machine-readable interface follows |
 
 Detailed validation evidence belongs in [`TESTING.md`](TESTING.md),
@@ -338,29 +375,18 @@ usermod -aG sudo YOUR_USER
 Log out and back in as `YOUR_USER` so group membership applies (`groups` should
 list `sudo`).
 
-**2) Fresh local install (as YOUR_USER)** — same as [Start here](#start-here):
-
-```bash
-sudo apt-get update && sudo apt-get install -y curl ca-certificates tar && \
-REPO="ReyadWeb/erpnext-dev-toolkit" && \
-VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
-  "https://github.com/${REPO}/releases/latest" \
-  | sed -n 's|.*/tag/\([^/]*\)$|\1|p')" && \
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve latest release" >&2; exit 1; } && \
-BASE="https://github.com/${REPO}/releases/download/${VERSION}" && \
-cd ~ && \
-curl -fsSLO "${BASE}/erpnext-dev-${VERSION}.tar.gz" && \
-tar -xzf "erpnext-dev-${VERSION}.tar.gz" && \
-cd "erpnext-dev-${VERSION}" && \
-sha256sum -c SHA256SUMS && \
-sudo ./erpnext-dev.sh local-dev-quickstart
-```
+**2) Fresh install (as YOUR_USER)** — use the one-command setup in
+[Start here](#start-here). Choose **Local development VM** or
+**Public VM / production-candidate** when the wizard opens.
 
 Other Debian notes:
 
 - **Package names (v1.15.2+):** the native installer no longer requires Ubuntu-only
   `software-properties-common` (removed from Debian 13) and prefers
   `libfontconfig1` for fontconfig.
+- **Node bootstrap (v1.20.3+):** the native installer clones the pinned nvm tag
+  from `https://github.com/nvm-sh/nvm.git`; it no longer depends on
+  `raw.githubusercontent.com` for nvm.
 - **Local HTTPS / mkcert (on the HOST browser machine):** `apt install -y mkcert libnss3-tools` before `mkcert -install`. Firefox may still need `browser-trust-guide`.
 - **Field validation:** use [`VALIDATION.md`](VALIDATION.md) for go-live checks on a real Debian VPS.
 - **Docker on Debian:** the toolkit prefers Docker’s official apt repository; OS differences are largely abstracted once the daemon is up.
