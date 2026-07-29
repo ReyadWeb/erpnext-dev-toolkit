@@ -1,3 +1,14 @@
+## v1.20.2-beta.4 - Workflow hardening and maintainer reliability
+
+### Fixed
+
+- Stable promotion publishing, recovery, status/Doctor reporting, and high-level orchestration now use the validated saved transaction target when the source prerelease tag still points at `HEAD`.
+- Repeated stable promotion recognizes the exact prepared tree and no longer attempts a second metadata mutation.
+
+### Validation
+
+- Added hermetic regression coverage for a prerelease-tagged `HEAD` with prepared stable working-tree metadata, including idempotent promotion, recovery guidance, publishing, and status/Doctor lifecycle consistency.
+
 ## v1.20.2-beta.3 - Workflow hardening and maintainer reliability
 
 ### Fixed
