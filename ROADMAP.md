@@ -2,8 +2,8 @@
 
 **Current release:** v1.20.3
 **Current project version:** v1.20.3
-**Current work:** v1.20.3 — One-command setup and Debian native-install reliability
-**Next product milestone:** v1.20.3 — One-command setup and Debian native-install reliability
+**Current work:** v1.20.4 — Menu status refresh and update safety
+**Next product milestone:** v1.20.5 — Transaction journal MVP
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
 
 The active roadmap contains current priorities and forward-looking commitments only. Completed plans and superseded sequencing are preserved in [Roadmap history](docs/ROADMAP-HISTORY.md), [CHANGELOG.md](CHANGELOG.md), and Git history.
@@ -92,9 +92,10 @@ The detailed release record is maintained in [CHANGELOG.md](CHANGELOG.md).
 Documentation consolidation     Complete after v1.20.0
 v1.20.1                         Release coherence and pre-sudo trust
 v1.20.2                         Shipped — workflow hardening and maintainer reliability
-v1.20.3                         One-command setup and Debian native-install reliability
-v1.20.4                         Transaction journal MVP
-v1.20.5                         Declarative command architecture
+v1.20.3                         Shipped — one-command setup and Debian native-install reliability
+v1.20.4                         Menu status refresh and update safety
+v1.20.5                         Transaction journal MVP
+v1.20.6                         Declarative command architecture
 v1.21.0                         Machine-readable API foundation
 v1.21.1+                        Jobs, privileged agent, watchdog, panel contract
 v1.22.0                         Real VPS validation matrix
@@ -210,7 +211,7 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 
 ## v1.20.3 — One-command setup and Debian native-install reliability
 
-**Status:** Current
+**Status:** Shipped
 
 - Add a README first-run command that verifies the latest stable bundle, installs
   the toolkit command, and opens the setup wizard.
@@ -220,7 +221,16 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 - Require focused regression coverage and a fresh Debian 13 VM acceptance test
   before stable promotion.
 
-## v1.20.4 — Transaction journal MVP
+## v1.20.4 — Menu status refresh and update safety
+
+**Status:** Current
+
+- Refresh main menu runtime status from the live service state after installs,
+  starts, stops, and dashboard returns.
+- Add guided local-app change protection before ERPNext/Frappe updates.
+- Surface toolkit update, verification, and CLI repair actions from the menu.
+
+## v1.20.5 — Transaction journal MVP
 
 **Status:** Planned
 
@@ -228,7 +238,7 @@ Start with toolkit update and restore: preflight, capture, recovery point, mutat
 verification, commit, rollback, recovery evidence, SIGTERM handling, resume, and
 idempotency.
 
-## v1.20.5 — Declarative command architecture
+## v1.20.6 — Declarative command architecture
 
 **Status:** Planned
 
