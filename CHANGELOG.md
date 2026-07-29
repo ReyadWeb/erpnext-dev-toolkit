@@ -1,3 +1,13 @@
+## v1.20.2 - Workflow hardening and maintainer reliability
+
+### Added
+
+- Release notes pending final review.
+
+### Validation
+
+- Release validation pending.
+
 ## v1.20.2-beta.4 - Workflow hardening and maintainer reliability
 
 ### Fixed
