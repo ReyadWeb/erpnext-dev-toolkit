@@ -91,7 +91,11 @@ case "${1:-read}" in
     fi
     ;;
   channel)
-    if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if [[ -n "${ERPNEXT_RELEASE_CHANNEL:-}" ]]; then
+      echo "$ERPNEXT_RELEASE_CHANNEL"
+    elif [[ "${RELEASE_FAKE_UNTAGGED_CHANNEL_DEVELOPMENT:-0}" == "1" ]]; then
+      echo development
+    elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
       echo stable
     elif [[ "$version" == *-beta.* ]]; then
       echo beta
@@ -260,11 +264,13 @@ set -e
 ((rc != 0)) || fail "release publish succeeded without --confirm-reviewed"
 assert_contains "${tmp}/publish-unconfirmed.out" "requires --confirm-reviewed"
 
+export RELEASE_FAKE_UNTAGGED_CHANNEL_DEVELOPMENT=1
 scripts/repo-workflow.sh release beta \
   1.21.0-beta.1 \
   "Release transaction fixture" \
   --confirm-reviewed \
   >"${tmp}/publish.out"
+unset RELEASE_FAKE_UNTAGGED_CHANNEL_DEVELOPMENT
 assert_contains "${tmp}/publish.out" "reviewed release metadata validated, committed, and pushed"
 assert_contains "${tmp}/publish.out" "Beta Tag Confirmation Required"
 assert_contains "${tmp}/publish.out" "no tag was created"
