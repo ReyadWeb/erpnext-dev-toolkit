@@ -15,6 +15,7 @@ pass() { echo "OK: $*"; }
 
 bash -n lib/ui.sh || note_fail "bash -n lib/ui.sh"
 bash -n lib/menu.sh || note_fail "bash -n lib/menu.sh"
+bash -n lib/update.sh || note_fail "bash -n lib/update.sh"
 bash -n erpnext-dev.sh || note_fail "bash -n erpnext-dev.sh"
 
 export NO_COLOR=1
@@ -81,6 +82,36 @@ if grep -q $'\033' "$tmp2"; then
   note_fail "ANSI escape codes in wide layout with NO_COLOR=1"
 fi
 rm -f "$tmp2"
+
+runtime_dir="$(mktemp -d /tmp/erpnext-dev-menu-runtime.XXXXXX)"
+mkdir -p "$runtime_dir/metrics"
+cat >"$runtime_dir/metrics/current.json" <<'JSON'
+{
+  "overall_status": "DEGRADED",
+  "deployment": {
+    "site": "erpnext.test",
+    "runtime_state": "Stopped"
+  }
+}
+JSON
+runtime_tmp="$(mktemp /tmp/erpnext-dev-menu-runtime-render.XXXXXX)"
+HEALTH_LIB_DIR="$runtime_dir" bash -c '
+  set -Eeuo pipefail
+  cd "'"$ROOT_DIR"'"
+  export NO_COLOR=1 FORCE_NO_COLOR=1 TERM=dumb UI_FORCE_ASCII=1 MENU_NO_CLEAR=1 MENU_LIVE_RUNTIME_STATUS=1
+  source lib/common.sh
+  source lib/ui.sh
+  source lib/menu.sh
+  runtime_state() { printf "%s\n" "Running via service"; }
+  render_main_menu_screen
+' >"$runtime_tmp" 2>/dev/null || note_fail "live runtime menu render failed"
+grep -q "Runtime:" "$runtime_tmp" || note_fail "live runtime render missing Runtime row"
+grep -q "Running" "$runtime_tmp" || note_fail "menu did not refresh stale cached runtime to Running"
+if grep -q "Stopped" "$runtime_tmp"; then
+  note_fail "menu rendered stale cached runtime even though live runtime was Running"
+fi
+rm -rf "$runtime_dir"
+rm -f "$runtime_tmp"
 
 # 80-col terminals now stay two-column when labels fit (v1.19.11 page UX).
 export COLUMNS=80
@@ -275,6 +306,44 @@ if grep -q "50) Credentials / Login" "$adv_tmp"; then
   note_fail "Advanced still exposes the legacy 50-item flat menu"
 fi
 rm -f "$adv_tmp"
+
+advanced_install_tmp="$(mktemp /tmp/erpnext-dev-ui-advanced-install.XXXXXX)"
+if ! printf '1\nq\n' | ./erpnext-dev.sh advanced >"$advanced_install_tmp" 2>/dev/null; then
+  note_fail "advanced installation menu render failed"
+fi
+grep -q "Update toolkit" "$advanced_install_tmp" \
+  || note_fail "Advanced Installation & Repair missing Update toolkit"
+grep -q "Verify toolkit" "$advanced_install_tmp" \
+  || note_fail "Advanced Installation & Repair missing Verify toolkit"
+grep -q "Repair CLI command" "$advanced_install_tmp" \
+  || note_fail "Advanced Installation & Repair missing Repair CLI command"
+rm -f "$advanced_install_tmp"
+
+updates_tmp="$(mktemp /tmp/erpnext-dev-ui-updates.XXXXXX)"
+if ! printf '10\n4\nq\n' | env \
+  NO_COLOR=1 \
+  FORCE_NO_COLOR=1 \
+  TERM=dumb \
+  UI_FORCE_ASCII=1 \
+  MENU_NO_CLEAR=1 \
+  COLUMNS=120 \
+  MENU_TERMINAL_COLS=120 \
+  ./erpnext-dev.sh menu >"$updates_tmp" 2>/dev/null; then
+  note_fail "Operations Updates menu render failed"
+fi
+grep -q "Update check" "$updates_tmp" \
+  || note_fail "Updates menu missing Update check"
+grep -q "Safe update" "$updates_tmp" \
+  || note_fail "Updates menu missing Safe update"
+grep -q "Protect local changes" "$updates_tmp" \
+  || note_fail "Updates menu missing Protect local changes"
+rm -f "$updates_tmp"
+
+help_tmp="$(mktemp /tmp/erpnext-dev-help-update.XXXXXX)"
+./erpnext-dev.sh help >"$help_tmp" 2>/dev/null || note_fail "help render failed"
+grep -q "protect-local-app-changes" "$help_tmp" \
+  || note_fail "help missing protect-local-app-changes command"
+rm -f "$help_tmp"
 
 access_tmp="$(mktemp /tmp/erpnext-dev-ui-access.XXXXXX)"
 if ! printf 'q\n' | ./erpnext-dev.sh access >"$access_tmp" 2>/dev/null; then

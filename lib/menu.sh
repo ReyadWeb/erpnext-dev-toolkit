@@ -116,9 +116,11 @@ menu_map_health_word() {
 }
 
 load_menu_status_fast() {
-  # Populate MENU_STATUS_* from cached snapshot / light files only.
+  # Populate MENU_STATUS_* from cached snapshot / light files, then refresh the
+  # cheap runtime state live so post-install menus do not show stale status until
+  # the dashboard is opened.
   local metrics="${HEALTH_LIB_DIR:-/var/lib/erpnext-dev}/metrics/current.json"
-  local overall https https_detail backup offvm restore runtime site
+  local overall https https_detail backup offvm restore runtime site live_runtime
 
   MENU_STATUS_SITE="${PRODUCTION_DOMAIN:-${SITE_NAME:-unknown}}"
   if declare -F is_public_vm_workflow >/dev/null 2>&1 && is_public_vm_workflow 2>/dev/null; then
@@ -172,6 +174,12 @@ load_menu_status_fast() {
     [[ -n "$offvm" ]] && MENU_STATUS_OFFVM="$(menu_map_health_word offvm "$offvm")"
     [[ -n "$restore" ]] && MENU_STATUS_RESTORE="$(menu_map_health_word restore "$restore")"
     [[ -n "$runtime" ]] && MENU_STATUS_RUNTIME="$(menu_map_health_word runtime "$runtime")"
+  fi
+
+  if [[ "${MENU_LIVE_RUNTIME_STATUS:-1}" == "1" ]] \
+    && declare -F runtime_state >/dev/null 2>&1; then
+    live_runtime="$(runtime_state 2>/dev/null || true)"
+    [[ -n "$live_runtime" ]] && MENU_STATUS_RUNTIME="$(menu_map_health_word runtime "$live_runtime")"
   fi
 
   # Local HTTPS: light file/cert check when snapshot cache is missing or still Unknown.
@@ -1200,7 +1208,7 @@ render_operations_menu_options() {
 show_operations_updates_menu() {
   while true; do
     ui_submenu_header "Updates" \
-      "Check readiness and update ERPNext safely."
+      "Check readiness, protect local app work, and update ERPNext safely."
 
     local width
     width="$(ui_panel_width)"
@@ -1209,9 +1217,11 @@ show_operations_updates_menu() {
 
     if ((width >= 80)); then
       operations_menu_render_pair "$width" "1" "Update check" "2" "Safe update"
+      operations_menu_render_pair "$width" "3" "Protect local changes"
     else
       operations_menu_render_pair "$width" "1" "Update check"
       operations_menu_render_pair "$width" "2" "Safe update"
+      operations_menu_render_pair "$width" "3" "Protect local changes"
     fi
 
     ui_box_line bot "$width"
@@ -1228,6 +1238,10 @@ show_operations_updates_menu() {
         ;;
       2)
         run_safe_update_wizard
+        pause_after_screen "Press Enter to return to Updates..."
+        ;;
+      3)
+        run_update_protect_local_changes
         pause_after_screen "Press Enter to return to Updates..."
         ;;
       b | B | "")

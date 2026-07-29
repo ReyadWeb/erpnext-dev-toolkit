@@ -19,6 +19,10 @@ update_state_file() {
   printf '%s/last-update.state\n' "${LOG_DIR:-/var/log/erpnext-dev}"
 }
 
+update_local_changes_state_file() {
+  printf '%s/last-update-local-changes.state\n' "${LOG_DIR:-/var/log/erpnext-dev}"
+}
+
 # Emit one "app|branch|shortsha" line per git-backed app in the bench.
 update_app_git_state() {
   local bench_dir="$1"
@@ -43,6 +47,118 @@ for d in */; do
     printf '%s\n' \"\$app\"
   fi
 done"
+}
+
+update_dirty_apps_details() {
+  local bench_dir="$1"
+  run_as_frappe "cd '${bench_dir}/apps' 2>/dev/null || exit 0
+for d in */; do
+  app=\"\${d%/}\"
+  [ -d \"\$app/.git\" ] || continue
+  status=\"\$(git -C \"\$app\" status --short 2>/dev/null || true)\"
+  [ -n \"\$status\" ] || continue
+  printf '%s\n' \"\$app\"
+  printf '%s\n' \"\$status\" | sed 's/^/  /'
+done"
+}
+
+update_stash_dirty_apps() {
+  local bench_dir="$1" stamp="$2"
+  run_as_frappe "set -e
+cd '${bench_dir}/apps' 2>/dev/null || exit 0
+for d in */; do
+  app=\"\${d%/}\"
+  [ -d \"\$app/.git\" ] || continue
+  if [ -n \"\$(git -C \"\$app\" status --porcelain 2>/dev/null)\" ]; then
+    before=\"\$(git -C \"\$app\" stash list 2>/dev/null | sed -n '1p' || true)\"
+    git -C \"\$app\" stash push --include-untracked -m \"erpnext-dev safe-update ${stamp}\" >/dev/null
+    after=\"\$(git -C \"\$app\" stash list 2>/dev/null | sed -n '1p' || true)\"
+    if [ -n \"\$after\" ] && [ \"\$after\" != \"\$before\" ]; then
+      printf '%s|%s\n' \"\$app\" \"\$after\"
+    else
+      printf '%s|no stash created\n' \"\$app\"
+    fi
+  fi
+done"
+}
+
+run_update_protect_local_changes() {
+  require_sudo
+
+  local bench_dir dirty details reply stamp output state_file state_dir tmp_state app_list
+  bench_dir="$(require_site_environment)" || return 1
+  dirty="$(update_dirty_apps "$bench_dir" 2>/dev/null || true)"
+
+  ui_box_start "Protect Local App Changes"
+  status_line "Mode" "INFO" "save dirty app working trees before ERPNext/Frappe update"
+  status_line "Bench directory" "OK" "$bench_dir"
+
+  if [[ -z "$dirty" ]]; then
+    status_line "App working trees" "OK" "clean; nothing to protect"
+    echo "Next: $(toolkit_cmd update-preflight)"
+    ui_box_end
+    return 0
+  fi
+
+  status_line "App working trees" "WARN" "uncommitted local changes in: $(printf '%s' "$dirty" | tr '\n' ' ')"
+  details="$(update_dirty_apps_details "$bench_dir" 2>/dev/null || true)"
+  if [[ -n "$details" ]]; then
+    echo
+    echo "Dirty app details:"
+    printf '%s\n' "$details" | sed 's/^/  /'
+  fi
+
+  echo
+  echo "This will run 'git stash push --include-untracked' inside each dirty app repo."
+  echo "The stashes are NOT reapplied automatically after the update; review and apply"
+  echo "them manually only if you intentionally customized core app code."
+  echo
+
+  if [[ "${ASSUME_YES:-0}" -ne 1 && "${UPDATE_PROTECT_CONFIRMED:-0}" != "1" ]]; then
+    read -r -p "Type STASH to protect these app changes: " reply
+    [[ "$reply" == "STASH" ]] || fail "Local app change protection cancelled."
+  fi
+
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  output="$(update_stash_dirty_apps "$bench_dir" "$stamp")" || {
+    ui_box_end
+    fail "Could not stash one or more dirty app working trees."
+  }
+
+  state_file="$(update_local_changes_state_file)"
+  state_dir="$(dirname "$state_file")"
+  mkdir -p "$state_dir" 2>/dev/null || true
+  tmp_state="$(mktemp "${state_dir}/erpnext-dev-app-stashes.XXXXXX.tmp" 2>/dev/null || mktemp /tmp/erpnext-dev-app-stashes.XXXXXX.tmp)"
+  {
+    echo "# ERPNext Dev Toolkit — local app changes protected before update"
+    echo "UPDATE_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "BENCH_DIR=${bench_dir}"
+    echo "SITE_NAME=${SITE_NAME}"
+    echo "# app|stash reference"
+    printf '%s\n' "$output"
+  } >"$tmp_state"
+  if mv -f "$tmp_state" "$state_file" 2>/dev/null; then
+    chmod 600 "$state_file" 2>/dev/null || true
+    status_line "Protection record" "OK" "$state_file"
+  else
+    rm -f "$tmp_state" 2>/dev/null || true
+    status_line "Protection record" "WARN" "could not write ${state_file}; Git stashes were still created"
+  fi
+
+  app_list="$(printf '%s\n' "$output" | awk -F'|' 'NF {print $1}' | tr '\n' ' ')"
+  status_line "Protected apps" "OK" "${app_list:-none}"
+  if [[ -n "$output" ]]; then
+    echo
+    echo "Created stashes:"
+    printf '%s\n' "$output" | while IFS='|' read -r app ref; do
+      [[ -n "$app" ]] || continue
+      printf '  %-16s %s\n' "$app" "${ref:-unknown}"
+    done
+  fi
+
+  echo
+  echo "Next: $(toolkit_cmd update-preflight), then $(toolkit_cmd safe-update-wizard)."
+  ui_box_end
 }
 
 # Read-only preflight. Returns 0 if the upgrade looks safe to attempt, 1 if
@@ -95,7 +211,8 @@ run_update_preflight() {
   dirty="$(update_dirty_apps "$bench_dir" 2>/dev/null || true)"
   if [[ -n "$dirty" ]]; then
     status_line "App working trees" "FAIL" "uncommitted local changes in: $(printf '%s' "$dirty" | tr '\n' ' ')"
-    echo "  Commit, stash, or discard these before upgrading; bench update will not overwrite local work."
+    echo "  Protect these from the Updates menu, or run: $(toolkit_cmd protect-local-app-changes)"
+    echo "  Advanced/manual: commit, stash, or discard them before upgrading."
     blockers=$((blockers + 1))
   else
     status_line "App working trees" "OK" "clean; no uncommitted local changes"
@@ -148,7 +265,7 @@ run_update_preflight() {
 run_safe_update_wizard() {
   require_sudo
 
-  local bench_dir reply pre_state latest_lines backup_prefix state_file
+  local bench_dir reply pre_state latest_lines backup_prefix state_file dirty
   bench_dir="$(require_site_environment)" || return 1
 
   ui_box_start "Safe ERPNext Update"
@@ -162,7 +279,23 @@ run_safe_update_wizard() {
     if [[ "${UPDATE_FORCE:-0}" == "1" ]]; then
       warn "Preflight reported blockers but UPDATE_FORCE=1 is set; continuing at your own risk."
     else
-      fail "Preflight found blockers. Resolve them or re-run with UPDATE_FORCE=1 to override."
+      dirty="$(update_dirty_apps "$bench_dir" 2>/dev/null || true)"
+      if [[ -n "$dirty" ]]; then
+        echo
+        warn "Preflight found dirty app working trees. Safe Update can protect them with Git stashes, then rerun preflight."
+        if [[ "${ASSUME_YES:-0}" -eq 1 || "${UPDATE_AUTO_STASH:-0}" == "1" ]]; then
+          UPDATE_PROTECT_CONFIRMED=1 run_update_protect_local_changes
+        else
+          read -r -p "Type STASH to protect local app changes and retry preflight: " reply
+          [[ "$reply" == "STASH" ]] || fail "Preflight found blockers. Resolve them, then re-run $(toolkit_cmd safe-update-wizard)."
+          UPDATE_PROTECT_CONFIRMED=1 run_update_protect_local_changes
+        fi
+        if ! run_update_preflight; then
+          fail "Preflight still found blockers after protecting local app changes."
+        fi
+      else
+        fail "Preflight found blockers. Resolve them or re-run with UPDATE_FORCE=1 to override."
+      fi
     fi
   fi
 
