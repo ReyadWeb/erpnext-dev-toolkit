@@ -1,3 +1,13 @@
+## v1.20.2-beta.3 - Workflow hardening and maintainer reliability
+
+### Fixed
+
+- Reapply persistent Docker restart policies immediately after `docker compose up` and before waiting for site creation, preventing new installations from retaining the temporary `on-failure` policy.
+
+### Validation
+
+- Passed Docker shell syntax validation, the Docker reliability test suite, checksum regeneration, and Git diff validation.
+
 ## v1.20.2-beta.2 - Docker reboot and slow-install reliability
 
 ### Added

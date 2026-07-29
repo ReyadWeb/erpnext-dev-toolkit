@@ -4381,6 +4381,7 @@ docker_guided_install() {
   write_dev_config_file
 
   docker_compose_up || fail "docker compose up failed. Inspect with: $(toolkit_cmd logs)"
+  docker_reconcile_restart_policy || fail "Could not apply persistent Docker restart policies."
   docker_wait_for_site_creation || fail "Site creation failed. See the create-site logs above, or run: $(toolkit_cmd logs)"
   docker_ready || warn "Stack started but readiness check timed out; it may still be initializing."
   docker_write_pins || warn "Could not record immutable pins."
