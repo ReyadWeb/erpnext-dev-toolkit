@@ -1,3 +1,20 @@
+## v1.20.3 - One-command setup and Debian native-install reliability
+
+### Added
+
+- Added a README one-command setup flow that downloads the latest stable bundle, verifies the signed checksums with the pinned signing key, installs the toolkit, creates the `erpnext-dev` command, and opens `sudo erpnext-dev first-run`.
+- Added regression coverage for the canonical signed bootstrap guidance and the Debian-safe nvm bootstrap path.
+
+### Fixed
+
+- Replaced the native installer's nvm `raw.githubusercontent.com` install-script pipe with a pinned `git clone` from `https://github.com/nvm-sh/nvm.git`.
+- Skipped probing Ubuntu-only `software-properties-common` on Debian so native Debian installs no longer show that misleading optional-package warning.
+
+### Validation
+
+- Focused bootstrap-guidance, release-doc-alignment, release-state, artifact consistency, and toolkit verification checks are required before beta publication.
+- Debian native installation should be field-tested on a fresh Debian 13 VM before stable promotion.
+
 ## v1.20.2 - Workflow hardening and maintainer reliability
 
 ### Added
