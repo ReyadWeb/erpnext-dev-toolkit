@@ -83,7 +83,13 @@ runtime="$(sed -nE 's/^SCRIPT_VERSION="([^"]+)".*/\1/p' erpnext-dev.sh | head -n
 case "${1:-read}" in
   read) echo "$version" ;;
   script) echo "$runtime" ;;
-  tag) echo "v${version}" ;;
+  tag)
+    if [[ "${RELEASE_FAKE_TAG_FROM_HEAD:-0}" == "1" ]]; then
+      printf 'v%s\n' "$(git show HEAD:VERSION)"
+    else
+      echo "v${version}"
+    fi
+    ;;
   channel)
     if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
       echo stable
@@ -269,6 +275,7 @@ assert_contains "${tmp}/publish.out" "no tag was created"
   || fail "beta release branch was not pushed"
 
 git tag -a v1.21.0-beta.1 -m "Accepted beta fixture"
+export RELEASE_FAKE_TAG_FROM_HEAD=1
 scripts/repo-workflow.sh release promote-stable \
   1.21.0 \
   "Release transaction fixture" \
@@ -281,6 +288,24 @@ assert_contains .git/erpnext-workflow/release-state "phase=stable-promotion"
 assert_contains .git/erpnext-workflow/release-state "source_tag=v1.21.0-beta.1"
 assert_contains .git/erpnext-workflow/release-state \
   "source_commit=$(git rev-parse 'v1.21.0-beta.1^{commit}')"
+
+scripts/repo-workflow.sh release promote-stable \
+  1.21.0 \
+  "Release transaction fixture" \
+  >"${tmp}/promote-again.out"
+assert_contains "${tmp}/promote-again.out" "Stable Metadata Already Prepared"
+assert_contains "${tmp}/promote-again.out" "no promotion changes were repeated"
+[[ "$(grep -Fc 'promote-stable 1.21.0' "$RELEASE_FAKE_LOG")" == "1" ]] \
+  || fail "idempotent stable promotion repeated the metadata helper"
+
+scripts/repo-workflow.sh release status --offline >"${tmp}/stable-prepared-status.out"
+assert_contains "${tmp}/stable-prepared-status.out" "Phase                        stable-promotion"
+assert_contains "${tmp}/stable-prepared-status.out" "Expected tag                 v1.21.0"
+assert_contains "${tmp}/stable-prepared-status.out" "Expected branch              release/v1.21.0"
+
+scripts/repo-workflow.sh release doctor --offline >"${tmp}/stable-prepared-doctor.out"
+assert_contains "${tmp}/stable-prepared-doctor.out" "Phase                        stable-promotion"
+assert_contains "${tmp}/stable-prepared-doctor.out" "Next safe action"
 
 scripts/repo-workflow.sh release stable \
   1.21.0 \

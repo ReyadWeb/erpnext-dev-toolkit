@@ -1,7 +1,7 @@
 # ERPNext Developer Toolkit Roadmap
 
 **Current release:** v1.20.1
-**Current project version:** v1.20.2-beta.3
+**Current project version:** v1.20.2-beta.4
 **Current work:** v1.20.2 — Workflow Hardening and Maintainer Reliability
 **Next product milestone:** v1.20.2 — Workflow Hardening and Maintainer Reliability
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3

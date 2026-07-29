@@ -303,6 +303,14 @@ release_state_matches_target() {
   "$(release_state_value target_tag)" == "$target_tag" ]]
 }
 
+release_worktree_tag() {
+  local version
+  version="$(scripts/release-version.sh read)"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[1-9][0-9]*)?$ ]] \
+    || fail "working-tree VERSION is not a canonical release version: ${version}"
+  printf 'v%s\n' "$version"
+}
+
 saved_state_summary() {
   local action stage mode
   action="$(state_value action)"
@@ -1734,7 +1742,7 @@ release_collect_state() {
   RELEASE_VERSION="$(scripts/release-version.sh read)"
   RELEASE_RUNTIME_VERSION="$(scripts/release-version.sh script)"
   RELEASE_CHANNEL="$(scripts/release-version.sh channel)"
-  RELEASE_TAG="$(scripts/release-version.sh tag)"
+  RELEASE_TAG="$(release_worktree_tag)"
   RELEASE_BRANCH="$(branch_name)"
   RELEASE_HEAD_COMMIT="$(git rev-parse HEAD)"
 
@@ -2024,7 +2032,7 @@ cmd_release_prepare_beta() {
   if release_state_matches_target "$target_tag" \
     && [[ "$(release_state_value phase)" == "beta-preparation" ]] \
     && [[ "$(release_state_value prepared_fingerprint)" == "$(tree_fingerprint)" ]] \
-    && [[ "$(scripts/release-version.sh tag)" == "$target_tag" ]]; then
+    && [[ "$(release_worktree_tag)" == "$target_tag" ]]; then
     heading "Beta Metadata Already Prepared"
     info "Tag" "$target_tag"
     info "State" "exact prepared tree matches saved transaction"
@@ -2080,7 +2088,7 @@ cmd_release_promote_stable() {
   if release_state_matches_target "$target_tag" \
     && [[ "$(release_state_value phase)" == "stable-promotion" ]] \
     && [[ "$(release_state_value prepared_fingerprint)" == "$(tree_fingerprint)" ]] \
-    && [[ "$(scripts/release-version.sh tag)" == "$target_tag" ]]; then
+    && [[ "$(release_worktree_tag)" == "$target_tag" ]]; then
     heading "Stable Metadata Already Prepared"
     info "Tag" "$target_tag"
     info "Source" "$(release_state_value source_tag)"
@@ -2169,7 +2177,7 @@ cmd_release_publish() {
   parse_release_publish_options "$@"
   branch="$(branch_name)"
   ensure_release_publish_branch "$branch"
-  canonical_tag="$(scripts/release-version.sh tag)"
+  canonical_tag="$(release_worktree_tag)"
   release_state_matches_target "$canonical_tag" \
     || fail "no matching prepared release transaction exists for ${canonical_tag}; rerun release prepare-beta or release promote-stable"
 
@@ -2178,6 +2186,10 @@ cmd_release_publish() {
   target_version="$(release_state_value target_version)"
   channel="$(release_state_value channel)"
   publication_commit="$(release_state_value publication_commit)"
+  [[ "$canonical_tag" == "$target_tag" && "v${target_version}" == "$target_tag" ]] \
+    || fail "prepared release identity is inconsistent: VERSION ${canonical_tag}, transaction ${target_tag}"
+  [[ "$(scripts/release-version.sh channel)" == "$channel" ]] \
+    || fail "prepared release channel does not match the working tree"
   expected_branch="$(release_expected_branch "$target_version" "$channel" "$phase")"
   [[ "$branch" == "$expected_branch" ]] \
     || fail "release phase ${phase:-missing} requires ${expected_branch}; current branch is ${branch:-detached HEAD}"
@@ -2933,7 +2945,7 @@ cmd_release_beta() {
   [[ "$branch" == "release/v${base_version}" ]] \
     || fail "beta orchestration requires release/v${base_version}; current branch is ${branch:-detached HEAD}"
 
-  if [[ "$(scripts/release-version.sh tag)" != "$target_tag" ]]; then
+  if [[ "$(release_worktree_tag)" != "$target_tag" ]]; then
     cmd_release_prepare_beta "$RELEASE_BETA_VERSION" "$RELEASE_BETA_TITLE"
     return 0
   fi
@@ -3046,7 +3058,7 @@ cmd_release_stable() {
   release_branch="release/v${RELEASE_STABLE_VERSION}"
   branch="$(branch_name)"
 
-  if [[ "$(scripts/release-version.sh tag)" != "$target_tag" ]]; then
+  if [[ "$(release_worktree_tag)" != "$target_tag" ]]; then
     [[ "$branch" == "$release_branch" ]] \
       || fail "stable promotion requires ${release_branch}; current branch is ${branch:-detached HEAD}"
     [[ "$(scripts/release-version.sh tag)" == "$RELEASE_STABLE_FROM" ]] \
