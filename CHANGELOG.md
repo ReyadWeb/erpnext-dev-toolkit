@@ -12,6 +12,7 @@
 - Made `install-cli` and `first-run` idempotent when launched from the already-installed `/opt/erpnext-dev` tree, avoiding a same-path `lib/` copy failure.
 - Strengthened the installed-path guard so the local-development wizard also skips entry script, library, and metadata self-copy when it is already running from `/opt/erpnext-dev`.
 - Changed `install-cli` to refresh `/opt/erpnext-dev` from the current checkout before recreating the command symlink, preventing stale installed copies from being reused during Debian retests.
+- Synchronized release metadata during `install-cli` refreshes so stale `/opt/erpnext-dev/BUILD-INFO.json` files from older releases cannot conflict with the current `VERSION`.
 
 ### Validation
 

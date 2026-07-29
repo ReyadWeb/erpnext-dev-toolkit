@@ -779,14 +779,22 @@ install_self_for_reuse() {
   }
   chmod 0644 "${dest_root}/VERSION" 2>/dev/null || true
   chown root:root "${dest_root}/VERSION" 2>/dev/null || true
-  if [[ -f "${src_root}/BUILD-INFO.json" ]]; then
-    cp -a "${src_root}/BUILD-INFO.json" "${dest_root}/BUILD-INFO.json" 2>/dev/null || {
-      warn "Could not copy BUILD-INFO.json to ${dest_root}"
-      return 1
-    }
-    chmod 0644 "${dest_root}/BUILD-INFO.json" 2>/dev/null || true
-    chown root:root "${dest_root}/BUILD-INFO.json" 2>/dev/null || true
-  fi
+  local metadata_name
+  for metadata_name in BUILD-INFO.json SHA256SUMS SHA256SUMS.asc RELEASE-MANIFEST.txt; do
+    if [[ -f "${src_root}/${metadata_name}" ]]; then
+      cp -a "${src_root}/${metadata_name}" "${dest_root}/${metadata_name}" 2>/dev/null || {
+        warn "Could not copy ${metadata_name} to ${dest_root}"
+        return 1
+      }
+      chmod 0644 "${dest_root}/${metadata_name}" 2>/dev/null || true
+      chown root:root "${dest_root}/${metadata_name}" 2>/dev/null || true
+    else
+      rm -f "${dest_root}/${metadata_name}" 2>/dev/null || {
+        warn "Could not remove stale ${metadata_name} from ${dest_root}"
+        return 1
+      }
+    fi
+  done
   install_toolkit_cli_entry 2>/dev/null || true
   return 0
 }
