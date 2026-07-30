@@ -153,6 +153,13 @@ run_pretag v1.20.0-beta.1 >/dev/null
 
 (
   cd "$fixture"
+  git switch -qc main
+)
+
+run_pretag v1.20.0-beta.1 >/dev/null
+
+(
+  cd "$fixture"
   git switch -q feature/v1.20-release-reliability
 )
 
@@ -203,7 +210,8 @@ fi
 
 (
   cd "$fixture"
-  git switch -qc main
+  git switch -q main
+  git reset --hard -q feature/v1.20-release-reliability
 )
 
 run_pretag v1.20.0 >/dev/null

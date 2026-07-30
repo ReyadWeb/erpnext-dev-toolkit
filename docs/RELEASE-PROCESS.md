@@ -46,22 +46,30 @@ The status command reports canonical identity, expected branch and tag, branch
 synchronization, validation cache, pre-tag proof, local/remote tags, GitHub
 release state, blockers, and the next safe command.
 
-For the normal path, use the high-level phase-aware commands:
+For the normal path, use the single resumable command:
 
 ```bash
-scripts/repo-workflow.sh release beta \
+scripts/repo-workflow.sh release run beta \
   X.Y.Z-beta.N \
   "Release title"
 
-scripts/repo-workflow.sh release stable \
+scripts/repo-workflow.sh release run stable \
   X.Y.Z \
   --from vX.Y.Z-beta.N \
   "Release title"
 ```
 
-Rerun the same command with the exact `--confirm-reviewed`,
-`--confirm-merge`, or `--confirm-tag` gate printed by the previous phase.
-Final `release verify` remains separate.
+It pauses in the same terminal for `REVIEWED`, `MERGE`, the exact tag, and
+`VERIFY`. If the process or GitHub API is interrupted, resume without repeating
+the release identity or rebuilding a branch:
+
+```bash
+scripts/repo-workflow.sh release run
+```
+
+Beta and stable metadata work happens on `release/vX.Y.Z`. After the exact PR is
+merged, both beta and stable pre-tag/tag stages run on synchronized `main`.
+The deleted release branch is never recreated merely to publish a tag.
 
 ## Prepare a beta
 
@@ -230,7 +238,8 @@ scripts/repo-workflow.sh release watch vX.Y.Z
 
 The command locates the tag-triggered `release.yml` run, verifies its commit
 against the remote tag, waits for completion, and fails when the workflow does
-not succeed.
+not succeed. Transient GitHub API/watch failures are retried without changing
+release state.
 
 Approve the protected `release-signing` environment when required. Stable tags
 must fail closed when the signing authority is unavailable.

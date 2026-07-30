@@ -81,6 +81,8 @@ pass() {
   || fail "scripts/test-repo-workflow-release-transaction.sh is missing or not executable"
 [[ -x scripts/test-repo-workflow-release-finalize.sh ]] \
   || fail "scripts/test-repo-workflow-release-finalize.sh is missing or not executable"
+[[ -x scripts/test-repo-workflow-release-run.sh ]] \
+  || fail "scripts/test-repo-workflow-release-run.sh is missing or not executable"
 
 [[ -x scripts/test-release-state-invariants.sh ]] \
   || fail "scripts/test-release-state-invariants.sh is missing or not executable"
@@ -165,6 +167,7 @@ bash -n scripts/test-repo-workflow-pr.sh
 bash -n scripts/test-repo-workflow-release.sh
 bash -n scripts/test-repo-workflow-release-transaction.sh
 bash -n scripts/test-repo-workflow-release-finalize.sh
+bash -n scripts/test-repo-workflow-release-run.sh
 pass "bash syntax valid"
 
 scripts/release-version.sh assert-runtime
@@ -208,7 +211,7 @@ chmod +x \
   scripts/release-asset-inventory.sh \
   scripts/bootstrap-verify.sh \
   scripts/test-release-asset-trust.sh
-chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-work.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh
+chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-work.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh scripts/test-repo-workflow-release-run.sh
 
 scripts/test-release-metadata.sh
 pass "release metadata update tests passed"
@@ -238,6 +241,8 @@ scripts/test-repo-workflow-release-transaction.sh
 pass "repository release transaction workflow tests passed"
 scripts/test-repo-workflow-release-finalize.sh
 pass "repository release finalization workflow tests passed"
+scripts/test-repo-workflow-release-run.sh
+pass "repository resumable release workflow tests passed"
 
 # Module lists and dispatcher targets must all agree. This is the single guard
 # that prevents a module from being sourced at runtime while missing from the

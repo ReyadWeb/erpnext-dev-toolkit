@@ -201,14 +201,17 @@ Expected branches derive from the saved phase:
 
 | Lifecycle phase | Expected branch |
 |---|---|
-| Beta preparation, publication, pre-tag, and tag | `release/vX.Y.Z` |
+| Beta preparation and release PR | `release/vX.Y.Z` |
+| Beta pre-tag, tag, publication, and verification | `main` |
 | Stable promotion and release PR | `release/vX.Y.Z` |
 | Stable pre-tag, tag, publication, and verification | `main` |
 
-Retries restore the validated release context from this state. Correct existing
-state is a successful no-op; conflicting state fails closed. Human confirmation
-remains mandatory for metadata review, PR merge, tag creation, protected signing
-approval, and final published-asset verification.
+After the exact reviewed PR merges, the resumable release command synchronizes
+that merge commit on `main` before pre-tag validation. It never reconstructs a
+deleted release branch. Retries restore the validated release context from this
+state. Correct existing state is a successful no-op; conflicting state fails
+closed. Human confirmation remains mandatory for metadata review, PR merge, tag
+creation, protected signing approval, and final published-asset verification.
 
 ## Migration sequence
 

@@ -468,28 +468,27 @@ commands, results, and evidence location.
 
 ### Beta preparation
 
-On the intended release branch:
+Run the complete interactive beta state machine:
 
 ```bash
 scripts/repo-workflow.sh release doctor
-scripts/repo-workflow.sh release beta \
+scripts/repo-workflow.sh release run beta \
   X.Y.Z-beta.N \
   "Release title"
 ```
 
-The first run prepares metadata and stops for review. Continue through the
-explicit review gate:
+The same process pauses for metadata review, exact PR merge approval, exact tag
+confirmation, and final published-asset verification. If the process is
+interrupted at any point, resume with:
 
 ```bash
-scripts/repo-workflow.sh release beta \
-  X.Y.Z-beta.N \
-  "Release title" \
-  --confirm-reviewed
+scripts/repo-workflow.sh release run
 ```
 
-After CI and acceptance approve the exact commit, pass
-`--confirm-tag vX.Y.Z-beta.N`. The command creates the guarded tag and watches
-publication, then stops before the independent final verification gate.
+Hermetic coverage must prove that an already-merged exact PR can resume after
+its local and remote release branch have been deleted, without reconstructing
+either branch. It must also prove that a transient workflow-watch HTTP failure
+is retried and does not repeat tagging.
 
 A beta is acceptable only when:
 
@@ -504,46 +503,16 @@ A beta is acceptable only when:
 Promote only a validated beta or RC:
 
 ```bash
-scripts/repo-workflow.sh release stable \
+scripts/repo-workflow.sh release run stable \
   X.Y.Z \
   --from vX.Y.Z-beta.N \
   "Release title"
 ```
 
-The first run prepares stable metadata on `release/vX.Y.Z` and stops for review.
-Continue with `--confirm-reviewed`; the workflow publishes the release branch,
-creates or reuses the PR, and stops before merge approval. Continue with
-`--confirm-merge` only after required checks and acceptance approve the PR.
-
-```bash
-scripts/repo-workflow.sh release stable \
-  X.Y.Z \
-  --from vX.Y.Z-beta.N \
-  "Release title" \
-  --confirm-reviewed \
-  --confirm-merge
-```
-
-The merge continuation synchronizes `main` and runs the strict pre-tag gate.
-The proof is bound to the exact tag, commit, and repository tree. Any change
-invalidates it.
-
-Create the guarded annotated tag only after pre-tag proof succeeds:
-
-```bash
-scripts/repo-workflow.sh release stable \
-  X.Y.Z \
-  --from vX.Y.Z-beta.N \
-  "Release title" \
-  --confirm-tag vX.Y.Z
-```
-
-The orchestration watches publication but leaves signing-environment approval and
-final asset verification as explicit human gates. Complete the release with:
-
-```bash
-scripts/repo-workflow.sh release verify vX.Y.Z
-```
+The state machine verifies the exact source prerelease, prepares stable metadata
+on `release/vX.Y.Z`, checks and merges its PR, synchronizes the exact merge on
+`main`, and then runs pre-tag, tag, protected publication, and verification
+gates. The proof remains bound to the exact tag, commit, and tree.
 
 A stable release is complete only after the protected workflow succeeds and
 `release verify` confirms the published assets, checksums, signing-key
