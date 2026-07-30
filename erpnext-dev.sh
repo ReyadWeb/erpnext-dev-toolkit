@@ -1619,6 +1619,24 @@ EOF_HELP
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
+    if [[ -n "${ACTION:-}" ]]; then
+      case "${ACTION}:${1}" in
+        update-toolkit:--version | update-toolkit:--tag)
+          shift
+          [[ $# -gt 0 ]] || fail "${ACTION} requires a release tag after --version."
+          TOOLKIT_UPDATE_VERSION="$1"
+          shift
+          continue
+          ;;
+        update-toolkit:--version=* | update-toolkit:--tag=*)
+          TOOLKIT_UPDATE_VERSION="${1#*=}"
+          [[ -n "$TOOLKIT_UPDATE_VERSION" ]] || fail "${ACTION} requires a non-empty release tag."
+          shift
+          continue
+          ;;
+      esac
+    fi
+
     case "$1" in
       -y | --yes)
         ASSUME_YES=1

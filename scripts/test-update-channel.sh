@@ -64,6 +64,26 @@ else
   echo "OK: mutable branch verifies canonical VERSION"
 fi
 
+
+parser_result() {
+  local tmp output
+  tmp="$(mktemp "${ROOT_DIR}/.erpnext-dev-parser-test.XXXXXX")"
+  sed '$s/^main "\$@"$/# main disabled for parser test/' erpnext-dev.sh >"$tmp"
+  output="$(bash -c '
+    source "$1"
+    update_toolkit() {
+      printf "%s|%s\n" "${ACTION:-}" "${TOOLKIT_UPDATE_VERSION:-}"
+    }
+    shift
+    main "$@"
+  ' _ "$tmp" "$@")"
+  rm "$tmp"
+  printf '%s\n' "$output"
+}
+
+assert_eq "update-toolkit --version keeps update action" "update-toolkit|v1.20.4-beta.3" "$(parser_result update-toolkit --version v1.20.4-beta.3)"
+assert_eq "update-toolkit --version= keeps update action" "update-toolkit|v1.20.4-beta.3" "$(parser_result update-toolkit --version=v1.20.4-beta.3)"
+
 if ((fail > 0)); then
   echo "test-update-channel: ${fail} failure(s)" >&2
   exit 1
