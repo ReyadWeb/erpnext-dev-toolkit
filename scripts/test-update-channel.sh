@@ -64,7 +64,6 @@ else
   echo "OK: mutable branch verifies canonical VERSION"
 fi
 
-
 parser_result() {
   local tmp output
   tmp="$(mktemp "${ROOT_DIR}/.erpnext-dev-parser-test.XXXXXX")"
