@@ -1,7 +1,7 @@
 # Testing guide
 
 **Current release:** v1.20.3
-**Current project version:** v1.20.4-beta.2
+**Current project version:** v1.20.4-beta.3
 
 This is the active entry point for testing ERPNext Developer Toolkit changes and
 releases. It describes the current validation layers, the evidence required at
