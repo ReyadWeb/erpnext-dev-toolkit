@@ -2,8 +2,9 @@
 # Validate every local condition required immediately before creating a tag.
 #
 # Stable tags are allowed only from synchronized main. Prerelease tags are
-# allowed from beta or matching release/feature branches. This command never
-# or pushes a tag.
+# allowed from synchronized main after the reviewed release PR merges, or from
+# the legacy beta and matching release/feature branches. This command never
+# creates or pushes a tag.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -93,12 +94,13 @@ case "$channel" in
     ;;
   *)
     case "$branch" in
-      "beta" | \
+      "main" | \
+        "beta" | \
         "release/v${base_version}" | \
         "feature/v${base_version}-"* | \
         "feature/v${series_version}-"*) ;;
       *)
-        fail "prerelease tag ${target_tag} is not on beta or a matching release/feature branch: ${branch}"
+        fail "prerelease tag ${target_tag} is not on main, beta, or a matching release/feature branch: ${branch}"
         ;;
     esac
     ;;

@@ -53,6 +53,7 @@ targets=(
   scripts/test-repo-workflow-release.sh
   scripts/test-repo-workflow-release-transaction.sh
   scripts/test-repo-workflow-release-finalize.sh
+  scripts/test-repo-workflow-release-run.sh
   scripts/release-version.sh
   scripts/test-release-version.sh
   scripts/build-info.sh

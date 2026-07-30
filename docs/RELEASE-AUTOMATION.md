@@ -75,6 +75,7 @@ scripts/check-release-artifact-consistency.sh
 | `release tag --confirm` | Create and push one guarded annotated tag |
 | `release watch` | Watch the protected tag-triggered workflow |
 | `release verify` | Verify the published tag, workflow, assets, checksums, and signature |
+| `release run` | Start or resume the complete release state machine from any lifecycle phase |
 | `release beta` | Phase-aware beta orchestration with explicit human gates |
 | `release stable` | Phase-aware stable orchestration with explicit review, merge, and tag gates |
 
@@ -203,20 +204,38 @@ Safety properties:
 ## High-level orchestration
 
 ```bash
-scripts/repo-workflow.sh release beta \
+scripts/repo-workflow.sh release run beta \
   X.Y.Z-beta.N \
   "Release title"
 
-scripts/repo-workflow.sh release stable \
+scripts/repo-workflow.sh release run stable \
   X.Y.Z \
   --from vX.Y.Z-beta.N \
   "Release title"
 ```
 
-Each command reads the saved phase and advances only to the next human gate.
-Release-note review, metadata publication confirmation, PR merge approval,
-exact tag confirmation, protected signing approval, and final
-published-asset verification remain explicit.
+`release run` creates or safely fast-forwards the release branch, prepares and
+publishes metadata, creates or reuses the exact PR, waits for required checks,
+verifies the resulting merge commit on synchronized `main`, records exact-tree
+pre-tag proof, publishes the annotated tag, resumes transiently interrupted
+workflow watching, and verifies the release.
+
+The same invocation prompts for release-note review (`REVIEWED`), PR merge
+approval (`MERGE`), the exact tag, and final published-asset verification
+(`VERIFY`). Protected signing approval remains in GitHub. To resume after any
+interruption, run:
+
+```bash
+scripts/repo-workflow.sh release run
+```
+
+The resume path uses the persisted target, release commit, PR number, merge
+commit, proof, workflow run, and verification commit. It never reconstructs a
+deleted release branch after merge, force-pushes a branch, or moves a tag.
+
+For non-interactive test fixtures, the individual confirmations are available
+as `--confirm-reviewed`, `--confirm-merge`, `--confirm-tag vX.Y.Z`, and
+`--confirm-verify`. Routine maintainers should use the interactive gates.
 
 ## Protected GitHub workflow
 

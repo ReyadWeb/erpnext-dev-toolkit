@@ -272,8 +272,8 @@ scripts/repo-workflow.sh release beta \
   >"${tmp}/publish.out"
 unset RELEASE_FAKE_UNTAGGED_CHANNEL_DEVELOPMENT
 assert_contains "${tmp}/publish.out" "reviewed release metadata validated, committed, and pushed"
-assert_contains "${tmp}/publish.out" "Beta Tag Confirmation Required"
-assert_contains "${tmp}/publish.out" "no tag was created"
+assert_contains "${tmp}/publish.out" "Beta Pull Request Gate"
+assert_contains "${tmp}/publish.out" "release run"
 [[ -z "$(git status --porcelain)" ]] || fail "release publish left a dirty tree"
 [[ "$(git log -1 --format=%s)" == "Release: prepare v1.21.0-beta.1" ]] \
   || fail "unexpected beta release commit message"
@@ -354,7 +354,8 @@ assert_contains "${tmp}/pretag-release-branch.out" \
 scripts/repo-workflow.sh release status --offline >"${tmp}/proof-release-branch.out"
 assert_contains "${tmp}/proof-release-branch.out" "Phase                        stable-pr"
 assert_contains "${tmp}/proof-release-branch.out" \
-  "stable release branch is ready for PR"
+  "release commit is ready for exact PR reconciliation"
+assert_contains "${tmp}/proof-release-branch.out" "release run"
 
 git switch main >/dev/null 2>&1
 git merge --ff-only release/v1.21.0 >/dev/null 2>&1

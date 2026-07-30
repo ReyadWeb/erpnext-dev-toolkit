@@ -203,9 +203,9 @@ The status includes:
 
 | Lifecycle phase | Required branch |
 |---|---|
-| Beta preparation, pre-tag, and tag | `release/vX.Y.Z` |
+| Beta preparation and beta PR | `release/vX.Y.Z` |
 | Stable promotion and stable PR | `release/vX.Y.Z` |
-| Stable pre-tag and stable tag | `main` |
+| Beta/stable pre-tag, tag, publication, and verification | `main` |
 
 These commands do not replace
 `scripts/release-pretag-check.sh`, which remains the strict release-tree,
@@ -315,45 +315,52 @@ force-updates or overwrites a tag.
 
 ## High-level release orchestration
 
-The normal beta path is phase-aware and pauses at review, tag confirmation, and
-final verification:
+The normal maintainer path is one interactive, resumable command. Start a beta:
 
 ```bash
-scripts/repo-workflow.sh release beta \
+scripts/repo-workflow.sh release run beta \
   1.20.2-beta.1 \
   "Release title"
 ```
 
-Repeat the same command with the exact gate printed by the previous phase:
+Or start stable promotion from an accepted prerelease:
 
 ```bash
-scripts/repo-workflow.sh release beta \
-  1.20.2-beta.1 \
-  "Release title" \
-  --confirm-reviewed
-
-scripts/repo-workflow.sh release beta \
-  1.20.2-beta.1 \
-  "Release title" \
-  --confirm-tag v1.20.2-beta.1
-```
-
-Stable orchestration starts on `release/vX.Y.Z`, verifies the exact accepted
-beta/RC, publishes and checks the stable PR, pauses for merge approval, moves
-to synchronized `main`, records the stable pre-tag proof, and pauses again
-before the stable tag:
-
-```bash
-scripts/repo-workflow.sh release stable \
+scripts/repo-workflow.sh release run stable \
   1.20.2 \
-  --from v1.20.2-beta.2 \
+  --from v1.20.2-beta.3 \
   "Release title"
 ```
 
-The explicit continuation gates are `--confirm-reviewed`, `--confirm-merge`,
-and `--confirm-tag v1.20.2`. `--admin` is accepted only together with
-`--confirm-merge`. The final `release verify vX.Y.Z` remains a separate human
-verification gate.
+The command owns the complete lifecycle:
+
+1. Create or safely fast-forward `release/vX.Y.Z` from `origin/main`.
+2. Prepare and validate release metadata.
+3. Pause for `REVIEWED`.
+4. Commit, push, create/reuse the exact PR, and wait for required checks.
+5. Pause for `MERGE`.
+6. Verify the PR merge commit and synchronize `main`.
+7. Run strict pre-tag validation on `main` without reconstructing the deleted
+   release branch.
+8. Pause for the exact immutable tag.
+9. Create the tag and resiliently watch the protected workflow.
+10. Pause for `VERIFY`, then independently verify published assets.
+
+If the shell, network, or GitHub API is interrupted, resume from any branch with:
+
+```bash
+scripts/repo-workflow.sh release run
+```
+
+The saved transaction binds the target, reviewed publication commit, PR number,
+merge commit, pre-tag proof, workflow run, and verified release commit. A
+transient `gh run watch` API failure such as HTTP 502 is retried automatically.
+Conflicting commits, branches, PRs, or tags fail closed; no force-push or tag
+movement is used.
+
+The older `release beta`, `release stable`, and low-level release subcommands
+remain available for diagnosis and scripted gate-by-gate operation. They are no
+longer the recommended routine maintainer path.
 
 Watch the protected release workflow:
 

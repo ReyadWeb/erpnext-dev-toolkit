@@ -64,7 +64,10 @@ Usage:
   scripts/repo-workflow.sh release tag --confirm vX.Y.Z[-prerelease]
   scripts/repo-workflow.sh release watch [vX.Y.Z[-prerelease]] [--interval SECONDS] [--attempts N]
   scripts/repo-workflow.sh release verify [vX.Y.Z[-prerelease]]
-  scripts/repo-workflow.sh release beta X.Y.Z-beta.N "Release title" [--confirm-reviewed] [--confirm-tag vX.Y.Z-beta.N]
+  scripts/repo-workflow.sh release run beta X.Y.Z-beta.N "Release title"
+  scripts/repo-workflow.sh release run stable X.Y.Z --from vX.Y.Z-beta.N "Release title"
+  scripts/repo-workflow.sh release run
+  scripts/repo-workflow.sh release beta X.Y.Z-beta.N "Release title" [--confirm-reviewed] [--confirm-merge] [--confirm-tag vX.Y.Z-beta.N] [--confirm-verify]
   scripts/repo-workflow.sh release stable X.Y.Z --from vX.Y.Z-beta.N "Release title" [--confirm-reviewed] [--confirm-merge] [--confirm-tag vX.Y.Z]
   scripts/repo-workflow.sh resume
   scripts/repo-workflow.sh clean-cache
@@ -163,7 +166,7 @@ risk_reason_for() {
     scripts/release-*.sh | scripts/test-release-*.sh)
       echo "release transaction or release regression path"
       ;;
-    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh)
+    scripts/repo-workflow.sh | scripts/test-repo-workflow.sh | scripts/test-repo-workflow-pr.sh | scripts/test-repo-workflow-release.sh | scripts/test-repo-workflow-release-transaction.sh | scripts/test-repo-workflow-release-finalize.sh | scripts/test-repo-workflow-release-run.sh)
       echo "repository workflow implementation"
       ;;
     SECURITY.md | docs/security/RELEASE-TRUST.md | docs/RELEASE-AUTOMATION.md | docs/RELEASE-PROCESS.md)
@@ -240,7 +243,7 @@ release_state_key_allowed() {
     schema | phase | channel | target_version | target_tag | source_tag | \
       source_commit | release_branch | title | commit_message | \
       prepared_fingerprint | review_confirmed | publication_commit | \
-      workflow_run | verified_commit)
+      pr_number | merge_commit | workflow_run | verified_commit)
       return 0
       ;;
     *) return 1 ;;
@@ -285,7 +288,8 @@ release_state_update() {
   tmp="$(mktemp "${STATE_DIR}/release-state.XXXXXX")"
   for key in schema phase channel target_version target_tag source_tag \
     source_commit release_branch title commit_message prepared_fingerprint \
-    review_confirmed publication_commit workflow_run verified_commit; do
+    review_confirmed publication_commit pr_number merge_commit workflow_run \
+    verified_commit; do
     [[ -v "values[$key]" ]] || continue
     printf '%s=%s\n' "$key" "${values[$key]}" >>"$tmp"
   done
@@ -1474,14 +1478,12 @@ release_expected_branch() {
   base_version="${version%%-*}"
 
   case "$phase" in
-    stable-promotion | stable-pr)
+    beta-preparation | beta-pr | stable-promotion | stable-pr)
       printf '%s\n' "release/v${base_version}"
       ;;
-    stable-pretag | stable-tagged | stable-published | stable-verified)
+    beta-pretag | beta-tagged | beta-published | beta-verified | \
+      stable-pretag | stable-tagged | stable-published | stable-verified)
       printf '%s\n' "main"
-      ;;
-    beta-*)
-      printf '%s\n' "release/v${base_version}"
       ;;
     *)
       case "$channel" in
@@ -1686,6 +1688,12 @@ release_compute_next_action() {
     return 0
   fi
 
+  if [[ "$RELEASE_PHASE" == "beta-pr" || "$RELEASE_PHASE" == "stable-pr" ]]; then
+    RELEASE_READINESS="release commit is ready for exact PR reconciliation"
+    RELEASE_NEXT_ACTION="${PROGRAM} release run"
+    return 0
+  fi
+
   if ((${#RELEASE_BLOCKERS[@]} > 0)); then
     RELEASE_READINESS="blocked (${#RELEASE_BLOCKERS[@]} condition(s))"
 
@@ -1704,12 +1712,6 @@ release_compute_next_action() {
     else
       RELEASE_NEXT_ACTION="Resolve the blocking conditions listed by: ${PROGRAM} release explain"
     fi
-    return 0
-  fi
-
-  if [[ "$RELEASE_PHASE" == "stable-pr" ]]; then
-    RELEASE_READINESS="stable release branch is ready for PR"
-    RELEASE_NEXT_ACTION="${PROGRAM} pr create --base main"
     return 0
   fi
 
@@ -2061,6 +2063,8 @@ cmd_release_prepare_beta() {
     commit_message "Release: prepare v${target_version}" \
     review_confirmed 0 \
     publication_commit "" \
+    pr_number "" \
+    merge_commit "" \
     workflow_run "" \
     verified_commit ""
   release_run_with_context release_cache_validated_tree
@@ -2122,6 +2126,8 @@ cmd_release_promote_stable() {
     commit_message "Release: promote v${target_version} stable" \
     review_confirmed 0 \
     publication_commit "" \
+    pr_number "" \
+    merge_commit "" \
     workflow_run "" \
     verified_commit ""
   release_run_with_context release_cache_validated_tree
@@ -2218,7 +2224,7 @@ cmd_release_publish() {
     info "Tag" "$target_tag"
     info "Branch" "$branch"
     info "Commit" "$publication_commit"
-    info "Next action" "${PROGRAM} pr create"
+    info "Next action" "${PROGRAM} release run"
     ok "exact release commit is already pushed; no action required"
     return 0
   fi
@@ -2268,7 +2274,7 @@ cmd_release_publish() {
   info "Branch" "$branch"
   info "Commit" "$(git rev-parse --short HEAD)"
   info "Upstream" "origin/${branch}"
-  info "Next action" "${PROGRAM} pr create"
+  info "Next action" "${PROGRAM} release run"
   ok "reviewed release metadata validated, committed, and pushed"
 }
 
@@ -2343,6 +2349,8 @@ cmd_release_pretag() {
       commit_message "" \
       review_confirmed 0 \
       publication_commit "$(git rev-parse HEAD)" \
+      pr_number "" \
+      merge_commit "" \
       workflow_run "" \
       verified_commit ""
   fi
@@ -2356,12 +2364,17 @@ cmd_release_pretag() {
   fingerprint="$(tree_fingerprint)"
   cache_store full "$fingerprint"
   release_record_pretag_proof "$target_tag" "$fingerprint"
-  release_state_update phase "$phase" publication_commit "$(git rev-parse HEAD)"
+  if [[ -n "$(release_state_value publication_commit)" ]]; then
+    release_state_update phase "$phase"
+  else
+    release_state_update phase "$phase" publication_commit "$(git rev-parse HEAD)"
+  fi
 
   heading "Pre-Tag Proof Recorded"
   info "Tag" "$target_tag"
   info "Commit" "$(git rev-parse HEAD)"
   info "Proof" "valid for exact commit"
+  info "Next action" "${PROGRAM} release tag --confirm ${target_tag}"
   ok "strict pre-tag validation passed; no tag was created"
 }
 
@@ -2432,12 +2445,12 @@ cmd_release_tag() {
   fetch_and_check_sync "$branch"
   upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
   [[ "$upstream" == "origin/${branch}" ]] \
-    || fail "release branch upstream must be origin/${branch}; current upstream is ${upstream:-none}"
+    || fail "tag source branch upstream must be origin/${branch}; current upstream is ${upstream:-none}"
   counts="$(git rev-list --left-right --count "${upstream}...HEAD")"
   behind="${counts%%[[:space:]]*}"
   ahead="${counts##*[[:space:]]}"
   [[ "$behind" == "0" && "$ahead" == "0" ]] \
-    || fail "release branch must be synchronized with ${upstream}; ahead ${ahead}, behind ${behind}"
+    || fail "tag source branch must be synchronized with ${upstream}; ahead ${ahead}, behind ${behind}"
 
   local_commit=""
   local_type=""
@@ -2580,8 +2593,28 @@ release_find_workflow_run() {
     --jq '.[0].databaseId // empty'
 }
 
+release_gh_run_field() {
+  local run_id="$1" jq_filter="$2" label="$3" interval="$4" attempts="$5"
+  local attempt output rc
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    set +e
+    output="$(gh run view "$run_id" --json headSha,conclusion,url --jq "$jq_filter" 2>/dev/null)"
+    rc=$?
+    set -e
+    if ((rc == 0)); then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    warn "GitHub API could not read ${label} for workflow ${run_id} (attempt ${attempt}/${attempts}); retrying"
+    sleep "$interval"
+  done
+  return 1
+}
+
 cmd_release_watch() {
   local target_tag run_id="" attempt remote_commit run_head conclusion run_url channel prefix
+  local watch_attempt watch_rc
 
   parse_release_watch_options "$@"
   require_gh
@@ -2592,24 +2625,45 @@ cmd_release_watch() {
 
   heading "Locate Protected Release Workflow"
   for ((attempt = 1; attempt <= RELEASE_WATCH_ATTEMPTS; attempt++)); do
-    run_id="$(release_find_workflow_run "$target_tag")"
+    run_id="$(release_find_workflow_run "$target_tag" 2>/dev/null || true)"
     [[ -z "$run_id" ]] || break
     echo "Attempt ${attempt}/${RELEASE_WATCH_ATTEMPTS}: release workflow is not visible yet"
     sleep "$RELEASE_WATCH_INTERVAL"
   done
   [[ -n "$run_id" ]] || fail "no release.yml workflow run was found for ${target_tag}"
 
-  run_head="$(gh run view "$run_id" --json headSha --jq '.headSha')"
+  run_head="$(
+    release_gh_run_field \
+      "$run_id" \
+      '.headSha' \
+      "head commit" \
+      "$RELEASE_WATCH_INTERVAL" \
+      "$RELEASE_WATCH_ATTEMPTS"
+  )" || fail "could not read release workflow head after ${RELEASE_WATCH_ATTEMPTS} attempts"
   [[ "$run_head" == "$remote_commit" ]] \
     || fail "release workflow head ${run_head} does not match ${target_tag} commit ${remote_commit}"
-  run_url="$(gh run view "$run_id" --json url --jq '.url')"
+  run_url="$(
+    release_gh_run_field \
+      "$run_id" \
+      '.url' \
+      "URL" \
+      "$RELEASE_WATCH_INTERVAL" \
+      "$RELEASE_WATCH_ATTEMPTS"
+  )" || fail "could not read release workflow URL after ${RELEASE_WATCH_ATTEMPTS} attempts"
 
   info "Tag" "$target_tag"
   info "Workflow run" "$run_id"
   info "Commit" "$run_head"
   info "URL" "$run_url"
 
-  conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // empty')"
+  conclusion="$(
+    release_gh_run_field \
+      "$run_id" \
+      '.conclusion // empty' \
+      "conclusion" \
+      "$RELEASE_WATCH_INTERVAL" \
+      "$RELEASE_WATCH_ATTEMPTS"
+  )" || fail "could not read release workflow conclusion after ${RELEASE_WATCH_ATTEMPTS} attempts"
   if [[ "$conclusion" == "success" ]]; then
     heading "Protected Release Workflow Already Complete"
     ok "workflow ${run_id} already completed successfully; no wait required"
@@ -2617,8 +2671,23 @@ cmd_release_watch() {
     fail "release workflow conclusion is ${conclusion}"
   else
     heading "Watch Protected Release Workflow"
-    gh run watch "$run_id" --exit-status
-    conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // empty')"
+    for ((watch_attempt = 1; watch_attempt <= RELEASE_WATCH_ATTEMPTS; watch_attempt++)); do
+      set +e
+      gh run watch "$run_id" --exit-status
+      watch_rc=$?
+      set -e
+      conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // empty' 2>/dev/null || true)"
+      if [[ "$conclusion" == "success" ]]; then
+        break
+      fi
+      if [[ -n "$conclusion" ]]; then
+        fail "release workflow conclusion is ${conclusion}"
+      fi
+      if ((watch_rc != 0)); then
+        warn "workflow watch was interrupted (attempt ${watch_attempt}/${RELEASE_WATCH_ATTEMPTS}); GitHub state is unchanged and the watch will resume"
+      fi
+      sleep "$RELEASE_WATCH_INTERVAL"
+    done
   fi
   [[ "$conclusion" == "success" ]] || fail "release workflow conclusion is ${conclusion:-unknown}"
   channel="$(scripts/release-version.sh channel-for-tag "$target_tag")"
@@ -2779,7 +2848,7 @@ cmd_release_verify() {
 }
 
 cmd_release_recover() {
-  local rollback=0 confirm=0 phase action stage branch target_tag message publication_commit
+  local rollback=0 confirm=0 phase action stage branch target_tag message
   local -a managed_files=(
     VERSION
     erpnext-dev.sh
@@ -2857,21 +2926,9 @@ cmd_release_recover() {
       fi
       ;;
     beta-pr | stable-pr)
-      publication_commit="$(release_state_value publication_commit)"
-      if [[ "$branch" == "main" && "$phase" == "stable-pr" ]]; then
-        release_state_update phase stable-pretag publication_commit "$(git rev-parse HEAD)"
-        cmd_release_pretag "$target_tag"
-      elif [[ -n "$publication_commit" &&
-        "$(git rev-parse "origin/${branch}" 2>/dev/null || true)" != "$publication_commit" ]]; then
-        [[ "$(git rev-parse HEAD)" == "$publication_commit" ]] \
-          || fail "HEAD does not match the saved publication commit"
-        push_branch "$branch"
-        ok "saved release publication push completed"
-      else
-        info "Published commit" "present on origin"
-        info "Safe recovery" "${PROGRAM} pr create --base main"
-        ok "no release commit or push needs to be repeated"
-      fi
+      info "Safe recovery" "${PROGRAM} release run"
+      info "Reason" "the resumable command reconciles the exact PR and merge commit"
+      ok "no branch reconstruction or release mutation was attempted"
       ;;
     beta-pretag | stable-pretag)
       if [[ "$(release_pretag_proof_state "$target_tag" "$(tree_fingerprint)")" == "valid for exact commit" ]]; then
@@ -2901,20 +2958,529 @@ cmd_release_recover() {
   esac
 }
 
+parse_release_run_options() {
+  RELEASE_RUN_KIND=""
+  RELEASE_RUN_VERSION=""
+  RELEASE_RUN_TITLE=""
+  RELEASE_RUN_FROM=""
+  RELEASE_RUN_CONFIRM_REVIEWED=0
+  RELEASE_RUN_CONFIRM_MERGE=0
+  RELEASE_RUN_CONFIRM_TAG=""
+  RELEASE_RUN_CONFIRM_VERIFY=0
+  RELEASE_RUN_NON_INTERACTIVE=0
+  RELEASE_RUN_INTERVAL=5
+  RELEASE_RUN_ATTEMPTS=120
+
+  while (($# > 0)); do
+    case "$1" in
+      beta | stable)
+        [[ -z "$RELEASE_RUN_KIND" ]] \
+          || fail "release run accepts only one release kind"
+        RELEASE_RUN_KIND="$1"
+        ;;
+      --from)
+        shift
+        (($# > 0)) || fail "--from requires the exact source prerelease tag"
+        RELEASE_RUN_FROM="$1"
+        ;;
+      --confirm-reviewed) RELEASE_RUN_CONFIRM_REVIEWED=1 ;;
+      --confirm-merge) RELEASE_RUN_CONFIRM_MERGE=1 ;;
+      --confirm-tag)
+        shift
+        (($# > 0)) || fail "--confirm-tag requires the exact release tag"
+        RELEASE_RUN_CONFIRM_TAG="$1"
+        ;;
+      --confirm-verify) RELEASE_RUN_CONFIRM_VERIFY=1 ;;
+      --non-interactive) RELEASE_RUN_NON_INTERACTIVE=1 ;;
+      --interval)
+        shift
+        (($# > 0)) || fail "--interval requires seconds"
+        RELEASE_RUN_INTERVAL="$1"
+        ;;
+      --attempts)
+        shift
+        (($# > 0)) || fail "--attempts requires a count"
+        RELEASE_RUN_ATTEMPTS="$1"
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -*)
+        fail "unknown release run option: $1"
+        ;;
+      *)
+        if [[ -z "$RELEASE_RUN_VERSION" ]]; then
+          RELEASE_RUN_VERSION="$1"
+        elif [[ -z "$RELEASE_RUN_TITLE" ]]; then
+          RELEASE_RUN_TITLE="$1"
+        else
+          fail "release run accepts one version and one release title"
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  [[ "$RELEASE_RUN_INTERVAL" =~ ^[1-9][0-9]*$ ]] \
+    || fail "--interval must be a positive integer"
+  [[ "$RELEASE_RUN_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] \
+    || fail "--attempts must be a positive integer"
+  ((RELEASE_RUN_INTERVAL <= 60)) || fail "--interval cannot exceed 60 seconds"
+  ((RELEASE_RUN_ATTEMPTS <= 120)) || fail "--attempts cannot exceed 120"
+
+  if [[ -n "$RELEASE_RUN_KIND" ]]; then
+    [[ -n "$RELEASE_RUN_VERSION" && -n "$RELEASE_RUN_TITLE" ]] \
+      || fail "new release run requires a release kind, version, and title"
+    case "$RELEASE_RUN_KIND" in
+      beta)
+        [[ "$RELEASE_RUN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[1-9][0-9]*$ ]] \
+          || fail "beta release run requires X.Y.Z-beta.N"
+        [[ -z "$RELEASE_RUN_FROM" ]] \
+          || fail "--from is valid only for a stable release run"
+        ;;
+      stable)
+        [[ "$RELEASE_RUN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+          || fail "stable release run requires X.Y.Z"
+        [[ "$RELEASE_RUN_FROM" =~ ^v${RELEASE_RUN_VERSION//./\\.}-(beta\.[1-9][0-9]*|rc\.[1-9][0-9]*)$ ]] \
+          || fail "stable release run requires --from v${RELEASE_RUN_VERSION}-beta.N or -rc.N"
+        ;;
+    esac
+  elif [[ -n "$RELEASE_RUN_VERSION" || -n "$RELEASE_RUN_TITLE" ||
+    -n "$RELEASE_RUN_FROM" ]]; then
+    fail "release run resume accepts no release identity; use: ${PROGRAM} release run"
+  fi
+}
+
+release_run_pause() {
+  local gate="$1" expected="$2" supplied="$3" response=""
+
+  if [[ "$supplied" == "1" ]]; then
+    return 0
+  fi
+
+  heading "${gate} Confirmation Required"
+  info "Required response" "$expected"
+  info "Resume command" "${PROGRAM} release run"
+
+  if [[ "$RELEASE_RUN_NON_INTERACTIVE" == "1" || ! -t 0 ]]; then
+    ok "release paused safely before ${gate,,}"
+    return 1
+  fi
+
+  read -r -p "Type ${expected} to continue, or press Enter to pause: " response
+  if [[ "$response" != "$expected" ]]; then
+    ok "release paused safely before ${gate,,}"
+    return 1
+  fi
+}
+
+release_run_pause_tag() {
+  local target_tag="$1" response=""
+
+  if [[ -n "$RELEASE_RUN_CONFIRM_TAG" ]]; then
+    [[ "$RELEASE_RUN_CONFIRM_TAG" == "$target_tag" ]] \
+      || fail "tag confirmation must exactly match ${target_tag}"
+    return 0
+  fi
+
+  heading "Release Tag Confirmation Required"
+  info "Tag" "$target_tag"
+  info "Resume command" "${PROGRAM} release run"
+
+  if [[ "$RELEASE_RUN_NON_INTERACTIVE" == "1" || ! -t 0 ]]; then
+    ok "release paused safely before tag creation"
+    return 1
+  fi
+
+  read -r -p "Type ${target_tag} to create the immutable tag, or press Enter to pause: " response
+  if [[ "$response" != "$target_tag" ]]; then
+    ok "release paused safely before tag creation"
+    return 1
+  fi
+}
+
+release_run_remote_branch_exists() {
+  git show-ref --verify --quiet "refs/remotes/origin/$1"
+}
+
+release_run_local_branch_exists() {
+  git show-ref --verify --quiet "refs/heads/$1"
+}
+
+release_run_prepare_branch() {
+  local release_branch="$1" main_commit local_commit remote_commit current
+
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree must be clean before starting a release run"
+
+  git fetch origin --prune --tags
+  main_commit="$(git rev-parse -q --verify refs/remotes/origin/main 2>/dev/null || true)"
+  [[ -n "$main_commit" ]] || fail "origin/main is missing"
+
+  current="$(branch_name)"
+  if release_run_remote_branch_exists "$release_branch"; then
+    remote_commit="$(git rev-parse "refs/remotes/origin/${release_branch}")"
+    git merge-base --is-ancestor "$remote_commit" "$main_commit" \
+      || fail "origin/${release_branch} contains commits not present on origin/main; inspect the existing release work instead of replacing it"
+
+    if release_run_local_branch_exists "$release_branch"; then
+      local_commit="$(git rev-parse "refs/heads/${release_branch}")"
+      if [[ "$local_commit" != "$remote_commit" ]]; then
+        git merge-base --is-ancestor "$local_commit" "$remote_commit" \
+          || fail "local ${release_branch} has unpushed or divergent commits; no branch was moved"
+        if [[ "$current" == "$release_branch" ]]; then
+          git merge --ff-only "origin/${release_branch}"
+        else
+          git branch -f "$release_branch" "$remote_commit"
+        fi
+      fi
+      git switch "$release_branch"
+    else
+      git switch -c "$release_branch" --track "origin/${release_branch}"
+    fi
+  elif release_run_local_branch_exists "$release_branch"; then
+    local_commit="$(git rev-parse "refs/heads/${release_branch}")"
+    git merge-base --is-ancestor "$local_commit" "$main_commit" \
+      || fail "local ${release_branch} contains commits not present on origin/main; no branch was moved"
+    [[ "$current" != "$release_branch" ]] \
+      || git switch main
+    git branch -f "$release_branch" "$main_commit"
+    git switch "$release_branch"
+  else
+    git switch -c "$release_branch" "origin/main"
+  fi
+
+  git merge --ff-only "origin/main"
+  if release_run_remote_branch_exists "$release_branch"; then
+    git push origin "$release_branch"
+    git branch --set-upstream-to="origin/${release_branch}" "$release_branch" >/dev/null
+  else
+    git push -u origin "$release_branch"
+  fi
+
+  [[ "$(git rev-parse HEAD)" == "$main_commit" ]] \
+    || fail "${release_branch} does not match the verified origin/main start commit"
+  heading "Release Branch Ready"
+  info "Branch" "$release_branch"
+  info "Commit" "$main_commit"
+  ok "release branch was created or safely fast-forwarded without force-push"
+}
+
+release_run_checkout_publication_branch() {
+  local branch="$1" publication_commit="$2"
+
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree must be clean before continuing the release pull request"
+  git fetch origin --prune --tags
+  release_run_remote_branch_exists "$branch" \
+    || return 1
+  [[ "$(git rev-parse "refs/remotes/origin/${branch}")" == "$publication_commit" ]] \
+    || fail "origin/${branch} does not match the saved release commit"
+
+  if release_run_local_branch_exists "$branch"; then
+    [[ "$(branch_name)" == "$branch" ]] || git switch "$branch"
+    git merge --ff-only "origin/${branch}"
+  else
+    git switch -c "$branch" --track "origin/${branch}"
+  fi
+  [[ "$(git rev-parse HEAD)" == "$publication_commit" ]] \
+    || fail "${branch} does not match the saved release commit"
+}
+
+release_run_find_pr_number() {
+  local branch="$1" publication_commit="$2" repo owner
+  repo="$(repository_name_with_owner)"
+  owner="${repo%%/*}"
+  gh api --method GET "repos/${repo}/pulls" \
+    -f state=all \
+    -f head="${owner}:${branch}" \
+    -f base=main \
+    -f per_page=100 \
+    --jq "map(select(.head.sha == \"${publication_commit}\")) | sort_by(.number) | last | .number // empty"
+}
+
+release_run_pr_metadata() {
+  local number="$1" repo
+  repo="$(repository_name_with_owner)"
+  gh api "repos/${repo}/pulls/${number}" \
+    --jq '"\(.state)|\(.merged_at // "")|\(.head.sha)|\(.merge_commit_sha // "")|\(.html_url)"'
+}
+
+release_run_ensure_pr() {
+  local branch="$1" publication_commit="$2" target_tag="$3" title="$4"
+  local number metadata state merged_at head_commit merge_commit url
+
+  require_gh
+  number="$(release_state_value pr_number)"
+  if [[ -z "$number" ]]; then
+    number="$(release_run_find_pr_number "$branch" "$publication_commit")"
+  fi
+
+  if [[ -z "$number" ]]; then
+    release_run_checkout_publication_branch "$branch" "$publication_commit" \
+      || fail "origin/${branch} is missing and no exact pull request exists for the saved release commit"
+    cmd_pr_create \
+      --base main \
+      --title "Release ${target_tag}: ${title}" \
+      --body "Automated release transaction for ${target_tag}. Human review, merge, tag, and verification gates remain enforced."
+    number="$(release_run_find_pr_number "$branch" "$publication_commit")"
+    [[ -n "$number" ]] || fail "created pull request could not be resolved to the exact release commit"
+  fi
+
+  metadata="$(release_run_pr_metadata "$number")"
+  IFS='|' read -r state merged_at head_commit merge_commit url <<<"$metadata"
+  [[ "$head_commit" == "$publication_commit" ]] \
+    || fail "PR #${number} head does not match the saved release commit"
+  release_state_update pr_number "$number"
+
+  RELEASE_RUN_PR_NUMBER="$number"
+  RELEASE_RUN_PR_STATE="$state"
+  RELEASE_RUN_PR_MERGED_AT="$merged_at"
+  RELEASE_RUN_PR_MERGE_COMMIT="$merge_commit"
+  RELEASE_RUN_PR_URL="$url"
+}
+
+release_run_sync_merged_pr() {
+  local prefix="$1" publication_commit="$2" merge_commit="$3" number="$4"
+  local main_commit
+
+  [[ -n "$merge_commit" ]] || fail "PR #${number} is merged but GitHub did not return its merge commit"
+  git fetch origin --prune --tags
+  main_commit="$(git rev-parse -q --verify refs/remotes/origin/main 2>/dev/null || true)"
+  [[ "$main_commit" == "$merge_commit" ]] \
+    || fail "origin/main advanced beyond PR #${number}; no release tag was created"
+  git cat-file -e "${merge_commit}^{commit}" 2>/dev/null \
+    || fail "merge commit ${merge_commit} is not available locally after fetch"
+  git diff --quiet "$publication_commit" "$merge_commit" -- \
+    || fail "PR #${number} merge tree differs from the reviewed release commit"
+
+  [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+    || fail "working tree must be clean before synchronizing main"
+  if release_run_local_branch_exists main; then
+    git switch main
+  else
+    git switch -c main --track origin/main
+  fi
+  git pull --ff-only origin main
+  [[ "$(git rev-parse HEAD)" == "$merge_commit" ]] \
+    || fail "local main does not match the exact PR #${number} merge commit"
+
+  release_state_update \
+    phase "${prefix}-pretag" \
+    merge_commit "$merge_commit"
+  heading "Merged Release Synchronized"
+  info "PR" "#${number}"
+  info "Main commit" "$merge_commit"
+  info "Release branch" "no reconstruction required"
+  ok "post-merge release stages will run from synchronized main"
+}
+
+release_run_load_saved_identity() {
+  local channel
+
+  RELEASE_RUN_VERSION="$(release_state_value target_version)"
+  RELEASE_RUN_TITLE="$(release_state_value title)"
+  RELEASE_RUN_FROM="$(release_state_value source_tag)"
+  channel="$(release_state_value channel)"
+
+  [[ -n "$RELEASE_RUN_VERSION" && -n "$RELEASE_RUN_TITLE" ]] \
+    || fail "saved release transaction is incomplete; run: ${PROGRAM} release doctor"
+  case "$channel" in
+    beta | rc | prerelease) RELEASE_RUN_KIND="beta" ;;
+    stable) RELEASE_RUN_KIND="stable" ;;
+    *) fail "saved release transaction has an unsupported channel: ${channel:-missing}" ;;
+  esac
+}
+
+release_run_start_transaction() {
+  local target_tag release_branch saved_tag saved_phase
+
+  target_tag="v${RELEASE_RUN_VERSION}"
+  release_branch="release/v${RELEASE_RUN_VERSION%%-*}"
+  saved_tag="$(release_state_value target_tag)"
+  saved_phase="$(release_state_value phase)"
+
+  if [[ -n "$saved_tag" && "$saved_tag" != "$target_tag" ]]; then
+    case "$saved_phase" in
+      beta-verified | stable-verified)
+        [[ -z "$(git status --porcelain --untracked-files=all)" ]] \
+          || fail "working tree must be clean before replacing a completed release transaction"
+        release_state_clear
+        release_clear_pretag_proof
+        ;;
+      *)
+        fail "unfinished release transaction ${saved_tag} exists in phase ${saved_phase:-unknown}; resume it with: ${PROGRAM} release run"
+        ;;
+    esac
+  fi
+
+  if release_state_matches_target "$target_tag"; then
+    [[ "$(release_state_value title)" == "$RELEASE_RUN_TITLE" ]] \
+      || fail "release title does not match the saved ${target_tag} transaction"
+    if [[ "$RELEASE_RUN_KIND" == "stable" ]]; then
+      [[ "$(release_state_value source_tag)" == "$RELEASE_RUN_FROM" ]] \
+        || fail "--from does not match the saved ${target_tag} transaction"
+    fi
+    return 0
+  fi
+
+  release_run_prepare_branch "$release_branch"
+  if [[ "$RELEASE_RUN_KIND" == "beta" ]]; then
+    cmd_release_prepare_beta "$RELEASE_RUN_VERSION" "$RELEASE_RUN_TITLE"
+  else
+    [[ "$(scripts/release-version.sh tag)" == "$RELEASE_RUN_FROM" ]] \
+      || fail "origin/main canonical prerelease does not match ${RELEASE_RUN_FROM}"
+    [[ "$(git rev-parse -q --verify "${RELEASE_RUN_FROM}^{commit}" 2>/dev/null || true)" == "$(git rev-parse HEAD)" ]] \
+      || fail "source prerelease ${RELEASE_RUN_FROM} does not point exactly at origin/main"
+    cmd_release_promote_stable "$RELEASE_RUN_VERSION" "$RELEASE_RUN_TITLE"
+    [[ "$(release_state_value source_tag)" == "$RELEASE_RUN_FROM" ]] \
+      || fail "saved stable source tag does not match ${RELEASE_RUN_FROM}"
+  fi
+}
+
+cmd_release_run() {
+  local phase target_tag release_branch prefix publication_commit
+  local metadata state merged_at head_commit merge_commit url
+  local -a watch_args
+
+  parse_release_run_options "$@"
+  if [[ -n "$RELEASE_RUN_KIND" ]]; then
+    release_run_start_transaction
+  else
+    [[ -f "$RELEASE_STATE_FILE" ]] \
+      || fail "no release transaction exists to resume"
+    release_run_load_saved_identity
+  fi
+
+  target_tag="$(release_state_value target_tag)"
+  release_branch="$(release_state_value release_branch)"
+  [[ -n "$target_tag" && -n "$release_branch" ]] \
+    || fail "saved release transaction lacks a target tag or release branch"
+  [[ "$RELEASE_RUN_KIND" == "stable" ]] && prefix="stable" || prefix="beta"
+
+  while true; do
+    phase="$(release_state_value phase)"
+    case "$phase" in
+      beta-preparation | stable-promotion)
+        if [[ "$(release_state_value review_confirmed)" == "1" ]]; then
+          cmd_release_publish --resume-prepared
+        else
+          release_show_review_gate \
+            "$(release_state_value target_version)" \
+            "$(release_state_value commit_message)"
+          release_run_pause \
+            "Metadata Review" \
+            "REVIEWED" \
+            "$RELEASE_RUN_CONFIRM_REVIEWED" \
+            || return 0
+          cmd_release_publish \
+            --confirm-reviewed \
+            -m "$(release_state_value commit_message)"
+        fi
+        ;;
+      beta-pr | stable-pr)
+        publication_commit="$(release_state_value publication_commit)"
+        [[ -n "$publication_commit" ]] \
+          || fail "saved release transaction has no publication commit"
+        release_run_ensure_pr \
+          "$release_branch" \
+          "$publication_commit" \
+          "$target_tag" \
+          "$(release_state_value title)"
+        info "Release pull request" "#${RELEASE_RUN_PR_NUMBER}; ${RELEASE_RUN_PR_URL}"
+
+        if [[ -n "$RELEASE_RUN_PR_MERGED_AT" ]]; then
+          release_run_sync_merged_pr \
+            "$prefix" \
+            "$publication_commit" \
+            "$RELEASE_RUN_PR_MERGE_COMMIT" \
+            "$RELEASE_RUN_PR_NUMBER"
+          continue
+        fi
+        [[ "$RELEASE_RUN_PR_STATE" == "open" ]] \
+          || fail "PR #${RELEASE_RUN_PR_NUMBER} is ${RELEASE_RUN_PR_STATE} without a merge"
+
+        release_run_checkout_publication_branch "$release_branch" "$publication_commit" \
+          || fail "open PR #${RELEASE_RUN_PR_NUMBER} has no matching remote release branch"
+        cmd_pr_checks --watch --required
+        release_run_pause \
+          "Pull Request Merge" \
+          "MERGE" \
+          "$RELEASE_RUN_CONFIRM_MERGE" \
+          || return 0
+        cmd_pr_merge --delete-branch
+
+        metadata="$(release_run_pr_metadata "$RELEASE_RUN_PR_NUMBER")"
+        IFS='|' read -r state merged_at head_commit merge_commit url <<<"$metadata"
+        [[ "$head_commit" == "$publication_commit" && -n "$merged_at" ]] \
+          || fail "PR #${RELEASE_RUN_PR_NUMBER} did not report an exact successful merge"
+        release_run_sync_merged_pr \
+          "$prefix" \
+          "$publication_commit" \
+          "$merge_commit" \
+          "$RELEASE_RUN_PR_NUMBER"
+        ;;
+      beta-pretag | stable-pretag)
+        [[ "$(branch_name)" == "main" ]] \
+          || fail "post-merge pre-tag validation must run from synchronized main"
+        [[ "$(git rev-parse HEAD)" == "$(release_state_value merge_commit)" ]] \
+          || fail "main no longer matches the saved release merge commit"
+        if [[ "$(release_pretag_proof_state "$target_tag" "$(tree_fingerprint)")" != "valid for exact commit" ]]; then
+          cmd_release_pretag "$target_tag"
+        fi
+        release_run_pause_tag "$target_tag" || return 0
+        cmd_release_tag --confirm "$target_tag"
+        ;;
+      beta-tagged | stable-tagged)
+        watch_args=(
+          "$target_tag"
+          --interval "$RELEASE_RUN_INTERVAL"
+          --attempts "$RELEASE_RUN_ATTEMPTS"
+        )
+        cmd_release_watch "${watch_args[@]}"
+        ;;
+      beta-published | stable-published)
+        release_run_pause \
+          "Published Asset Verification" \
+          "VERIFY" \
+          "$RELEASE_RUN_CONFIRM_VERIFY" \
+          || return 0
+        cmd_release_verify "$target_tag"
+        ;;
+      beta-verified | stable-verified)
+        heading "Resumable Release Complete"
+        info "Tag" "$target_tag"
+        info "Commit" "$(release_state_value verified_commit)"
+        info "Result" "published assets verified"
+        ok "${target_tag} completed through the single resumable release command"
+        return 0
+        ;;
+      *)
+        fail "saved release phase ${phase:-missing} cannot be resumed by release run"
+        ;;
+    esac
+  done
+}
+
 parse_release_beta_options() {
   RELEASE_BETA_VERSION=""
   RELEASE_BETA_TITLE=""
   RELEASE_BETA_CONFIRM_REVIEWED=0
+  RELEASE_BETA_CONFIRM_MERGE=0
   RELEASE_BETA_CONFIRM_TAG=""
+  RELEASE_BETA_CONFIRM_VERIFY=0
 
   while (($# > 0)); do
     case "$1" in
       --confirm-reviewed) RELEASE_BETA_CONFIRM_REVIEWED=1 ;;
+      --confirm-merge) RELEASE_BETA_CONFIRM_MERGE=1 ;;
       --confirm-tag)
         shift
         (($# > 0)) || fail "--confirm-tag requires the exact beta tag"
         RELEASE_BETA_CONFIRM_TAG="$1"
         ;;
+      --confirm-verify) RELEASE_BETA_CONFIRM_VERIFY=1 ;;
       -*)
         fail "unknown release beta option: $1"
         ;;
@@ -2937,67 +3503,56 @@ parse_release_beta_options() {
 }
 
 cmd_release_beta() {
-  local base_version target_tag branch phase proof
+  local base_version target_tag branch phase
+  local -a args
+
   parse_release_beta_options "$@"
   base_version="${RELEASE_BETA_VERSION%%-*}"
   target_tag="v${RELEASE_BETA_VERSION}"
   branch="$(branch_name)"
-  [[ "$branch" == "release/v${base_version}" ]] \
-    || fail "beta orchestration requires release/v${base_version}; current branch is ${branch:-detached HEAD}"
+  phase="$(release_state_value phase)"
 
   if [[ "$(release_worktree_tag)" != "$target_tag" ]]; then
+    [[ "$branch" == "release/v${base_version}" ]] \
+      || fail "beta preparation requires release/v${base_version}; current branch is ${branch:-detached HEAD}"
     cmd_release_prepare_beta "$RELEASE_BETA_VERSION" "$RELEASE_BETA_TITLE"
     return 0
   fi
 
-  phase="$(release_state_value phase)"
   case "$phase" in
-    beta-tagged)
-      cmd_release_watch "$target_tag"
-      heading "Final Verification Gate"
-      info "Next command" "${PROGRAM} release verify ${target_tag}"
-      ok "beta publication completed; final asset verification remains manual"
-      return 0
-      ;;
-    beta-published)
-      heading "Final Verification Gate"
-      info "Next command" "${PROGRAM} release verify ${target_tag}"
-      ok "beta publication is complete; final asset verification remains manual"
-      return 0
+    beta-preparation)
+      if ((RELEASE_BETA_CONFIRM_REVIEWED == 0)); then
+        release_show_review_gate \
+          "$RELEASE_BETA_VERSION" \
+          "Release: prepare v${RELEASE_BETA_VERSION}"
+        return 0
+      fi
+      cmd_release_publish \
+        --confirm-reviewed \
+        -m "Release: prepare v${RELEASE_BETA_VERSION}"
+      phase="beta-pr"
       ;;
     beta-verified)
       ok "${target_tag} is already published and verified; no action required"
       return 0
       ;;
   esac
-  if [[ "$phase" == "beta-preparation" ]]; then
-    if ((RELEASE_BETA_CONFIRM_REVIEWED == 0)); then
-      release_show_review_gate "$RELEASE_BETA_VERSION" "Release: prepare v${RELEASE_BETA_VERSION}"
-      return 0
-    fi
-    cmd_release_publish \
-      --confirm-reviewed \
-      -m "Release: prepare v${RELEASE_BETA_VERSION}"
-  fi
 
-  proof="$(release_pretag_proof_state "$target_tag" "$(tree_fingerprint)")"
-  [[ "$proof" == "valid for exact commit" ]] || cmd_release_pretag "$target_tag"
-
-  if [[ -z "$RELEASE_BETA_CONFIRM_TAG" ]]; then
-    heading "Beta Tag Confirmation Required"
+  if [[ "$phase" == "beta-pr" && "$RELEASE_BETA_CONFIRM_MERGE" == "0" &&
+    -z "$RELEASE_BETA_CONFIRM_TAG" && "$RELEASE_BETA_CONFIRM_VERIFY" == "0" ]]; then
+    heading "Beta Pull Request Gate"
     info "Tag" "$target_tag"
-    info "Proof" "valid for exact commit"
-    info "Next command" "${PROGRAM} release beta ${RELEASE_BETA_VERSION} \"${RELEASE_BETA_TITLE}\" --confirm-tag ${target_tag}"
-    ok "no tag was created"
+    info "Next command" "${PROGRAM} release run"
+    ok "release metadata is published; continue with the resumable command so it can create, check, and merge the exact PR"
     return 0
   fi
-  [[ "$RELEASE_BETA_CONFIRM_TAG" == "$target_tag" ]] \
-    || fail "beta tag confirmation must exactly match ${target_tag}"
-  cmd_release_tag --confirm "$target_tag"
-  cmd_release_watch "$target_tag"
-  heading "Final Verification Gate"
-  info "Next command" "${PROGRAM} release verify ${target_tag}"
-  ok "beta publication completed; final asset verification remains manual"
+
+  args=(--non-interactive)
+  ((RELEASE_BETA_CONFIRM_MERGE == 0)) || args+=(--confirm-merge)
+  [[ -z "$RELEASE_BETA_CONFIRM_TAG" ]] \
+    || args+=(--confirm-tag "$RELEASE_BETA_CONFIRM_TAG")
+  ((RELEASE_BETA_CONFIRM_VERIFY == 0)) || args+=(--confirm-verify)
+  cmd_release_run "${args[@]}"
 }
 
 parse_release_stable_options() {
@@ -3170,6 +3725,7 @@ cmd_release() {
     tag) cmd_release_tag "$@" ;;
     watch) cmd_release_watch "$@" ;;
     verify) cmd_release_verify "$@" ;;
+    run) cmd_release_run "$@" ;;
     beta) cmd_release_beta "$@" ;;
     stable) cmd_release_stable "$@" ;;
     -h | --help | help) usage ;;
