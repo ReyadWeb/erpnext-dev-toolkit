@@ -412,16 +412,18 @@ step is opt-in (press Enter to skip) and can be run later from the commands
 below. (The non-interactive `sudo ./erpnext-dev.sh -y install` only installs;
 use it for automation.)
 
-The recommended native profile remains Frappe + ERPNext. To install native
-Frappe without ERPNext, select the profile explicitly:
+The recommended profile remains Frappe + ERPNext for native and Docker
+installations. To install Frappe without ERPNext, select the profile explicitly:
 
 ```bash
 sudo ./erpnext-dev.sh install --profile frappe-only --yes
 ```
 
-Automation may also pass `--profile recommended` explicitly. Phase 1 does not
-change Docker production profiles; Docker continues to use the recommended
-ERPNext image profile.
+Automation may also pass `--profile recommended` explicitly. Docker production
+uses immutable cumulative application images: Frappe-only omits ERPNext, while
+the recommended default requires it. A later `app install erpnext --site SITE`
+builds and verifies a replacement image before changing the selected site or
+managed profile. See [Docker durability](docs/DOCKER-DURABILITY.md).
 
 After install, map the local domain and enable HTTPS:
 

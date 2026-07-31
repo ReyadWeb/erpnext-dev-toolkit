@@ -1386,7 +1386,7 @@ Core:
   app compatibility APP
                       Evaluate compatibility without fetching or running app code
   app install APP --site SITE [--preview] [--yes]
-                      Plan, back up, install, and verify a curated app on native Bench
+                      Plan, back up, install, and verify a curated app; Docker production uses a cumulative immutable image
   site list           Read-only site and installed-application inventory
   update-toolkit      Atomic update: verified bundle -> releases/<ver> -> current symlink
   toolkit-rollback    Switch the current symlink back to the previously installed release
@@ -1618,7 +1618,7 @@ Options:
   -y, --yes  Assume yes for supported confirmations
   --profile PROFILE
              Installation content: recommended (default) or frappe-only.
-             Frappe-only is native-only in Phase 1.
+             Both profiles support native and Docker installations.
 
 Verified signed-release bootstrap:
 $(verified_release_bundle_bootstrap "first-run" "  ")

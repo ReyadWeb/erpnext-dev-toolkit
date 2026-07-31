@@ -25,7 +25,7 @@ assert_not_contains() {
   [[ "$haystack" != *"$needle"* ]] && pass "$label" || fail_case "$label: unexpectedly found '$needle'"
 }
 
-TMP_ROOT="$(mktemp -d /tmp/erpnext-dev-docker-routing.XXXXXX)"
+TMP_ROOT="$(mktemp -d "${ROOT_DIR}/.erpnext-dev-docker-routing.XXXXXX")"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
 export ERPNEXT_DEV_ENTRY_SCRIPT="${ROOT_DIR}/erpnext-dev.sh"
@@ -69,6 +69,8 @@ source "${ROOT_DIR}/lib/common.sh"
 erpnext_dev_init_terminal_colors 2>/dev/null || true
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/lib/config.sh"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/lib/profile.sh"
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/lib/docker.sh"
 # shellcheck disable=SC1091
@@ -371,6 +373,7 @@ assert_contains "public 8080 failure is explicit" "$public_exposure_output" '808
 # the backend container while frontend, workers, scheduler, and websocket kept
 # running the original ERPNext-only image.
 echo "== production Docker optional-app image lifecycle =="
+docker_custom_image_release_ref_exists() { return 0; }
 
 DOCKER_CUSTOM_IMAGE_PROFILES_FILE="${DOCKER_WORKDIR}/test-custom-image-profiles"
 DOCKER_CUSTOM_IMAGE_APPS_FILE="${DOCKER_WORKDIR}/test-apps.json"
@@ -415,7 +418,7 @@ assert_eq \
 
 assert_eq \
   "persistent profiles resolve to install-app names" \
-  "crm builder" \
+  "erpnext crm builder" \
   "$(docker_custom_image_selected_app_names)"
 
 apps_json="$(cat "$DOCKER_CUSTOM_IMAGE_APPS_FILE")"

@@ -15,6 +15,8 @@ OPERATION_FAILURE_STAGE=""
 OPERATION_FAILURE_REASON=""
 OPERATION_BACKUP_REFERENCE=""
 OPERATION_RECOVERY=""
+OPERATION_PREVIOUS_IMAGE=""
+OPERATION_REPLACEMENT_IMAGE=""
 
 planner_exit_code() {
   case "$1" in
@@ -59,7 +61,8 @@ planner_record_write() {
   [[ -n "$OPERATION_FILE" && "$OPERATION_FILE" == "$OPERATION_STATE_DIR/"*.state ]] || return 1
   [[ ! -L "$OPERATION_FILE" && ! -L "$temp" ]] || return 1
   for value in "$OPERATION_ID" "$OPERATION_STATUS" "$OPERATION_CHECKPOINTS" "$OPERATION_FAILURE_STAGE" \
-    "$OPERATION_FAILURE_REASON" "$OPERATION_BACKUP_REFERENCE" "$OPERATION_RECOVERY"; do
+    "$OPERATION_FAILURE_REASON" "$OPERATION_BACKUP_REFERENCE" "$OPERATION_RECOVERY" \
+    "$OPERATION_PREVIOUS_IMAGE" "$OPERATION_REPLACEMENT_IMAGE"; do
     planner_safe_value "$value" || return 1
   done
   {
@@ -89,6 +92,8 @@ planner_record_write() {
     printf 'failure_stage=%s\n' "$OPERATION_FAILURE_STAGE"
     printf 'failure_reason=%s\n' "$OPERATION_FAILURE_REASON"
     printf 'backup_reference=%s\n' "$OPERATION_BACKUP_REFERENCE"
+    printf 'previous_image=%s\n' "$OPERATION_PREVIOUS_IMAGE"
+    printf 'replacement_image=%s\n' "$OPERATION_REPLACEMENT_IMAGE"
     printf 'recovery=%s\n' "$OPERATION_RECOVERY"
     printf 'started_at=%s\n' "$PLAN_STARTED_AT"
     printf 'completed_at=%s\n' "${PLAN_COMPLETED_AT:-}"
@@ -145,10 +150,11 @@ planner_resolve_dependencies() {
 }
 
 planner_select_target() {
-  local record count=0 selected="" site_count=0 site_record
+  local record count=0 selected="" site_count=0 site_record engine
+  engine="$(effective_deployment_engine)"
   while IFS= read -r record; do
     [[ "$record" == STACK\|* ]] || continue
-    [[ "$(printf '%s' "$record" | cut -d'|' -f3)" == native ]] || continue
+    [[ "$(printf '%s' "$record" | cut -d'|' -f3)" == "$engine" ]] || continue
     [[ "$(printf '%s' "$record" | cut -d'|' -f6)" == managed ]] || continue
     [[ "$(printf '%s' "$record" | cut -d'|' -f7)" == clean ]] || continue
     selected="$record"
@@ -156,6 +162,7 @@ planner_select_target() {
   done < <(inventory_records_sorted)
   [[ "$count" -eq 1 ]] || return 2
   PLAN_STACK="$(printf '%s' "$selected" | cut -d'|' -f2)"
+  PLAN_ENGINE="$engine"
   PLAN_BENCH="${PLAN_STACK#native:}"
   while IFS= read -r site_record; do
     [[ "$site_record" == SITE\|"${PLAN_STACK}"\|* ]] || continue
@@ -224,7 +231,6 @@ planner_build() {
   PLAN_REPO="$LIB_APP_REPO"
   PLAN_BRANCH="$LIB_APP_BRANCH"
   inventory_collect
-  [[ "$(effective_deployment_engine)" == native ]] || return 23
   planner_select_target || return $?
   PLAN_CURRENT_PROFILE="$(effective_installation_profile)"
   PLAN_RESULT_PROFILE="$PLAN_CURRENT_PROFILE"
@@ -246,10 +252,16 @@ planner_build() {
   other_sites="$(inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" -v t="$PLAN_SITE" \
     '$1=="SITE"&&$2==s&&$3!=t{print $3}' | paste -sd, -)"
   PLAN_SHARED_SITES="${other_sites:-none}"
-  PLAN_ACTIONS="backup-site"
-  [[ "$PLAN_CODE_STATE" == available ]] || PLAN_ACTIONS+=",acquire-bench-code"
-  [[ -n "$PLAN_DEPENDENCIES" ]] && PLAN_ACTIONS+=",install-dependencies"
-  PLAN_ACTIONS+=",install-site-app,migrate,build-assets,clear-cache,restart-services"
+  if [[ "$PLAN_ENGINE" == docker && "$(docker_mode)" == production ]]; then
+    PLAN_ACTIONS="write-cumulative-manifest,build-image,verify-image,backup-sites,capture-previous-image,deploy-image,install-site-app,migrate,verify-stack"
+  elif [[ "$PLAN_ENGINE" == docker ]]; then
+    PLAN_ACTIONS="development-only-container-code,install-site-app,migrate"
+  else
+    PLAN_ACTIONS="backup-site"
+    [[ "$PLAN_CODE_STATE" == available ]] || PLAN_ACTIONS+=",acquire-bench-code"
+    [[ -n "$PLAN_DEPENDENCIES" ]] && PLAN_ACTIONS+=",install-dependencies"
+    PLAN_ACTIONS+=",install-site-app,migrate,build-assets,clear-cache,restart-services"
+  fi
   PLAN_VERIFICATION="installed-apps,dependencies,bench-doctor,database,http,workers,scheduler,queues,redis,assets,services,inventory"
   PLAN_INVENTORY_FINGERPRINT="$(planner_inventory_fingerprint)"
   PLAN_STARTED_AT="$(planner_timestamp)"
@@ -269,7 +281,7 @@ planner_preview() {
   if [[ "${DOCTOR_FORMAT:-human}" == json ]]; then
     printf '{"schema_version":1,"read_only":true,"operation_id":'
     inventory_json_escape "$OPERATION_ID"
-    printf ',"status":"%s","engine":"native","stack":' "$OPERATION_STATUS"
+    printf ',"status":"%s","engine":"%s","stack":' "$OPERATION_STATUS" "$PLAN_ENGINE"
     inventory_json_escape "$PLAN_STACK"
     printf ',"site":'
     inventory_json_escape "$PLAN_SITE"
@@ -287,7 +299,7 @@ planner_preview() {
     return
   fi
   ui_box_start "Quick Application Installation Plan"
-  status_line "Deployment" "INFO" "native"
+  status_line "Deployment" "INFO" "$PLAN_ENGINE ($(docker_mode 2>/dev/null || printf native))"
   status_line "Bench / stack" "INFO" "$PLAN_STACK"
   status_line "Target site" "INFO" "$PLAN_SITE"
   status_line "Profile" "INFO" "${PLAN_CURRENT_PROFILE} -> ${PLAN_RESULT_PROFILE}"
@@ -445,6 +457,104 @@ planner_verify() {
   planner_checkpoint verification-complete verification-complete
 }
 
+planner_docker_backup_all() {
+  local site saved_site="${DOCKER_SITE_NAME:-}" refs=""
+  while IFS= read -r site; do
+    [[ -n "$site" ]] || continue
+    DOCKER_SITE_NAME="$site"
+    docker_backup true || {
+      DOCKER_SITE_NAME="$saved_site"
+      return 1
+    }
+    docker_backup_verify || {
+      DOCKER_SITE_NAME="$saved_site"
+      return 1
+    }
+    refs="${refs}${refs:+,}${site}:verified"
+  done < <(inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" '$1=="SITE"&&$2==s{print $3}')
+  DOCKER_SITE_NAME="$saved_site"
+  OPERATION_BACKUP_REFERENCE="$refs"
+  [[ -n "$refs" ]]
+}
+
+planner_execute_docker_production() {
+  local current_fingerprint profile="" saved_profile="$INSTALLATION_PROFILE" image image_id requested=""
+  if [[ "$PLAN_APP" != erpnext ]]; then
+    profile="$(docker_profile_for_app_name "$PLAN_APP")" || return 22
+    requested="$profile"
+  fi
+  INSTALLATION_PROFILE="$PLAN_RESULT_PROFILE"
+  current_fingerprint="$(planner_inventory_fingerprint)"
+  [[ "$current_fingerprint" == "$PLAN_INVENTORY_FINGERPRINT" ]] || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record preflight "Inventory changed after preview." "Generate and confirm a fresh plan."
+    return 34
+  }
+  planner_checkpoint validated validated || return 1
+  mapfile -t PLAN_DOCKER_PROFILES < <(docker_collect_desired_app_profiles "$requested")
+  docker_write_apps_json "${PLAN_DOCKER_PROFILES[@]}" || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record manifest "Cumulative manifest validation failed." "Correct the managed manifest; deployment was unchanged."
+    return 22
+  }
+  planner_checkpoint manifest-validated validated || return 1
+  ASSUME_YES=1 docker_build_custom_image || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record image-build "Replacement image build failed." "Running deployment was unchanged."
+    return 31
+  }
+  image="$(docker_env_value "$DOCKER_CUSTOM_IMAGE_STATE_FILE" DOCKER_CUSTOM_IMAGE)"
+  image_id="$(docker_env_value "$DOCKER_CUSTOM_IMAGE_STATE_FILE" DOCKER_CUSTOM_IMAGE_ID)"
+  [[ -n "$image" && "$image_id" =~ ^sha256: ]] || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record image-verify "Replacement image digest was not verified." "Running deployment was unchanged."
+    return 32
+  }
+  OPERATION_REPLACEMENT_IMAGE="${image}@${image_id}"
+  planner_checkpoint image-verified validated || return 1
+  inventory_collect
+  [[ "$(planner_inventory_fingerprint)" == "$PLAN_INVENTORY_FINGERPRINT" ]] || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record pre-backup "Inventory changed during image build." "Discard the candidate image and create a fresh plan."
+    return 34
+  }
+  planner_docker_backup_all || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record backup "A Docker site backup failed verification." "Deployment was not changed."
+    return 30
+  }
+  planner_checkpoint backup-complete backup-complete || return 1
+  OPERATION_PREVIOUS_IMAGE="${DOCKER_ERPNEXT_IMAGE}@${DOCKER_ERPNEXT_IMAGE_DIGEST:-unrecorded}"
+  planner_checkpoint previous-image-recorded backup-complete || return 1
+  ASSUME_YES=1 docker_deploy_custom_image || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record deployment "Replacement-image deployment failed." "Redeploy ${OPERATION_PREVIOUS_IMAGE}; restore from ${OPERATION_BACKUP_REFERENCE} if site data changed." recovery-required
+    return 31
+  }
+  planner_checkpoint mutation-complete mutation-complete || return 1
+  inventory_collect
+  planner_site_installed "$PLAN_STACK" "$PLAN_SITE" "$PLAN_APP" || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record verification "Docker post-deployment inventory verification failed." "Previous image: ${OPERATION_PREVIOUS_IMAGE}; backups: ${OPERATION_BACKUP_REFERENCE}." recovery-required
+    return 32
+  }
+  docker_custom_image_verify_runtime "$(docker_custom_image_selected_app_names)" || {
+    INSTALLATION_PROFILE="$saved_profile"
+    planner_fail_record verification "Docker stack health verification failed." "Previous image: ${OPERATION_PREVIOUS_IMAGE}; backups: ${OPERATION_BACKUP_REFERENCE}." recovery-required
+    return 32
+  }
+  planner_checkpoint verification-complete verification-complete || return 1
+  if [[ "$PLAN_RESULT_PROFILE" != "$PLAN_CURRENT_PROFILE" ]]; then
+    INSTALLATION_PROFILE="$PLAN_RESULT_PROFILE"
+    write_dev_config_file || {
+      INSTALLATION_PROFILE="$saved_profile"
+      return 33
+    }
+  fi
+  PLAN_COMPLETED_AT="$(planner_timestamp)"
+  planner_checkpoint completed completed
+}
+
 planner_execute() {
   local current_fingerprint previous_profile="$INSTALLATION_PROFILE"
   if [[ "$PLAN_SITE_STATE" == installed ]]; then
@@ -463,6 +573,19 @@ planner_execute() {
     OPERATION_STATUS=failed
     planner_fail_record confirmation "User cancelled after preview." "No mutation occurred."
     planner_exit_code cancelled
+    return
+  fi
+  if [[ "$PLAN_ENGINE" == docker ]]; then
+    if [[ "$(docker_mode)" == production ]]; then
+      planner_execute_docker_production
+      return
+    fi
+    warn "Docker development mutation is temporary and may be lost on container recreation."
+    OPERATION_RECOVERY="Development-only container state is not durable; rebuild the cumulative image or re-run after recreation."
+    load_validated_app_catalog_record "$PLAN_APP" || return 22
+    ASSUME_YES=1 docker_install_app "$LIB_APP_NAME" "$LIB_APP_DISPLAY" "$LIB_APP_REPO" "$LIB_APP_BRANCH" || return 31
+    PLAN_COMPLETED_AT="$(planner_timestamp)"
+    planner_checkpoint development-temporary completed
     return
   fi
   inventory_collect
@@ -525,7 +648,7 @@ run_quick_app_install() {
       20) err "Invalid or unmanaged Quick-install application: $app" ;;
       21 | 2) err "Target stack/site is ambiguous; pass --site with an exact managed site." ;;
       22) err "Application is incompatible or unsupported by trusted Quick-install policy." ;;
-      23) err "Quick installation supports managed native Bench deployments only." ;;
+      23) err "Quick installation is unsupported on the selected deployment method." ;;
       *) err "Could not build a safe operation plan." ;;
     esac
     return "$rc"

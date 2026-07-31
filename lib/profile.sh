@@ -8,8 +8,8 @@ normalize_installation_profile() {
   local raw="${1:-}"
   raw="$(printf '%s' "$raw" | tr '[:upper:]_' '[:lower:]-' | tr -d '[:space:]')"
   case "$raw" in
-    recommended|default|erpnext|frappe-erpnext) printf 'recommended\n' ;;
-    frappe-only|frappe) printf 'frappe-only\n' ;;
+    recommended | default | erpnext | frappe-erpnext) printf 'recommended\n' ;;
+    frappe-only | frappe) printf 'frappe-only\n' ;;
     *) return 1 ;;
   esac
 }
@@ -38,7 +38,7 @@ installation_profile_label() {
 installation_profile_requires_app() {
   local app="$1"
   case "$(effective_installation_profile):${app}" in
-    recommended:frappe|recommended:erpnext|frappe-only:frappe) return 0 ;;
+    recommended:frappe | recommended:erpnext | frappe-only:frappe) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -48,14 +48,9 @@ installation_profile_requires_erpnext() {
 }
 
 validate_platform_profile_combination() {
-  local profile engine
-  profile="$(effective_installation_profile)"
+  local engine
   engine="$(effective_deployment_engine 2>/dev/null || printf native)"
-  if [[ "$engine" == "docker" && "$profile" != "recommended" ]]; then
-    err "Installation profile '${profile}' is not supported by the Docker engine in Phase 1."
-    err "Use --profile recommended, or select the native engine for Frappe-only."
-    return 1
-  fi
+  [[ "$engine" =~ ^(native|docker)$ ]] || return 1
 }
 
 installation_profile_required_apps() {
@@ -75,9 +70,9 @@ installation_profile_health_pair() {
   local app missing=()
   if deployment_engine_is_docker 2>/dev/null; then
     if [[ "$(install_state 2>/dev/null || true)" == "Installed" ]]; then
-      printf 'OK|required apps supplied by the recommended ERPNext image\n'
+      printf 'OK|required apps supplied by the %s Docker profile image\n' "$(effective_installation_profile)"
     else
-      printf 'WARN|recommended ERPNext image is not provisioned\n'
+      printf 'WARN|%s Docker profile image is not provisioned\n' "$(effective_installation_profile)"
     fi
     return 0
   fi
@@ -89,6 +84,9 @@ installation_profile_health_pair() {
   if ((${#missing[@]} == 0)); then
     printf 'OK|required apps present: %s\n' "$(installation_profile_required_apps | paste -sd, -)"
   else
-    printf 'WARN|required apps missing or unconfirmed: %s\n' "$(IFS=,; printf '%s' "${missing[*]}")"
+    printf 'WARN|required apps missing or unconfirmed: %s\n' "$(
+      IFS=,
+      printf '%s' "${missing[*]}"
+    )"
   fi
 }

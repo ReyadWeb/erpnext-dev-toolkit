@@ -73,6 +73,8 @@ DOCKER_CUSTOM_IMAGE_STATE_FILE="${DOCKER_CUSTOM_IMAGE_STATE_FILE:-${DOCKER_WORKD
 DOCKER_CUSTOM_IMAGE_APPS_FILE="${DOCKER_CUSTOM_IMAGE_APPS_FILE:-${DOCKER_WORKDIR}/erpnext-dev.apps.json}"
 DOCKER_CUSTOM_IMAGE_PROFILES_FILE="${DOCKER_CUSTOM_IMAGE_PROFILES_FILE:-${DOCKER_WORKDIR}/erpnext-dev.custom-image-profiles}"
 DOCKER_CUSTOM_IMAGE_CORE_FILE="${DOCKER_CUSTOM_IMAGE_CORE_FILE:-${DOCKER_WORKDIR}/erpnext-dev.custom-image-core.env}"
+DOCKER_APP_MANIFEST_FILE="${DOCKER_APP_MANIFEST_FILE:-${DOCKER_WORKDIR}/erpnext-dev.app-manifest.tsv}"
+DOCKER_APP_MANIFEST_CANDIDATE_FILE="${DOCKER_APP_MANIFEST_CANDIDATE_FILE:-${DOCKER_WORKDIR}/erpnext-dev.app-manifest.candidate.tsv}"
 DOCKER_CUSTOM_IMAGE_REPO="${DOCKER_CUSTOM_IMAGE_REPO:-erpnext-dev/custom}"
 
 docker_clone_dir() { printf '%s/frappe_docker\n' "$DOCKER_WORKDIR"; }
@@ -730,8 +732,9 @@ EOF_DOCKER_ENV
 # the site is never created. Do not reintroduce `\` continuations here.
 docker_write_override() {
   require_sudo
-  local override
+  local override install_arg=""
   override="$(docker_override_file)"
+  installation_profile_requires_erpnext && install_arg="--install-app erpnext"
 
   $SUDO mkdir -p "$DOCKER_WORKDIR"
   $SUDO tee "$override" >/dev/null <<'EOF_DOCKER_OVERRIDE'
@@ -769,7 +772,7 @@ services:
           echo "Site $$SITE_NAME already exists; skipping create-site";
           exit 0;
         fi;
-        bench new-site --mariadb-user-host-login-scope='%' --admin-password="$$ADMIN_PASSWORD" --db-root-username=root --db-root-password="$$DB_ROOT_PASSWORD" --install-app erpnext --set-default "$$SITE_NAME";
+        bench new-site --mariadb-user-host-login-scope='%' --admin-password="$$ADMIN_PASSWORD" --db-root-username=root --db-root-password="$$DB_ROOT_PASSWORD" __INSTALL_APP__ --set-default "$$SITE_NAME";
   db:
     image: mariadb:11.8
   frontend:
@@ -787,6 +790,11 @@ services:
   websocket:
     image: ${DOCKER_ERPNEXT_IMAGE}
 EOF_DOCKER_OVERRIDE
+  if [[ -n "$install_arg" ]]; then
+    $SUDO sed -i "s/__INSTALL_APP__/${install_arg}/" "$override"
+  else
+    $SUDO sed -i 's/ __INSTALL_APP__//' "$override"
+  fi
   $SUDO chown root:root "$override" 2>/dev/null || true
   $SUDO chmod 644 "$override" 2>/dev/null || true
 }
@@ -2658,29 +2666,35 @@ docker_custom_image_capture_core_state() {
   local frappe_ref erpnext_ref
   local frappe_major erpnext_major base_tag
 
-  frappe_version="$(docker_custom_image_site_app_version frappe)" || {
-    err "Could not determine the currently deployed Frappe version."
+  frappe_version="$(docker_custom_image_site_app_version frappe 2>/dev/null || true)"
+  [[ -n "$frappe_version" ]] || frappe_version="$(docker_custom_image_image_app_version "$DOCKER_ERPNEXT_IMAGE" frappe 2>/dev/null || true)"
+  [[ -n "$frappe_version" ]] || {
+    err "Could not determine the deployed/base Frappe version."
     return 1
   }
 
-  erpnext_version="$(docker_custom_image_site_app_version erpnext)" || {
-    err "Could not determine the currently deployed ERPNext version."
-    return 1
-  }
+  erpnext_version=""
+  if installation_profile_requires_erpnext; then
+    erpnext_version="$(docker_custom_image_site_app_version erpnext)" || {
+      err "Could not determine the currently deployed ERPNext version."
+      return 1
+    }
+  fi
 
   frappe_major="${frappe_version%%.*}"
   erpnext_major="${erpnext_version%%.*}"
 
-  if [[ "$frappe_major" != "$erpnext_major" ]]; then
+  if [[ -n "$erpnext_version" && "$frappe_major" != "$erpnext_major" ]]; then
     err "Frappe ${frappe_version} and ERPNext ${erpnext_version} are on different major versions."
     return 1
   fi
 
   frappe_ref="v${frappe_version}"
-  erpnext_ref="v${erpnext_version}"
+  erpnext_ref=""
+  [[ -n "$erpnext_version" ]] && erpnext_ref="v${erpnext_version}"
   base_tag="version-${frappe_major}"
 
-  if ! docker_custom_image_release_ref_exists \
+  if [[ -n "$erpnext_ref" ]] && ! docker_custom_image_release_ref_exists \
     "https://github.com/frappe/frappe" \
     "$frappe_ref"; then
     err "Exact Frappe release tag ${frappe_ref} was not found."
@@ -2823,7 +2837,7 @@ docker_custom_image_verify_core_versions() {
       DOCKER_CUSTOM_IMAGE_ERPNEXT_VERSION
   )"
 
-  [[ -n "$expected_frappe" && -n "$expected_erpnext" ]] || {
+  [[ -n "$expected_frappe" ]] || {
     err "Pinned core-version state is incomplete."
     return 1
   }
@@ -2832,9 +2846,7 @@ docker_custom_image_verify_core_versions() {
     docker_custom_image_image_app_version "$image" frappe
   )"
 
-  actual_erpnext="$(
-    docker_custom_image_image_app_version "$image" erpnext
-  )"
+  actual_erpnext="$(docker_custom_image_image_app_version "$image" erpnext || true)"
 
   if [[ "$actual_frappe" != "$expected_frappe" ]]; then
     err "Custom image changed Frappe core version."
@@ -2842,16 +2854,20 @@ docker_custom_image_verify_core_versions() {
     return 1
   fi
 
-  if [[ "$actual_erpnext" != "$expected_erpnext" ]]; then
+  if [[ -n "$expected_erpnext" && "$actual_erpnext" != "$expected_erpnext" ]]; then
     err "Custom image changed ERPNext core version."
     err "Expected ${expected_erpnext}; built ${actual_erpnext:-unknown}."
+    return 1
+  fi
+  if [[ -z "$expected_erpnext" && -n "$actual_erpnext" ]]; then
+    err "Frappe-only custom image unexpectedly contains ERPNext."
     return 1
   fi
 
   status_line \
     "Core versions" \
     "OK" \
-    "frappe ${actual_frappe}; erpnext ${actual_erpnext}"
+    "frappe ${actual_frappe}; erpnext ${actual_erpnext:-absent}"
 
   return 0
 }
@@ -2897,6 +2913,8 @@ docker_profile_dependency_list() {
 docker_custom_image_selected_app_names() {
   require_sudo
   local profile names=""
+
+  installation_profile_requires_erpnext && names="erpnext"
 
   $SUDO test -f "$DOCKER_CUSTOM_IMAGE_PROFILES_FILE" || return 0
 
@@ -2974,6 +2992,111 @@ docker_collect_desired_app_profiles() {
   return 0
 }
 
+docker_validate_app_manifest() {
+  local file="$1" kind id repo revision install_name seen_frappe=0 seen_erpnext=0 profile="" previous="" key
+  local seen_format=0 seen_profile=0 seen_created=0 seen_image=0
+  local -A seen=()
+  [[ -f "$file" && ! -L "$file" ]] || return 1
+  while IFS=$'\t' read -r kind id repo revision install_name; do
+    case "$kind" in
+      FORMAT)
+        [[ "$id" == 1 && "$seen_format" -eq 0 && -z "$repo$revision$install_name" ]] || return 1
+        seen_format=1
+        ;;
+      PROFILE)
+        [[ "$seen_profile" -eq 0 && -z "$repo$revision$install_name" ]] || return 1
+        profile="$(normalize_installation_profile "$id" 2>/dev/null)" || return 1
+        seen_profile=1
+        ;;
+      APP)
+        load_validated_app_catalog_record "$id" || return 1
+        [[ "$repo" == "$LIB_APP_REPO" && "$install_name" == "$LIB_APP_NAME" ]] || return 1
+        validate_branch_name "$revision" || return 1
+        [[ -z "${seen[$id]:-}" ]] || return 1
+        seen["$id"]=1
+        [[ "$id" == frappe ]] && seen_frappe=1
+        [[ "$id" == erpnext ]] && seen_erpnext=1
+        while IFS= read -r key; do
+          [[ -z "$key" || "$key" == frappe || -n "${seen[$key]:-}" ]] || return 1
+        done < <(printf '%s\n' "${LIB_APP_REQUIRES:-}" | tr ',' '\n')
+        previous="$id"
+        ;;
+      CREATED)
+        [[ "$seen_created" -eq 0 && "$id" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T && -z "$repo$revision$install_name" ]] || return 1
+        seen_created=1
+        ;;
+      IMAGE)
+        [[ "$seen_image" -eq 0 && "$id" =~ ^[A-Za-z0-9._/:@-]+$ && "$repo" =~ ^sha256:[a-f0-9]{64}$ && -z "$revision$install_name" ]] || return 1
+        seen_image=1
+        ;;
+      *) return 1 ;;
+    esac
+  done <"$file"
+  [[ "$seen_format" -eq 1 && "$seen_profile" -eq 1 && "$seen_created" -eq 1 ]] || return 1
+  [[ -n "$previous" && "$seen_frappe" -eq 1 ]] || return 1
+  for key in "${!seen[@]}"; do
+    load_validated_app_catalog_record "$key" || return 1
+    while IFS= read -r id; do
+      [[ -z "$id" || -z "${seen[$id]:-}" ]] || return 1
+    done < <(printf '%s\n' "${LIB_APP_CONFLICTS:-}" | tr ',' '\n')
+  done
+  [[ "$profile" == recommended && "$seen_erpnext" -eq 1 ]] || [[ "$profile" == frappe-only && "$seen_erpnext" -eq 0 ]]
+}
+
+docker_write_app_manifest() {
+  require_sudo
+  local profile target="$DOCKER_APP_MANIFEST_CANDIDATE_FILE" item frappe_ref erpnext_ref revision
+  local tmp="${target}.tmp.$$"
+  profile="$(effective_installation_profile)"
+  frappe_ref="$(docker_env_value "$DOCKER_CUSTOM_IMAGE_CORE_FILE" DOCKER_CUSTOM_IMAGE_FRAPPE_SOURCE_REF 2>/dev/null || true)"
+  erpnext_ref="$(docker_env_value "$DOCKER_CUSTOM_IMAGE_CORE_FILE" DOCKER_CUSTOM_IMAGE_ERPNEXT_SOURCE_REF 2>/dev/null || true)"
+  [[ ! -L "$target" && ! -L "$tmp" ]] || return 1
+  $SUDO mkdir -p "$DOCKER_WORKDIR" || return 1
+  {
+    printf 'FORMAT\t1\nPROFILE\t%s\n' "$profile"
+    app_profile_defaults frappe
+    printf 'APP\tfrappe\t%s\t%s\tfrappe\n' "$LIB_APP_REPO" "${frappe_ref:-${FRAPPE_BRANCH:-version-16}}"
+    if [[ "$profile" == recommended ]]; then
+      app_profile_defaults erpnext
+      printf 'APP\terpnext\t%s\t%s\terpnext\n' "$LIB_APP_REPO" "${erpnext_ref:-${ERPNEXT_BRANCH:-version-16}}"
+    fi
+    for item in "$@"; do
+      [[ -n "$item" ]] || continue
+      load_validated_app_catalog_record "$item" || return 1
+      revision="$LIB_APP_BRANCH"
+      [[ -n "$revision" ]] || revision="$(docker_resolve_default_branch "$LIB_APP_REPO")"
+      printf 'APP\t%s\t%s\t%s\t%s\n' "$LIB_APP_ID" "$LIB_APP_REPO" "$revision" "$LIB_APP_NAME"
+    done
+    printf 'CREATED\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  } | $SUDO tee "$tmp" >/dev/null || return 1
+  $SUDO chmod 600 "$tmp" || return 1
+  docker_validate_app_manifest "$tmp" || {
+    $SUDO rm -f "$tmp"
+    return 1
+  }
+  $SUDO mv "$tmp" "$target"
+}
+
+docker_app_manifest_record_image() {
+  local image="$1" digest="$2" target="$DOCKER_APP_MANIFEST_CANDIDATE_FILE"
+  local tmp="${target}.image.tmp.$$"
+  [[ "$image" =~ ^[A-Za-z0-9._/:@-]+$ && "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
+  [[ -f "$target" && ! -L "$target" && ! -L "$tmp" ]] || return 1
+  $SUDO awk -F'\t' '$1 != "IMAGE"' "$target" >"$tmp" || return 1
+  printf 'IMAGE\t%s\t%s\n' "$image" "$digest" | $SUDO tee -a "$tmp" >/dev/null || return 1
+  docker_validate_app_manifest "$tmp" || return 1
+  $SUDO chmod 600 "$tmp" && $SUDO mv "$tmp" "$target"
+}
+
+docker_promote_app_manifest() {
+  local tmp="${DOCKER_APP_MANIFEST_FILE}.promote.tmp.$$"
+  [[ -f "$DOCKER_APP_MANIFEST_CANDIDATE_FILE" && ! -L "$DOCKER_APP_MANIFEST_CANDIDATE_FILE" ]] || return 1
+  [[ ! -L "$DOCKER_APP_MANIFEST_FILE" && ! -L "$tmp" ]] || return 1
+  docker_validate_app_manifest "$DOCKER_APP_MANIFEST_CANDIDATE_FILE" || return 1
+  $SUDO cp "$DOCKER_APP_MANIFEST_CANDIDATE_FILE" "$tmp" && $SUDO chmod 600 "$tmp" \
+    && $SUDO mv "$tmp" "$DOCKER_APP_MANIFEST_FILE"
+}
+
 docker_write_apps_json() {
   require_sudo
   local frappe_branch erpnext_branch tmp profiles_tmp profile repo branch
@@ -3000,7 +3123,11 @@ docker_write_apps_json() {
 
   {
     printf '[\n'
-    printf '  {"url": "https://github.com/frappe/erpnext", "branch": "%s"}' "$erpnext_branch"
+    local separator=""
+    if installation_profile_requires_erpnext; then
+      printf '  {"url": "https://github.com/frappe/erpnext", "branch": "%s"}' "$erpnext_branch"
+      separator=","
+    fi
 
     for profile in "$@"; do
       [[ -n "$profile" ]] || continue
@@ -3017,7 +3144,8 @@ docker_write_apps_json() {
       branch="$LIB_APP_BRANCH"
       [[ -n "$branch" ]] || branch="$(docker_resolve_default_branch "$repo")"
 
-      printf ',\n  {"url": "%s", "branch": "%s"}' "$repo" "$branch"
+      printf '%s\n  {"url": "%s", "branch": "%s"}' "$separator" "$repo" "$branch"
+      separator=","
       printf '%s\n' "$profile" >>"$profiles_tmp"
 
     done
@@ -3041,6 +3169,8 @@ docker_write_apps_json() {
     "$DOCKER_CUSTOM_IMAGE_APPS_FILE" \
     "$DOCKER_CUSTOM_IMAGE_PROFILES_FILE" \
     2>/dev/null || true
+
+  docker_write_app_manifest "$@" || return 1
 
 }
 
@@ -3129,8 +3259,9 @@ docker_custom_image_config() {
 
   ui_box_start "Configure Custom-App Image"
   status_line "Site" "INFO" "$(docker_site_name)"
-  status_line "Base" "INFO" "erpnext @ $(docker_frappe_branch)"
-  echo "Select apps to bake into a durable, immutable image (in addition to ERPNext)."
+  status_line "Profile" "INFO" "$(effective_installation_profile)"
+  status_line "Base" "INFO" "frappe @ $(docker_frappe_branch)"
+  echo "Select curated apps to bake into the cumulative durable image."
   echo "Available apps:"
   while IFS= read -r profile; do
     app_profile_defaults "$profile" >/dev/null 2>&1 && printf '  %-16s %s\n' "$profile" "$LIB_APP_DISPLAY"
@@ -3157,6 +3288,17 @@ docker_custom_image_config() {
   $SUDO sed 's/^/  /' "$DOCKER_CUSTOM_IMAGE_APPS_FILE"
   ui_next "$(toolkit_cmd docker-build-custom-image)"
   ui_box_end
+}
+
+docker_prepare_profile_image() {
+  installation_profile_requires_erpnext && return 0
+  log "Preparing immutable Frappe-only image"
+  ${SUDO:-} docker image inspect "$DOCKER_ERPNEXT_IMAGE" >/dev/null 2>&1 \
+    || ${SUDO:-} docker pull "$DOCKER_ERPNEXT_IMAGE" || return 1
+  docker_write_apps_json || return 1
+  ASSUME_YES=1 docker_build_custom_image || return 1
+  DOCKER_ERPNEXT_IMAGE="$(docker_env_value "$DOCKER_CUSTOM_IMAGE_STATE_FILE" DOCKER_CUSTOM_IMAGE)"
+  [[ -n "$DOCKER_ERPNEXT_IMAGE" ]]
 }
 
 docker_custom_image_write_state() {
@@ -3331,6 +3473,8 @@ docker_build_custom_image() {
   fi
 
   docker_custom_image_write_state "$image" "$image_id" "$apps"
+  docker_app_manifest_record_image "$image" "$image_id" \
+    || fail "Could not atomically record the verified image digest in the cumulative manifest."
 
   ui_box_start "Custom-App Image Built"
   status_line "Image" "OK" "$image"
@@ -3472,6 +3616,9 @@ docker_deploy_custom_image() {
 
   docker_custom_image_verify_runtime "$apps" \
     || fail "Custom-image runtime consistency verification failed."
+
+  docker_promote_app_manifest \
+    || fail "Deployment verified, but the cumulative manifest could not be promoted."
 
   docker_write_pins || true
 
@@ -4264,13 +4411,16 @@ docker_prod_create_site() {
   fi
 
   log "Creating site ${site} (bench new-site inside the backend container)"
-  if ! docker_compose exec -T backend bench new-site \
-    --mariadb-user-host-login-scope='%' \
-    --admin-password "$DOCKER_ADMIN_PASSWORD" \
-    --db-root-username root \
-    --db-root-password "$DOCKER_DB_ROOT_PASSWORD" \
-    --install-app erpnext \
-    --set-default "$site"; then
+  local -a new_site_args=(
+    bench new-site
+    --mariadb-user-host-login-scope='%'
+    --admin-password "$DOCKER_ADMIN_PASSWORD"
+    --db-root-username root
+    --db-root-password "$DOCKER_DB_ROOT_PASSWORD"
+  )
+  installation_profile_requires_erpnext && new_site_args+=(--install-app erpnext)
+  new_site_args+=(--set-default "$site")
+  if ! docker_compose exec -T backend "${new_site_args[@]}"; then
     err "bench new-site failed for ${site}. Inspect with: $(toolkit_cmd logs)"
     return 1
   fi
@@ -4303,7 +4453,7 @@ docker_prod_guided_install() {
   docker_preflight
 
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    if ! confirm "Provision the PRODUCTION Docker ERPNext stack now?"; then
+    if ! confirm "Provision the PRODUCTION Docker $(installation_profile_label) stack now?"; then
       echo "Next command:"
       echo "  $(toolkit_cmd install)"
       return 0
@@ -4312,6 +4462,7 @@ docker_prod_guided_install() {
 
   docker_install_engine
   docker_provision_workdir
+  docker_prepare_profile_image || fail "Could not prepare the selected Docker profile image."
   docker_write_prod_env
   docker_write_prod_image_override
   docker_write_restart_policy_override
@@ -4360,7 +4511,7 @@ docker_guided_install() {
   docker_preflight
 
   if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
-    if ! confirm "Provision the Docker ERPNext stack now?"; then
+    if ! confirm "Provision the Docker $(installation_profile_label) stack now?"; then
       echo "Next command:"
       echo "  $(toolkit_cmd install)"
       return 0
@@ -4369,6 +4520,7 @@ docker_guided_install() {
 
   docker_install_engine
   docker_provision_workdir
+  docker_prepare_profile_image || fail "Could not prepare the selected Docker profile image."
   docker_write_env
   docker_write_override
 

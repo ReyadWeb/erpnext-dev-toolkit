@@ -1,4 +1,4 @@
-# Operation planner and native Quick installation
+# Operation planner and Quick installation
 
 Phase 3 adds one mutation lifecycle driven by the Phase 2 inventory and
 validated application catalog:
@@ -8,8 +8,10 @@ Discover → Validate → Preview → Back up → Mutate → Verify → Record
 ```
 
 Quick installation supports curated applications on a selected,
-Toolkit-managed native Bench site. Docker development and production remain
-read-only until immutable custom-image operations are implemented in Phase 4.
+Toolkit-managed native Bench or Docker site. Native Bench uses validated code
+acquisition and site installation. Docker production uses the Phase 4 verified,
+cumulative replacement-image lifecycle; Docker development changes are clearly
+reported as temporary container state.
 
 ## Commands
 
@@ -40,10 +42,9 @@ backup, availability impact, verification, and recovery checkpoint.
 ## Safety and recovery
 
 The planner rejects unmanaged sources, catalog inconsistencies, unsupported
-platforms, Docker targets, ambiguous stacks/sites, malformed identifiers, and
-inventory changes between preview and mutation. Multiple sites require an
-explicit target. The existing Toolkit lock prevents concurrent lifecycle
-mutations.
+platforms, ambiguous stacks/sites, malformed identifiers, and inventory changes
+between preview and mutation. Multiple sites require an explicit target. The
+existing Toolkit lock prevents concurrent lifecycle mutations.
 
 A database-and-files backup must be created, matched to the selected site, and
 verified before code acquisition or site mutation. A failed backup stops the
@@ -63,18 +64,20 @@ Failed verification produces `recovery-required`, never a false success.
 
 ## Adding ERPNext to Frappe-only
 
-On a managed native Frappe-only site:
+On a managed native or Docker Frappe-only site:
 
 ```bash
 erpnext-dev app install erpnext --site erp.test
 ```
 
-The planner resolves the pinned ERPNext catalog source, previews Bench-wide
-code and site-specific effects, verifies a backup, installs and checks ERPNext,
-then changes the managed profile to `recommended`. The profile changes only
-after verification. Re-running a healthy completed installation reports it as
-already complete without repeating mutation.
+The planner resolves the pinned ERPNext catalog source, previews shared-stack
+code and site-specific effects, verifies backups, installs and checks ERPNext,
+then changes the managed profile to `recommended`. Docker production first
+builds and verifies a cumulative immutable image and records the previous image
+checkpoint. The profile changes only after verification. Re-running a healthy
+completed installation reports it as already complete without repeating
+mutation.
 
 Application updates, uninstallation, existing-stack adoption, separate-Bench
-placement, Docker mutation, image rebuilding, and automatic restoration remain
-out of scope.
+placement, arbitrary custom applications, and automatic restoration remain out
+of scope.

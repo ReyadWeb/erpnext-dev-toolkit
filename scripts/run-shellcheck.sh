@@ -86,6 +86,7 @@ targets=(
   scripts/test-staged-signature.sh
   scripts/test-inventory-compatibility.sh
   scripts/test-operation-planner.sh
+  scripts/test-docker-durability.sh
   scripts/test-host-os-output.sh
   scripts/test-install-self-path.sh
   scripts/test-legacy-modular-bootstrap.sh
