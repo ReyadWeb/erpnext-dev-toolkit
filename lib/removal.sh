@@ -15,6 +15,7 @@ REMOVAL_INSTALLED_SITES=""
 REMOVAL_ALL_SITES=""
 REMOVAL_BLOCKER=""
 REMOVAL_FAILURE_STAGE=""
+REMOVAL_SERVICE_WAS_ACTIVE=0
 
 removal_validate_scope() {
 	case "$1" in site | remove-unused-code | erpnext-site | convert-frappe-only) return 0 ;; *) return 1 ;; esac
@@ -188,12 +189,22 @@ removal_site_action() {
 }
 
 removal_native_preflight() {
-	local path="${PLAN_BENCH}/apps/${PLAN_APP}" remote
-	[[ "$PLAN_BENCH" == /* && -d "$path/.git" && ! -L "$PLAN_BENCH" && ! -L "$path" ]] || return 1
-	[[ -z "$(git -C "$path" status --porcelain)" ]] || return 1
-	git -C "$path" symbolic-ref -q HEAD >/dev/null || return 1
-	remote="$(git -C "$path" remote get-url origin)" || return 1
-	[[ "$remote" == "$PLAN_REPO" || "$remote" == "${PLAN_REPO}.git" ]] || return 1
+	local app path remote branch
+	[[ "$PLAN_BENCH" == /* && -d "$PLAN_BENCH/apps" && ! -L "$PLAN_BENCH" ]] || return 1
+	while IFS= read -r app; do
+		load_validated_app_catalog_record "$app" || return 1
+		path="${PLAN_BENCH}/apps/${app}"
+		[[ -d "$path/.git" && ! -L "$path" ]] || return 1
+		[[ -z "$(git -C "$path" status --porcelain)" ]] || return 1
+		git -C "$path" symbolic-ref -q HEAD >/dev/null || return 1
+		[[ -z "$(git -C "$path" rev-parse -q --verify MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD BISECT_HEAD 2>/dev/null)" ]] || return 1
+		branch="$(git -C "$path" symbolic-ref --short HEAD)"
+		[[ -z "$LIB_APP_BRANCH" || "$branch" == "$LIB_APP_BRANCH" ]] || return 1
+		remote="$(git -C "$path" remote get-url origin)" || return 1
+		[[ "$remote" == "$LIB_APP_REPO" || "$remote" == "${LIB_APP_REPO}.git" ]] || return 1
+	done < <(inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" '$1=="APP"&&$2==s&&$10=="managed"{print $3}' | sort -u)
+	command -v git >/dev/null && command -v df >/dev/null || return 1
+	[[ "$(df -Pk "$PLAN_BENCH" | awk 'NR==2{print $4}')" -ge 1048576 ]] || return 1
 }
 
 removal_set_maintenance() {
@@ -218,6 +229,22 @@ removal_verify_sites() {
 		docker_custom_image_verify_runtime "$(docker_custom_image_selected_app_names)"
 	else
 		wait_for_erpnext_ready
+	fi
+}
+
+removal_post_maintenance() {
+	local site bench_q site_q
+	printf -v bench_q %q "$PLAN_BENCH"
+	while IFS= read -r site; do
+		printf -v site_q %q "$site"
+		if [[ "$PLAN_ENGINE" == docker ]]; then
+			docker_bench --site "$site" migrate && docker_bench --site "$site" clear-cache || return 1
+		else
+			run_as_frappe "cd ${bench_q} && bench --site ${site_q} migrate && bench --site ${site_q} clear-cache" || return 1
+		fi
+	done < <(printf '%s\n' "$REMOVAL_ALL_SITES" | tr ',' '\n')
+	if [[ "$PLAN_ENGINE" == native ]]; then
+		run_as_frappe "cd ${bench_q} && bench build" || return 1
 	fi
 }
 
@@ -276,7 +303,8 @@ removal_execute() {
 		planner_checkpoint candidate-ready validated || return 1
 	fi
 	[[ "$OPERATION_CODE_DECISION" != remove ]] || sites_to_backup="$REMOVAL_ALL_SITES"
-	OPERATION_ORIGINAL_STATE="maintenance=preserve,scheduler=preserve,services=preserve"
+	if [[ "$PLAN_ENGINE" == native ]] && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME:-erpnext-dev}" 2>/dev/null; then REMOVAL_SERVICE_WAS_ACTIVE=1; fi
+	OPERATION_ORIGINAL_STATE="maintenance=off,scheduler=preserve,service_active=${REMOVAL_SERVICE_WAS_ACTIVE}"
 	OPERATION_PREVIOUS_REVISIONS="${PLAN_APP}@$(inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" -v a="$PLAN_APP" '$1=="APP"&&$2==s&&$3==a{print $7;exit}')"
 	if [[ "$PLAN_ENGINE" == native && "$OPERATION_CODE_DECISION" == remove ]]; then
 		source_ref="${PLAN_BENCH}/.erpnext-dev-recovery/${OPERATION_ID}.source.bundle"
@@ -324,8 +352,10 @@ removal_execute() {
 	fi
 	inventory_collect
 	while IFS= read -r site; do planner_site_installed "$PLAN_STACK" "$site" "$PLAN_APP" && return 32; done < <(printf '%s\n' "$OPERATION_SELECTED_SITES" | tr ',' '\n')
+	REMOVAL_FAILURE_STAGE="post-uninstall-maintenance"
+	removal_post_maintenance || return 33
 	removal_set_maintenance off || return 33
-	restart_erpnext_service || return 33
+	if [[ "$PLAN_ENGINE" == docker || "$REMOVAL_SERVICE_WAS_ACTIVE" == 1 ]]; then restart_erpnext_service || return 33; fi
 	inventory_collect
 	REMOVAL_FAILURE_STAGE=verification
 	removal_verify_sites || return 32
