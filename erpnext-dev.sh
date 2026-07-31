@@ -105,6 +105,13 @@ if [[ -n "${DEPLOYMENT_ENGINE+x}" ]]; then
   DEPLOYMENT_ENGINE_ENV_PROVIDED=1
 fi
 DEPLOYMENT_ENGINE="${DEPLOYMENT_ENGINE:-}"
+# Installation content profile. The long-standing Frappe + ERPNext stack is the
+# default; native installs may explicitly select a Frappe-only site.
+INSTALLATION_PROFILE_ENV_PROVIDED=0
+if [[ -n "${INSTALLATION_PROFILE+x}" ]]; then
+  INSTALLATION_PROFILE_ENV_PROVIDED=1
+fi
+INSTALLATION_PROFILE="${INSTALLATION_PROFILE:-}"
 # Docker engine settings (used only when DEPLOYMENT_ENGINE=docker). See lib/docker.sh.
 DOCKER_WORKDIR="${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}"
 FRAPPE_DOCKER_REPO="${FRAPPE_DOCKER_REPO:-https://github.com/frappe/frappe_docker.git}"
@@ -278,7 +285,7 @@ _ERPNEXT_DEV_BOOTSTRAP_SIGNING_FINGERPRINT_DEFAULT="BFC10C79427CF73496EA6F5A30BF
 
 _erpnext_dev_required_lib_files() {
   printf '%s\n' \
-    common.sh ui.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
+    common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
     dashboard.sh healing.sh menu.sh security.sh update.sh
 }
@@ -535,6 +542,12 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/ui.sh" ]]; then
 fi
 # shellcheck source=lib/ui.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/ui.sh"
+if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/profile.sh" ]]; then
+  echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/profile.sh" >&2
+  exit 1
+fi
+# shellcheck source=lib/profile.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/profile.sh"
 if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/config.sh" ]]; then
   echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/config.sh" >&2
   exit 1
@@ -1581,6 +1594,9 @@ Examples:
 
 Options:
   -y, --yes  Assume yes for supported confirmations
+  --profile PROFILE
+             Installation content: recommended (default) or frappe-only.
+             Frappe-only is native-only in Phase 1.
 
 Verified signed-release bootstrap:
 $(verified_release_bundle_bootstrap "first-run" "  ")
@@ -1599,6 +1615,7 @@ Common environment overrides:
   BACKUP_RETENTION_KEEP_COMPLETE=14
   BACKUP_RETENTION_WARN_DISK_PERCENT=80
   ERPNEXT_ALLOW_UNSAFE_INSTALL=false
+  INSTALLATION_PROFILE=recommended|frappe-only
   OFF_VM_BACKUP_TARGET=backup@example.com:/srv/erpnext-backups/site/
   OFF_VM_BACKUP_SSH_IDENTITY=/root/.ssh/id_ed25519
   OFF_VM_BACKUP_RSYNC_DELETE=false
@@ -1640,6 +1657,19 @@ parse_args() {
     case "$1" in
       -y | --yes)
         ASSUME_YES=1
+        shift
+        ;;
+      --profile)
+        shift
+        [[ $# -gt 0 ]] || fail "--profile requires recommended or frappe-only."
+        INSTALLATION_PROFILE="$1"
+        INSTALLATION_PROFILE_ENV_PROVIDED=1
+        shift
+        ;;
+      --profile=*)
+        INSTALLATION_PROFILE="${1#*=}"
+        INSTALLATION_PROFILE_ENV_PROVIDED=1
+        [[ -n "$INSTALLATION_PROFILE" ]] || fail "--profile requires a non-empty value."
         shift
         ;;
       --plain)
@@ -1692,6 +1722,12 @@ parse_args() {
 
 main() {
   parse_args "$@"
+  if [[ "$INSTALLATION_PROFILE_ENV_PROVIDED" -eq 1 ]]; then
+    INSTALLATION_PROFILE="$(normalize_installation_profile "$INSTALLATION_PROFILE" 2>/dev/null)" \
+      || fail "Invalid installation profile: ${INSTALLATION_PROFILE}. Supported: recommended, frappe-only."
+  fi
+  validate_platform_profile_combination \
+    || fail "Invalid platform/profile selection; no system changes were made."
   # Re-apply color policy after flags such as --no-color / NO_COLOR.
   # Uses ERPNEXT_DEV_STDOUT_TTY (snapshotted before tee) so OK/WARN/FAIL
   # colors survive the log redirect on interactive terminals.

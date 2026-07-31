@@ -197,6 +197,7 @@ run_installation_status() {
   echo "============================================================"
   echo "ERPNext Installation Status"
   echo "============================================================"
+  status_line "Install profile" "INFO" "$(installation_profile_label)"
   local install_status
   install_status="$(install_state)"
   if [[ "$install_status" == "Installed" ]]; then
@@ -225,10 +226,14 @@ run_installation_status() {
     status_line "Frappe app files" "FAIL" "apps/frappe missing"
   fi
 
-  if check_bench_app_installed erpnext; then
-    status_line "ERPNext app files" "OK" "apps/erpnext exists"
+  if installation_profile_requires_erpnext; then
+    if check_bench_app_installed erpnext; then
+      status_line "ERPNext app files" "OK" "apps/erpnext exists"
+    else
+      status_line "ERPNext app files" "WARN" "required by profile; apps/erpnext missing"
+    fi
   else
-    status_line "ERPNext app files" "WARN" "apps/erpnext missing"
+    status_line "ERPNext app files" "INFO" "not required by Frappe-only profile"
   fi
 
   if site_exists; then
@@ -243,10 +248,12 @@ run_installation_status() {
     status_line "Site app: frappe" "WARN" "not confirmed on ${SITE_NAME}"
   fi
 
-  if site_app_installed erpnext; then
-    status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
-  else
-    status_line "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
+  if installation_profile_requires_erpnext; then
+    if site_app_installed erpnext; then
+      status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
+    else
+      status_line "Site app: erpnext" "WARN" "required by profile; not confirmed on ${SITE_NAME}"
+    fi
   fi
 
   echo "============================================================"

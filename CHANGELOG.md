@@ -52,6 +52,7 @@
 
 ### Added
 
+- Added native installation profiles with the recommended Frappe + ERPNext stack remaining the default and an explicit `--profile frappe-only` path, plus profile-aware install, health, final-QA, persistence, and hermetic regression policies.
 - Added `protect-local-app-changes` and an Operations > Updates > Protect local changes menu action to save dirty app working trees before ERPNext/Frappe updates.
 
 ### Fixed

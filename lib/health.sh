@@ -66,6 +66,7 @@ HEALTH_CHECK_STATUS=${overall}
 HEALTH_CHECK_RECORDED_AT=$(date -Iseconds)
 HEALTH_CHECK_SITE=${SITE_NAME}
 HEALTH_CHECK_DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-unknown}
+HEALTH_CHECK_INSTALLATION_PROFILE=$(effective_installation_profile)
 HEALTH_CHECK_INSTALL=${installed}
 HEALTH_CHECK_RUNTIME=${runtime}
 HEALTH_CHECK_HTTPS_STATUS=${ssl_status}
@@ -104,12 +105,15 @@ run_health_check() {
   health_snapshot_collect
   health_snapshot_write_compat_state
 
-  local overall_legacy
+  local overall_legacy profile_pair
   overall_legacy="$(health_legacy_ok_warn "${SNAPSHOT_OVERALL:-UNKNOWN}")"
 
   ui_box_start "Health Check"
   status_line "Site" "INFO" "${SNAPSHOT_SITE:-$SITE_NAME}"
   status_line "Engine" "INFO" "${SNAPSHOT_ENGINE_LABEL:-native}"
+  status_line "Install profile" "INFO" "$(installation_profile_label)"
+  profile_pair="$(installation_profile_health_pair)"
+  status_line "Profile policy" "${profile_pair%%|*}" "${profile_pair#*|}"
   if [[ "${SNAPSHOT_INSTALL:-}" == "Installed" ]]; then
     status_line "Install" "OK" "${SNAPSHOT_INSTALL}"
   else
@@ -669,7 +673,7 @@ show_release_readiness() {
 
   local syntax_status syntax_detail installed runtime ssl_pair ssl_status ssl_detail
   local ufw_status fail2ban_status latest_lines completeness release_state rehearsal_pair rehearsal_state rehearsal_detail go_pair go_state go_detail
-  local docker_backup_dir docker_rehearsal_status docker_rehearsal_at
+  local docker_backup_dir docker_rehearsal_status docker_rehearsal_at profile_pair
 
   if bash -n "$0" >/dev/null 2>&1; then
     syntax_status="OK"
@@ -680,6 +684,7 @@ show_release_readiness() {
   fi
 
   installed="$(install_state 2>/dev/null || echo "Unknown")"
+  profile_pair="$(installation_profile_health_pair)"
   runtime="$(runtime_state 2>/dev/null || echo "Unknown")"
   if deployment_engine_is_docker; then
     if docker_is_production && docker_https_enabled; then
@@ -732,6 +737,7 @@ show_release_readiness() {
   release_state="OK"
   [[ "$syntax_status" == "OK" ]] || release_state="WARN"
   [[ "$installed" == "Installed" ]] || release_state="WARN"
+  [[ "${profile_pair%%|*}" == "OK" ]] || release_state="WARN"
   [[ "$runtime" == Running* ]] || release_state="WARN"
   [[ "$ssl_status" == "OK" ]] || release_state="WARN"
   [[ "${ufw_status%%|*}" == "OK" ]] || release_state="WARN"
@@ -743,6 +749,8 @@ show_release_readiness() {
   status_line "Syntax" "$syntax_status" "$syntax_detail"
   status_line "Site" "INFO" "${SITE_NAME} (${SITE_NAME_SOURCE})"
   status_line "Deployment mode" "INFO" "${DEPLOYMENT_MODE:-unknown}"
+  status_line "Install profile" "INFO" "$(installation_profile_label)"
+  status_line "Profile policy" "${profile_pair%%|*}" "${profile_pair#*|}"
   status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
   status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
   status_line "HTTPS" "$ssl_status" "$ssl_detail"
@@ -827,6 +835,8 @@ show_release_notes_guide() {
 
 final_qa_wizard() {
   require_sudo
+  validate_platform_profile_combination \
+    || fail "Final QA cannot evaluate an invalid platform/profile selection."
 
   while true; do
     ui_submenu_header "Final QA" \
