@@ -24,6 +24,7 @@ docs/security/PRODUCTION-HARDENING.md
 docs/security/SECURITY-HISTORY.md
 docs/HEALTH-ARCHITECTURE.md
 docs/INVENTORY-COMPATIBILITY.md
+docs/OPERATION-PLANNER.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
 docs/ROADMAP-HISTORY.md
@@ -38,6 +39,7 @@ scripts/test-repo-workflow-release-run.sh
 scripts/test-health-snapshot.sh
 scripts/test-platform-profiles.sh
 scripts/test-inventory-compatibility.sh
+scripts/test-operation-planner.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
@@ -77,6 +79,7 @@ lib/install.sh
 lib/ops.sh
 lib/dashboard.sh
 lib/inventory.sh
+lib/planner.sh
 lib/healing.sh
 lib/menu.sh
 lib/security.sh

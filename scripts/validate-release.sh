@@ -257,6 +257,9 @@ pass "platform/profile selection tests passed"
 scripts/test-inventory-compatibility.sh
 pass "inventory/compatibility tests passed"
 
+scripts/test-operation-planner.sh
+pass "operation planner tests passed"
+
 if [[ "${SKIP_SHELLCHECK:-0}" == "1" ]]; then
   command -v shellcheck >/dev/null 2>&1 \
     || fail "SKIP_SHELLCHECK=1 requires shellcheck to be installed"

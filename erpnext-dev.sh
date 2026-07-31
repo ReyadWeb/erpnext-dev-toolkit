@@ -255,6 +255,8 @@ DASHBOARD_DETAILS="${DASHBOARD_DETAILS:-0}"
 FORCE_NO_COLOR="${FORCE_NO_COLOR:-0}"
 ACTION_ARG="${ACTION_ARG:-}"
 ACTION_ARG2="${ACTION_ARG2:-}"
+QUICK_INSTALL_SITE="${QUICK_INSTALL_SITE:-}"
+QUICK_INSTALL_PREVIEW="${QUICK_INSTALL_PREVIEW:-0}"
 HEALTH_CHECK_ON_CALENDAR="${HEALTH_CHECK_ON_CALENDAR:-hourly}"
 HEALTH_CHECK_RANDOM_DELAY="${HEALTH_CHECK_RANDOM_DELAY:-10m}"
 HEALTH_CHECK_DISK_WARN_PERCENT="${HEALTH_CHECK_DISK_WARN_PERCENT:-80}"
@@ -288,7 +290,7 @@ _erpnext_dev_required_lib_files() {
   printf '%s\n' \
     common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
-    dashboard.sh inventory.sh healing.sh menu.sh security.sh update.sh
+    dashboard.sh inventory.sh planner.sh healing.sh menu.sh security.sh update.sh
 }
 
 _erpnext_dev_missing_lib_files() {
@@ -663,6 +665,12 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/inventory.sh" ]]; then
 fi
 # shellcheck source=lib/inventory.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/inventory.sh"
+if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/planner.sh" ]]; then
+  echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/planner.sh" >&2
+  exit 1
+fi
+# shellcheck source=lib/planner.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/planner.sh"
 if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/healing.sh" ]]; then
   echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/healing.sh" >&2
   exit 1
@@ -1377,6 +1385,8 @@ Core:
   app status          Read-only stack/application inventory status
   app compatibility APP
                       Evaluate compatibility without fetching or running app code
+  app install APP --site SITE [--preview] [--yes]
+                      Plan, back up, install, and verify a curated app on native Bench
   site list           Read-only site and installed-application inventory
   update-toolkit      Atomic update: verified bundle -> releases/<ver> -> current symlink
   toolkit-rollback    Switch the current symlink back to the previously installed release
@@ -1700,6 +1710,21 @@ parse_args() {
         [[ -n "$INSTALLATION_PROFILE" ]] || fail "--profile requires a non-empty value."
         shift
         ;;
+      --site)
+        shift
+        [[ $# -gt 0 ]] || fail "--site requires an exact site name."
+        QUICK_INSTALL_SITE="$1"
+        shift
+        ;;
+      --site=*)
+        QUICK_INSTALL_SITE="${1#*=}"
+        [[ -n "$QUICK_INSTALL_SITE" ]] || fail "--site requires an exact site name."
+        shift
+        ;;
+      --preview | --dry-run)
+        QUICK_INSTALL_PREVIEW=1
+        shift
+        ;;
       --plain)
         DOCTOR_FORMAT="plain"
         shift
@@ -1762,7 +1787,8 @@ main() {
   erpnext_dev_init_terminal_colors
   ui_init
 
-  if action_requires_lock "${ACTION:-menu}"; then
+  if action_requires_lock "${ACTION:-menu}" \
+    || [[ "${ACTION:-}" == app && "${ACTION_ARG:-}" == install && "$QUICK_INSTALL_PREVIEW" -ne 1 ]]; then
     acquire_toolkit_lock
   fi
 
@@ -1824,7 +1850,14 @@ main() {
     local-ssl-menu | local-https | local-vm-ssl) show_local_ssl_menu main ;;
     local-ssl-wizard | ssl-wizard) run_local_ssl_wizard main ;;
     backup-menu) run_backup_maintenance_menu ;;
-    app) run_app_inventory_command "${ACTION_ARG:-status}" "${ACTION_ARG2:-}" ;;
+    app)
+      if [[ "${ACTION_ARG:-status}" == install ]]; then
+        [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd app install APP --site SITE)"
+        run_quick_app_install "$ACTION_ARG2"
+      else
+        run_app_inventory_command "${ACTION_ARG:-status}" "${ACTION_ARG2:-}"
+      fi
+      ;;
     site) run_site_inventory_command "${ACTION_ARG:-list}" "${ACTION_ARG2:-}" ;;
     app-library | apps) show_app_library_menu ;;
     app-install-wizard | app-wizard) run_app_install_wizard ;;
