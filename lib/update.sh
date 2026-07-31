@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034 # planner journal fields are consumed by sourced sibling modules
 # ============================================================
 # lib/update.sh — guarded ERPNext/Frappe version upgrades
 #
@@ -449,4 +450,303 @@ run_update_rollback() {
   echo "  $(toolkit_cmd restore-full)"
   ui_box_end
   return "$failed"
+}
+
+# Phase 5 managed update lifecycle. This deliberately coexists with the legacy
+# safe-update wizard so existing command contracts do not change.
+MANAGED_UPDATE_POLICY="${MANAGED_UPDATE_POLICY:-v1-release-line-16}"
+MANAGED_UPDATE_MODE="${MANAGED_UPDATE_MODE:-}"
+MANAGED_UPDATE_APP="${MANAGED_UPDATE_APP:-}"
+MANAGED_UPDATE_SITE="${MANAGED_UPDATE_SITE:-}"
+MANAGED_UPDATE_PREVIEW="${MANAGED_UPDATE_PREVIEW:-0}"
+UPDATE_TARGET_SET=""
+UPDATE_CURRENT_SET=""
+UPDATE_AFFECTED_SITES=""
+UPDATE_FAILURE_STAGE=""
+
+managed_update_validate_mode() {
+  case "$1" in app | safe | full) return 0 ;; *) return 1 ;; esac
+}
+
+managed_update_stable_branch() {
+  case "$1" in *nightly* | *preview* | *alpha* | *beta* | *develop*) return 1 ;; *) return 0 ;; esac
+}
+
+managed_update_resolve_commit() {
+  local repo="$1" revision="$2" result
+  [[ "$repo" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(\.git)?$ ]] || return 1
+  validate_branch_name "$revision" || return 1
+  managed_update_stable_branch "$revision" || return 1
+  result="$(git ls-remote --refs "$repo" "refs/heads/${revision}" "refs/tags/${revision}^{}" 2>/dev/null | awk 'NR==1{print $1}')"
+  [[ "$result" =~ ^[a-f0-9]{40,64}$ ]] || return 1
+  printf '%s\n' "$result"
+}
+
+managed_update_inventory_apps() {
+  inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" '$1=="APP"&&$2==s&&$10=="managed"{print $3}'
+}
+
+managed_update_sites() {
+  inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" '$1=="SITE"&&$2==s&&$4=="known"{print $3}'
+}
+
+managed_update_select_target() {
+  local record selected="" count=0 engine
+  engine="$(effective_deployment_engine)"
+  while IFS= read -r record; do
+    [[ "$record" == STACK\|* ]] || continue
+    [[ "$(printf '%s' "$record" | cut -d'|' -f3)" == "$engine" ]] || continue
+    [[ "$(printf '%s' "$record" | cut -d'|' -f6)" == managed ]] || continue
+    [[ "$(printf '%s' "$record" | cut -d'|' -f7)" == clean ]] || continue
+    selected="$record"; count=$((count + 1))
+  done < <(inventory_records_sorted)
+  [[ "$count" -eq 1 ]] || return 1
+  PLAN_STACK="$(printf '%s' "$selected" | cut -d'|' -f2)"
+  PLAN_ENGINE="$engine"
+  PLAN_BENCH="${PLAN_STACK#native:}"
+}
+
+managed_update_build_plan() {
+  local mode="$1" requested="${2:-}" app record current branch target repo management source repo_state
+  managed_update_validate_mode "$mode" || return 20
+  [[ "$mode" != app ]] || inventory_valid_name "$requested" || return 20
+  OPERATION_TYPE=managed-update
+  OPERATION_UPDATE_MODE="$mode"
+  PLAN_APP="${requested:-managed-stack}"
+  PLAN_CATALOG_ID="$PLAN_APP"
+  PLAN_INSTALL_NAME="$PLAN_APP"
+  PLAN_CURRENT_PROFILE="$(effective_installation_profile)"
+  PLAN_RESULT_PROFILE="$PLAN_CURRENT_PROFILE"
+  inventory_collect
+  managed_update_select_target || return 21
+  UPDATE_AFFECTED_SITES="$(managed_update_sites | paste -sd, -)"
+  [[ -n "$UPDATE_AFFECTED_SITES" ]] || return 21
+  [[ -z "$MANAGED_UPDATE_SITE" || ",${UPDATE_AFFECTED_SITES}," == *",${MANAGED_UPDATE_SITE},"* ]] || return 21
+  UPDATE_CURRENT_SET="" UPDATE_TARGET_SET=""
+  local -a apps=()
+  if [[ "$mode" == app ]]; then
+    PLAN_APP="$requested"
+    planner_resolve_dependencies || return 22
+    if [[ -n "$PLAN_DEPENDENCIES" ]]; then
+      mapfile -t apps < <(printf '%s\n' "$PLAN_DEPENDENCIES" | tr ',' '\n')
+    fi
+    apps+=("$requested")
+  elif [[ "$mode" == safe ]]; then
+    apps=(frappe)
+    installation_profile_requires_erpnext && apps+=(erpnext)
+  else
+    mapfile -t apps < <(managed_update_inventory_apps)
+  fi
+  ((${#apps[@]} > 0)) || return 22
+  for app in "${apps[@]}"; do
+    load_validated_app_catalog_record "$app" || return 22
+    [[ "$LIB_APP_TRUST" == official || "$LIB_APP_TRUST" == trusted ]] || return 22
+    branch="$LIB_APP_BRANCH"
+    [[ -n "$branch" ]] || return 24
+    managed_update_stable_branch "$branch" || return 22
+    repo="$LIB_APP_REPO"
+    record="$(inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" -v a="$app" '$1=="APP"&&$2==s&&$3==a{print;exit}')"
+    [[ -n "$record" ]] || return 22
+    current="$(printf '%s' "$record" | cut -d'|' -f7)"
+    source="$(printf '%s' "$record" | cut -d'|' -f8)"
+    management="$(printf '%s' "$record" | cut -d'|' -f10)"
+    repo_state="$(printf '%s' "$record" | cut -d'|' -f11)"
+    [[ "$management" == managed && "$current" =~ ^[a-f0-9]{7,64}$ ]] || return 25
+    if [[ "$PLAN_ENGINE" == native ]]; then
+      [[ "$source" == "$repo" || "$source" == "${repo}.git" ]] || return 25
+      [[ "$repo_state" == clean ]] || return 25
+    fi
+    inventory_compatibility_evaluate "$app" || return 22
+    [[ "$INVENTORY_COMPAT_STATUS" == COMPATIBLE ]] || return 22
+    target="$(managed_update_resolve_commit "$repo" "$branch")" || return 24
+    UPDATE_CURRENT_SET+="${UPDATE_CURRENT_SET:+,}${app}@${current}"
+    UPDATE_TARGET_SET+="${UPDATE_TARGET_SET:+,}${app}@${target}"
+  done
+  PLAN_STACK="${PLAN_STACK}" PLAN_BENCH="${PLAN_BENCH}" PLAN_SITE="${MANAGED_UPDATE_SITE:-${UPDATE_AFFECTED_SITES%%,*}}"
+  PLAN_CODE_STATE=available PLAN_SITE_STATE=installed PLAN_DEPENDENCIES=validated PLAN_COMPATIBILITY=compatible PLAN_TRUST=trusted
+  PLAN_SHARED_SITES="$UPDATE_AFFECTED_SITES"
+  PLAN_ACTIONS="recovery-checkpoint,backup-all-sites,maintenance,update-code-or-image,migrate-all-sites,assets,services,verify-all-sites"
+  PLAN_VERIFICATION="revisions,installed-apps,database,http,workers,scheduler,queues,redis,assets,services,inventory,profile"
+  PLAN_INVENTORY_FINGERPRINT="$(planner_inventory_fingerprint)"
+  PLAN_STARTED_AT="$(planner_timestamp)"
+  OPERATION_ID="update-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  OPERATION_FILE="${OPERATION_STATE_DIR}/${OPERATION_ID}.state"
+  OPERATION_STATUS=planned OPERATION_CHECKPOINTS=planned
+  OPERATION_TARGET_SET="$UPDATE_TARGET_SET" OPERATION_AFFECTED_SITES="$UPDATE_AFFECTED_SITES"
+  if [[ "$UPDATE_CURRENT_SET" == "$UPDATE_TARGET_SET" ]]; then
+    OPERATION_STATUS=already-complete
+  fi
+  return 0
+}
+
+managed_update_preview() {
+  if [[ "${DOCTOR_FORMAT:-human}" == json ]]; then
+    printf '{"schema_version":1,"read_only":true,"operation_type":"managed-update","mode":"%s","engine":"%s","stack":' "$OPERATION_UPDATE_MODE" "$PLAN_ENGINE"
+    inventory_json_escape "$PLAN_STACK"
+    printf ',"profile":"%s","affected_sites":' "$PLAN_CURRENT_PROFILE"
+    inventory_json_escape "$UPDATE_AFFECTED_SITES"
+    printf ',"current_set":'
+    inventory_json_escape "$UPDATE_CURRENT_SET"
+    printf ',"target_set":'
+    inventory_json_escape "$UPDATE_TARGET_SET"
+    printf ',"status":"%s"}\n' "$OPERATION_STATUS"
+    return
+  fi
+  ui_box_start "Managed Update Plan"
+  status_line "Mode" "INFO" "$OPERATION_UPDATE_MODE"
+  status_line "Deployment" "INFO" "$PLAN_ENGINE"
+  status_line "Stack" "INFO" "$PLAN_STACK"
+  status_line "Profile" "INFO" "$PLAN_CURRENT_PROFILE (preserved)"
+  status_line "Affected sites" "INFO" "$UPDATE_AFFECTED_SITES"
+  status_line "Current revisions" "INFO" "$UPDATE_CURRENT_SET"
+  status_line "Pinned targets" "INFO" "$UPDATE_TARGET_SET"
+  status_line "Shared impact" "WARN" "shared code/image; every affected site is backed up, migrated, and verified"
+  status_line "Maintenance" "WARN" "controlled maintenance and service restoration"
+  status_line "Recovery" "INFO" "exact revisions or previous image plus verified per-site backups"
+  ui_box_end
+}
+
+managed_update_native_preflight() {
+  local item app path branch remote
+  [[ "$PLAN_BENCH" == /* && -d "$PLAN_BENCH/apps" && ! -L "$PLAN_BENCH" ]] || return 1
+  while IFS= read -r item; do
+    app="${item%@*}" path="${PLAN_BENCH}/apps/${app}"
+    [[ -d "$path/.git" && ! -L "$path" ]] || return 1
+    [[ -z "$(git -C "$path" status --porcelain)" ]] || return 1
+    branch="$(git -C "$path" symbolic-ref --short -q HEAD)" || return 1
+    load_validated_app_catalog_record "$app" || return 1
+    [[ "$branch" == "$LIB_APP_BRANCH" ]] || return 1
+    remote="$(git -C "$path" remote get-url origin)" || return 1
+    [[ "$remote" == "$LIB_APP_REPO" || "$remote" == "${LIB_APP_REPO}.git" ]] || return 1
+    [[ -z "$(git -C "$path" rev-parse -q --verify MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD BISECT_HEAD 2>/dev/null)" ]] || return 1
+  done < <(printf '%s\n' "$UPDATE_TARGET_SET" | tr ',' '\n')
+  [[ "$(df -Pk "$PLAN_BENCH" | awk 'NR==2{print $4}')" -ge 5242880 ]] || return 1
+}
+
+managed_update_backup_native_sites() {
+  local site saved="$SITE_NAME" refs=""
+  while IFS= read -r site; do
+    SITE_NAME="$site"
+    create_site_backup true && verify_latest_backup_set >/dev/null || { SITE_NAME="$saved"; return 1; }
+    refs+="${refs:+,}${site}:verified"
+  done < <(printf '%s\n' "$UPDATE_AFFECTED_SITES" | tr ',' '\n')
+  SITE_NAME="$saved" OPERATION_BACKUP_REFERENCE="$refs"
+}
+
+managed_update_execute_native() {
+  local item app target site fingerprint
+  fingerprint="$(planner_inventory_fingerprint)"
+  [[ "$fingerprint" == "$PLAN_INVENTORY_FINGERPRINT" ]] || return 34
+  UPDATE_FAILURE_STAGE=preflight
+  managed_update_native_preflight || return 25
+  OPERATION_PREVIOUS_REVISIONS="$UPDATE_CURRENT_SET"
+  OPERATION_ORIGINAL_STATE="maintenance=off,service=$(systemctl is-active "${ERPNEXT_SERVICE_NAME:-erpnext-dev}" 2>/dev/null || printf inactive),scheduler=preserve"
+  planner_checkpoint recovery-checkpoint-ready validated || return 1
+  UPDATE_FAILURE_STAGE=backup
+  managed_update_backup_native_sites || return 30
+  planner_checkpoint backup-complete backup-complete || return 1
+  UPDATE_FAILURE_STAGE=maintenance
+  run_as_frappe_quiet "enter maintenance" "cd '${PLAN_BENCH}' && bench set-maintenance-mode on" || return 31
+  planner_checkpoint maintenance-entered mutation-started || return 1
+  while IFS= read -r item; do
+    UPDATE_FAILURE_STAGE=code-update
+    app="${item%@*}" target="${item#*@}"
+    run_as_frappe "git -C '${PLAN_BENCH}/apps/${app}' fetch --no-tags origin '${target}' && git -C '${PLAN_BENCH}/apps/${app}' merge-base --is-ancestor HEAD '${target}' && git -C '${PLAN_BENCH}/apps/${app}' merge --ff-only '${target}'" || return 31
+  done < <(printf '%s\n' "$UPDATE_TARGET_SET" | tr ',' '\n')
+  planner_checkpoint code-or-image-updated mutation-complete || return 1
+  while IFS= read -r site; do
+    UPDATE_FAILURE_STAGE=migration
+    run_as_frappe_quiet "update migrate ${site}" "cd '${PLAN_BENCH}' && bench --site '${site}' migrate" || return 33
+  done < <(printf '%s\n' "$UPDATE_AFFECTED_SITES" | tr ',' '\n')
+  planner_checkpoint migration-complete mutation-complete || return 1
+  UPDATE_FAILURE_STAGE=assets
+  run_as_frappe_quiet "update assets" "cd '${PLAN_BENCH}' && bench build" || return 33
+  planner_checkpoint assets-complete mutation-complete || return 1
+  UPDATE_FAILURE_STAGE=services
+  run_as_frappe_quiet "leave maintenance" "cd '${PLAN_BENCH}' && bench set-maintenance-mode off" || return 33
+  restart_erpnext_service || return 33
+  planner_checkpoint services-restored mutation-complete || return 1
+  UPDATE_FAILURE_STAGE=verification
+  wait_for_erpnext_ready || return 32
+  inventory_collect
+  planner_checkpoint verification-complete verification-complete || return 1
+  PLAN_COMPLETED_AT="$(planner_timestamp)"; planner_checkpoint completed completed
+}
+
+managed_update_execute_docker() {
+  local profiles=() item app target actual fingerprint site mode
+  mode="$(docker_mode)"
+  if [[ -f "$DOCKER_APP_MANIFEST_FILE" ]]; then
+    docker_validate_app_manifest "$DOCKER_APP_MANIFEST_FILE" || return 25
+    mapfile -t profiles < <(awk -F'\t' '$1=="APP"&&$2!="frappe"&&$2!="erpnext"{print $2}' "$DOCKER_APP_MANIFEST_FILE")
+  elif [[ "$mode" == development ]]; then
+    mapfile -t profiles < <(docker_collect_desired_app_profiles)
+  else
+    return 25
+  fi
+  OPERATION_PREVIOUS_IMAGE="${DOCKER_ERPNEXT_IMAGE}@${DOCKER_ERPNEXT_IMAGE_DIGEST:-unrecorded}"
+  OPERATION_ORIGINAL_STATE="maintenance=off,deployment=${DOCKER_PROJECT_NAME:-erpnext-dev},scheduler=preserve,persistence=managed-image"
+  planner_prepare_state_dir || return 1
+  [[ ! -L "${OPERATION_STATE_DIR}/${OPERATION_ID}.previous-manifest.tsv" ]] || return 1
+  if [[ -f "$DOCKER_APP_MANIFEST_FILE" ]]; then
+    $SUDO cp "$DOCKER_APP_MANIFEST_FILE" "${OPERATION_STATE_DIR}/${OPERATION_ID}.previous-manifest.tsv" || return 1
+  fi
+  UPDATE_FAILURE_STAGE=manifest
+  docker_write_apps_json "${profiles[@]}" || return 25
+  planner_checkpoint recovery-checkpoint-ready validated || return 1
+  UPDATE_FAILURE_STAGE=image-build
+  ASSUME_YES=1 docker_build_custom_image || return 31
+  while IFS= read -r item; do
+    app="${item%@*}" target="${item#*@}"
+    actual="$(${SUDO:-} docker run --rm --entrypoint git "$(docker_env_value "$DOCKER_CUSTOM_IMAGE_STATE_FILE" DOCKER_CUSTOM_IMAGE)" -C "/home/frappe/frappe-bench/apps/${app}" rev-parse HEAD 2>/dev/null)"
+    [[ "$actual" == "$target" ]] || { UPDATE_FAILURE_STAGE=image-verification; return 32; }
+  done < <(printf '%s\n' "$UPDATE_TARGET_SET" | tr ',' '\n')
+  planner_checkpoint image-verified validated || return 1
+  fingerprint="$(planner_inventory_fingerprint)"
+  [[ "$fingerprint" == "$PLAN_INVENTORY_FINGERPRINT" ]] || return 34
+  UPDATE_FAILURE_STAGE=backup
+  planner_docker_backup_all || return 30
+  planner_checkpoint backup-complete backup-complete || return 1
+  UPDATE_FAILURE_STAGE=deployment
+  DOCKER_DEFER_MANIFEST_PROMOTION=1 ASSUME_YES=1 docker_deploy_custom_image || return 31
+  planner_checkpoint code-or-image-updated mutation-complete || return 1
+  while IFS= read -r site; do
+    UPDATE_FAILURE_STAGE=migration
+    docker_bench --site "$site" migrate || return 33
+  done < <(printf '%s\n' "$UPDATE_AFFECTED_SITES" | tr ',' '\n')
+  planner_checkpoint migration-complete mutation-complete || return 1
+  UPDATE_FAILURE_STAGE=verification
+  docker_custom_image_verify_runtime "$(docker_custom_image_selected_app_names)" || return 32
+  UPDATE_FAILURE_STAGE=manifest-promotion
+  docker_promote_app_manifest || return 33
+  planner_checkpoint verification-complete verification-complete || return 1
+  PLAN_COMPLETED_AT="$(planner_timestamp)"; planner_checkpoint completed completed
+}
+
+run_managed_update() {
+  local mode="$1" app="${2:-}" rc
+  managed_update_build_plan "$mode" "$app" || { rc=$?; err "Could not resolve a trusted compatible update plan (code ${rc})."; return "$rc"; }
+  managed_update_preview
+  [[ "$OPERATION_STATUS" != already-complete ]] || return 10
+  [[ "$MANAGED_UPDATE_PREVIEW" != 1 ]] || return 11
+  if [[ "${ASSUME_YES:-0}" -ne 1 ]]; then confirm "Apply this managed update plan?" || return 12; fi
+  planner_record_write || return 1
+  if [[ "$PLAN_ENGINE" == native ]]; then
+    managed_update_execute_native || rc=$?
+  else
+    managed_update_execute_docker || rc=$?
+  fi
+  if [[ -n "${rc:-}" ]]; then
+    case "$rc" in
+      20 | 21 | 22 | 23 | 24 | 25 | 30) planner_fail_record "$UPDATE_FAILURE_STAGE" "Managed update stopped before deployment mutation." "Resolve the reported blocker and create a fresh plan." failed ;;
+      *) planner_fail_record "$UPDATE_FAILURE_STAGE" "Managed update did not complete verification." "Use backups ${OPERATION_BACKUP_REFERENCE:-unavailable} with previous revisions/image ${OPERATION_PREVIOUS_REVISIONS:-${OPERATION_PREVIOUS_IMAGE:-unavailable}}; inspect the recorded checkpoint before restoring code, data, files, assets, and services." recovery-required ;;
+    esac
+    return "$rc"
+  fi
+}
+
+run_managed_update_availability() {
+  local app="${1:-}" mode=safe
+  [[ -z "$app" ]] || mode=app
+  MANAGED_UPDATE_PREVIEW=1 run_managed_update "$mode" "$app"
 }

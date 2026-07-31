@@ -17,6 +17,12 @@ OPERATION_BACKUP_REFERENCE=""
 OPERATION_RECOVERY=""
 OPERATION_PREVIOUS_IMAGE=""
 OPERATION_REPLACEMENT_IMAGE=""
+OPERATION_TYPE="${OPERATION_TYPE:-quick-app-install}"
+OPERATION_UPDATE_MODE=""
+OPERATION_TARGET_SET=""
+OPERATION_AFFECTED_SITES=""
+OPERATION_PREVIOUS_REVISIONS=""
+OPERATION_ORIGINAL_STATE=""
 
 planner_exit_code() {
   case "$1" in
@@ -62,13 +68,20 @@ planner_record_write() {
   [[ ! -L "$OPERATION_FILE" && ! -L "$temp" ]] || return 1
   for value in "$OPERATION_ID" "$OPERATION_STATUS" "$OPERATION_CHECKPOINTS" "$OPERATION_FAILURE_STAGE" \
     "$OPERATION_FAILURE_REASON" "$OPERATION_BACKUP_REFERENCE" "$OPERATION_RECOVERY" \
-    "$OPERATION_PREVIOUS_IMAGE" "$OPERATION_REPLACEMENT_IMAGE"; do
+    "$OPERATION_PREVIOUS_IMAGE" "$OPERATION_REPLACEMENT_IMAGE" "$OPERATION_TYPE" \
+    "$OPERATION_UPDATE_MODE" "$OPERATION_TARGET_SET" "$OPERATION_AFFECTED_SITES" "$OPERATION_PREVIOUS_REVISIONS" \
+    "$OPERATION_ORIGINAL_STATE"; do
     planner_safe_value "$value" || return 1
   done
   {
     printf 'schema=1\n'
     printf 'operation_id=%s\n' "$OPERATION_ID"
-    printf 'operation_type=quick-app-install\n'
+    printf 'operation_type=%s\n' "$OPERATION_TYPE"
+    printf 'update_mode=%s\n' "$OPERATION_UPDATE_MODE"
+    printf 'target_set=%s\n' "$OPERATION_TARGET_SET"
+    printf 'affected_sites=%s\n' "$OPERATION_AFFECTED_SITES"
+    printf 'previous_revisions=%s\n' "$OPERATION_PREVIOUS_REVISIONS"
+    printf 'original_runtime_state=%s\n' "$OPERATION_ORIGINAL_STATE"
     printf 'requested_app=%s\n' "$PLAN_APP"
     printf 'catalog_id=%s\n' "$PLAN_CATALOG_ID"
     printf 'install_app_name=%s\n' "$PLAN_INSTALL_NAME"

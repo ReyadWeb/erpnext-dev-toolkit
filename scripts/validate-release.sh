@@ -263,6 +263,9 @@ pass "operation planner tests passed"
 scripts/test-docker-durability.sh
 pass "Docker durability tests passed"
 
+scripts/test-safe-update-lifecycle.sh
+pass "safe-update lifecycle tests passed"
+
 if [[ "${SKIP_SHELLCHECK:-0}" == "1" ]]; then
   command -v shellcheck >/dev/null 2>&1 \
     || fail "SKIP_SHELLCHECK=1 requires shellcheck to be installed"

@@ -26,6 +26,7 @@ docs/HEALTH-ARCHITECTURE.md
 docs/INVENTORY-COMPATIBILITY.md
 docs/OPERATION-PLANNER.md
 docs/DOCKER-DURABILITY.md
+docs/SAFE-UPDATE-LIFECYCLE.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
 docs/ROADMAP-HISTORY.md
@@ -42,6 +43,7 @@ scripts/test-platform-profiles.sh
 scripts/test-inventory-compatibility.sh
 scripts/test-operation-planner.sh
 scripts/test-docker-durability.sh
+scripts/test-safe-update-lifecycle.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh

@@ -3617,8 +3617,10 @@ docker_deploy_custom_image() {
   docker_custom_image_verify_runtime "$apps" \
     || fail "Custom-image runtime consistency verification failed."
 
-  docker_promote_app_manifest \
-    || fail "Deployment verified, but the cumulative manifest could not be promoted."
+  if [[ "${DOCKER_DEFER_MANIFEST_PROMOTION:-0}" != 1 ]]; then
+    docker_promote_app_manifest \
+      || fail "Deployment verified, but the cumulative manifest could not be promoted."
+  fi
 
   docker_write_pins || true
 

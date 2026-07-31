@@ -61,6 +61,7 @@ concise.
 | Application inventory and compatibility | [Inventory architecture](INVENTORY-COMPATIBILITY.md) |
 | Operation planner and Quick installation | [Operation planner](OPERATION-PLANNER.md) |
 | Docker profiles and durable images | [Docker durability](DOCKER-DURABILITY.md) |
+| Safe managed updates | [Safe update lifecycle](SAFE-UPDATE-LIFECYCLE.md) |
 | HTTPS and domains | [README HTTPS section](../README.md#https--ssl) |
 | Updates and rollback | [README integrity section](../README.md#toolkit-integrity-and-updates) |
 | Production acceptance | [Validation runbook](../VALIDATION.md) |
@@ -133,6 +134,7 @@ Supporting references:
 - [Inventory and compatibility architecture](INVENTORY-COMPATIBILITY.md)
 - [Operation planner and native Quick installation](OPERATION-PLANNER.md)
 - [Docker profiles and durable application images](DOCKER-DURABILITY.md)
+- [Safe update management and recovery](SAFE-UPDATE-LIFECYCLE.md)
 - [Stable local VM IP design](LOCAL-VM-STABLE-IP.md)
 - [Frontend asset readiness](FRAPPE-FRONTEND-ASSETS.md)
 - [`assets/`](assets/) for diagrams and screenshots
