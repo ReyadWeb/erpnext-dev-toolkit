@@ -1208,7 +1208,7 @@ render_operations_menu_options() {
 show_operations_updates_menu() {
   while true; do
     ui_submenu_header "Updates" \
-      "Check readiness, protect local app work, and update ERPNext safely."
+      "Check trusted updates and apply app, recommended/safe, or full managed-stack plans."
 
     local width
     width="$(ui_panel_width)"
@@ -1217,11 +1217,12 @@ show_operations_updates_menu() {
 
     if ((width >= 80)); then
       operations_menu_render_pair "$width" "1" "Update check" "2" "Safe update"
-      operations_menu_render_pair "$width" "3" "Protect local changes"
+      operations_menu_render_pair "$width" "3" "Protect local changes" "4" "Full managed-stack update"
     else
       operations_menu_render_pair "$width" "1" "Update check"
       operations_menu_render_pair "$width" "2" "Safe update"
       operations_menu_render_pair "$width" "3" "Protect local changes"
+      operations_menu_render_pair "$width" "4" "Full managed-stack update"
     fi
 
     ui_box_line bot "$width"
@@ -1233,15 +1234,19 @@ show_operations_updates_menu() {
 
     case "$choice" in
       1)
-        run_update_preflight
+        run_managed_update_availability
         pause_after_screen "Press Enter to return to Updates..."
         ;;
       2)
-        run_safe_update_wizard
+        run_managed_update safe
         pause_after_screen "Press Enter to return to Updates..."
         ;;
       3)
         run_update_protect_local_changes
+        pause_after_screen "Press Enter to return to Updates..."
+        ;;
+      4)
+        run_managed_update full
         pause_after_screen "Press Enter to return to Updates..."
         ;;
       b | B | "")

@@ -52,6 +52,8 @@
 
 ## Unreleased
 
+- Add trusted, preview-first managed application and stack updates with multi-site recovery gates for native and Docker deployments.
+
 ### Added
 
 - Added Phase 2 read-only native/Docker application inventory, multi-site usage, validated catalog metadata, fail-safe compatibility evaluation, stable human/JSON commands, and hermetic discovery regression coverage.

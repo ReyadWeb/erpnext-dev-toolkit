@@ -425,6 +425,12 @@ the recommended default requires it. A later `app install erpnext --site SITE`
 builds and verifies a replacement image before changing the selected site or
 managed profile. See [Docker durability](docs/DOCKER-DURABILITY.md).
 
+Managed updates are separate from `update-toolkit`. Use `app updates`,
+`app update APP`, or `stack update --mode safe|full` for preview-first,
+release-line-constrained updates. Native plans cover every site sharing Bench
+code; Docker production plans retain the cumulative manifest and use verified
+replacement images. See [Safe update management](docs/SAFE-UPDATE-LIFECYCLE.md).
+
 After install, map the local domain and enable HTTPS:
 
 ```bash

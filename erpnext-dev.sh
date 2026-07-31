@@ -1386,6 +1386,9 @@ Core:
   app compatibility APP
                       Evaluate compatibility without fetching or running app code
   app install APP --site SITE [--preview] [--yes]
+  app updates [APP] [--site SITE] [--json]
+  app update APP --site SITE [--preview] [--yes]
+  stack update --mode safe|full [--preview] [--yes]
                       Plan, back up, install, and verify a curated app; Docker production uses a cumulative immutable image
   site list           Read-only site and installed-application inventory
   update-toolkit      Atomic update: verified bundle -> releases/<ver> -> current symlink
@@ -1658,12 +1661,12 @@ EOF_HELP
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
-    if [[ -z "${ACTION:-}" && ("$1" == "app" || "$1" == "site") ]]; then
+    if [[ -z "${ACTION:-}" && ("$1" == "app" || "$1" == "site" || "$1" == "stack") ]]; then
       ACTION="$1"
       shift
       continue
     fi
-    if [[ ("${ACTION:-}" == "app" || "${ACTION:-}" == "site") && "$1" != -* ]]; then
+    if [[ ("${ACTION:-}" == "app" || "${ACTION:-}" == "site" || "${ACTION:-}" == "stack") && "$1" != -* ]]; then
       if [[ -z "${ACTION_ARG:-}" ]]; then
         ACTION_ARG="$1"
       elif [[ -z "${ACTION_ARG2:-}" ]]; then
@@ -1721,8 +1724,19 @@ parse_args() {
         [[ -n "$QUICK_INSTALL_SITE" ]] || fail "--site requires an exact site name."
         shift
         ;;
+      --mode)
+        shift
+        [[ $# -gt 0 ]] || fail "--mode requires safe or full."
+        MANAGED_UPDATE_MODE="$1"
+        shift
+        ;;
+      --mode=*)
+        MANAGED_UPDATE_MODE="${1#*=}"
+        shift
+        ;;
       --preview | --dry-run)
         QUICK_INSTALL_PREVIEW=1
+        MANAGED_UPDATE_PREVIEW=1
         shift
         ;;
       --plain)
@@ -1788,7 +1802,8 @@ main() {
   ui_init
 
   if action_requires_lock "${ACTION:-menu}" \
-    || [[ "${ACTION:-}" == app && "${ACTION_ARG:-}" == install && "$QUICK_INSTALL_PREVIEW" -ne 1 ]]; then
+    || [[ "${ACTION:-}" == app && ("${ACTION_ARG:-}" == install || "${ACTION_ARG:-}" == update) && "$QUICK_INSTALL_PREVIEW" -ne 1 && "$MANAGED_UPDATE_PREVIEW" -ne 1 ]] \
+    || [[ "${ACTION:-}" == stack && "${ACTION_ARG:-}" == update && "$MANAGED_UPDATE_PREVIEW" -ne 1 ]]; then
     acquire_toolkit_lock
   fi
 
@@ -1851,12 +1866,24 @@ main() {
     local-ssl-wizard | ssl-wizard) run_local_ssl_wizard main ;;
     backup-menu) run_backup_maintenance_menu ;;
     app)
-      if [[ "${ACTION_ARG:-status}" == install ]]; then
-        [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd app install APP --site SITE)"
-        run_quick_app_install "$ACTION_ARG2"
-      else
-        run_app_inventory_command "${ACTION_ARG:-status}" "${ACTION_ARG2:-}"
-      fi
+      case "${ACTION_ARG:-status}" in
+        install)
+          [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd app install APP --site SITE)"
+          run_quick_app_install "$ACTION_ARG2"
+          ;;
+        updates) run_managed_update_availability "${ACTION_ARG2:-}" ;;
+        update)
+          [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd app update APP --site SITE)"
+          MANAGED_UPDATE_SITE="$QUICK_INSTALL_SITE" run_managed_update app "$ACTION_ARG2"
+          ;;
+        *) run_app_inventory_command "${ACTION_ARG:-status}" "${ACTION_ARG2:-}" ;;
+      esac
+      ;;
+    stack)
+      [[ "${ACTION_ARG:-}" == update ]] || fail "Usage: $(toolkit_cmd stack update --mode safe|full)"
+      managed_update_validate_mode "$MANAGED_UPDATE_MODE" || fail "stack update requires --mode safe or --mode full."
+      [[ "$MANAGED_UPDATE_MODE" != app ]] || fail "Use app update APP for individual updates."
+      run_managed_update "$MANAGED_UPDATE_MODE"
       ;;
     site) run_site_inventory_command "${ACTION_ARG:-list}" "${ACTION_ARG2:-}" ;;
     app-library | apps) show_app_library_menu ;;
