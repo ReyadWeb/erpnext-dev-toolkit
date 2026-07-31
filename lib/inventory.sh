@@ -1,0 +1,582 @@
+# shellcheck shell=bash
+# Read-only application inventory and compatibility engine.
+[[ -n "${_ERPNEXT_DEV_INVENTORY_LOADED:-}" ]] && return 0
+_ERPNEXT_DEV_INVENTORY_LOADED=1
+
+declare -ag INVENTORY_RECORDS=()
+
+inventory_valid_name() {
+  [[ "${1:-}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]
+}
+
+inventory_safe_field() {
+  [[ "${1:-}" != *"|"* && "${1:-}" != *$'\n'* && "${1:-}" != *$'\r'* && "${1:-}" != *$'\t'* ]]
+}
+
+inventory_add_record() {
+  local field record="" separator=""
+  for field in "$@"; do
+    inventory_safe_field "$field" || return 1
+    record="${record}${separator}${field}"
+    separator="|"
+  done
+  INVENTORY_RECORDS+=("$record")
+}
+
+inventory_catalog_classification() {
+  local app="$1"
+  if load_validated_app_catalog_record "$app" 2>/dev/null; then
+    printf '%s|managed\n' "${LIB_APP_TRUST}"
+  else
+    printf 'unknown|unmanaged\n'
+  fi
+}
+
+inventory_git_value() {
+  local dir="$1" key="$2"
+  [[ -d "$dir/.git" || -f "$dir/.git" ]] || return 0
+  case "$key" in
+    branch) GIT_OPTIONAL_LOCKS=0 git -C "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached\n' ;;
+    commit) GIT_OPTIONAL_LOCKS=0 git -C "$dir" rev-parse --verify HEAD 2>/dev/null || true ;;
+    source) GIT_OPTIONAL_LOCKS=0 git -C "$dir" remote get-url origin 2>/dev/null || true ;;
+    state)
+      if [[ -n "$(GIT_OPTIONAL_LOCKS=0 git -C "$dir" status --porcelain --untracked-files=normal 2>/dev/null)" ]]; then
+        printf 'dirty\n'
+      else
+        printf 'clean\n'
+      fi
+      ;;
+  esac
+}
+
+inventory_app_version_from_tree() {
+  local dir="$1" value=""
+  [[ -d "$dir" ]] || return 0
+  value="$(sed -nE 's/^[[:space:]]*(__version__|version)[[:space:]]*=[[:space:]]*["'\'']([^"'\'']+)["'\''].*/\2/p' \
+    "$dir"/*/__init__.py "$dir"/pyproject.toml 2>/dev/null | head -n 1 || true)"
+  printf '%s\n' "${value:-unknown}"
+}
+
+inventory_fixture_meta() {
+  local dir="$1" key="$2"
+  [[ -f "$dir/.inventory-meta" ]] || return 0
+  awk -F= -v key="$key" '$1 == key {v=$0; sub(/^[^=]*=/, "", v)} END {print v}' "$dir/.inventory-meta"
+}
+
+inventory_emit_app() {
+  local stack="$1" app="$2" dir="$3" fixture="${4:-0}"
+  local class trust management version branch commit source repo_state
+  inventory_valid_name "$app" || return 1
+  class="$(inventory_catalog_classification "$app")"
+  trust="${class%%|*}"
+  management="${class#*|}"
+  if [[ "$fixture" == 1 ]]; then
+    version="$(inventory_fixture_meta "$dir" VERSION)"
+    version="${version:-unknown}"
+    branch="$(inventory_fixture_meta "$dir" BRANCH)"
+    branch="${branch:-unknown}"
+    commit="$(inventory_fixture_meta "$dir" COMMIT)"
+    commit="${commit:-unknown}"
+    source="$(inventory_fixture_meta "$dir" SOURCE)"
+    source="${source:-unknown}"
+    repo_state="$(inventory_fixture_meta "$dir" STATE)"
+    repo_state="${repo_state:-ambiguous}"
+  else
+    version="$(inventory_app_version_from_tree "$dir")"
+    branch="$(inventory_git_value "$dir" branch)"
+    branch="${branch:-unknown}"
+    commit="$(inventory_git_value "$dir" commit)"
+    commit="${commit:-unknown}"
+    source="$(inventory_git_value "$dir" source)"
+    source="${source:-unknown}"
+    repo_state="$(inventory_git_value "$dir" state)"
+    repo_state="${repo_state:-ambiguous}"
+  fi
+  inventory_add_record APP "$stack" "$app" available "$version" "$branch" "$commit" "$source" "$trust" "$management" "$repo_state"
+}
+
+inventory_native_site_db_apps() {
+  local site_dir="$1" db_name db_password raw
+  command -v mariadb >/dev/null 2>&1 || return 2
+  db_name="$(sed -nE 's/^[[:space:]]*"db_name"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)".*/\1/p' "$site_dir/site_config.json" | head -n 1)"
+  db_password="$(sed -nE 's/^[[:space:]]*"db_password"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$site_dir/site_config.json" | head -n 1)"
+  [[ "$db_name" =~ ^[A-Za-z0-9_]+$ && -n "$db_password" ]] || return 2
+  raw="$(MYSQL_PWD="$db_password" mariadb --batch --skip-column-names "$db_name" \
+    -e "SELECT defvalue FROM tabDefaultValue WHERE defkey='installed_apps' AND parent='__global' LIMIT 1" 2>/dev/null)" || return 2
+  [[ -n "$raw" ]] || return 2
+  printf '%s\n' "$raw" | grep -oE '"[A-Za-z0-9][A-Za-z0-9_-]*"' | tr -d '"'
+}
+
+inventory_collect_tree() {
+  local engine="$1" mode="$2" root="$3" fixture="${4:-0}" requested_management="${5:-}"
+  local stack management state site_dir site app_dir app site_state installed
+  stack="${engine}:${root}"
+  management="${requested_management:-${ERPNEXT_DEV_INVENTORY_FIXTURE_MANAGEMENT:-managed}}"
+  state="clean"
+  [[ -d "$root/apps" && -d "$root/sites" ]] || state="missing"
+  inventory_add_record STACK "$stack" "$engine" "$mode" "$(effective_installation_profile)" "$management" "$state"
+  [[ "$state" == clean ]] || return 0
+
+  while IFS= read -r app_dir; do
+    app="${app_dir##*/}"
+    if ! inventory_valid_name "$app"; then
+      inventory_add_record ISSUE "$stack" app invalid-name malformed
+      continue
+    fi
+    inventory_emit_app "$stack" "$app" "$app_dir" "$fixture" \
+      || inventory_add_record ISSUE "$stack" app "$app" ambiguous
+  done < <(find "$root/apps" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | LC_ALL=C sort)
+
+  while IFS= read -r site_dir; do
+    site="${site_dir##*/}"
+    [[ "$site" != assets ]] || continue
+    if ! inventory_valid_name "$site"; then
+      inventory_add_record ISSUE "$stack" site invalid-name malformed
+      continue
+    fi
+    site_state="known"
+    if [[ "$fixture" == 1 && -f "$site_dir/apps.txt" ]]; then
+      installed="$(sed '/^[[:space:]]*$/d' "$site_dir/apps.txt")"
+    elif [[ "$engine" == native ]]; then
+      installed="$(inventory_native_site_db_apps "$site_dir" 2>/dev/null)" || site_state="ambiguous"
+    else
+      installed=""
+      site_state="ambiguous"
+    fi
+    inventory_add_record SITE "$stack" "$site" "$site_state"
+    while IFS= read -r app; do
+      [[ -n "$app" ]] || continue
+      if inventory_valid_name "$app"; then
+        inventory_add_record SITE_APP "$stack" "$site" "$app" installed
+      else
+        inventory_add_record ISSUE "$stack" site-app invalid-name malformed
+      fi
+    done <<<"$installed"
+  done < <(find "$root/sites" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | LC_ALL=C sort)
+}
+
+inventory_collect_native_live() {
+  local active candidate management found=0
+  active="$(active_bench_dir 2>/dev/null || true)"
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" && -d "$candidate" ]] || continue
+    found=1
+    if [[ "$candidate" == "$active" ]]; then
+      management="managed"
+    else
+      management="supported-unadopted"
+    fi
+    inventory_collect_tree native native "$candidate" 0 "$management"
+  done < <(bench_dir_candidates 2>/dev/null | awk '!seen[$0]++')
+  if ((found == 0)); then
+    inventory_collect_tree native native "${active:-${BENCH_DIR:-unknown}}" 0 managed
+  fi
+}
+
+inventory_docker_read() {
+  docker_compose exec -T backend "$@" 2>/dev/null | tr -d '\r'
+}
+
+inventory_docker_site_apps() {
+  local site="$1" config db_name db_password raw
+  inventory_valid_name "$site" || return 2
+  config="$(inventory_docker_read cat "sites/${site}/site_config.json")" || return 2
+  db_name="$(printf '%s\n' "$config" | sed -nE 's/^[[:space:]]*"db_name"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)".*/\1/p' | head -n 1)"
+  db_password="$(docker_db_root_password 2>/dev/null || true)"
+  [[ "$db_name" =~ ^[A-Za-z0-9_]+$ && -n "$db_password" ]] || return 2
+  raw="$(docker_compose exec -T -e "MYSQL_PWD=${db_password}" db mariadb -uroot --batch --skip-column-names "$db_name" \
+    -e "SELECT defvalue FROM tabDefaultValue WHERE defkey='installed_apps' AND parent='__global' LIMIT 1" 2>/dev/null)" || return 2
+  [[ -n "$raw" ]] || return 2
+  printf '%s\n' "$raw" | grep -oE '"[A-Za-z0-9][A-Za-z0-9_-]*"' | tr -d '"'
+}
+
+inventory_emit_docker_app() {
+  local stack="$1" app="$2" image_version="unknown" source="unknown" class trust management
+  class="$(inventory_catalog_classification "$app")"
+  trust="${class%%|*}"
+  management="${class#*|}"
+  if [[ "$app" == frappe || "$app" == erpnext ]]; then
+    image_version="${DOCKER_ERPNEXT_IMAGE##*:}"
+    [[ "$image_version" =~ ^v?[0-9]+(\.[0-9]+)*$ ]] || image_version="unknown"
+    source="image:${DOCKER_ERPNEXT_IMAGE}"
+  fi
+  inventory_add_record APP "$stack" "$app" available "$image_version" unknown unknown "$source" "$trust" "$management" immutable
+}
+
+inventory_collect_docker_live() {
+  local stack mode site app installed sites apps site_state
+  mode="$(docker_mode)"
+  stack="docker:${DOCKER_PROJECT_NAME:-erpnext-dev}"
+  inventory_add_record STACK "$stack" docker "$mode" "$(effective_installation_profile)" managed clean
+  if ! docker_compose_available 2>/dev/null; then
+    inventory_add_record ISSUE "$stack" stack docker "ambiguous"
+    return 0
+  fi
+  if ! sites="$(inventory_docker_read find sites -mindepth 1 -maxdepth 1 -type d -printf '%f\n')"; then
+    inventory_add_record ISSUE "$stack" sites docker "ambiguous"
+    return 0
+  fi
+  if ! apps="$(inventory_docker_read find apps -mindepth 1 -maxdepth 1 -type d -printf '%f\n')"; then
+    inventory_add_record ISSUE "$stack" apps docker "ambiguous"
+    return 0
+  fi
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    if inventory_valid_name "$app"; then
+      inventory_emit_docker_app "$stack" "$app"
+    else
+      inventory_add_record ISSUE "$stack" app invalid-name malformed
+    fi
+  done <<<"$apps"
+  while IFS= read -r site; do
+    [[ -n "$site" && "$site" != assets ]] || continue
+    if ! inventory_valid_name "$site"; then
+      inventory_add_record ISSUE "$stack" site invalid-name malformed
+      continue
+    fi
+    site_state="known"
+    installed="$(inventory_docker_site_apps "$site" 2>/dev/null)" || site_state="ambiguous"
+    inventory_add_record SITE "$stack" "$site" "$site_state"
+    while IFS= read -r app; do
+      [[ -n "$app" ]] || continue
+      if inventory_valid_name "$app"; then
+        inventory_add_record SITE_APP "$stack" "$site" "$app" installed
+      else
+        inventory_add_record ISSUE "$stack" site-app invalid-name malformed
+      fi
+    done <<<"$installed"
+  done <<<"$sites"
+}
+
+inventory_reconcile_site_apps() {
+  local record stack app class trust management
+  local -a snapshot=("${INVENTORY_RECORDS[@]}")
+  for record in "${snapshot[@]}"; do
+    [[ "${record%%|*}" == SITE_APP ]] || continue
+    stack="$(printf '%s' "$record" | cut -d'|' -f2)"
+    app="$(printf '%s' "$record" | cut -d'|' -f4)"
+    if ! printf '%s\n' "${INVENTORY_RECORDS[@]}" \
+      | awk -F'|' -v s="$stack" -v a="$app" '$1=="APP" && $2==s && $3==a {found=1} END {exit !found}'; then
+      class="$(inventory_catalog_classification "$app")"
+      trust="${class%%|*}"
+      management="${class#*|}"
+      inventory_add_record APP "$stack" "$app" missing unknown unknown unknown unknown "$trust" "$management" missing
+    fi
+  done
+}
+
+inventory_collect() {
+  INVENTORY_RECORDS=()
+  if [[ -n "${ERPNEXT_DEV_INVENTORY_FIXTURE_ROOT:-}" ]]; then
+    inventory_collect_tree "$(effective_deployment_engine)" \
+      "$(deployment_engine_is_docker && docker_mode || printf native)" \
+      "$ERPNEXT_DEV_INVENTORY_FIXTURE_ROOT" 1
+  elif deployment_engine_is_docker; then
+    inventory_collect_docker_live
+  else
+    inventory_collect_native_live
+  fi
+  inventory_reconcile_site_apps
+}
+
+inventory_records_sorted() {
+  printf '%s\n' "${INVENTORY_RECORDS[@]}" | sed '/^$/d' | LC_ALL=C sort
+}
+
+inventory_usage_count() {
+  local stack="$1" app="$2"
+  inventory_records_sorted | awk -F'|' -v s="$stack" -v a="$app" '$1=="SITE_APP" && $2==s && $4==a {n++} END {print n+0}'
+}
+
+inventory_platform_major() {
+  local app="$1" record version branch
+  record="$(inventory_records_sorted | awk -F'|' -v a="$app" '$1=="APP" && $3==a {print; exit}')"
+  version="$(printf '%s' "$record" | cut -d'|' -f5)"
+  branch="$(printf '%s' "$record" | cut -d'|' -f6)"
+  if [[ "$version" =~ ^v?([0-9]+) ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  elif [[ "$branch" =~ ^version-([0-9]+)$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  fi
+}
+
+inventory_app_available() {
+  local app="$1"
+  inventory_records_sorted | awk -F'|' -v a="$app" '$1=="APP" && $3==a && $4=="available" {found=1} END {exit !found}'
+}
+
+inventory_catalog_dependents() {
+  local target="$1" candidate dependency
+  while IFS= read -r candidate; do
+    load_validated_app_catalog_record "$candidate" 2>/dev/null || continue
+    while IFS= read -r dependency; do
+      if [[ "$dependency" == "$target" ]] && inventory_app_available "$candidate"; then
+        printf '%s\n' "$candidate"
+      fi
+    done < <(printf '%s\n' "${LIB_APP_REQUIRES:-}" | tr ',' '\n')
+  done < <(app_catalog_ids)
+}
+
+inventory_deployment_supported() {
+  local engine="$1" mode="$2" native_support="$3" docker_dev_support="$4" docker_prod_strategy="$5"
+  if [[ "$engine" == native ]]; then
+    [[ "$native_support" == supported ]]
+  elif [[ "$engine" == docker && "$mode" == development ]]; then
+    [[ "$docker_dev_support" == supported ]]
+  elif [[ "$engine" == docker && "$mode" == production ]]; then
+    [[ "$docker_prod_strategy" != unsupported ]]
+  else
+    return 1
+  fi
+}
+
+inventory_has_ambiguous_site() {
+  inventory_records_sorted | awk -F'|' '$1=="SITE" && $4!="known" {found=1} END {exit !found}'
+}
+
+inventory_dependency_rules_evaluate() {
+  local requires="${1:-}" conflicts="${2:-}" dep
+  while IFS= read -r dep; do
+    [[ -n "$dep" ]] || continue
+    if ! inventory_app_available "$dep"; then
+      INVENTORY_COMPAT_STATUS="INCOMPATIBLE"
+      INVENTORY_COMPAT_DETAIL="Required application code is missing: ${dep}."
+      return 1
+    fi
+  done < <(printf '%s\n' "$requires" | tr ',' '\n')
+  while IFS= read -r dep; do
+    [[ -n "$dep" ]] || continue
+    if inventory_app_available "$dep"; then
+      INVENTORY_COMPAT_STATUS="INCOMPATIBLE"
+      INVENTORY_COMPAT_DETAIL="Conflicting application code is available: ${dep}."
+      return 1
+    fi
+  done < <(printf '%s\n' "$conflicts" | tr ',' '\n')
+
+  return 0
+}
+
+inventory_compatibility_evaluate() {
+  local app="$1" engine profile frappe_major erpnext_major record actual_source repo_state
+  INVENTORY_COMPAT_STATUS="UNKNOWN"
+  INVENTORY_COMPAT_DETAIL=""
+  INVENTORY_COMPAT_DEPENDENTS=""
+  inventory_valid_name "$app" || {
+    INVENTORY_COMPAT_DETAIL="Malformed application identifier."
+    return 2
+  }
+  if ! load_validated_app_catalog_record "$app" 2>/dev/null; then
+    INVENTORY_COMPAT_DETAIL="Application is custom or unmanaged; trusted compatibility metadata is unavailable."
+    return 2
+  fi
+  INVENTORY_COMPAT_DEPENDENTS="$(inventory_catalog_dependents "$app" | paste -sd, -)"
+  load_validated_app_catalog_record "$app" 2>/dev/null || {
+    INVENTORY_COMPAT_DETAIL="Catalog metadata became unavailable during evaluation."
+    return 2
+  }
+  engine="$(effective_deployment_engine)"
+  profile="$(effective_installation_profile)"
+  frappe_major="$(inventory_platform_major frappe)"
+  erpnext_major="$(inventory_platform_major erpnext)"
+  [[ -n "$frappe_major" ]] || {
+    INVENTORY_COMPAT_DETAIL="Frappe version is missing or ambiguous."
+    return 2
+  }
+  [[ ",${LIB_APP_SUPPORTED_FRAPPE}," == *",${frappe_major},"* ]] || {
+    INVENTORY_COMPAT_STATUS="INCOMPATIBLE"
+    INVENTORY_COMPAT_DETAIL="Frappe ${frappe_major} is outside supported majors: ${LIB_APP_SUPPORTED_FRAPPE}."
+    return 1
+  }
+  if [[ -n "$LIB_APP_SUPPORTED_ERPNEXT" && -n "$erpnext_major" ]] \
+    && [[ ",${LIB_APP_SUPPORTED_ERPNEXT}," != *",${erpnext_major},"* ]]; then
+    INVENTORY_COMPAT_STATUS="INCOMPATIBLE"
+    INVENTORY_COMPAT_DETAIL="ERPNext ${erpnext_major} is outside supported majors: ${LIB_APP_SUPPORTED_ERPNEXT}."
+    return 1
+  fi
+  inventory_dependency_rules_evaluate "${LIB_APP_REQUIRES:-}" "${LIB_APP_CONFLICTS:-}" || return 1
+  if [[ "$profile" == frappe-only && ("$app" == erpnext || "$LIB_APP_REQUIRES" == *erpnext*) ]]; then
+    INVENTORY_COMPAT_STATUS="INCOMPATIBLE"
+    INVENTORY_COMPAT_DETAIL="Application requires ERPNext, which is excluded by the Frappe-only profile."
+    return 1
+  fi
+  if ! inventory_deployment_supported "$engine" "$(docker_mode 2>/dev/null || printf native)" \
+    "$LIB_APP_NATIVE_SUPPORT" "$LIB_APP_DOCKER_DEV_SUPPORT" "$LIB_APP_DOCKER_PROD_STRATEGY"; then
+    INVENTORY_COMPAT_STATUS="INCOMPATIBLE"
+    INVENTORY_COMPAT_DETAIL="Application is unsupported on the active deployment method."
+    return 1
+  fi
+  if inventory_has_ambiguous_site; then
+    INVENTORY_COMPAT_DETAIL="One or more site application inventories are ambiguous; shared-stack impact cannot be proven."
+    return 2
+  fi
+  record="$(inventory_records_sorted | awk -F'|' -v a="$app" '$1=="APP" && $3==a {print; exit}')"
+  actual_source="$(printf '%s' "$record" | cut -d'|' -f8)"
+  repo_state="$(printf '%s' "$record" | cut -d'|' -f11)"
+  if [[ -n "$record" ]]; then
+    if [[ "$repo_state" == dirty || "$repo_state" == ambiguous ]]; then
+      INVENTORY_COMPAT_DETAIL="Available application code state is ${repo_state}; compatibility cannot be proven."
+      return 2
+    fi
+    if [[ "$actual_source" == unknown ]]; then
+      INVENTORY_COMPAT_DETAIL="Available application source is unknown; trust cannot be proven."
+      return 2
+    fi
+    if [[ "$actual_source" == image:* ]]; then
+      if [[ "$engine" != docker || "$actual_source" != image:frappe/erpnext:* || ("$app" != frappe && "$app" != erpnext) ]]; then
+        INVENTORY_COMPAT_DETAIL="Available image source is not a trusted built-in platform source."
+        return 2
+      fi
+    elif [[ "${actual_source%.git}" != "${LIB_APP_REPO%.git}" ]]; then
+      INVENTORY_COMPAT_DETAIL="Available code source does not match the trusted catalog source."
+      return 2
+    fi
+  fi
+  INVENTORY_COMPAT_STATUS="COMPATIBLE"
+  INVENTORY_COMPAT_DETAIL="Catalog, platform major, dependencies, profile, deployment method, and known source checks passed."
+  return 0
+}
+
+inventory_json_escape() {
+  local s="${1:-}"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '"%s"' "$s"
+}
+
+inventory_emit_json() {
+  local first=1 record
+  printf '{"schema_version":1,"read_only":true,"records":['
+  while IFS= read -r record; do
+    ((first)) || printf ','
+    first=0
+    inventory_json_escape "$record"
+  done < <(inventory_records_sorted)
+  printf ']}\n'
+}
+
+inventory_show_apps() {
+  local record stack app usage support
+  inventory_collect
+  if [[ "${DOCTOR_FORMAT:-human}" == json ]]; then
+    inventory_emit_json
+    return
+  fi
+  printf 'APPLICATION\tCODE\tSITE_USAGE\tTRUST\tMANAGEMENT\tSTATE\tDEPLOYMENT_SUPPORT\n'
+  while IFS= read -r record; do
+    [[ "${record%%|*}" == APP ]] || continue
+    stack="$(printf '%s' "$record" | cut -d'|' -f2)"
+    app="$(printf '%s' "$record" | cut -d'|' -f3)"
+    usage="$(inventory_usage_count "$stack" "$app")"
+    support="unknown"
+    if load_validated_app_catalog_record "$app" 2>/dev/null; then
+      if [[ "$(effective_deployment_engine)" == native ]]; then
+        support="$LIB_APP_NATIVE_SUPPORT"
+      elif [[ "$(docker_mode)" == production ]]; then
+        support="$LIB_APP_DOCKER_PROD_STRATEGY"
+      else
+        support="$LIB_APP_DOCKER_DEV_SUPPORT"
+      fi
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$app" "$(printf '%s' "$record" | cut -d'|' -f4)" "$usage" \
+      "$(printf '%s' "$record" | cut -d'|' -f9)" "$(printf '%s' "$record" | cut -d'|' -f10)" \
+      "$(printf '%s' "$record" | cut -d'|' -f11)" "$support"
+  done < <(inventory_records_sorted)
+}
+
+inventory_show_sites() {
+  local record stack site apps
+  inventory_collect
+  if [[ "${DOCTOR_FORMAT:-human}" == json ]]; then
+    inventory_emit_json
+    return
+  fi
+  printf 'SITE\tSTACK\tINSTALLED_APPS\tDISCOVERY_STATE\n'
+  while IFS= read -r record; do
+    [[ "${record%%|*}" == SITE ]] || continue
+    stack="$(printf '%s' "$record" | cut -d'|' -f2)"
+    site="$(printf '%s' "$record" | cut -d'|' -f3)"
+    apps="$(inventory_records_sorted | awk -F'|' -v s="$stack" -v site="$site" \
+      '$1=="SITE_APP" && $2==s && $3==site {print $4}' | paste -sd, -)"
+    printf '%s\t%s\t%s\t%s\n' "$site" "$stack" "${apps:-unknown}" "$(printf '%s' "$record" | cut -d'|' -f4)"
+  done < <(inventory_records_sorted)
+}
+
+inventory_show_status() {
+  inventory_collect
+  if [[ "${DOCTOR_FORMAT:-human}" == json ]]; then
+    inventory_emit_json
+  else
+    printf 'TYPE\tSTACK\tSUBJECT\tSTATE\tDETAIL\n'
+    inventory_records_sorted | awk -F'|' '
+      $1=="STACK" {printf "STACK\t%s\t%s/%s\t%s\tprofile=%s; management=%s\n",$2,$3,$4,$7,$5,$6}
+      $1=="APP" {printf "APP\t%s\t%s\tcode-%s\ttrust=%s; management=%s; repo=%s\n",$2,$3,$4,$9,$10,$11}
+      $1=="SITE" {printf "SITE\t%s\t%s\t%s\tinstalled apps are separate SITE_APP records\n",$2,$3,$4}
+      $1=="SITE_APP" {printf "SITE_APP\t%s\t%s/%s\t%s\tsite-level installation\n",$2,$3,$4,$5}
+      $1=="ISSUE" {printf "ISSUE\t%s\t%s/%s\t%s\tdiscovery did not infer state\n",$2,$3,$4,$5}
+    '
+  fi
+}
+
+inventory_show_compatibility() {
+  local app="$1" rc=0 record stack usage
+  inventory_collect
+  if inventory_compatibility_evaluate "$app"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  record="$(inventory_records_sorted | awk -F'|' -v a="$app" '$1=="APP" && $3==a {print; exit}')"
+  stack="$(printf '%s' "$record" | cut -d'|' -f2)"
+  usage=0
+  [[ -n "$stack" ]] && usage="$(inventory_usage_count "$stack" "$app")"
+  if [[ "${DOCTOR_FORMAT:-human}" == json ]]; then
+    printf '{"schema_version":1,"read_only":true,"application":'
+    inventory_json_escape "$app"
+    printf ',"status":'
+    inventory_json_escape "$INVENTORY_COMPAT_STATUS"
+    printf ',"detail":'
+    inventory_json_escape "$INVENTORY_COMPAT_DETAIL"
+    printf ',"site_usage":%s,"dependents":' "$usage"
+    inventory_json_escape "${INVENTORY_COMPAT_DEPENDENTS:-}"
+    printf '}\n'
+  else
+    printf 'Application: %s\nStatus: %s\nDetail: %s\nUsed by sites: %s\nDependents: %s\nEngine: %s\nProfile: %s\n' \
+      "$app" "$INVENTORY_COMPAT_STATUS" "$INVENTORY_COMPAT_DETAIL" "$usage" \
+      "${INVENTORY_COMPAT_DEPENDENTS:-none}" "$(effective_deployment_engine)" "$(effective_installation_profile)"
+  fi
+  return "$rc"
+}
+
+run_app_inventory_command() {
+  local subcommand="${1:-status}" app="${2:-}"
+  case "$subcommand" in
+    list)
+      [[ -z "$app" ]] || fail "Usage: $(toolkit_cmd app list)"
+      inventory_show_apps
+      ;;
+    status)
+      [[ -z "$app" ]] || fail "Usage: $(toolkit_cmd app status)"
+      inventory_show_status
+      ;;
+    compatibility)
+      [[ -n "$app" ]] || fail "Usage: $(toolkit_cmd app compatibility APP)"
+      inventory_valid_name "$app" || fail "Invalid application identifier: ${app}"
+      inventory_show_compatibility "$app"
+      ;;
+    *) fail "Unknown app inventory command: ${subcommand}" ;;
+  esac
+}
+
+run_site_inventory_command() {
+  local subcommand="${1:-list}" extra="${2:-}"
+  case "$subcommand" in
+    list)
+      [[ -z "$extra" ]] || fail "Usage: $(toolkit_cmd site list)"
+      inventory_show_sites
+      ;;
+    *) fail "Unknown site inventory command: ${subcommand}" ;;
+  esac
+}

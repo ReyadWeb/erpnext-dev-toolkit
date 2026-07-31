@@ -23,6 +23,7 @@ docs/security/RELEASE-TRUST.md
 docs/security/PRODUCTION-HARDENING.md
 docs/security/SECURITY-HISTORY.md
 docs/HEALTH-ARCHITECTURE.md
+docs/INVENTORY-COMPATIBILITY.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
 docs/ROADMAP-HISTORY.md
@@ -36,6 +37,7 @@ scripts/test-repo-workflow-release-finalize.sh
 scripts/test-repo-workflow-release-run.sh
 scripts/test-health-snapshot.sh
 scripts/test-platform-profiles.sh
+scripts/test-inventory-compatibility.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
@@ -74,6 +76,7 @@ lib/engine.sh
 lib/install.sh
 lib/ops.sh
 lib/dashboard.sh
+lib/inventory.sh
 lib/healing.sh
 lib/menu.sh
 lib/security.sh

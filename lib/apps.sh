@@ -30,6 +30,14 @@ app_profile_list() {
     india_compliance
 }
 
+# Canonical catalog identifiers include the two platform apps, which are not
+# optional install-menu entries. Inventory and compatibility use this superset;
+# the existing install UI continues to use app_profile_list().
+app_catalog_ids() {
+  printf '%s\n' frappe erpnext
+  app_profile_list
+}
+
 app_profile_branch_overrides() {
   echo "CRM_BRANCH, HRMS_BRANCH, EDUCATION_BRANCH, PAYMENTS_BRANCH, WEBSHOP_BRANCH, BUILDER_BRANCH, LMS_BRANCH, WIKI_BRANCH, PRINT_DESIGNER_BRANCH, DRIVE_BRANCH, GAMEPLAN_BRANCH, LENDING_BRANCH, RAVEN_BRANCH, INSIGHTS_BRANCH, TELEPHONY_BRANCH, HELPDESK_BRANCH, INDIA_COMPLIANCE_BRANCH"
 }
@@ -48,6 +56,7 @@ app_profile_defaults() {
   local profile="$1"
 
   LIB_APP_DISPLAY=""
+  LIB_APP_ID=""
   LIB_APP_NAME=""
   LIB_APP_REPO=""
   LIB_APP_BRANCH=""
@@ -55,8 +64,40 @@ app_profile_defaults() {
   # frappe = github.com/frappe/* maintained by Frappe Technologies
   # community = popular third-party / partner apps (still open source)
   LIB_APP_ORIGIN="frappe"
+  LIB_APP_SUPPORTED_FRAPPE="16"
+  LIB_APP_SUPPORTED_ERPNEXT=""
+  LIB_APP_REQUIRES=""
+  LIB_APP_CONFLICTS=""
+  LIB_APP_NATIVE_SUPPORT="supported"
+  LIB_APP_DOCKER_DEV_SUPPORT="supported"
+  LIB_APP_DOCKER_PROD_STRATEGY="custom-image"
+  LIB_APP_UNINSTALL_CAPABILITY="manual-review"
+  LIB_APP_TRUST="official"
+  LIB_APP_RISK="standard"
+  LIB_APP_VERIFY="source-match,platform-major,dependencies"
 
   case "$profile" in
+    frappe)
+      LIB_APP_DISPLAY="Frappe Framework"
+      LIB_APP_NAME="frappe"
+      LIB_APP_REPO="https://github.com/frappe/frappe"
+      LIB_APP_BRANCH="${FRAPPE_BRANCH:-version-16}"
+      LIB_APP_SUPPORTED_ERPNEXT=""
+      LIB_APP_UNINSTALL_CAPABILITY="never"
+      LIB_APP_RISK="core"
+      LIB_APP_NOTES="Core framework required by every managed stack."
+      ;;
+    erpnext)
+      LIB_APP_DISPLAY="ERPNext"
+      LIB_APP_NAME="erpnext"
+      LIB_APP_REPO="https://github.com/frappe/erpnext"
+      LIB_APP_BRANCH="${ERPNEXT_BRANCH:-version-16}"
+      LIB_APP_REQUIRES="frappe"
+      LIB_APP_SUPPORTED_ERPNEXT="16"
+      LIB_APP_UNINSTALL_CAPABILITY="unsupported"
+      LIB_APP_RISK="core"
+      LIB_APP_NOTES="Recommended business application profile."
+      ;;
     crm)
       LIB_APP_DISPLAY="Frappe CRM"
       LIB_APP_NAME="crm"
@@ -70,6 +111,7 @@ app_profile_defaults() {
       LIB_APP_REPO="https://github.com/frappe/hrms"
       LIB_APP_BRANCH="${HRMS_BRANCH:-version-16}"
       LIB_APP_NOTES="HR, payroll, attendance, leave, employee lifecycle, and HR operations app for Frappe/ERPNext."
+      LIB_APP_SUPPORTED_ERPNEXT="16"
       ;;
     education | school | school-erp)
       LIB_APP_DISPLAY="Frappe Education"
@@ -91,6 +133,7 @@ app_profile_defaults() {
       LIB_APP_REPO="https://github.com/frappe/helpdesk"
       LIB_APP_BRANCH="${HELPDESK_BRANCH:-main}"
       LIB_APP_NOTES="Ticketing and customer support app. Requires the Frappe Telephony app; the toolkit handles that dependency automatically."
+      LIB_APP_REQUIRES="telephony"
       ;;
     insights)
       LIB_APP_DISPLAY="Frappe Insights"
@@ -112,6 +155,8 @@ app_profile_defaults() {
       LIB_APP_REPO="https://github.com/frappe/webshop"
       LIB_APP_BRANCH="${WEBSHOP_BRANCH:-develop}"
       LIB_APP_NOTES="Open-source eCommerce storefront app for ERPNext-backed catalogs and orders. For Frappe/ERPNext v16, upstream guidance currently points to the develop branch."
+      LIB_APP_REQUIRES="erpnext"
+      LIB_APP_SUPPORTED_ERPNEXT="16"
       ;;
     builder | frappe-builder)
       LIB_APP_DISPLAY="Frappe Builder"
@@ -168,6 +213,8 @@ app_profile_defaults() {
       LIB_APP_REPO="https://github.com/The-Commit-Company/raven"
       LIB_APP_BRANCH="${RAVEN_BRANCH:-}"
       LIB_APP_ORIGIN="community"
+      LIB_APP_TRUST="community"
+      LIB_APP_RISK="elevated"
       LIB_APP_NOTES="Community / third-party team messaging (The Commit Company), not a Frappe Technologies product. Open source with ERPNext/FrappeHR integrations. Treat as advanced and test notifications/access paths carefully."
       ;;
     india_compliance | india-compliance | gst | india-gst)
@@ -176,12 +223,44 @@ app_profile_defaults() {
       LIB_APP_REPO="https://github.com/resilient-tech/india-compliance"
       LIB_APP_BRANCH="${INDIA_COMPLIANCE_BRANCH:-version-16}"
       LIB_APP_ORIGIN="community"
+      LIB_APP_TRUST="community"
+      LIB_APP_RISK="elevated"
+      LIB_APP_SUPPORTED_ERPNEXT="16"
       LIB_APP_NOTES="Community / third-party GST, e-invoice, and e-waybill compliance for Indian businesses (Resilient Tech) — the most-installed marketplace compliance app. Not a Frappe Technologies product. Defaults to INDIA_COMPLIANCE_BRANCH=version-16. Some GST API features need an India Compliance account."
       ;;
     *)
       return 1
       ;;
   esac
+  LIB_APP_ID="$LIB_APP_NAME"
+}
+
+validate_app_catalog_record() {
+  validate_app_name "${LIB_APP_ID:-}" || return 1
+  validate_app_name "${LIB_APP_NAME:-}" || return 1
+  [[ -n "${LIB_APP_DISPLAY:-}" ]] || return 1
+  [[ "${LIB_APP_REPO:-}" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$ ]] || return 1
+  [[ "${LIB_APP_SUPPORTED_FRAPPE:-}" =~ ^([0-9]+)(,[0-9]+)*$ ]] || return 1
+  [[ -z "${LIB_APP_SUPPORTED_ERPNEXT:-}" || "${LIB_APP_SUPPORTED_ERPNEXT}" =~ ^([0-9]+)(,[0-9]+)*$ ]] || return 1
+  [[ "${LIB_APP_NATIVE_SUPPORT:-}" == "supported" || "${LIB_APP_NATIVE_SUPPORT:-}" == "unsupported" ]] || return 1
+  [[ "${LIB_APP_DOCKER_DEV_SUPPORT:-}" == "supported" || "${LIB_APP_DOCKER_DEV_SUPPORT:-}" == "unsupported" ]] || return 1
+  [[ "${LIB_APP_DOCKER_PROD_STRATEGY:-}" =~ ^(custom-image|built-in|unsupported)$ ]] || return 1
+  [[ "${LIB_APP_UNINSTALL_CAPABILITY:-}" =~ ^(manual-review|unsupported|never)$ ]] || return 1
+  [[ "${LIB_APP_TRUST:-}" =~ ^(official|community)$ ]] || return 1
+  [[ "${LIB_APP_RISK:-}" =~ ^(core|standard|elevated)$ ]] || return 1
+  [[ -n "${LIB_APP_VERIFY:-}" ]] || return 1
+  local dependency rule_set
+  for rule_set in "${LIB_APP_REQUIRES:-}" "${LIB_APP_CONFLICTS:-}"; do
+    while IFS= read -r dependency; do
+      [[ -n "$dependency" ]] || continue
+      validate_app_name "$dependency" || return 1
+    done < <(printf '%s\n' "$rule_set" | tr ',' '\n')
+  done
+}
+
+load_validated_app_catalog_record() {
+  app_profile_defaults "$1" || return 1
+  validate_app_catalog_record
 }
 
 validate_app_name() {

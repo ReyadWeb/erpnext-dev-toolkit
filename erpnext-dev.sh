@@ -254,6 +254,7 @@ DASHBOARD_WATCH_SEC="${DASHBOARD_WATCH_SEC:-0}"
 DASHBOARD_DETAILS="${DASHBOARD_DETAILS:-0}"
 FORCE_NO_COLOR="${FORCE_NO_COLOR:-0}"
 ACTION_ARG="${ACTION_ARG:-}"
+ACTION_ARG2="${ACTION_ARG2:-}"
 HEALTH_CHECK_ON_CALENDAR="${HEALTH_CHECK_ON_CALENDAR:-hourly}"
 HEALTH_CHECK_RANDOM_DELAY="${HEALTH_CHECK_RANDOM_DELAY:-10m}"
 HEALTH_CHECK_DISK_WARN_PERCENT="${HEALTH_CHECK_DISK_WARN_PERCENT:-80}"
@@ -287,7 +288,7 @@ _erpnext_dev_required_lib_files() {
   printf '%s\n' \
     common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
-    dashboard.sh healing.sh menu.sh security.sh update.sh
+    dashboard.sh inventory.sh healing.sh menu.sh security.sh update.sh
 }
 
 _erpnext_dev_missing_lib_files() {
@@ -453,8 +454,8 @@ _erpnext_dev_recover_legacy_modular_install() {
     return 1
   fi
 
-  if [[ ! -x "${tree}/scripts/build-info.sh" ]] ||
-    ! "${tree}/scripts/build-info.sh" verify \
+  if [[ ! -x "${tree}/scripts/build-info.sh" ]] \
+    || ! "${tree}/scripts/build-info.sh" verify \
       --root "$tree" \
       --archive "erpnext-dev-${version_tag}.tar.gz" \
       --expected-tag "$version_tag" \
@@ -656,6 +657,12 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/dashboard.sh" ]]; then
 fi
 # shellcheck source=lib/dashboard.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/dashboard.sh"
+if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/inventory.sh" ]]; then
+  echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/inventory.sh" >&2
+  exit 1
+fi
+# shellcheck source=lib/inventory.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/inventory.sh"
 if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/healing.sh" ]]; then
   echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/healing.sh" >&2
   exit 1
@@ -1366,6 +1373,11 @@ Core:
   verify-signature    Verify the GPG signature over SHA256SUMS (needs TOOLKIT_SIGNING_PUBKEY)
   install-cli         Install or repair the erpnext-dev command
   repair-cli          Alias for install-cli
+  app list            Read-only code availability and multi-site usage inventory
+  app status          Read-only stack/application inventory status
+  app compatibility APP
+                      Evaluate compatibility without fetching or running app code
+  site list           Read-only site and installed-application inventory
   update-toolkit      Atomic update: verified bundle -> releases/<ver> -> current symlink
   toolkit-rollback    Switch the current symlink back to the previously installed release
   clear-lock          Clear a stale toolkit lock (refuses if another process still holds it)
@@ -1636,6 +1648,22 @@ EOF_HELP
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
+    if [[ -z "${ACTION:-}" && ("$1" == "app" || "$1" == "site") ]]; then
+      ACTION="$1"
+      shift
+      continue
+    fi
+    if [[ ("${ACTION:-}" == "app" || "${ACTION:-}" == "site") && "$1" != -* ]]; then
+      if [[ -z "${ACTION_ARG:-}" ]]; then
+        ACTION_ARG="$1"
+      elif [[ -z "${ACTION_ARG2:-}" ]]; then
+        ACTION_ARG2="$1"
+      else
+        fail "Too many arguments for ${ACTION} inventory command."
+      fi
+      shift
+      continue
+    fi
     if [[ -n "${ACTION:-}" ]]; then
       case "${ACTION}:${1}" in
         update-toolkit:--version | update-toolkit:--tag)
@@ -1796,6 +1824,8 @@ main() {
     local-ssl-menu | local-https | local-vm-ssl) show_local_ssl_menu main ;;
     local-ssl-wizard | ssl-wizard) run_local_ssl_wizard main ;;
     backup-menu) run_backup_maintenance_menu ;;
+    app) run_app_inventory_command "${ACTION_ARG:-status}" "${ACTION_ARG2:-}" ;;
+    site) run_site_inventory_command "${ACTION_ARG:-list}" "${ACTION_ARG2:-}" ;;
     app-library | apps) show_app_library_menu ;;
     app-install-wizard | app-wizard) run_app_install_wizard ;;
     app-install-guide) show_app_install_guide ;;

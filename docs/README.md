@@ -58,6 +58,7 @@ concise.
 | Restore rehearsal | [README restore section](../README.md#restore-rehearsal) |
 | Dashboard and incidents | [README dashboard section](../README.md#production-operations-dashboard) |
 | Health monitoring | [Health architecture](HEALTH-ARCHITECTURE.md) |
+| Application inventory and compatibility | [Inventory architecture](INVENTORY-COMPATIBILITY.md) |
 | HTTPS and domains | [README HTTPS section](../README.md#https--ssl) |
 | Updates and rollback | [README integrity section](../README.md#toolkit-integrity-and-updates) |
 | Production acceptance | [Validation runbook](../VALIDATION.md) |
@@ -127,6 +128,7 @@ without navigating away from the landing page:
 Supporting references:
 
 - [Health architecture](HEALTH-ARCHITECTURE.md)
+- [Inventory and compatibility architecture](INVENTORY-COMPATIBILITY.md)
 - [Stable local VM IP design](LOCAL-VM-STABLE-IP.md)
 - [Frontend asset readiness](FRAPPE-FRONTEND-ASSETS.md)
 - [`assets/`](assets/) for diagrams and screenshots
