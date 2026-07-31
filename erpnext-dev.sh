@@ -671,6 +671,12 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/planner.sh" ]]; then
 fi
 # shellcheck source=lib/planner.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/planner.sh"
+if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/removal.sh" ]]; then
+  echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/removal.sh" >&2
+  exit 1
+fi
+# shellcheck source=lib/removal.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/removal.sh"
 if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/healing.sh" ]]; then
   echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/healing.sh" >&2
   exit 1
@@ -1388,7 +1394,11 @@ Core:
   app install APP --site SITE [--preview] [--yes]
   app updates [APP] [--site SITE] [--json]
   app update APP --site SITE [--preview] [--yes]
+  app removal-check APP [--site SITE] [--scope site|remove-unused-code]
+  app uninstall APP --site SITE --scope site|remove-unused-code --ack-app-data-removal [--yes]
   stack update --mode safe|full [--preview] [--yes]
+  stack convert --profile frappe-only --ack-app-data-removal --ack-profile-transition [--yes]
+  operation status|recover OPERATION_ID [--preview]
                       Plan, back up, install, and verify a curated app; Docker production uses a cumulative immutable image
   site list           Read-only site and installed-application inventory
   update-toolkit      Atomic update: verified bundle -> releases/<ver> -> current symlink
@@ -1661,12 +1671,12 @@ EOF_HELP
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
-    if [[ -z "${ACTION:-}" && ("$1" == "app" || "$1" == "site" || "$1" == "stack") ]]; then
+    if [[ -z "${ACTION:-}" && ("$1" == "app" || "$1" == "site" || "$1" == "stack" || "$1" == "operation") ]]; then
       ACTION="$1"
       shift
       continue
     fi
-    if [[ ("${ACTION:-}" == "app" || "${ACTION:-}" == "site" || "${ACTION:-}" == "stack") && "$1" != -* ]]; then
+    if [[ ("${ACTION:-}" == "app" || "${ACTION:-}" == "site" || "${ACTION:-}" == "stack" || "${ACTION:-}" == "operation") && "$1" != -* ]]; then
       if [[ -z "${ACTION_ARG:-}" ]]; then
         ACTION_ARG="$1"
       elif [[ -z "${ACTION_ARG2:-}" ]]; then
@@ -1703,14 +1713,23 @@ parse_args() {
       --profile)
         shift
         [[ $# -gt 0 ]] || fail "--profile requires recommended or frappe-only."
-        INSTALLATION_PROFILE="$1"
-        INSTALLATION_PROFILE_ENV_PROVIDED=1
+        if [[ "${ACTION:-}" == stack && "${ACTION_ARG:-}" == convert ]]; then
+          REMOVAL_TARGET_PROFILE="$1"
+        else
+          INSTALLATION_PROFILE="$1"
+          INSTALLATION_PROFILE_ENV_PROVIDED=1
+        fi
         shift
         ;;
       --profile=*)
-        INSTALLATION_PROFILE="${1#*=}"
-        INSTALLATION_PROFILE_ENV_PROVIDED=1
-        [[ -n "$INSTALLATION_PROFILE" ]] || fail "--profile requires a non-empty value."
+        if [[ "${ACTION:-}" == stack && "${ACTION_ARG:-}" == convert ]]; then
+          REMOVAL_TARGET_PROFILE="${1#*=}"
+          [[ -n "$REMOVAL_TARGET_PROFILE" ]] || fail "--profile requires a non-empty value."
+        else
+          INSTALLATION_PROFILE="${1#*=}"
+          INSTALLATION_PROFILE_ENV_PROVIDED=1
+          [[ -n "$INSTALLATION_PROFILE" ]] || fail "--profile requires a non-empty value."
+        fi
         shift
         ;;
       --site)
@@ -1734,9 +1753,19 @@ parse_args() {
         MANAGED_UPDATE_MODE="${1#*=}"
         shift
         ;;
+      --scope)
+        shift
+        [[ $# -gt 0 ]] || fail "--scope requires site or remove-unused-code."
+        REMOVAL_SCOPE="$1"; shift
+        ;;
+      --scope=*) REMOVAL_SCOPE="${1#*=}"; shift ;;
+      --remove-unused-code) REMOVAL_SCOPE=remove-unused-code; shift ;;
+      --ack-app-data-removal) REMOVAL_DATA_ACK=1; shift ;;
+      --ack-profile-transition) REMOVAL_PROFILE_ACK=1; shift ;;
       --preview | --dry-run)
         QUICK_INSTALL_PREVIEW=1
         MANAGED_UPDATE_PREVIEW=1
+        REMOVAL_PREVIEW=1
         shift
         ;;
       --plain)
@@ -1801,9 +1830,19 @@ main() {
   erpnext_dev_init_terminal_colors
   ui_init
 
+  if [[ "${ACTION:-}" == app && ("${ACTION_ARG:-}" == uninstall || "${ACTION_ARG:-}" == removal-check) ]]; then
+    inventory_valid_name "${ACTION_ARG2:-}" || fail "Invalid application identifier; no system changes were made."
+    removal_validate_scope "$REMOVAL_SCOPE" || fail "Invalid removal scope; no system changes were made."
+    [[ "${ACTION_ARG2:-}" != frappe ]] || fail "Frappe is protected and cannot be uninstalled."
+    load_validated_app_catalog_record "${ACTION_ARG2:-}" || fail "Unknown or unmanaged application; no system changes were made."
+    [[ "$LIB_APP_UNINSTALL_CAPABILITY" != never && "$LIB_APP_UNINSTALL_CAPABILITY" != unsupported ]] \
+      || fail "Application removal is prohibited by trusted catalog policy."
+  fi
+
   if action_requires_lock "${ACTION:-menu}" \
-    || [[ "${ACTION:-}" == app && ("${ACTION_ARG:-}" == install || "${ACTION_ARG:-}" == update) && "$QUICK_INSTALL_PREVIEW" -ne 1 && "$MANAGED_UPDATE_PREVIEW" -ne 1 ]] \
-    || [[ "${ACTION:-}" == stack && "${ACTION_ARG:-}" == update && "$MANAGED_UPDATE_PREVIEW" -ne 1 ]]; then
+    || [[ "${ACTION:-}" == app && ("${ACTION_ARG:-}" == install || "${ACTION_ARG:-}" == update || "${ACTION_ARG:-}" == uninstall) && "$QUICK_INSTALL_PREVIEW" -ne 1 && "$MANAGED_UPDATE_PREVIEW" -ne 1 && "$REMOVAL_PREVIEW" -ne 1 ]] \
+    || [[ "${ACTION:-}" == stack && ("${ACTION_ARG:-}" == update || "${ACTION_ARG:-}" == convert) && "$MANAGED_UPDATE_PREVIEW" -ne 1 && "$REMOVAL_PREVIEW" -ne 1 ]] \
+    || [[ "${ACTION:-}" == operation && "${ACTION_ARG:-}" == recover && "$REMOVAL_PREVIEW" -ne 1 ]]; then
     acquire_toolkit_lock
   fi
 
@@ -1876,14 +1915,31 @@ main() {
           [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd app update APP --site SITE)"
           MANAGED_UPDATE_SITE="$QUICK_INSTALL_SITE" run_managed_update app "$ACTION_ARG2"
           ;;
+        removal-check)
+          [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd app removal-check APP --site SITE)"
+          REMOVAL_SITES="$QUICK_INSTALL_SITE" run_removal_check "$ACTION_ARG2" "$REMOVAL_SCOPE"
+          ;;
+        uninstall)
+          [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd app uninstall APP --site SITE --ack-app-data-removal)"
+          REMOVAL_SITES="$QUICK_INSTALL_SITE" run_app_removal "$ACTION_ARG2" "$REMOVAL_SCOPE"
+          ;;
         *) run_app_inventory_command "${ACTION_ARG:-status}" "${ACTION_ARG2:-}" ;;
       esac
       ;;
     stack)
-      [[ "${ACTION_ARG:-}" == update ]] || fail "Usage: $(toolkit_cmd stack update --mode safe|full)"
-      managed_update_validate_mode "$MANAGED_UPDATE_MODE" || fail "stack update requires --mode safe or --mode full."
-      [[ "$MANAGED_UPDATE_MODE" != app ]] || fail "Use app update APP for individual updates."
-      run_managed_update "$MANAGED_UPDATE_MODE"
+      if [[ "${ACTION_ARG:-}" == convert ]]; then
+        [[ "$REMOVAL_TARGET_PROFILE" == frappe-only ]] || fail "stack convert currently requires --profile frappe-only."
+        run_app_removal erpnext convert-frappe-only
+      else
+        [[ "${ACTION_ARG:-}" == update ]] || fail "Usage: $(toolkit_cmd stack update --mode safe|full)"
+        managed_update_validate_mode "$MANAGED_UPDATE_MODE" || fail "stack update requires --mode safe or full."
+        [[ "$MANAGED_UPDATE_MODE" != app ]] || fail "Use app update APP for individual updates."
+        run_managed_update "$MANAGED_UPDATE_MODE"
+      fi
+      ;;
+    operation)
+      [[ -n "${ACTION_ARG2:-}" ]] || fail "Usage: $(toolkit_cmd operation status|recover OPERATION_ID)"
+      case "${ACTION_ARG:-}" in status) run_removal_operation_status "$ACTION_ARG2" ;; recover) run_removal_recovery "$ACTION_ARG2" ;; *) fail "Unknown operation action." ;; esac
       ;;
     site) run_site_inventory_command "${ACTION_ARG:-list}" "${ACTION_ARG2:-}" ;;
     app-library | apps) show_app_library_menu ;;

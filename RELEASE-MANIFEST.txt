@@ -27,6 +27,7 @@ docs/INVENTORY-COMPATIBILITY.md
 docs/OPERATION-PLANNER.md
 docs/DOCKER-DURABILITY.md
 docs/SAFE-UPDATE-LIFECYCLE.md
+docs/APP-UNINSTALL-RECOVERY.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
 docs/ROADMAP-HISTORY.md
@@ -44,6 +45,7 @@ scripts/test-inventory-compatibility.sh
 scripts/test-operation-planner.sh
 scripts/test-docker-durability.sh
 scripts/test-safe-update-lifecycle.sh
+scripts/test-app-uninstall-recovery.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
@@ -84,6 +86,7 @@ lib/ops.sh
 lib/dashboard.sh
 lib/inventory.sh
 lib/planner.sh
+lib/removal.sh
 lib/healing.sh
 lib/menu.sh
 lib/security.sh

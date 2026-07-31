@@ -431,6 +431,11 @@ release-line-constrained updates. Native plans cover every site sharing Bench
 code; Docker production plans retain the cumulative manifest and use verified
 replacement images. See [Safe update management](docs/SAFE-UPDATE-LIFECYCLE.md).
 
+Application removal separates site data lifecycle from shared Bench/image code.
+Use `app removal-check`, then an explicit `app uninstall` scope and data-loss
+acknowledgement. ERPNext-to-Frappe-only conversion is a separate stack action;
+Frappe is never removable. See [application uninstall and recovery](docs/APP-UNINSTALL-RECOVERY.md).
+
 After install, map the local domain and enable HTTPS:
 
 ```bash

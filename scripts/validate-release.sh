@@ -265,6 +265,8 @@ pass "Docker durability tests passed"
 
 scripts/test-safe-update-lifecycle.sh
 pass "safe-update lifecycle tests passed"
+scripts/test-app-uninstall-recovery.sh
+pass "app-uninstall recovery tests passed"
 
 if [[ "${SKIP_SHELLCHECK:-0}" == "1" ]]; then
   command -v shellcheck >/dev/null 2>&1 \
