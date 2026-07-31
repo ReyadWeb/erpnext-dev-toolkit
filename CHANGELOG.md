@@ -1,3 +1,13 @@
+## v1.20.4 - ERPNext Developer Toolkit v1.20.4
+
+### Added
+
+- Release notes pending final review.
+
+### Validation
+
+- Release validation pending.
+
 ## v1.20.4-beta.4 - Resumable release workflow
 
 ### Added
