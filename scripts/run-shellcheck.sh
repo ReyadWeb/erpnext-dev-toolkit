@@ -42,6 +42,7 @@ targets=(
   lib/install.sh
   lib/ops.sh
   lib/dashboard.sh
+  lib/inventory.sh
   lib/healing.sh
   lib/menu.sh
   lib/security.sh
@@ -82,6 +83,7 @@ targets=(
   scripts/build-release-bundle.sh
   scripts/test-atomic-update.sh
   scripts/test-staged-signature.sh
+  scripts/test-inventory-compatibility.sh
   scripts/test-host-os-output.sh
   scripts/test-install-self-path.sh
   scripts/test-legacy-modular-bootstrap.sh
