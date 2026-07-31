@@ -1098,7 +1098,7 @@ follow_erpnext_service_logs() {
 }
 
 install_state() {
-  local bench_dir
+  local bench_dir required_app
   if declare -F deployment_engine_is_docker >/dev/null 2>&1 && deployment_engine_is_docker; then
     # Preserve the long-standing install_state contract: callers and health
     # snapshots expect the exact string "Installed". Runtime state is reported
@@ -1113,8 +1113,14 @@ install_state() {
   fi
   bench_dir="$(active_bench_dir)"
 
-  if path_is_dir "${bench_dir}" && path_is_dir "${bench_dir}/apps/frappe" && path_is_dir "${bench_dir}/apps/erpnext" && path_is_dir "${bench_dir}/sites/${SITE_NAME}"; then
-    if site_app_installed erpnext || [[ -f "${bench_dir}/sites/apps.txt" ]]; then
+  if path_is_dir "${bench_dir}" && path_is_dir "${bench_dir}/sites/${SITE_NAME}"; then
+    while IFS= read -r required_app; do
+      path_is_dir "${bench_dir}/apps/${required_app}" || {
+        echo "Incomplete"
+        return
+      }
+    done < <(installation_profile_required_apps)
+    if site_app_installed frappe && { ! installation_profile_requires_erpnext || site_app_installed erpnext; }; then
       echo "Installed"
     else
       echo "Installed files found; site app not confirmed"

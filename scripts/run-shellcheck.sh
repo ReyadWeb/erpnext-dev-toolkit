@@ -23,6 +23,7 @@ fi
 targets=(
   lib/common.sh
   lib/ui.sh
+  lib/profile.sh
   lib/config.sh
   lib/access.sh
   lib/local_ip.sh

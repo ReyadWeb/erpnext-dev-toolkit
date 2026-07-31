@@ -243,6 +243,16 @@ load_future_domain_config_if_available() {
     fi
   fi
 
+  if [[ "${INSTALLATION_PROFILE_ENV_PROVIDED:-0}" -ne 1 ]] && [[ -z "${INSTALLATION_PROFILE:-}" ]]; then
+    if saved="$(read_saved_config_value INSTALLATION_PROFILE 2>/dev/null)" && [[ -n "$saved" ]]; then
+      if saved="$(normalize_installation_profile "$saved" 2>/dev/null)"; then
+        INSTALLATION_PROFILE="$saved"
+      else
+        warn "Ignoring invalid saved INSTALLATION_PROFILE; using recommended."
+      fi
+    fi
+  fi
+
   # Load the saved Docker published port unless it was provided via the
   # environment this run, so status/logs/access output use the real port
   # (e.g. an auto-picked one) instead of the 8080 default.
@@ -618,6 +628,7 @@ PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
 RUNTIME_MODE=$(runtime_mode)
 HOST_OS=${HOST_OS}
 DEPLOYMENT_ENGINE=$(effective_deployment_engine)
+INSTALLATION_PROFILE=$(effective_installation_profile)
 DOCKER_PUBLISH_PORT=${DOCKER_PUBLISH_PORT}
 DOCKER_SITE_NAME=${DOCKER_SITE_NAME:-}
 DOCKER_MODE=${DOCKER_MODE:-development}
@@ -642,6 +653,7 @@ PRODUCTION_SSL_MODE=${PRODUCTION_SSL_MODE}
 RUNTIME_MODE=$(runtime_mode)
 HOST_OS=${HOST_OS}
 DEPLOYMENT_ENGINE=$(effective_deployment_engine)
+INSTALLATION_PROFILE=$(effective_installation_profile)
 DOCKER_PUBLISH_PORT=${DOCKER_PUBLISH_PORT}
 DOCKER_SITE_NAME=${DOCKER_SITE_NAME:-}
 DOCKER_MODE=${DOCKER_MODE:-development}

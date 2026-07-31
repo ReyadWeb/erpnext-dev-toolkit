@@ -35,6 +35,7 @@ scripts/test-repo-workflow-release-transaction.sh
 scripts/test-repo-workflow-release-finalize.sh
 scripts/test-repo-workflow-release-run.sh
 scripts/test-health-snapshot.sh
+scripts/test-platform-profiles.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
@@ -54,6 +55,7 @@ scripts/frappe-frontend-asset-checklist.sh
 docs/FRAPPE-FRONTEND-ASSETS.md
 lib/common.sh
 lib/ui.sh
+lib/profile.sh
 lib/config.sh
 lib/access.sh
 lib/local_ip.sh

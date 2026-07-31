@@ -706,13 +706,14 @@ EOF_HELPER
 }
 
 install_frappe_stack_as_user() {
-  log "Installing Node, Python, Bench, Frappe, and ERPNext as ${FRAPPE_USER}"
+  log "Installing $(installation_profile_label) as ${FRAPPE_USER}"
 
   frappe_login_bash <<EOF_USER
 set -Eeuo pipefail
 
 export HOME="${FRAPPE_HOME}"
 export PATH="\$HOME/.local/bin:\$PATH"
+INSTALLATION_PROFILE="$(effective_installation_profile)"
 
 # Pin XDG base dirs under the frappe home. Otherwise a caller-inherited
 # XDG_CONFIG_HOME/XDG_* (e.g. /home/runner/.config in CI, or a sudo env that
@@ -825,12 +826,17 @@ bench set-config -g default_site "${SITE_NAME}"
 bench set-config -g serve_default_site true
 
 echo
-echo "==> Downloading ERPNext"
-
-if [[ -d "apps/erpnext" ]]; then
-  echo "ERPNext app already exists"
+if [[ "\$INSTALLATION_PROFILE" == "recommended" ]]; then
+  echo
+  echo "==> Downloading ERPNext"
+  if [[ -d "apps/erpnext" ]]; then
+    echo "ERPNext app already exists"
+  else
+    bench get-app erpnext --branch "${ERPNEXT_BRANCH}"
+  fi
 else
-  bench get-app erpnext --branch "${ERPNEXT_BRANCH}"
+  echo
+  echo "==> Frappe-only profile selected; ERPNext will not be downloaded or installed"
 fi
 
 echo
@@ -871,12 +877,14 @@ for i in {1..60}; do
 done
 
 echo
-echo "==> Installing ERPNext on ${SITE_NAME}"
-
-if bench --site "${SITE_NAME}" list-apps | awk '{print \$1}' | grep -qx "erpnext"; then
-  echo "ERPNext is already installed on ${SITE_NAME}"
-else
-  bench --site "${SITE_NAME}" install-app erpnext
+if [[ "\$INSTALLATION_PROFILE" == "recommended" ]]; then
+  echo
+  echo "==> Installing ERPNext on ${SITE_NAME}"
+  if bench --site "${SITE_NAME}" list-apps | awk '{print \$1}' | grep -qx "erpnext"; then
+    echo "ERPNext is already installed on ${SITE_NAME}"
+  else
+    bench --site "${SITE_NAME}" install-app erpnext
+  fi
 fi
 
 echo
@@ -889,15 +897,19 @@ bench build
 disk_ok() {
   ls sites/assets/frappe/dist/css/website.bundle.*.css >/dev/null 2>&1 \\
     && ls sites/assets/frappe/dist/css/login.bundle.*.css >/dev/null 2>&1 \\
-    && ls sites/assets/erpnext/dist/css/erpnext-web.bundle.*.css >/dev/null 2>&1 \\
     && ls sites/assets/frappe/dist/js/frappe-web.bundle.*.js >/dev/null 2>&1
+  local frappe_ok=\$?
+  [[ "\$frappe_ok" -eq 0 ]] || return "\$frappe_ok"
+  if [[ "\$INSTALLATION_PROFILE" == "recommended" ]]; then
+    ls sites/assets/erpnext/dist/css/erpnext-web.bundle.*.css >/dev/null 2>&1
+  fi
 }
 if ! disk_ok; then
   echo "WARN: login-critical assets missing after first bench build — rebuilding once"
   bench build
 fi
 if ! disk_ok; then
-  echo "ERROR: login CSS/JS still missing under sites/assets after rebuild."
+  echo "ERROR: required \$INSTALLATION_PROFILE login CSS/JS still missing under sites/assets after rebuild."
   echo "Often OOM during yarn/esbuild (need >=4GB RAM). See docs/FRAPPE-FRONTEND-ASSETS.md"
   exit 1
 fi
@@ -907,7 +919,7 @@ bench --site "${SITE_NAME}" execute frappe.cache_manager.clear_global_cache || t
 EOF_USER
 
   create_start_helper
-  ok "Frappe/ERPNext stack installed"
+  ok "$(installation_profile_label) stack installed"
 }
 
 write_credentials_file() {
@@ -918,7 +930,10 @@ write_credentials_file() {
   bench_dir="$(active_bench_dir)"
 
   $SUDO tee "$cred_file" >/dev/null <<EOF_CREDS
-ERPNext Developer Environment
+Frappe Developer Environment
+
+Installation profile:
+  $(installation_profile_label)
 
 Site:
   ${SITE_NAME}
@@ -951,7 +966,7 @@ Browser access:
     http://${SITE_NAME}:8000
 
 Important:
-  ${SITE_NAME} only works after ERPNext is running and your HOST machine maps ${SITE_NAME} to the VM IP.
+  ${SITE_NAME} only works after the Frappe stack is running and your HOST machine maps ${SITE_NAME} to the VM IP.
   Use $(toolkit_cmd access) to print the required host-side command.
 EOF_CREDS
 
@@ -1001,6 +1016,8 @@ run_install() {
   local enable_boot start_now
 
   require_sudo
+  validate_platform_profile_combination \
+    || fail "Invalid platform/profile selection; installation stopped before mutation."
 
   # Choose the deployment engine once (native VM or Docker). Native keeps the
   # exact behavior below; Docker hands off to the frappe_docker-backed engine.
