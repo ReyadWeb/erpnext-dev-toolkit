@@ -124,13 +124,22 @@ set -e
 [[ "$rc" -eq 34 ]] && pass "inventory change after preview rejected" || fail_case "stale plan accepted"
 
 DEPLOYMENT_ENGINE=docker DOCKER_MODE=development
+DOCKER_APP_MANIFEST_FILE="$fixture/manifest"
+DOCKER_ERPNEXT_IMAGE=development:current
+DOCKER_ERPNEXT_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+DOCKER_PROJECT_NAME=erpnext-dev
 docker_mode() { printf '%s\n' "$DOCKER_MODE"; }
+docker_collect_desired_app_profiles() { printf 'crm\n'; }
+docker_write_apps_json() { :; }
+planner_prepare_state_dir() { :; }
+planner_checkpoint() { :; }
+docker_build_custom_image() { return 1; }
 set +e
 managed_update_execute_docker >/dev/null 2>&1
 rc=$?
 set -e
-[[ "$rc" -eq 23 ]] && pass "Docker development mutable path not called durable" || fail_case "Docker development durability classification"
-DOCKER_MODE=production DOCKER_APP_MANIFEST_FILE="$fixture/manifest"
+[[ "$rc" -eq 31 ]] && pass "Docker development uses managed-image lifecycle" || fail_case "Docker development durability classification"
+DOCKER_MODE=production
 printf 'invalid\n' >"$DOCKER_APP_MANIFEST_FILE"
 docker_validate_app_manifest() { return 1; }
 set +e

@@ -35,7 +35,8 @@ A candidate is built and verified before backups or deployment, its digest is
 recorded, and the previous manifest, image digest, configuration, and backups
 remain recovery checkpoints. The last-known-good manifest is promoted only after
 stack verification. Development-container mutation is explicitly temporary and
-is never described as production durability.
+is never described as production durability; Phase 5 instead prefers the same
+managed cumulative-image mechanism for Docker development updates.
 
 Operation records reuse the lifecycle journal and lock. They contain targets,
 affected sites, checkpoints, backup references, previous revisions or image

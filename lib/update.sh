@@ -674,15 +674,23 @@ managed_update_execute_native() {
 }
 
 managed_update_execute_docker() {
-  local profiles=() item app target actual fingerprint site
-  [[ "$(docker_mode)" == production ]] || { warn "Docker development updates are temporary unless using a managed cumulative image."; return 23; }
-  [[ -f "$DOCKER_APP_MANIFEST_FILE" ]] && docker_validate_app_manifest "$DOCKER_APP_MANIFEST_FILE" || return 25
+  local profiles=() item app target actual fingerprint site mode
+  mode="$(docker_mode)"
+  if [[ -f "$DOCKER_APP_MANIFEST_FILE" ]]; then
+    docker_validate_app_manifest "$DOCKER_APP_MANIFEST_FILE" || return 25
+    mapfile -t profiles < <(awk -F'\t' '$1=="APP"&&$2!="frappe"&&$2!="erpnext"{print $2}' "$DOCKER_APP_MANIFEST_FILE")
+  elif [[ "$mode" == development ]]; then
+    mapfile -t profiles < <(docker_collect_desired_app_profiles)
+  else
+    return 25
+  fi
   OPERATION_PREVIOUS_IMAGE="${DOCKER_ERPNEXT_IMAGE}@${DOCKER_ERPNEXT_IMAGE_DIGEST:-unrecorded}"
-  OPERATION_ORIGINAL_STATE="maintenance=off,deployment=${DOCKER_PROJECT_NAME:-erpnext-dev},scheduler=preserve"
+  OPERATION_ORIGINAL_STATE="maintenance=off,deployment=${DOCKER_PROJECT_NAME:-erpnext-dev},scheduler=preserve,persistence=managed-image"
   planner_prepare_state_dir || return 1
   [[ ! -L "${OPERATION_STATE_DIR}/${OPERATION_ID}.previous-manifest.tsv" ]] || return 1
-  $SUDO cp "$DOCKER_APP_MANIFEST_FILE" "${OPERATION_STATE_DIR}/${OPERATION_ID}.previous-manifest.tsv" || return 1
-  mapfile -t profiles < <(awk -F'\t' '$1=="APP"&&$2!="frappe"&&$2!="erpnext"{print $2}' "$DOCKER_APP_MANIFEST_FILE")
+  if [[ -f "$DOCKER_APP_MANIFEST_FILE" ]]; then
+    $SUDO cp "$DOCKER_APP_MANIFEST_FILE" "${OPERATION_STATE_DIR}/${OPERATION_ID}.previous-manifest.tsv" || return 1
+  fi
   UPDATE_FAILURE_STAGE=manifest
   docker_write_apps_json "${profiles[@]}" || return 25
   planner_checkpoint recovery-checkpoint-ready validated || return 1
