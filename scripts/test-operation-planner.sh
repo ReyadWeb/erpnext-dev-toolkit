@@ -268,14 +268,14 @@ if validate_app_catalog_record; then
 else
   pass "catalog source tampering rejected"
 fi
-if rg -q 'ACTION_ARG:-.*install.*QUICK_INSTALL_PREVIEW' "$ROOT_DIR/erpnext-dev.sh"; then
+if grep -Eq 'ACTION_ARG:-.*install.*QUICK_INSTALL_PREVIEW' "$ROOT_DIR/erpnext-dev.sh"; then
   pass "Quick mutation uses established toolkit lock"
 else
   fail_case "Quick mutation lock routing missing"
 fi
 
 redaction_marker='synthetic-sensitive-value'
-if rg -q "$redaction_marker" "$OPERATION_STATE_DIR" 2>/dev/null; then
+if grep -R -F -q -- "$redaction_marker" "$OPERATION_STATE_DIR" 2>/dev/null; then
   fail_case "secret appeared in operation records"
 else
   pass "operation records contain no injected secret"
