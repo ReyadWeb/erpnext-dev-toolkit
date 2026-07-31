@@ -60,6 +60,7 @@ concise.
 | Health monitoring | [Health architecture](HEALTH-ARCHITECTURE.md) |
 | Application inventory and compatibility | [Inventory architecture](INVENTORY-COMPATIBILITY.md) |
 | Operation planner and Quick installation | [Operation planner](OPERATION-PLANNER.md) |
+| Docker profiles and durable images | [Docker durability](DOCKER-DURABILITY.md) |
 | HTTPS and domains | [README HTTPS section](../README.md#https--ssl) |
 | Updates and rollback | [README integrity section](../README.md#toolkit-integrity-and-updates) |
 | Production acceptance | [Validation runbook](../VALIDATION.md) |
@@ -131,6 +132,7 @@ Supporting references:
 - [Health architecture](HEALTH-ARCHITECTURE.md)
 - [Inventory and compatibility architecture](INVENTORY-COMPATIBILITY.md)
 - [Operation planner and native Quick installation](OPERATION-PLANNER.md)
+- [Docker profiles and durable application images](DOCKER-DURABILITY.md)
 - [Stable local VM IP design](LOCAL-VM-STABLE-IP.md)
 - [Frontend asset readiness](FRAPPE-FRONTEND-ASSETS.md)
 - [`assets/`](assets/) for diagrams and screenshots

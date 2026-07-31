@@ -106,11 +106,8 @@ QUICK_INSTALL_SITE=one.test
 rm -rf "$ERPNEXT_DEV_INVENTORY_FIXTURE_ROOT/sites/two.test"
 
 DEPLOYMENT_ENGINE=docker
-set +e
-planner_build hrms >/dev/null
-docker_rc=$?
-set -e
-assert_eq "Docker mutation unsupported" 23 "$docker_rc"
+planner_build hrms >/dev/null || fail_case "Docker operation plan rejected"
+assert_eq "Docker operation plan uses shared planner" docker "$PLAN_ENGINE"
 DEPLOYMENT_ENGINE=native
 
 mutation_log="$fixture/mutations"

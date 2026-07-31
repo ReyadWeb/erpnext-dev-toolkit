@@ -199,8 +199,25 @@ inventory_emit_docker_app() {
     image_version="${DOCKER_ERPNEXT_IMAGE##*:}"
     [[ "$image_version" =~ ^v?[0-9]+(\.[0-9]+)*$ ]] || image_version="unknown"
     source="image:${DOCKER_ERPNEXT_IMAGE}"
+    if [[ -f "${DOCKER_CUSTOM_IMAGE_CORE_FILE:-}" ]]; then
+      if [[ "$app" == frappe ]]; then
+        image_version="$(docker_env_value "$DOCKER_CUSTOM_IMAGE_CORE_FILE" DOCKER_CUSTOM_IMAGE_FRAPPE_VERSION 2>/dev/null || printf unknown)"
+      else
+        image_version="$(docker_env_value "$DOCKER_CUSTOM_IMAGE_CORE_FILE" DOCKER_CUSTOM_IMAGE_ERPNEXT_VERSION 2>/dev/null || printf unknown)"
+      fi
+    fi
   fi
   inventory_add_record APP "$stack" "$app" available "$image_version" unknown unknown "$source" "$trust" "$management" immutable
+}
+
+inventory_docker_manifest_trusts_app() {
+  local app="$1" expected_repo
+  deployment_engine_is_docker || return 1
+  [[ -f "${DOCKER_APP_MANIFEST_FILE:-}" ]] || return 1
+  docker_validate_app_manifest "$DOCKER_APP_MANIFEST_FILE" || return 1
+  load_validated_app_catalog_record "$app" || return 1
+  expected_repo="$LIB_APP_REPO"
+  awk -F'\t' -v a="$app" -v r="$expected_repo" '$1=="APP"&&$2==a&&$3==r{found=1} END{exit !found}' "$DOCKER_APP_MANIFEST_FILE"
 }
 
 inventory_collect_docker_live() {
@@ -422,7 +439,8 @@ inventory_compatibility_evaluate() {
       return 2
     fi
     if [[ "$actual_source" == image:* ]]; then
-      if [[ "$engine" != docker || "$actual_source" != image:frappe/erpnext:* || ("$app" != frappe && "$app" != erpnext) ]]; then
+      if [[ "$engine" != docker ]] || { [[ "$actual_source" != image:frappe/erpnext:* || ("$app" != frappe && "$app" != erpnext) ]] \
+        && ! inventory_docker_manifest_trusts_app "$app"; }; then
         INVENTORY_COMPAT_DETAIL="Available image source is not a trusted built-in platform source."
         return 2
       fi

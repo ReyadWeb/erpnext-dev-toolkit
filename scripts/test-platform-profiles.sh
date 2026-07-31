@@ -40,10 +40,8 @@ assert_eq "Frappe-only asset policy" frappe-only "$(installation_profile_asset_p
 DEPLOYMENT_ENGINE=native
 validate_platform_profile_combination || fail "native Frappe-only rejected"
 DEPLOYMENT_ENGINE=docker
-if validate_platform_profile_combination; then
-  fail "Docker Frappe-only accepted during Phase 1"
-fi
-echo "OK: unsupported Docker/profile combination rejected"
+validate_platform_profile_combination || fail "Docker Frappe-only rejected during Phase 4"
+echo "OK: Docker Frappe-only profile accepted"
 
 declare -A bench_apps=([frappe]=1 [erpnext]=0)
 declare -A site_apps=([frappe]=1 [erpnext]=0)
