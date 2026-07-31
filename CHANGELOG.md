@@ -2,6 +2,7 @@
 
 ### Added
 
+- Added the Phase 3 inventory-driven operation planner and backup-gated, verified native Quick application installation, including ERPNext promotion from Frappe-only and durable recovery records.
 - Release notes pending final review.
 
 ### Validation

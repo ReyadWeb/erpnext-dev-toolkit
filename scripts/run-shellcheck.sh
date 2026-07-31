@@ -43,6 +43,7 @@ targets=(
   lib/ops.sh
   lib/dashboard.sh
   lib/inventory.sh
+  lib/planner.sh
   lib/healing.sh
   lib/menu.sh
   lib/security.sh
@@ -84,6 +85,7 @@ targets=(
   scripts/test-atomic-update.sh
   scripts/test-staged-signature.sh
   scripts/test-inventory-compatibility.sh
+  scripts/test-operation-planner.sh
   scripts/test-host-os-output.sh
   scripts/test-install-self-path.sh
   scripts/test-legacy-modular-bootstrap.sh

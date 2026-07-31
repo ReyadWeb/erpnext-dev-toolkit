@@ -75,6 +75,7 @@ app_profile_defaults() {
   LIB_APP_TRUST="official"
   LIB_APP_RISK="standard"
   LIB_APP_VERIFY="source-match,platform-major,dependencies"
+  LIB_APP_QUICK_INSTALL="supported"
 
   case "$profile" in
     frappe)
@@ -85,6 +86,7 @@ app_profile_defaults() {
       LIB_APP_SUPPORTED_ERPNEXT=""
       LIB_APP_UNINSTALL_CAPABILITY="never"
       LIB_APP_RISK="core"
+      LIB_APP_QUICK_INSTALL="unsupported"
       LIB_APP_NOTES="Core framework required by every managed stack."
       ;;
     erpnext)
@@ -240,6 +242,7 @@ validate_app_catalog_record() {
   validate_app_name "${LIB_APP_NAME:-}" || return 1
   [[ -n "${LIB_APP_DISPLAY:-}" ]] || return 1
   [[ "${LIB_APP_REPO:-}" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$ ]] || return 1
+  validate_branch_name "${LIB_APP_BRANCH:-}" || return 1
   [[ "${LIB_APP_SUPPORTED_FRAPPE:-}" =~ ^([0-9]+)(,[0-9]+)*$ ]] || return 1
   [[ -z "${LIB_APP_SUPPORTED_ERPNEXT:-}" || "${LIB_APP_SUPPORTED_ERPNEXT}" =~ ^([0-9]+)(,[0-9]+)*$ ]] || return 1
   [[ "${LIB_APP_NATIVE_SUPPORT:-}" == "supported" || "${LIB_APP_NATIVE_SUPPORT:-}" == "unsupported" ]] || return 1
@@ -249,6 +252,7 @@ validate_app_catalog_record() {
   [[ "${LIB_APP_TRUST:-}" =~ ^(official|community)$ ]] || return 1
   [[ "${LIB_APP_RISK:-}" =~ ^(core|standard|elevated)$ ]] || return 1
   [[ -n "${LIB_APP_VERIFY:-}" ]] || return 1
+  [[ "${LIB_APP_QUICK_INSTALL:-}" =~ ^(supported|unsupported)$ ]] || return 1
   local dependency rule_set
   for rule_set in "${LIB_APP_REQUIRES:-}" "${LIB_APP_CONFLICTS:-}"; do
     while IFS= read -r dependency; do
