@@ -12,8 +12,8 @@ health checks, diagnostics, signed updates, and rollback.
 
 > This is a community project and is not an official Frappe Technologies product.
 
-**Current release:** v1.20.3
-**Current project version:** v1.20.4-beta.4
+**Current release:** v1.20.4
+**Current project version:** v1.20.4
 **Current development programme:** v1.20.1–v1.20.5 reliability foundations before v1.21.0.
 
 ## At a glance
@@ -179,7 +179,7 @@ Why this block resolves `/releases/latest` through `url_effective`:
 To pin the current stable release explicitly:
 
 ```bash
-VERSION="v1.20.3"
+VERSION="v1.20.4"
 ```
 
 ### 3. Run the workflow for your environment
