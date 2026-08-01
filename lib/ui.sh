@@ -8,6 +8,20 @@ _ERPNEXT_DEV_UI_LOADED=1
 # Resolve terminal width in a way that still works after
 # `exec > >(tee …)` turns stdout/stderr into pipes (tput/COLUMNS alone often
 # collapse to the 80-col default and force a single-column menu).
+ui_can_query_controlling_tty() {
+  local process_pgid="" terminal_pgid=""
+
+  # Opening /dev/tty from a redirected or background command can stop forever
+  # under job control. Only query it when the original output and current input
+  # are terminals and this process is in the terminal's foreground group.
+  [[ "${ERPNEXT_DEV_STDOUT_TTY:-0}" == "1" && -t 0 ]] || return 1
+
+  process_pgid="$(ps -o pgid= -p "$$" 2>/dev/null | tr -d '[:space:]')"
+  terminal_pgid="$(ps -o tpgid= -p "$$" 2>/dev/null | tr -d '[:space:]')"
+
+  [[ "$process_pgid" =~ ^[0-9]+$ && "$terminal_pgid" == "$process_pgid" ]]
+}
+
 ui_detect_terminal_cols() {
   local cols=""
 
@@ -17,23 +31,27 @@ ui_detect_terminal_cols() {
     return 0
   fi
 
-  # Live size from the controlling terminal (works after tee redirect).
-  # Prefer stty -F/-f so a failed /dev/tty open does not spam bash redirection errors.
-  cols=""
-  if cols="$(stty -F /dev/tty size 2>/dev/null)"; then
-    :
-  elif cols="$(stty -f /dev/tty size 2>/dev/null)"; then
-    :
-  else
-    cols=""
-  fi
-  cols="$(printf '%s\n' "$cols" | awk '{print $2}')"
+  # A pre-tee snapshot or explicit shell width is authoritative. Checking it
+  # before stty also prevents later ui_init calls from reopening /dev/tty.
+  cols="${ERPNEXT_DEV_TTY_COLS:-${COLUMNS:-}}"
   if [[ "$cols" =~ ^[0-9]+$ ]] && ((cols > 0)); then
     printf '%s' "$cols"
     return 0
   fi
 
-  cols="${ERPNEXT_DEV_TTY_COLS:-${COLUMNS:-}}"
+  # Live size from the controlling terminal (works after tee redirect).
+  # Prefer stty -F/-f so a failed /dev/tty open does not spam bash redirection errors.
+  cols=""
+  if ui_can_query_controlling_tty; then
+    if cols="$(stty -F /dev/tty size 2>/dev/null)"; then
+      :
+    elif cols="$(stty -f /dev/tty size 2>/dev/null)"; then
+      :
+    else
+      cols=""
+    fi
+  fi
+  cols="$(printf '%s\n' "$cols" | awk '{print $2}')"
   if [[ "$cols" =~ ^[0-9]+$ ]] && ((cols > 0)); then
     printf '%s' "$cols"
     return 0

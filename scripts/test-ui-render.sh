@@ -218,6 +218,30 @@ export ERPNEXT_DEV_TTY_COLS=100
 )
 unset ERPNEXT_DEV_TTY_COLS
 
+# Non-interactive entry points must not open /dev/tty. A background/piped
+# command can otherwise be stopped by job control before argument dispatch.
+blocking_stty_dir="$(mktemp -d /tmp/erpnext-dev-blocking-stty.XXXXXX)"
+blocking_stty_marker="${blocking_stty_dir}/called"
+blocking_stty_output="${blocking_stty_dir}/version.out"
+cat >"${blocking_stty_dir}/stty" <<'STTY'
+#!/usr/bin/env bash
+: >"${ERPNEXT_TEST_STTY_MARKER}"
+sleep 30
+STTY
+chmod +x "${blocking_stty_dir}/stty"
+if ! ERPNEXT_TEST_STTY_MARKER="$blocking_stty_marker" \
+  PATH="${blocking_stty_dir}:$PATH" \
+  timeout --signal=TERM --kill-after=1s 5s \
+  ./erpnext-dev.sh --no-color version >"$blocking_stty_output" 2>&1; then
+  note_fail "non-interactive version command blocked during terminal-width detection"
+  cat "$blocking_stty_output" >&2 || true
+elif [[ -e "$blocking_stty_marker" ]]; then
+  note_fail "non-interactive version command invoked stty"
+else
+  pass "non-interactive entry point skips controlling-terminal query"
+fi
+rm -rf "$blocking_stty_dir"
+
 # Color must survive the post-tee re-init path (interactive menus log via tee,
 # which makes `[[ -t 1 ]]` false). Snapshot ERPNEXT_DEV_STDOUT_TTY once.
 unset NO_COLOR FORCE_NO_COLOR ERPNEXT_DEV_STDOUT_TTY GREEN YELLOW RED BLUE BOLD RESET
