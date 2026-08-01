@@ -27,10 +27,12 @@ PLAN_STACK="native:/srv/bench"
 effective_deployment_engine() { printf 'native\n'; }
 inventory_collect() { :; }
 inventory_records_sorted() {
+  local two_site_state=known
+  [[ "${REMOVAL_TEST_AMBIGUOUS:-0}" == 1 ]] && two_site_state=ambiguous
   printf '%s\n' \
     'STACK|native:/srv/bench|native|development|recommended|managed|clean' \
     'SITE|native:/srv/bench|one.test|known' \
-    'SITE|native:/srv/bench|two.test|known' \
+    "SITE|native:/srv/bench|two.test|${two_site_state}" \
     'APP|native:/srv/bench|frappe|available|v16|version-16|aaaaaaaa|https://github.com/frappe/frappe|official|managed|clean' \
     'APP|native:/srv/bench|erpnext|available|v16|version-16|bbbbbbbb|https://github.com/frappe/erpnext|official|managed|clean' \
     'APP|native:/srv/bench|telephony|available|v16|version-16|cccccccc|https://github.com/frappe/telephony|official|managed|clean' \
@@ -66,6 +68,15 @@ REMOVAL_SITES=two.test
 removal_build_plan erpnext erpnext-site
 assert_eq 'ERPNext site scope retains code' retain "$OPERATION_CODE_DECISION"
 assert_eq 'ERPNext site scope retains recommended profile' recommended "$PLAN_RESULT_PROFILE"
+
+REMOVAL_TEST_AMBIGUOUS=1
+set +e
+removal_build_plan erpnext erpnext-site
+ambiguous_removal_rc=$?
+set -e
+assert_eq 'ambiguous removal inventory rejected' 21 "$ambiguous_removal_rc"
+assert_eq 'ambiguous removal blocker reported' ambiguous-inventory "$REMOVAL_BLOCKER"
+REMOVAL_TEST_AMBIGUOUS=0
 
 if removal_build_plan erpnext convert-frappe-only; then fail_case 'ERPNext dependent conversion accepted'; else pass 'ERPNext dependent blocks conversion'; fi
 

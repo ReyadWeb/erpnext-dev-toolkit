@@ -76,6 +76,10 @@ removal_build_plan() {
 		[[ "$LIB_APP_UNINSTALL_CAPABILITY" == supported ]] || return 22
 	fi
 	inventory_collect
+	if inventory_has_ambiguous_state; then
+		REMOVAL_BLOCKER=ambiguous-inventory
+		return 21
+	fi
 	removal_select_stack || return 21
 	PLAN_APP="$app" PLAN_CATALOG_ID="$LIB_APP_ID" PLAN_INSTALL_NAME="$LIB_APP_NAME" PLAN_REPO="$LIB_APP_REPO" PLAN_BRANCH="$LIB_APP_BRANCH"
 	PLAN_CURRENT_PROFILE="$(effective_installation_profile)" PLAN_RESULT_PROFILE="$PLAN_CURRENT_PROFILE"

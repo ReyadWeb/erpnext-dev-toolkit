@@ -21,6 +21,22 @@ assert_eq() {
   local label="$1" expected="$2" actual="$3"
   if [[ "$expected" == "$actual" ]]; then pass "$label"; else fail_case "$label (expected ${expected}, got ${actual})"; fi
 }
+assert_process_gone() {
+  local label="$1" pid="$2" attempt state
+  for attempt in {1..40}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      pass "$label"
+      return 0
+    fi
+    state="$(ps -o stat= -p "$pid" 2>/dev/null || true)"
+    if [[ "$state" == Z* ]]; then
+      pass "$label"
+      return 0
+    fi
+    sleep 0.05
+  done
+  fail_case "$label (PID ${pid} survived the timeout)"
+}
 
 SITE_NAME="one.test"
 INSTALLATION_PROFILE="recommended"
@@ -39,6 +55,78 @@ deployment_engine_is_docker() { [[ "$DEPLOYMENT_ENGINE" == docker ]]; }
 docker_mode() { printf '%s\n' "$DOCKER_MODE"; }
 active_bench_dir() { printf '%s\n' "$fixture"; }
 source "$ROOT_DIR/lib/inventory.sh"
+
+slow_bin="$fixture/slow-bin"
+slow_repo="$fixture/slow-repo"
+slow_pid_file="$fixture/slow-probe.pid"
+slow_db_pid_file="$fixture/slow-db.pid"
+slow_site="$fixture/slow-site"
+mkdir -p "$slow_bin" "$slow_repo/.git"
+cat >"$slow_bin/git" <<'EOF_SLOW_GIT'
+#!/usr/bin/env bash
+case " $* " in
+  *" status "*)
+    sleep 300 &
+    child=$!
+    printf '%s\n' "$child" >"$ERPNEXT_TEST_PID_FILE"
+    wait "$child"
+    ;;
+  *" symbolic-ref "*) printf 'version-16\n' ;;
+  *" rev-parse "*) printf '1111111111111111111111111111111111111111\n' ;;
+  *" remote get-url "*) printf 'https://github.com/frappe/frappe\n' ;;
+  *) exit 1 ;;
+esac
+EOF_SLOW_GIT
+chmod +x "$slow_bin/git"
+cat >"$slow_bin/mariadb" <<'EOF_SLOW_DB'
+#!/usr/bin/env bash
+sleep 300 &
+child=$!
+printf '%s\n' "$child" >"$ERPNEXT_TEST_PID_FILE"
+wait "$child"
+EOF_SLOW_DB
+chmod +x "$slow_bin/mariadb"
+
+INVENTORY_RECORDS=()
+started_at="$(date +%s)"
+original_path="$PATH"
+PATH="$slow_bin:$PATH"
+ERPNEXT_TEST_PID_FILE="$slow_pid_file"
+ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT=1
+export PATH ERPNEXT_TEST_PID_FILE ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+inventory_emit_app "native:$fixture" frappe "$slow_repo" 0
+elapsed=$(($(date +%s) - started_at))
+assert_contains "timed-out Git state is ambiguous" "$(inventory_records_sorted)" "|managed|ambiguous"
+if ((elapsed <= 4)); then pass "Git inventory probe is bounded"; else fail_case "Git inventory probe exceeded its deadline"; fi
+[[ -s "$slow_pid_file" ]] \
+  && assert_process_gone "Git timeout leaves no child process" "$(<"$slow_pid_file")" \
+  || fail_case "slow Git probe did not record its child PID"
+
+mkdir -p "$slow_site"
+printf '{\n  "db_name": "fixture_db",\n  "db_password": "fixture_password"\n}\n' >"$slow_site/site_config.json"
+ERPNEXT_TEST_PID_FILE="$slow_db_pid_file"
+export ERPNEXT_TEST_PID_FILE
+set +e
+inventory_native_site_db_apps "$slow_site" >/dev/null 2>&1
+slow_db_rc=$?
+set -e
+assert_eq "timed-out database inventory is ambiguous" 2 "$slow_db_rc"
+[[ -s "$slow_db_pid_file" ]] \
+  && assert_process_gone "database timeout leaves no child process" "$(<"$slow_db_pid_file")" \
+  || fail_case "slow database probe did not record its child PID"
+
+PATH="$original_path"
+unset ERPNEXT_TEST_PID_FILE ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+export PATH
+
+set +e
+ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT=invalid
+export ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+inventory_run_probe true >/dev/null 2>&1
+invalid_timeout_rc=$?
+set -e
+unset ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+assert_eq "invalid probe timeout fails closed" 125 "$invalid_timeout_rc"
 
 make_app() {
   local app="$1" version="$2" branch="$3" source="$4" state="${5:-clean}"
@@ -197,6 +285,11 @@ rm -rf "$fixture/sites/bad!site" "$fixture/apps/bad!app"
 rm -f "$fixture/sites/two.test/apps.txt"
 inventory_collect
 assert_contains "ambiguous site explicit" "$(inventory_records_sorted)" "|two.test|ambiguous"
+if inventory_has_ambiguous_state; then
+  pass "ambiguous inventory state is detected"
+else
+  fail_case "ambiguous inventory state was accepted"
+fi
 set +e
 inventory_compatibility_evaluate hrms
 rc=$?

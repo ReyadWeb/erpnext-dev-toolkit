@@ -42,6 +42,22 @@ assert_fails() {
     pass "$label"
   fi
 }
+assert_process_gone() {
+  local label="$1" pid="$2" attempt state
+  for attempt in {1..40}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      pass "$label"
+      return 0
+    fi
+    state="$(ps -o stat= -p "$pid" 2>/dev/null || true)"
+    if [[ "$state" == Z* ]]; then
+      pass "$label"
+      return 0
+    fi
+    sleep 0.05
+  done
+  fail_case "$label: PID ${pid} survived the timeout"
+}
 
 TMP_ROOT="$(mktemp -d /tmp/erpnext-dev-docker-reliability.XXXXXX)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
@@ -89,6 +105,33 @@ assert_not_contains "configurator remains one-shot" "$restart_override" "  confi
 assert_not_contains "create-site remains one-shot" "$restart_override" "  create-site:"
 compose_files="$(docker_compose_file_list)"
 assert_contains "Compose includes persistence overlay" "$compose_files" "$(docker_restart_policy_override_file)"
+
+slow_bin="${TMP_ROOT}/slow-bin"
+slow_pid_file="${TMP_ROOT}/slow-docker.pid"
+mkdir -p "$slow_bin"
+cat >"$slow_bin/docker" <<'EOF_SLOW_DOCKER'
+#!/usr/bin/env bash
+if [[ "${1:-}" == compose && "${2:-}" == version ]]; then
+  exit 0
+fi
+sleep 300 &
+child=$!
+printf '%s\n' "$child" >"$ERPNEXT_TEST_PID_FILE"
+wait "$child"
+EOF_SLOW_DOCKER
+chmod +x "$slow_bin/docker"
+
+set +e
+PATH="$slow_bin:$PATH" ERPNEXT_TEST_PID_FILE="$slow_pid_file" \
+  ERPNEXT_DEV_DOCKER_COMPOSE_TIMEOUT=1 docker_compose ps >/dev/null 2>&1
+slow_compose_rc=$?
+set -e
+[[ "$slow_compose_rc" -eq 124 ]] \
+  && pass "Docker inventory deadline returns timeout status" \
+  || fail_case "Docker inventory deadline returned ${slow_compose_rc}, expected 124"
+[[ -s "$slow_pid_file" ]] \
+  && assert_process_gone "Docker timeout leaves no child process" "$(<"$slow_pid_file")" \
+  || fail_case "slow Docker probe did not record its child PID"
 
 declare -A CID=()
 declare -A STATE=()
