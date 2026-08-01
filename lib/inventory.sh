@@ -27,6 +27,45 @@ inventory_safe_field() {
   [[ "${1:-}" != *"|"* && "${1:-}" != *$'\n'* && "${1:-}" != *$'\r'* && "${1:-}" != *$'\t'* ]]
 }
 
+inventory_current_uid() {
+  printf '%s\n' "${EUID:-$(id -u)}"
+}
+
+inventory_run_git_probe() {
+  local dir="$1"
+  shift
+  local current_uid owner_record owner_name owner_uid owner_home resolved_uid
+
+  current_uid="$(inventory_current_uid)" || return 125
+  owner_uid="$(inventory_run_probe stat -c '%u' -- "$dir" 2>/dev/null)" || return 125
+  [[ "$owner_uid" =~ ^[0-9]+$ ]] || return 125
+
+  if [[ "$owner_uid" == "$current_uid" ]]; then
+    inventory_run_probe env \
+      -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+      -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_CONFIG_COUNT \
+      GIT_OPTIONAL_LOCKS=0 git -C "$dir" "$@"
+    return
+  fi
+
+  # Never bypass Git's dubious-ownership protection with safe.directory. A
+  # root-run inventory must inspect a repository as its actual filesystem
+  # owner, just as Bench does. Unknown owners and non-root cross-user probes
+  # fail closed and are reported as ambiguous by the caller.
+  [[ "$current_uid" == 0 ]] || return 125
+  command -v runuser >/dev/null 2>&1 || return 125
+  command -v getent >/dev/null 2>&1 || return 125
+  owner_record="$(inventory_run_probe getent passwd "$owner_uid" 2>/dev/null)" || return 125
+  IFS=: read -r owner_name _ resolved_uid _ _ owner_home _ <<<"$owner_record"
+  [[ -n "$owner_name" && "$resolved_uid" == "$owner_uid" && "$owner_home" == /* ]] || return 125
+
+  inventory_run_probe runuser -u "$owner_name" -- env \
+    -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+    -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_CONFIG_COUNT \
+    HOME="$owner_home" \
+    GIT_OPTIONAL_LOCKS=0 git -C "$dir" "$@"
+}
+
 inventory_add_record() {
   local field record="" separator=""
   for field in "$@"; do
@@ -47,11 +86,11 @@ inventory_catalog_classification() {
 }
 
 inventory_git_value() {
-  local dir="$1" key="$2" value="" rc=0
+  local dir="$1" key="$2" value="" rc=0 remotes="" remote=""
   [[ -d "$dir/.git" || -f "$dir/.git" ]] || return 0
   case "$key" in
     branch)
-      if value="$(inventory_run_probe env GIT_OPTIONAL_LOCKS=0 git -C "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null)"; then
+      if value="$(inventory_run_git_probe "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null)"; then
         printf '%s\n' "$value"
       else
         rc=$?
@@ -59,15 +98,24 @@ inventory_git_value() {
       fi
       ;;
     commit)
-      value="$(inventory_run_probe env GIT_OPTIONAL_LOCKS=0 git -C "$dir" rev-parse --verify HEAD 2>/dev/null)" \
+      value="$(inventory_run_git_probe "$dir" rev-parse --verify HEAD 2>/dev/null)" \
         && printf '%s\n' "$value"
       ;;
     source)
-      value="$(inventory_run_probe env GIT_OPTIONAL_LOCKS=0 git -C "$dir" remote get-url origin 2>/dev/null)" \
-        && printf '%s\n' "$value"
+      if value="$(inventory_run_git_probe "$dir" remote get-url origin 2>/dev/null)"; then
+        printf '%s\n' "$value"
+      elif value="$(inventory_run_git_probe "$dir" remote get-url upstream 2>/dev/null)"; then
+        printf '%s\n' "$value"
+      elif remotes="$(inventory_run_git_probe "$dir" remote 2>/dev/null)"; then
+        remote="$(printf '%s\n' "$remotes" | sed '/^$/d')"
+        if [[ -n "$remote" && "$remote" != *$'\n'* ]]; then
+          value="$(inventory_run_git_probe "$dir" remote get-url "$remote" 2>/dev/null)" \
+            && printf '%s\n' "$value"
+        fi
+      fi
       ;;
     state)
-      if value="$(inventory_run_probe env GIT_OPTIONAL_LOCKS=0 git -C "$dir" status --porcelain --untracked-files=normal 2>/dev/null)"; then
+      if value="$(inventory_run_git_probe "$dir" status --porcelain --untracked-files=normal 2>/dev/null)"; then
         if [[ -n "$value" ]]; then
           printf 'dirty\n'
         else
@@ -77,6 +125,16 @@ inventory_git_value() {
       ;;
   esac
   return 0
+}
+
+inventory_git_ref_absent() {
+  local dir="$1" ref="$2" rc
+  if inventory_run_git_probe "$dir" rev-parse --quiet --verify "$ref" >/dev/null 2>&1; then
+    return 1
+  else
+    rc=$?
+  fi
+  [[ "$rc" -eq 1 ]]
 }
 
 inventory_app_version_from_tree() {

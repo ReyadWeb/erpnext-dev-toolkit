@@ -56,6 +56,77 @@ docker_mode() { printf '%s\n' "$DOCKER_MODE"; }
 active_bench_dir() { printf '%s\n' "$fixture"; }
 source "$ROOT_DIR/lib/inventory.sh"
 
+# A root-run toolkit must inspect an app repository as its filesystem owner,
+# not suppress Git's dubious-ownership safeguard. Mock the account boundary so
+# this regression remains hermetic on both root and non-root CI runners.
+owner_bin="$fixture/owner-bin"
+owner_repo="$fixture/owner-repo"
+owner_probe_log="$fixture/owner-probe.log"
+owner_real_stat="$(command -v stat)"
+owner_real_getent="$(command -v getent)"
+mkdir -p "$owner_bin" "$owner_repo/.git"
+cat >"$owner_bin/stat" <<'EOF_OWNER_STAT'
+#!/usr/bin/env bash
+if [[ "$*" == *"%u"* && "${*: -1}" == "$ERPNEXT_TEST_OWNER_REPO" ]]; then
+  printf '4242\n'
+else
+  exec "$ERPNEXT_TEST_REAL_STAT" "$@"
+fi
+EOF_OWNER_STAT
+cat >"$owner_bin/getent" <<'EOF_OWNER_GETENT'
+#!/usr/bin/env bash
+if [[ "${1:-}" == passwd && "${2:-}" == 4242 ]]; then
+  printf 'frappe:x:4242:4242::/home/frappe:/bin/bash\n'
+else
+  exec "$ERPNEXT_TEST_REAL_GETENT" "$@"
+fi
+EOF_OWNER_GETENT
+cat >"$owner_bin/runuser" <<'EOF_OWNER_RUNUSER'
+#!/usr/bin/env bash
+printf '%q ' "$@" >>"$ERPNEXT_TEST_OWNER_LOG"
+printf '\n' >>"$ERPNEXT_TEST_OWNER_LOG"
+[[ "${1:-}" == -u && "${2:-}" == frappe && "${3:-}" == -- ]] || exit 64
+shift 3
+exec "$@"
+EOF_OWNER_RUNUSER
+cat >"$owner_bin/git" <<'EOF_OWNER_GIT'
+#!/usr/bin/env bash
+case " $* " in
+  *" symbolic-ref "*) printf 'version-16\n' ;;
+  *" rev-parse --quiet --verify MERGE_HEAD "*) exit 1 ;;
+  *" rev-parse --quiet --verify CHERRY_PICK_HEAD "*) printf '3333333333333333333333333333333333333333\n' ;;
+  *" rev-parse "*) printf '2222222222222222222222222222222222222222\n' ;;
+  *" remote get-url origin "*) exit 2 ;;
+  *" remote get-url upstream "*) printf 'https://github.com/frappe/erpnext\n' ;;
+  *" status "*) printf ' M banking/yarn.lock\n' ;;
+  *) exit 1 ;;
+esac
+EOF_OWNER_GIT
+chmod +x "$owner_bin"/*
+
+owner_records="$({
+  PATH="$owner_bin:$PATH"
+  ERPNEXT_TEST_OWNER_REPO="$owner_repo"
+  ERPNEXT_TEST_OWNER_LOG="$owner_probe_log"
+  ERPNEXT_TEST_REAL_STAT="$owner_real_stat"
+  ERPNEXT_TEST_REAL_GETENT="$owner_real_getent"
+  export PATH ERPNEXT_TEST_OWNER_REPO ERPNEXT_TEST_OWNER_LOG ERPNEXT_TEST_REAL_STAT ERPNEXT_TEST_REAL_GETENT
+  inventory_current_uid() { printf '0\n'; }
+  INVENTORY_RECORDS=()
+  inventory_emit_app "native:$fixture" erpnext "$owner_repo" 0
+  inventory_records_sorted
+  inventory_git_ref_absent "$owner_repo" MERGE_HEAD && printf 'REF_ABSENT\n'
+  if ! inventory_git_ref_absent "$owner_repo" CHERRY_PICK_HEAD; then
+    printf 'REF_PRESENT_REJECTED\n'
+  fi
+})"
+assert_contains "owner-aware Git probe reports genuine dirty state" "$owner_records" "|version-16|2222222222222222222222222222222222222222|https://github.com/frappe/erpnext|official|managed|dirty"
+assert_contains "owner-aware Git probe switches to repository owner" "$(<"$owner_probe_log")" "-u frappe -- env -u"
+assert_contains "owner-aware Git probe uses repository owner home" "$(<"$owner_probe_log")" "HOME=/home/frappe"
+assert_contains "upstream remote is accepted when origin is absent" "$owner_records" "|https://github.com/frappe/erpnext|"
+assert_contains "absent Git operation ref passes preflight" "$owner_records" "REF_ABSENT"
+assert_contains "present Git operation ref blocks preflight" "$owner_records" "REF_PRESENT_REJECTED"
+
 slow_bin="$fixture/slow-bin"
 slow_repo="$fixture/slow-repo"
 slow_pid_file="$fixture/slow-probe.pid"

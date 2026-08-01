@@ -113,6 +113,9 @@ if run_app_removal erpnext erpnext-site >/dev/null 2>&1; then fail_case 'missing
 commands="$(sed -n '/removal_site_action()/,/^}/p' lib/removal.sh)"
 assert_has 'supported Bench uninstall lifecycle used' "$commands" 'uninstall-app'
 if [[ "$commands" == *'--force'* ]]; then fail_case 'force bypass present'; else pass 'no force bypass'; fi
+native_preflight="$(sed -n '/removal_native_preflight()/,/^}/p' lib/removal.sh)"
+assert_has 'native preflight uses owner-aware inventory state' "$native_preflight" 'inventory_git_value'
+if [[ "$native_preflight" == *'git -C'* ]]; then fail_case 'native preflight bypasses owner-aware Git probe'; else pass 'native preflight contains no direct Git execution'; fi
 if grep -Eq 'rm[[:space:]]+-rf.*apps/' lib/removal.sh; then fail_case 'direct app deletion present'; else pass 'no direct app directory deletion'; fi
 assert_has 'Docker immutable candidate path' "$(<lib/removal.sh)" 'removal_docker_prepare_candidate'
 assert_has 'Docker deferred manifest promotion' "$(<lib/removal.sh)" 'DOCKER_DEFER_MANIFEST_PROMOTION=1'

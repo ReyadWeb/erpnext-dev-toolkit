@@ -193,18 +193,21 @@ removal_site_action() {
 }
 
 removal_native_preflight() {
-	local app path remote branch
+	local app path remote branch ref
 	[[ "$PLAN_BENCH" == /* && -d "$PLAN_BENCH/apps" && ! -L "$PLAN_BENCH" ]] || return 1
 	while IFS= read -r app; do
 		load_validated_app_catalog_record "$app" || return 1
 		path="${PLAN_BENCH}/apps/${app}"
 		[[ -d "$path/.git" && ! -L "$path" ]] || return 1
-		[[ -z "$(git -C "$path" status --porcelain)" ]] || return 1
-		git -C "$path" symbolic-ref -q HEAD >/dev/null || return 1
-		[[ -z "$(git -C "$path" rev-parse -q --verify MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD BISECT_HEAD 2>/dev/null)" ]] || return 1
-		branch="$(git -C "$path" symbolic-ref --short HEAD)"
+		[[ "$(inventory_git_value "$path" state)" == clean ]] || return 1
+		branch="$(inventory_git_value "$path" branch)"
+		[[ -n "$branch" && "$branch" != detached && "$branch" != unknown ]] || return 1
+		for ref in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD BISECT_HEAD; do
+			inventory_git_ref_absent "$path" "$ref" || return 1
+		done
 		[[ -z "$LIB_APP_BRANCH" || "$branch" == "$LIB_APP_BRANCH" ]] || return 1
-		remote="$(git -C "$path" remote get-url origin)" || return 1
+		remote="$(inventory_git_value "$path" source)"
+		[[ -n "$remote" && "$remote" != unknown ]] || return 1
 		[[ "$remote" == "$LIB_APP_REPO" || "$remote" == "${LIB_APP_REPO}.git" ]] || return 1
 	done < <(inventory_records_sorted | awk -F'|' -v s="$PLAN_STACK" '$1=="APP"&&$2==s&&$10=="managed"{print $3}' | sort -u)
 	command -v git >/dev/null && command -v df >/dev/null || return 1
