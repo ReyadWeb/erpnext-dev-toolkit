@@ -35,6 +35,23 @@ installation_profile_label() {
   esac
 }
 
+installation_profile_erpnext_action() {
+  case "${1:-$(effective_installation_profile)}" in
+    recommended) printf 'Will be installed\n' ;;
+    frappe-only) printf 'Will not be installed\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+installation_mode_label() {
+  case "${INSTALLATION_MODE:-}" in
+    quick) printf 'Quick\n' ;;
+    advanced) printf 'Advanced\n' ;;
+    existing) printf 'Existing installation\n' ;;
+    *) printf 'Non-interactive\n' ;;
+  esac
+}
+
 installation_profile_requires_app() {
   local app="$1"
   case "$(effective_installation_profile):${app}" in

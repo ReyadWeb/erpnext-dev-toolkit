@@ -329,7 +329,8 @@ prompt_for_site_name_if_needed() {
     return 0
   fi
 
-  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+  if { [[ -t 0 ]] || [[ "${ERPNEXT_DEV_TEST_INTERACTIVE:-0}" == "1" ]]; } \
+    && [[ "$ASSUME_YES" -ne 1 ]]; then
     while true; do
       read -r -p "Local site name [${SITE_NAME}]: " reply
       reply="${reply:-$SITE_NAME}"
@@ -368,7 +369,8 @@ choose_local_site_name_for_setup() {
     default_name="erp.test"
   fi
 
-  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+  if { [[ -t 0 ]] || [[ "${ERPNEXT_DEV_TEST_INTERACTIVE:-0}" == "1" ]]; } \
+    && [[ "$ASSUME_YES" -ne 1 ]]; then
     while true; do
       echo
       read -r -p "Local VM domain / Frappe site name [${default_name}]: " reply
@@ -410,7 +412,8 @@ choose_host_os_for_setup() {
 
   current="$(effective_host_os)"
 
-  if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
+  if { [[ -t 0 ]] || [[ "${ERPNEXT_DEV_TEST_INTERACTIVE:-0}" == "1" ]]; } \
+    && [[ "$ASSUME_YES" -ne 1 ]]; then
     echo
     echo "Which operating system is your HOST machine (the computer running this VM)?"
     echo "This tailors the /etc/hosts mapping, connectivity tests, and HTTPS trust steps."
@@ -613,12 +616,15 @@ write_dev_config_file() {
 
   log "Writing ERPNext developer config"
 
-  local config_dir legacy_dir
+  local config_dir legacy_dir config_tmp legacy_tmp
   config_dir="$(dirname "$CONFIG_FILE")"
   legacy_dir="$(dirname "$LEGACY_CONFIG_FILE")"
 
   $SUDO mkdir -p "$config_dir"
-  $SUDO tee "$CONFIG_FILE" >/dev/null <<EOF_DEV_CONFIG
+  [[ ! -L "$CONFIG_FILE" ]] || fail "Unsafe config path; refusing to write through a symlink."
+  config_tmp="$($SUDO mktemp "${CONFIG_FILE}.tmp.XXXXXX")" \
+    || fail "Could not create an atomic configuration staging file."
+  $SUDO tee "$config_tmp" >/dev/null <<EOF_DEV_CONFIG
 # ERPNext Developer Toolkit local configuration
 # Non-secret settings only. Credentials are stored separately.
 SITE_NAME=${SITE_NAME}
@@ -637,13 +643,17 @@ BENCH_PARENT=${BENCH_PARENT}
 BENCH_NAME=${BENCH_NAME}
 BENCH_DIR=${BENCH_DIR}
 EOF_DEV_CONFIG
-  $SUDO chown root:root "$CONFIG_FILE" || true
-  $SUDO chmod 644 "$CONFIG_FILE" || true
+  $SUDO chown root:root "$config_tmp" || true
+  $SUDO chmod 644 "$config_tmp"
+  $SUDO mv -f "$config_tmp" "$CONFIG_FILE"
 
   # Keep the legacy user-home config as a compatibility mirror for older workflows.
   if [[ "$LEGACY_CONFIG_FILE" != "$CONFIG_FILE" ]]; then
     $SUDO mkdir -p "$legacy_dir" || true
-    $SUDO tee "$LEGACY_CONFIG_FILE" >/dev/null <<EOF_LEGACY_DEV_CONFIG
+    [[ ! -L "$LEGACY_CONFIG_FILE" ]] || fail "Unsafe legacy config path; refusing to write through a symlink."
+    legacy_tmp="$($SUDO mktemp "${LEGACY_CONFIG_FILE}.tmp.XXXXXX")" \
+      || fail "Could not create an atomic legacy configuration staging file."
+    $SUDO tee "$legacy_tmp" >/dev/null <<EOF_LEGACY_DEV_CONFIG
 # ERPNext Developer Toolkit local configuration
 # Compatibility mirror. Primary config: ${CONFIG_FILE}
 SITE_NAME=${SITE_NAME}
@@ -663,9 +673,10 @@ BENCH_NAME=${BENCH_NAME}
 BENCH_DIR=${BENCH_DIR}
 EOF_LEGACY_DEV_CONFIG
     if id "$FRAPPE_USER" >/dev/null 2>&1; then
-      $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$LEGACY_CONFIG_FILE" || true
+      $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$legacy_tmp" || true
     fi
-    $SUDO chmod 644 "$LEGACY_CONFIG_FILE" || true
+    $SUDO chmod 644 "$legacy_tmp"
+    $SUDO mv -f "$legacy_tmp" "$LEGACY_CONFIG_FILE"
   fi
 
   ok "Config saved to ${CONFIG_FILE}"

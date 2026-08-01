@@ -53,6 +53,8 @@
 
 ## Unreleased
 
+- Fix fresh interactive installation so Quick visibly confirms Frappe + ERPNext, Advanced selects a canonical profile and engine, and cancellation writes no configuration or deployment state.
+
 - Add trusted, preview-first managed application and stack updates with multi-site recovery gates for native and Docker deployments.
 
 ### Added

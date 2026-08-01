@@ -40,6 +40,7 @@ quickstart and keeps the host mapping, HTTPS, host-OS, and stable-IP guidance vi
 ### Native and Docker engines
 
 - [Deployment engine overview](../README.md#deployment-engines)
+- [Interactive installation profiles](INSTALLATION-PROFILES.md)
 - [Development guide](DEVELOPMENT.md)
 - [Release validation](../TESTING.md)
 

@@ -1369,10 +1369,10 @@ Usage:
   $(toolkit_cmd "[command]")
 
 Start here:
-  first-run           Pick local VM, public VM, or maintenance flow
-  public-vm-guided-setup Guided production VPS setup; domain -> DNS -> install -> HTTPS -> security -> QA
+  first-run           Pick local/public target, then Quick or Advanced installation
+  public-vm-guided-setup Guided production setup; confirms profile before install
   public-vm-quickstart Public VM manual menu for production tasks
-  local-dev-quickstart Local VM setup; prompts for domain, Enter defaults to erp.test
+  local-dev-quickstart Local setup; Quick installs Frappe+ERPNext, Advanced selects profile/engine
   install-preflight   Check OS, internet, CPU, RAM, disk, and /tmp before installing
   set-domain          Save public domain and site config
   show-config         Show saved toolkit config
@@ -1630,7 +1630,9 @@ Examples:
 Options:
   -y, --yes  Assume yes for supported confirmations
   --profile PROFILE
-             Installation content: recommended (default) or frappe-only.
+             Explicit installation content: recommended or frappe-only.
+             Interactive Quick discloses the recommended Frappe+ERPNext choice;
+             Advanced asks for profile and engine before final confirmation.
              Both profiles support native and Docker installations.
 
 Verified signed-release bootstrap:

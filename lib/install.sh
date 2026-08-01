@@ -1016,6 +1016,7 @@ run_install() {
   local enable_boot start_now
 
   require_sudo
+  prepare_direct_installation_selection || return 0
   validate_platform_profile_combination \
     || fail "Invalid platform/profile selection; installation stopped before mutation."
 
@@ -1436,6 +1437,174 @@ run_guided_setup() {
   prompt_open_main_menu_after_install
 }
 
+setup_input_is_interactive() {
+  [[ -t 0 || "${ERPNEXT_DEV_TEST_INTERACTIVE:-0}" == "1" ]] && [[ "${ASSUME_YES:-0}" -ne 1 ]]
+}
+
+setup_has_existing_deployment() {
+  if [[ -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/pwd.yml" \
+    || -f "${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}/frappe_docker/compose.yaml" ]]; then
+    return 0
+  fi
+  [[ -d "$(active_bench_dir 2>/dev/null)/sites" ]]
+}
+
+choose_installation_profile_for_setup() {
+  local reply resolved
+  if [[ "${INSTALLATION_PROFILE_ENV_PROVIDED:-0}" -eq 1 ]]; then
+    INSTALLATION_PROFILE="$(normalize_installation_profile "$INSTALLATION_PROFILE")" \
+      || fail "Invalid installation profile; no configuration or deployment changes were made."
+    echo "Using explicit installation profile: $(installation_profile_label)"
+    return 0
+  fi
+
+  echo
+  echo "Choose Installation Profile"
+  echo
+  echo "1) Recommended (Frappe + ERPNext)"
+  echo "   Installs the Frappe framework and ERPNext."
+  echo "   Best for most users."
+  echo
+  echo "2) Frappe only"
+  echo "   Installs the Frappe framework without ERPNext."
+  echo "   ERPNext can be installed later through App Management."
+  echo
+  echo "B) Back"
+  echo "Q) Quit"
+  while true; do
+    read -r -p "Installation profile [1-2, default: Recommended]: " reply || return 1
+    case "${reply,,}" in
+      "" | 1 | recommended) resolved="recommended" ;;
+      2 | frappe | frappe-only) resolved="frappe-only" ;;
+      b | back) return 10 ;;
+      q | quit) return 11 ;;
+      *) echo "Please choose 1, 2, B, or Q."; continue ;;
+    esac
+    break
+  done
+  INSTALLATION_PROFILE="$resolved"
+  INSTALLATION_PROFILE_SESSION_CHOSEN=1
+}
+
+choose_installation_mode_for_setup() {
+  local reply
+  if [[ "${INSTALLATION_PROFILE_ENV_PROVIDED:-0}" -eq 1 ]]; then
+    INSTALLATION_MODE="advanced"
+    choose_installation_profile_for_setup
+    choose_deployment_engine_for_setup 0
+    return 0
+  fi
+
+  if ! setup_input_is_interactive; then
+    INSTALLATION_MODE="quick"
+    INSTALLATION_PROFILE="recommended"
+    DEPLOYMENT_ENGINE="$(effective_deployment_engine)"
+    # Assign through printf so ShellCheck does not misclassify this cross-module
+    # session guard as an unused local value.
+    printf -v DEPLOYMENT_ENGINE_SESSION_CHOSEN '%s' 1
+    echo "Quick installation selected: Frappe + ERPNext using the recommended profile."
+    return 0
+  fi
+
+  echo
+  echo "Choose Installation Mode"
+  echo
+  echo "1) Quick installation (Recommended)"
+  echo "   Installs Frappe + ERPNext using the recommended profile."
+  echo "   Uses safe defaults and asks only essential questions."
+  echo
+  echo "2) Advanced installation"
+  echo "   Choose the installation profile and deployment engine."
+  echo "   Supports Frappe-only installation without ERPNext."
+  echo
+  echo "B) Back"
+  echo "Q) Quit"
+  while true; do
+    read -r -p "Installation mode [1-2, default: Quick]: " reply || return 1
+    case "${reply,,}" in
+      "" | 1 | quick)
+        INSTALLATION_MODE="quick"
+        INSTALLATION_PROFILE="recommended"
+        INSTALLATION_PROFILE_SESSION_CHOSEN=1
+        if [[ "${DEPLOYMENT_ENGINE_ENV_PROVIDED:-0}" -eq 1 ]]; then
+          choose_deployment_engine_for_setup 0
+        else
+          DEPLOYMENT_ENGINE="native"
+          # shellcheck disable=SC2034 # consumed by lib/engine.sh on the next setup call
+          printf -v DEPLOYMENT_ENGINE_SESSION_CHOSEN '%s' 1
+        fi
+        echo "Quick installation will install both Frappe and ERPNext using $(deployment_engine_label)."
+        return 0
+        ;;
+      2 | advanced)
+        INSTALLATION_MODE="advanced"
+        choose_installation_profile_for_setup || return $?
+        choose_deployment_engine_for_setup 0
+        return 0
+        ;;
+      b | back) return 10 ;;
+      q | quit) return 11 ;;
+      *) echo "Please choose 1, 2, B, or Q." ;;
+    esac
+  done
+}
+
+show_installation_confirmation() {
+  local target="$1"
+  ui_box_start "Setup Confirmation"
+  status_line "Setup target" "INFO" "$target"
+  status_line "Installation mode" "INFO" "$(installation_mode_label)"
+  status_line "Site/domain" "INFO" "$SITE_NAME"
+  status_line "Deployment engine" "INFO" "$(deployment_engine_label)"
+  status_line "Installation profile" "INFO" "$(installation_profile_label)"
+  status_line "Frappe" "INFO" "Will be installed"
+  status_line "ERPNext" "INFO" "$(installation_profile_erpnext_action)"
+  if deployment_engine_is_docker; then
+    status_line "Docker environment" "INFO" "$(docker_mode_label 2>/dev/null || printf development)"
+  fi
+  ui_box_end
+}
+
+confirm_fresh_installation_setup() {
+  local target="$1" reply
+  show_installation_confirmation "$target"
+  if ! setup_input_is_interactive; then
+    [[ "${ASSUME_YES:-0}" -eq 1 ]] && return 0
+    return 1
+  fi
+  while true; do
+    read -r -p "Save these settings and start installation? [y/N, b=Back, q=Quit]: " reply || return 1
+    case "${reply,,}" in
+      y | yes) return 0 ;;
+      "" | n | no | b | back | q | quit)
+        echo "Installation cancelled before configuration or deployment changes."
+        return 1
+        ;;
+      *) echo "Please choose Y, N, B, or Q." ;;
+    esac
+  done
+}
+
+prepare_direct_installation_selection() {
+  if setup_has_existing_deployment \
+    || [[ "${INSTALLATION_PROFILE_SESSION_CHOSEN:-0}" -eq 1 ]] \
+    || ! setup_input_is_interactive; then
+    return 0
+  fi
+
+  prompt_for_site_name_if_needed
+  choose_installation_mode_for_setup || return 1
+  if [[ "${DEPLOYMENT_MODE:-development}" == "public-vm" ]]; then
+    DOCKER_MODE="production"
+    confirm_fresh_installation_setup "Public VM" || return 1
+  else
+    DOCKER_MODE="development"
+    confirm_fresh_installation_setup "Local VM" || return 1
+  fi
+  write_dev_config_file
+  SITE_NAME_SOURCE="saved config"
+}
+
 # Stable guest IP checkpoint for local installs. DHCP leases often change after
 # reboot and break HOST /etc/hosts + local HTTPS. Offered before install
 # (local-dev-quickstart) and again in post-install follow-ups if still DHCP.
@@ -1624,6 +1793,7 @@ prompt_open_main_menu_after_install() {
 prompt_and_save_public_domain() {
   require_sudo
 
+  local persist="${1:-1}"
   local current default_domain domain reply site_reply use_as_site
   current="${PRODUCTION_DOMAIN:-}"
   if [[ -z "$current" && "$SITE_NAME" != *.test && "$SITE_NAME" != *.local ]]; then
@@ -1682,14 +1852,20 @@ prompt_and_save_public_domain() {
     done
   fi
 
-  write_dev_config_file
-  SITE_NAME_SOURCE="saved config"
+  if [[ "$persist" == "1" ]]; then
+    write_dev_config_file
+    SITE_NAME_SOURCE="saved config"
+  fi
 
   ui_box_start "Result Summary"
   status_line "Production domain" "OK" "$PRODUCTION_DOMAIN"
   status_line "ERPNext site" "OK" "$SITE_NAME"
   status_line "Deployment mode" "INFO" "$DEPLOYMENT_MODE"
-  status_line "Saved config" "OK" "$CONFIG_FILE"
+  if [[ "$persist" == "1" ]]; then
+    status_line "Saved config" "OK" "$CONFIG_FILE"
+  else
+    status_line "Saved config" "INFO" "pending final installation confirmation"
+  fi
   ui_box_end
   ui_next "$(toolkit_cmd public-vm-quickstart)" "$(toolkit_cmd production-domain-plan)"
 }
@@ -1717,7 +1893,16 @@ set_local_dev_defaults() {
 
 run_local_dev_quickstart() {
   require_sudo
-  install_self_for_reuse || fail "Could not install the toolkit to ${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
+
+  if setup_has_existing_deployment; then
+    INSTALLATION_MODE="existing"
+    ui_box_start "Existing Installation Detected"
+    status_line "Installation profile" "INFO" "$(installation_profile_label)"
+    echo "Fresh profile selection is disabled for an existing deployment."
+    echo "Use maintenance tools; profile conversion requires the protected conversion workflow."
+    ui_box_end
+    return 0
+  fi
 
   ui_box_start "Local VM Quickstart"
   echo "This path uses local development defaults and keeps inputs minimal."
@@ -1732,20 +1917,8 @@ run_local_dev_quickstart() {
   # Ask once which host OS is in use; set_local_dev_defaults persists it below.
   choose_host_os_for_setup 0
 
-  # Choose the deployment engine. Docker hands off to the containerized flow.
-  choose_deployment_engine_for_setup 0
-  if deployment_engine_is_docker; then
-    docker_guided_install
-    return
-  fi
-
-  ui_box_start "Local VM Setup Confirmation"
-  status_line "Local VM domain" "OK" "${SITE_NAME}"
-  status_line "Default if skipped" "INFO" "erp.test"
-  status_line "Host OS" "INFO" "$(host_os_label)"
-  status_line "Deployment engine" "INFO" "$(deployment_engine_label)"
-  status_line "Production domain" "INFO" "not used"
-  ui_box_end
+  choose_installation_mode_for_setup || return 0
+  DOCKER_MODE="development"
 
   echo "The host DNS command will be generated with this VM's detected IP. Do not hardcode another user's IP."
   echo "Warning: DHCP guest IPs often change after reboot and break ${SITE_NAME:-erp.test} / local HTTPS."
@@ -1759,12 +1932,15 @@ run_local_dev_quickstart() {
   echo "  $(toolkit_cmd local-fixed-ip-guide)"
   echo "  $(toolkit_cmd restart)"
 
-  # Offer static/stable IP before install so hosts + HTTPS use a durable address.
-  local_guided_stable_ip_checkpoint
-
-  if confirm "Save local defaults and start guided setup now?"; then
+  if confirm_fresh_installation_setup "Local VM"; then
     set_local_dev_defaults
-    run_guided_setup
+    local_guided_stable_ip_checkpoint
+    install_self_for_reuse || fail "Could not install the toolkit to ${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
+    if deployment_engine_is_docker; then
+      docker_guided_install
+    else
+      run_guided_setup
+    fi
   else
     ui_next "$(toolkit_cmd local-dev-quickstart)" "$(toolkit_cmd setup-wizard)"
   fi
@@ -1807,13 +1983,14 @@ public_quickstart_status_summary() {
 }
 
 ensure_public_domain_configured() {
+  local persist="${1:-1}"
   if [[ -n "${PRODUCTION_DOMAIN:-}" ]] && validate_production_domain_value "$PRODUCTION_DOMAIN" >/dev/null 2>&1; then
     return 0
   fi
 
   warn "Public VM setup needs a real production domain before install/HTTPS."
   if confirm "Set the production domain now?"; then
-    prompt_and_save_public_domain
+    prompt_and_save_public_domain "$persist"
     return 0
   fi
   return 1
@@ -2245,7 +2422,6 @@ public_vm_guided_final_qa() {
 
 run_public_vm_guided_setup() {
   require_sudo
-  install_self_for_reuse
 
   ui_box_start "Public VM Guided Setup"
   echo "Guided order: domain -> engine -> DNS -> firewall/snapshot -> install -> backup -> HTTPS -> credentials -> security -> operations -> QA."
@@ -2255,15 +2431,24 @@ run_public_vm_guided_setup() {
   ui_box_end
 
   public_vm_guided_step "1" "Production domain"
-  ensure_public_domain_configured || return 1
+  ensure_public_domain_configured 0 || return 1
 
-  # Choose the engine before planning/firewall instructions so every later step
-  # uses the correct Docker/native ports and HTTPS implementation.
-  choose_deployment_engine_for_setup 0
-  if deployment_engine_is_docker; then
+  if setup_has_existing_deployment; then
+    INSTALLATION_MODE="existing"
+    echo
+    status_line "Existing profile" "INFO" "$(installation_profile_label)"
+    echo "Existing profile retained; conversion is available only through the protected conversion workflow."
+  else
+    choose_installation_mode_for_setup || return 0
+    DOCKER_MODE="production"
+    if ! confirm_fresh_installation_setup "Public VM"; then
+      return 0
+    fi
     DEPLOYMENT_MODE="public-vm"
-    write_dev_config_file >/dev/null || true
+    PRODUCTION_SSL_MODE="planned"
+    write_dev_config_file
   fi
+  install_self_for_reuse
 
   public_vm_guided_step "2" "Requirements and production plan"
   status_line "Deployment engine" "OK" "$(deployment_engine_label)"
@@ -2289,7 +2474,6 @@ run_public_vm_guided_setup() {
 
 run_public_vm_quickstart() {
   require_sudo
-  install_self_for_reuse
 
   while true; do
     ui_submenu_header "Public VM Quickstart" \
@@ -2324,7 +2508,25 @@ run_public_vm_quickstart() {
         pause_after_screen "Press Enter to return to Production setup..."
         ;;
       4)
-        ensure_public_domain_configured && choose_deployment_engine_for_setup 0 && public_vm_guided_install_core
+        if ensure_public_domain_configured 0; then
+          if setup_has_existing_deployment; then
+            # shellcheck disable=SC2034 # rendered by shared profile helpers in interactive flows
+            INSTALLATION_MODE="existing"
+            status_line "Existing profile" "INFO" "$(installation_profile_label)"
+            public_vm_guided_install_core
+          else
+            if choose_installation_mode_for_setup; then
+              # shellcheck disable=SC2034 # consumed by Docker helpers after confirmation
+              DOCKER_MODE="production"
+              if confirm_fresh_installation_setup "Public VM"; then
+                DEPLOYMENT_MODE="public-vm"
+                write_dev_config_file
+                install_self_for_reuse
+                public_vm_guided_install_core
+              fi
+            fi
+          fi
+        fi
         pause_after_screen "Press Enter to return to Production setup..."
         ;;
       5)

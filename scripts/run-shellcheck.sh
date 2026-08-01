@@ -90,6 +90,7 @@ targets=(
   scripts/test-docker-durability.sh
   scripts/test-safe-update-lifecycle.sh
   scripts/test-app-uninstall-recovery.sh
+  scripts/test-interactive-installation-profiles.sh
   scripts/test-host-os-output.sh
   scripts/test-install-self-path.sh
   scripts/test-legacy-modular-bootstrap.sh
