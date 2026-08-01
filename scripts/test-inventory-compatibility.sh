@@ -22,8 +22,8 @@ assert_eq() {
   if [[ "$expected" == "$actual" ]]; then pass "$label"; else fail_case "$label (expected ${expected}, got ${actual})"; fi
 }
 assert_process_gone() {
-  local label="$1" pid="$2" attempt state
-  for attempt in {1..40}; do
+  local label="$1" pid="$2" state
+  for _ in {1..40}; do
     if ! kill -0 "$pid" 2>/dev/null; then
       pass "$label"
       return 0

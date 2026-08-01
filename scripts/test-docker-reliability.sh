@@ -122,6 +122,9 @@ EOF_SLOW_DOCKER
 chmod +x "$slow_bin/docker"
 
 set +e
+# The sourced implementation is exercised here before docker_compose is
+# intentionally replaced with a hermetic mock for the remaining tests.
+# shellcheck disable=SC2218
 PATH="$slow_bin:$PATH" ERPNEXT_TEST_PID_FILE="$slow_pid_file" \
   ERPNEXT_DEV_DOCKER_COMPOSE_TIMEOUT=1 docker_compose ps >/dev/null 2>&1
 slow_compose_rc=$?
