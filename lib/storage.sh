@@ -477,7 +477,7 @@ expand_root_storage() {
     fi
 
     log "Extending root logical volume"
-    $SUDO lvextend -r -l +100%FREE "$lv_path"
+    run_lvm_extend_root "$lv_path"
   else
     if [[ ! "${tail_free_bytes:-0}" =~ ^[0-9]+$ || "${tail_free_bytes:-0}" -le 1073741824 ]]; then
       status_line "Storage" "OK" "no partition growth needed"
@@ -514,6 +514,13 @@ expand_root_storage() {
 
   ok "Root storage expansion completed"
   show_storage_status
+}
+
+run_lvm_extend_root() {
+  local lv_path="$1"
+  # The parent keeps descriptor 200 and therefore the lifecycle lock. Only the
+  # child that execs LVM closes its inherited copy.
+  (exec 200>&-; $SUDO lvextend -r -l +100%FREE "$lv_path")
 }
 
 storage_debug() {

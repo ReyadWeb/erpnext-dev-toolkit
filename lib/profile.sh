@@ -43,6 +43,13 @@ installation_profile_erpnext_action() {
   esac
 }
 
+# Shared runtime terminology is deliberately profile-neutral: Frappe owns the
+# site, Bench/container processes, and service lifecycle. ERPNext is an app.
+frappe_runtime_label() { printf 'Frappe stack\n'; }
+frappe_service_label() { printf 'managed Frappe stack service\n'; }
+frappe_ready_label() { printf 'Frappe site is ready\n'; }
+site_administrator_label() { printf 'Site Administrator\n'; }
+
 installation_mode_label() {
   case "${INSTALLATION_MODE:-}" in
     quick) printf 'Quick\n' ;;

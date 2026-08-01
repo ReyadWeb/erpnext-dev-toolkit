@@ -191,8 +191,10 @@ doctor_collect() {
 
   if check_bench_app_installed erpnext; then
     doctor_add_check "ERPNext app files" "OK" "apps/erpnext exists"
+  elif installation_profile_requires_erpnext; then
+    doctor_add_check "ERPNext app files" "WARN" "required by profile; apps/erpnext missing"
   else
-    doctor_add_check "ERPNext app files" "WARN" "apps/erpnext missing"
+    doctor_add_check "ERPNext app files" "OK" "absent by design for Frappe-only profile"
   fi
 
   if site_exists; then
@@ -209,8 +211,10 @@ doctor_collect() {
 
   if site_app_installed erpnext 2>/dev/null; then
     doctor_add_check "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
+  elif installation_profile_requires_erpnext; then
+    doctor_add_check "Site app: erpnext" "WARN" "required by profile; not confirmed on ${SITE_NAME}"
   else
-    doctor_add_check "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
+    doctor_add_check "Site app: erpnext" "OK" "absent by design for Frappe-only profile"
   fi
 
   case "$DOCTOR_INSTALL_STATE" in

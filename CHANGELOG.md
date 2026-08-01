@@ -53,6 +53,11 @@
 
 ## Unreleased
 
+- Corrected shared lifecycle semantics so Frappe owns site readiness, service,
+  access, HTTPS, and Administrator workflows while ERPNext remains an optional
+  profile-managed application; added early clock/APT readiness and LVM lock-fd
+  isolation checks for resumable fresh installations.
+
 - Fix fresh interactive installation so Quick visibly confirms Frappe + ERPNext, Advanced selects a canonical profile and engine, and cancellation writes no configuration or deployment state.
 
 - Add trusted, preview-first managed application and stack updates with multi-site recovery gates for native and Docker deployments.

@@ -15,12 +15,12 @@ recommended_action() {
     "Installed" | "Installed files found; site app not confirmed")
       if [[ "$runtime" == Running* ]]; then
         if [[ "$auto" == "Enabled" ]]; then
-          echo "ERPNext is ready. Open the browser URL below."
+          echo "Frappe site is ready. Open the browser URL below."
         else
-          echo "ERPNext is running. Optional: enable autostart with $(toolkit_cmd enable-autostart)"
+          echo "Frappe stack is running. Optional: enable autostart with $(toolkit_cmd enable-autostart)"
         fi
       else
-        echo "Start ERPNext with $(toolkit_cmd start)"
+        echo "Start the Frappe stack with $(toolkit_cmd start)"
       fi
       ;;
     "Incomplete")
@@ -83,7 +83,7 @@ run_status() {
   echo "  $(recommended_action "$installed" "$runtime" "$auto")"
   echo
   echo "Notes:"
-  echo "  - Direct URL works after ERPNext is running."
+  echo "  - The friendly hostname is the canonical access path; the raw-IP URL is diagnostic only."
   echo "  - Friendly URL also needs the HOST /etc/hosts entry: ${vm_ip} ${SITE_NAME}"
   echo "  - Detailed diagnostics: $(toolkit_cmd doctor)"
   echo "============================================================"
@@ -159,7 +159,7 @@ run_runtime_status() {
 
   echo
   if [[ "$runtime_status" == Starting* ]]; then
-    echo "ERPNext was recently started/restarted. If ports are still waiting, run:"
+    echo "The Frappe stack was recently started/restarted. If ports are still waiting, run:"
     echo "  sleep 30 && $(toolkit_cmd runtime-status)"
     echo "  $(toolkit_cmd logs)"
   else
@@ -517,18 +517,18 @@ run_full_status() {
 
   if service_exists; then
     if systemctl is-enabled --quiet "${ERPNEXT_SERVICE_NAME}" 2>/dev/null; then
-      status_line "ERPNext autostart" "OK" "enabled"
+      status_line "Frappe stack autostart" "OK" "enabled"
     else
-      status_line "ERPNext autostart" "WARN" "disabled"
+      status_line "Frappe stack autostart" "WARN" "disabled"
     fi
 
     if systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-      status_line "ERPNext service" "OK" "running"
+      status_line "Frappe stack service" "OK" "running"
     else
-      status_line "ERPNext service" "INFO" "installed but stopped"
+      status_line "Frappe stack service" "INFO" "installed but stopped"
     fi
   else
-    status_line "ERPNext service" "WARN" "not configured"
+    status_line "Frappe stack service" "WARN" "not configured"
   fi
 
   if id "$FRAPPE_USER" >/dev/null 2>&1; then
@@ -554,8 +554,10 @@ run_full_status() {
 
   if check_bench_app_installed erpnext; then
     status_line "ERPNext app files" "OK" "apps/erpnext exists"
+  elif installation_profile_requires_erpnext; then
+    status_line "ERPNext app files" "WARN" "required by profile; apps/erpnext missing"
   else
-    status_line "ERPNext app files" "WARN" "apps/erpnext missing"
+    status_line "ERPNext app files" "OK" "absent by design for Frappe-only profile"
   fi
 
   if path_is_dir "${bench_dir}/sites/${SITE_NAME}"; then

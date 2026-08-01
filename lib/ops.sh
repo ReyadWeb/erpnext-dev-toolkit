@@ -69,9 +69,9 @@ production_ops_services_menu() {
     ui_submenu_header "Services and Recovery" "Production Operations"
     print_two_column_menu \
       "1) Service status" \
-      "2) Start ERPNext service" \
-      "3) Stop ERPNext service" \
-      "4) Restart ERPNext service" \
+      "2) Start Frappe stack service" \
+      "3) Stop Frappe stack service" \
+      "4) Restart Frappe stack service" \
       "5) Wait for ERPNext readiness" \
       "6) Verify frontend assets" \
       "7) Repair frontend assets" \

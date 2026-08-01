@@ -801,7 +801,7 @@ configure_production_ssl() {
   echo "Configure Production HTTPS / Let's Encrypt"
   echo "============================================================"
   echo "This configures Nginx + Let's Encrypt for: https://${domain}"
-  echo "It does not change cloud firewall rules and does not stop the ERPNext service."
+  echo "It does not change cloud firewall rules and does not stop the Frappe stack service."
   echo
   status_line "Domain" "$([[ -n "$dns_ip" && "$dns_ip" == "$vm_ip" ]] && echo OK || echo FAIL)" "${domain}; DNS=${dns_ip:-unresolved}; VM=${vm_ip}"
   status_line "Install state" "$([[ "$install_quick" == Installed* ]] && echo OK || echo FAIL)" "$install_quick"

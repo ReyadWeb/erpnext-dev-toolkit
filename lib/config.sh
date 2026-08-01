@@ -545,7 +545,7 @@ change_local_domain_wizard() {
 
   if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
     service_was_active="yes"
-    log "Stopping ERPNext service before site rename"
+    log "Stopping managed Frappe stack service before site rename"
     $SUDO systemctl stop "${ERPNEXT_SERVICE_NAME}" || warn "Could not stop ${ERPNEXT_SERVICE_NAME}; continuing carefully."
   fi
 
@@ -588,7 +588,7 @@ change_local_domain_wizard() {
   fi
 
   if [[ "$service_was_active" == yes ]]; then
-    log "Starting ERPNext service after site rename"
+    log "Starting managed Frappe stack service after site rename"
     $SUDO systemctl start "${ERPNEXT_SERVICE_NAME}" || warn "Could not restart ${ERPNEXT_SERVICE_NAME}. Run: $(toolkit_cmd start)"
   fi
 

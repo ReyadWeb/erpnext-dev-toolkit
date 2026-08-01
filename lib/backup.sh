@@ -276,16 +276,16 @@ run_post_restore_maintenance() {
   local bench_dir="$1"
   local maintenance_failed=0
 
-  log "Starting ERPNext service before post-restore maintenance"
+  log "Starting managed Frappe stack service before post-restore maintenance"
   if ! service_exists; then
-    warn "Restore completed, but the ERPNext service is not configured."
+    warn "Restore completed, but the managed Frappe stack service is not configured."
     echo "Run Bench manually before running migrate/clear-cache."
     return 1
   fi
 
   if ! systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
     if ! start_erpnext_service; then
-      warn "Restore completed, but the ERPNext service could not be started automatically."
+      warn "Restore completed, but the managed Frappe stack service could not be started automatically."
       echo
       echo "Run manually:"
       echo "  $(toolkit_cmd start)"
@@ -547,7 +547,7 @@ run_maintenance_menu() {
       "1) Run migrate" \
       "2) Build assets" \
       "3) Clear cache" \
-      "4) Restart ERPNext service" \
+      "4) Restart Frappe stack service" \
       "5) Verify frontend assets" \
       "6) Wait for frontend assets" \
       "7) Repair frontend assets" \

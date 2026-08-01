@@ -627,7 +627,7 @@ prompt_production_credential_handoff_if_needed() {
 
   echo
   warn "Optional: remove the local plaintext credentials file now."
-  echo "This does not change the ERPNext Administrator password."
+  echo "This does not change the Site Administrator password."
   read -r -p "Type DELETE to remove ${cred_file} now: " reply || reply=""
   if [[ "$reply" == "DELETE" ]]; then
     credentials_delete

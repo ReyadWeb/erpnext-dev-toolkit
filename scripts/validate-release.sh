@@ -257,6 +257,9 @@ pass "platform/profile selection tests passed"
 scripts/test-interactive-installation-profiles.sh
 pass "interactive installation-profile tests passed"
 
+scripts/test-frappe-platform-lifecycle.sh
+pass "Frappe platform lifecycle tests passed"
+
 scripts/test-inventory-compatibility.sh
 pass "inventory/compatibility tests passed"
 

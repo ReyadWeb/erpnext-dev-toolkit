@@ -158,6 +158,77 @@ check_resources() {
   fi
 }
 
+detect_time_sync_provider() {
+  if command -v chronyc >/dev/null 2>&1 && systemctl is-active --quiet chrony 2>/dev/null; then
+    printf 'chrony\n'
+  elif systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+    printf 'systemd-timesyncd\n'
+  elif command -v timedatectl >/dev/null 2>&1; then
+    printf 'timedatectl\n'
+  else
+    printf 'none\n'
+  fi
+}
+
+system_clock_synchronized() {
+  local value
+  value="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)"
+  [[ "$value" == "yes" ]]
+}
+
+attempt_bounded_clock_sync() {
+  local provider="$1"
+  case "$provider" in
+    chrony)
+      $SUDO chronyc -a makestep >/dev/null 2>&1 || return 1
+      ;;
+    systemd-timesyncd | timedatectl)
+      $SUDO timedatectl set-ntp true >/dev/null 2>&1 || return 1
+      ;;
+    *) return 1 ;;
+  esac
+  local _
+  for _ in 1 2 3 4 5; do
+    system_clock_synchronized && return 0
+    sleep 2
+  done
+  return 1
+}
+
+verify_clock_and_repository_readiness() {
+  local provider apt_log
+  provider="$(detect_time_sync_provider)"
+  if ! system_clock_synchronized; then
+    log "System clock is not synchronized; attempting bounded synchronization with ${provider}"
+    if ! attempt_bounded_clock_sync "$provider"; then
+      err "System clock is not synchronized (detected provider: ${provider})."
+      echo "Correct the VM clock, then resume with: $(toolkit_cmd first-run)" >&2
+      case "$provider" in
+        chrony) echo "Check: sudo chronyc tracking; sudo chronyc -a makestep" >&2 ;;
+        systemd-timesyncd | timedatectl) echo "Check: timedatectl status; sudo timedatectl set-ntp true" >&2 ;;
+        *) echo "Install or enable a supported time provider such as chrony, then verify with timedatectl." >&2 ;;
+      esac
+      return 1
+    fi
+  fi
+
+  apt_log="$(mktemp /tmp/erpnext-dev-apt-readiness.XXXXXX)"
+  if ! $SUDO apt-get update >"$apt_log" 2>&1; then
+    if grep -Eqi 'not valid yet|valid.*future|release file.*future' "$apt_log"; then
+      err "APT repository metadata is not valid yet; the system clock is incorrect or not fully synchronized."
+      echo "Detected time provider: ${provider}" >&2
+    else
+      err "APT repository readiness check failed before storage or installation mutation."
+    fi
+    sed -n '1,12p' "$apt_log" >&2
+    rm -f "$apt_log"
+    echo "After correcting time/network/repository access, resume with: $(toolkit_cmd first-run)" >&2
+    return 1
+  fi
+  rm -f "$apt_log"
+  ok "System clock and APT repository metadata are ready"
+}
+
 run_install_preflight() {
   require_sudo
   install_self_for_reuse
@@ -178,6 +249,7 @@ run_install_preflight() {
 
   check_os
   check_internet
+  verify_clock_and_repository_readiness
   check_resources
   echo
   ok "This VM is safe to continue with ERPNext installation."
@@ -1031,6 +1103,7 @@ run_install() {
   install_self_for_reuse || fail "Could not install the toolkit to ${INSTALLER_CANONICAL_PATH:-/opt/erpnext-dev/erpnext-dev.sh}"
   check_os
   check_internet
+  verify_clock_and_repository_readiness
   maybe_offer_root_storage_expansion
   check_resources
   prompt_for_site_name_if_needed
@@ -1055,7 +1128,7 @@ run_install() {
   install_frappe_stack_as_user
   write_credentials_file
   if ! create_erpnext_service; then
-    warn "Install completed, but the ERPNext service could not be configured automatically."
+    warn "Core install completed, but the managed Frappe stack service could not be configured automatically."
     warn "You can still start manually with: sudo -iu ${FRAPPE_USER}; cd $(active_bench_dir); bench start"
   fi
 
@@ -1088,7 +1161,7 @@ run_install() {
     warn "Autostart was not enabled because ENABLE_AUTOSTART=false."
   elif [[ -t 0 ]]; then
     echo
-    read -r -p "Enable ERPNext autostart when this VM boots? [Y/n]: " enable_boot
+    read -r -p "Enable the managed Frappe stack at VM boot? [Y/n]: " enable_boot
     enable_boot="${enable_boot:-Y}"
     if [[ "$enable_boot" =~ ^[Yy]$ ]]; then
       if ! enable_autostart_service; then
@@ -1098,34 +1171,34 @@ run_install() {
   fi
 
   if [[ "$production_runtime_restored" -eq 1 ]]; then
-    ok "ERPNext is already running under the restored production runtime."
+    ok "The Frappe stack is already running under the restored production runtime."
   elif [[ "${AUTO_START}" == "true" || "$ASSUME_YES" -eq 1 ]]; then
     if ! start_erpnext_service; then
-      warn "Install completed, but ERPNext could not be started automatically."
+      warn "Core install completed, but the Frappe stack could not be started automatically."
       warn "Run this later: $(toolkit_cmd start)"
     fi
   elif [[ "${AUTO_START}" == "false" ]]; then
     echo
-    echo "You can start ERPNext later with:"
+    echo "You can start the Frappe stack later with:"
     echo "  $(toolkit_cmd start)"
   elif [[ -t 0 ]]; then
     echo
-    read -r -p "Start ERPNext now in the background service? [Y/n]: " start_now
+    read -r -p "Start the Frappe stack now in the background service? [Y/n]: " start_now
     start_now="${start_now:-Y}"
     if [[ "$start_now" =~ ^[Yy]$ ]]; then
       if ! start_erpnext_service; then
-        warn "Install completed, but ERPNext could not be started automatically."
+        warn "Core install completed, but the Frappe stack could not be started automatically."
         warn "Run this later: $(toolkit_cmd start)"
       fi
     else
       echo
-      echo "You can start ERPNext later with:"
+      echo "You can start the Frappe stack later with:"
       echo "  $(toolkit_cmd start)"
     fi
   fi
 
   # Core installation success is separate from browser-asset readiness. The
-  # frontend gate remains release-blocking in CI, but a completed ERPNext install
+  # frontend gate remains release-blocking in CI, but a completed Frappe install
   # must not be falsely reported as failed because the browser layer is degraded.
   if ! is_public_vm_workflow && { port_listens 8000 || port_listens 443; }; then
     local frontend_ready=1
@@ -1141,7 +1214,7 @@ run_install() {
     if ((frontend_ready == 1)); then
       ok "Independent post-install frontend verification passed."
     else
-      warn "ERPNext core installation completed, but frontend assets are not browser-ready yet."
+      warn "Frappe core installation completed, but frontend assets are not browser-ready yet."
       warn "Overall state: DEGRADED (installation preserved; no automatic rebuild loop)."
       echo "Repair explicitly with: $(toolkit_cmd repair-frontend-assets)"
       echo "Then verify with:      $(toolkit_cmd wait-ready)"
@@ -1278,9 +1351,9 @@ post_install_validation_summary() {
   fi
 
   if [[ "$service_status" == "Running" ]]; then
-    status_line "ERPNext service" "OK" "$service_status"
+    status_line "Frappe stack service" "OK" "$service_status"
   else
-    status_line "ERPNext service" "INFO" "$service_status"
+    status_line "Frappe stack service" "INFO" "$service_status"
   fi
 
   if [[ "$autostart_status" == "Enabled" ]]; then
@@ -1402,7 +1475,7 @@ run_guided_setup() {
 
   echo
   echo "============================================================"
-  echo "Guided ERPNext Setup"
+  echo "Guided Frappe Stack Setup"
   echo "============================================================"
   echo "Flow: requirements -> domain -> install -> verify -> backup checkpoint -> HTTPS -> security profile -> apps -> final QA."
   echo "Keep this terminal open until setup finishes."
@@ -1416,7 +1489,7 @@ run_guided_setup() {
   if declare -F wait_for_erpnext_ready >/dev/null 2>&1 \
     && { port_listens 443 || port_listens 8000; }; then
     if wait_for_erpnext_ready; then
-      ok "ERPNext installation workflow finished successfully (browser assets verified)."
+      ok "Frappe installation workflow finished successfully (browser assets verified)."
     else
       warn "Install finished, but browser assets are not ready yet."
       echo "  $(toolkit_cmd repair-frontend-assets)"
@@ -1424,7 +1497,7 @@ run_guided_setup() {
       echo "  $(toolkit_cmd wait-frontend-assets)"
     fi
   else
-    ok "ERPNext installation workflow finished successfully."
+    ok "Frappe core installation finished successfully. Continuing guided access and security checkpoints."
   fi
   echo "Verifying access state..."
   verify_access
@@ -1744,7 +1817,7 @@ local_guided_credentials_checkpoint() {
 
   echo
   ui_box_start "Local setup: login credentials"
-  echo "Your ERPNext Administrator login is ready. Save it before hardening the VM."
+  echo "Your Site Administrator login is ready. Save it before hardening the VM."
   ui_box_end
   show_credentials_info || true
 

@@ -643,7 +643,7 @@ sudo erpnext-dev install-cli    # or: repair-cli
 
 ## Credentials
 
-The toolkit saves the generated ERPNext Administrator password and database
+The toolkit saves the generated Site Administrator password and database
 credentials on the VM. The safe overview does **not** print passwords. The
 Credentials / Login commands are engine-aware: native installs use the native
 credential record, while Docker installs use the root-only Docker credential

@@ -48,6 +48,7 @@ scripts/test-docker-durability.sh
 scripts/test-safe-update-lifecycle.sh
 scripts/test-app-uninstall-recovery.sh
 scripts/test-interactive-installation-profiles.sh
+scripts/test-frappe-platform-lifecycle.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh

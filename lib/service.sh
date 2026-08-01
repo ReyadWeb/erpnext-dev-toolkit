@@ -8,7 +8,7 @@ _ERPNEXT_DEV_SERVICE_LOADED=1
 # ============================================================
 
 start_erpnext_foreground() {
-  log "Starting ERPNext development server in foreground"
+  log "Starting Frappe development server in foreground"
 
   local bench_dir
   bench_dir="$(require_bench_dir)" || return 1
@@ -312,7 +312,7 @@ try_rebuild_frontend_assets_once() {
     log "Restarting production runtime after asset rebuild"
     $SUDO "$(supervisorctl_bin)" restart all >/dev/null 2>&1 || true
   elif service_exists; then
-    log "Restarting ERPNext service after asset rebuild"
+    log "Restarting managed Frappe stack service after asset rebuild"
     $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
   fi
 
@@ -337,7 +337,7 @@ wait_for_erpnext_ready() {
   local asset_fingerprint="" previous_asset_fingerprint="" asset_probe_rc=1
 
   echo
-  echo "Waiting for ERPNext services to become ready..."
+  echo "Waiting for Frappe stack services to become ready..."
   echo "Requires ports, HTTP ping, and a stable login asset manifest (CSS/JS)."
   echo "Read-only check: wait-ready never rebuilds assets or changes the runtime."
   echo "This can take up to ${timeout}s after start/restart (READY_TIMEOUT)."
@@ -387,9 +387,9 @@ wait_for_erpnext_ready() {
     if bench_ports_ready && [[ "$http_state" == "OK" && "$assets_state" == "OK" ]] \
       && ((asset_stable_streak >= need_stable)); then
       if runtime_is_production; then
-        ok "ERPNext is ready. Production runtime is serving a stable frontend manifest."
+        ok "Frappe site is ready. Production runtime is serving a stable frontend manifest."
       else
-        ok "ERPNext is ready. Development ports, HTTP, and a stable frontend manifest are OK."
+        ok "Frappe site is ready. Development ports, HTTP, and a stable frontend manifest are OK."
       fi
       return 0
     fi
@@ -405,7 +405,7 @@ wait_for_erpnext_ready() {
     elapsed=$((elapsed + interval))
   done
 
-  warn "ERPNext did not become fully ready within ${timeout}s."
+  warn "Frappe site did not become fully ready within ${timeout}s."
   echo
   echo "Useful checks:"
   echo "  $(toolkit_cmd runtime-status)"
@@ -737,7 +737,7 @@ ensure_bench_services_for_site_commands() {
   bench_dir="$(active_bench_dir)"
 
   if ! service_exists; then
-    err "ERPNext service is not configured, so Bench services are not managed by this toolkit yet."
+    err "The managed Frappe stack service is not configured, so Bench services are not managed by this toolkit yet."
     echo
     echo "Start Bench manually as the ${FRAPPE_USER} user if you are using development mode:"
     echo "  sudo -iu ${FRAPPE_USER} bash -lc 'export PATH=\"\$HOME/.local/bin:\$PATH\"; cd ${bench_dir} && bench start'"
@@ -759,9 +759,9 @@ ensure_bench_services_for_site_commands() {
   fi
 
   if systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    warn "ERPNext service is active, but one or more Bench ports are not ready. Restarting before ${context}."
+    warn "The Frappe stack service is active, but one or more Bench ports are not ready. Restarting before ${context}."
   else
-    warn "ERPNext service is not running. Starting it before ${context}."
+    warn "The Frappe stack service is not running. Starting it before ${context}."
   fi
 
   if ! $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}"; then
@@ -781,12 +781,12 @@ create_erpnext_service() {
     return 1
   fi
 
-  log "Creating ERPNext development systemd service"
+  log "Creating managed Frappe stack systemd service"
   ensure_toolkit_runtime_procfile "$bench_dir" || return 1
 
   $SUDO tee "$(erpnext_service_path)" >/dev/null <<EOF_SERVICE
 [Unit]
-Description=ERPNext Frappe Bench Development Server (${SITE_NAME})
+Description=Managed Frappe Stack Service (${SITE_NAME})
 After=network-online.target mariadb.service redis-server.service
 Wants=network-online.target
 
@@ -816,7 +816,7 @@ enable_autostart_service() {
     create_erpnext_service || return 1
   fi
 
-  log "Enabling ERPNext autostart on VM boot"
+  log "Enabling managed Frappe stack autostart on VM boot"
   if $SUDO systemctl enable "${ERPNEXT_SERVICE_NAME}"; then
     ok "Autostart enabled"
   else
@@ -829,7 +829,7 @@ disable_autostart_service() {
   require_sudo
 
   if service_exists; then
-    log "Disabling ERPNext autostart"
+    log "Disabling managed Frappe stack autostart"
     $SUDO systemctl disable "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
     ok "Autostart disabled"
   else
@@ -852,9 +852,9 @@ start_erpnext_service() {
 
   ensure_erpnext_service_definition || return 1
 
-  log "Starting ERPNext service"
+  log "Starting managed Frappe stack service"
   if $SUDO systemctl start "${ERPNEXT_SERVICE_NAME}"; then
-    ok "ERPNext service start command completed"
+    ok "Managed Frappe stack service start command completed"
     if wait_for_erpnext_ready; then
       show_ready_summary
     else
@@ -880,9 +880,9 @@ stop_erpnext_service() {
   fi
 
   if service_exists; then
-    log "Stopping ERPNext service"
+    log "Stopping managed Frappe stack service"
     $SUDO systemctl stop "${ERPNEXT_SERVICE_NAME}" >/dev/null 2>&1 || true
-    ok "ERPNext service stopped"
+    ok "Managed Frappe stack service stopped"
   else
     warn "Service does not exist yet: ${ERPNEXT_SERVICE_NAME}"
   fi
@@ -908,9 +908,9 @@ restart_erpnext_service() {
 
   ensure_erpnext_service_definition || return 1
 
-  log "Restarting ERPNext service"
+  log "Restarting managed Frappe stack service"
   if $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}"; then
-    ok "ERPNext service restart command completed"
+    ok "Managed Frappe stack service restart command completed"
     if wait_for_erpnext_ready; then
       show_ready_summary
     else
@@ -941,7 +941,7 @@ _soft_restart_erpnext_runtime() {
   fi
   if declare -F ensure_erpnext_service_definition >/dev/null 2>&1; then
     ensure_erpnext_service_definition || return 1
-    log "Restarting ERPNext service"
+    log "Restarting managed Frappe stack service"
     $SUDO systemctl restart "${ERPNEXT_SERVICE_NAME}" || return 1
     return 0
   fi
@@ -1213,7 +1213,7 @@ run_foreground_start() {
   require_sudo
 
   if service_exists && systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
-    warn "ERPNext service is already running in the background."
+    warn "The Frappe stack service is already running in the background."
     if ! confirm "Start a foreground bench session anyway?"; then
       return 0
     fi
@@ -1228,9 +1228,9 @@ show_service_menu() {
     print_two_column_menu \
       "1) Enable autostart on VM boot" \
       "2) Disable autostart" \
-      "3) Start ERPNext service" \
-      "4) Stop ERPNext service" \
-      "5) Restart ERPNext service" \
+      "3) Start Frappe stack service" \
+      "4) Stop Frappe stack service" \
+      "5) Restart Frappe stack service" \
       "6) Show service status" \
       "7) Show recent service logs" \
       "8) Follow service logs"

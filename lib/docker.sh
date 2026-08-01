@@ -4176,7 +4176,7 @@ docker_guided_credentials_checkpoint() {
 
   echo
   ui_box_start "Docker setup: login credentials"
-  echo "Your ERPNext Administrator login is ready. Save it before security hardening."
+  echo "Your Site Administrator login is ready. Save it before security hardening."
   ui_box_end
   show_credentials_info || true
 

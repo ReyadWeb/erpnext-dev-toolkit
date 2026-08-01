@@ -333,7 +333,7 @@ show_service_recovery_plan() {
   require_sudo
   ui_box_start "Service Recovery Plan"
   status_line "Mode" "INFO" "planning only; no services are restarted"
-  status_line "ERPNext service" "INFO" "${ERPNEXT_SERVICE_NAME}"
+  status_line "Frappe stack service" "INFO" "${ERPNEXT_SERVICE_NAME}"
   echo
   echo "Recommended manual recovery order:"
   echo "  1) Run health-check and review WARN/FAIL rows."

@@ -539,7 +539,7 @@ health_probe_native_runtime() {
     return 0
   else
     overall="CRITICAL"
-    detail="ERPNext service not running"
+    detail="Frappe stack service not running"
   fi
   p="$(health_probe_systemd_unit nginx.service Nginx)"
   overall="$(health_status_worst "$overall" "${p%%|*}")"
@@ -1541,7 +1541,7 @@ dashboard_render_test() {
   SNAPSHOT_QUEUE_STATUS="UNKNOWN"; SNAPSHOT_QUEUE_DETAIL="not probed"
   SNAPSHOT_WEB_PORT_STATUS="CRITICAL"; SNAPSHOT_WEB_PORT_DETAIL="port 8000 closed"
   SNAPSHOT_SOCKET_STATUS="UNKNOWN"; SNAPSHOT_SOCKET_DETAIL="not probed"
-  SNAPSHOT_RUNTIME_LAYER_STATUS="CRITICAL"; SNAPSHOT_RUNTIME_LAYER_DETAIL="ERPNext service not running"
+  SNAPSHOT_RUNTIME_LAYER_STATUS="CRITICAL"; SNAPSHOT_RUNTIME_LAYER_DETAIL="Frappe stack service not running"
 
   SNAPSHOT_HTTPS_STATUS="UNKNOWN"; SNAPSHOT_HTTPS_DETAIL="not configured"
   SNAPSHOT_FIREWALL_STATUS="UNKNOWN"; SNAPSHOT_FIREWALL_DETAIL="not checked"

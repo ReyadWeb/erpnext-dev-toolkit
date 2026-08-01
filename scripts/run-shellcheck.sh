@@ -91,6 +91,7 @@ targets=(
   scripts/test-safe-update-lifecycle.sh
   scripts/test-app-uninstall-recovery.sh
   scripts/test-interactive-installation-profiles.sh
+  scripts/test-frappe-platform-lifecycle.sh
   scripts/test-host-os-output.sh
   scripts/test-install-self-path.sh
   scripts/test-legacy-modular-bootstrap.sh
