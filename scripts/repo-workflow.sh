@@ -510,6 +510,11 @@ select_focused_tests() {
       lib/update.sh | scripts/test-update-channel.sh)
         add_focused_test scripts/test-update-channel.sh
         ;;
+      lib/adoption.sh | lib/config.sh | lib/inventory.sh | lib/planner.sh | scripts/test-existing-installation-adoption.sh | docs/INSTALLATION-PROFILES.md)
+        add_focused_test scripts/test-existing-installation-adoption.sh
+        add_focused_test scripts/test-installation-profile-contract.sh
+        add_focused_test scripts/test-inventory-compatibility.sh
+        ;;
       .github/* | scripts/check-pinned-actions.sh)
         add_focused_test scripts/check-pinned-actions.sh
         ;;

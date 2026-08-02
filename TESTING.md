@@ -1,5 +1,18 @@
 # Testing guide
 
+Existing-installation discovery and configuration-only adoption have a focused
+hermetic suite:
+
+```bash
+scripts/test-existing-installation-adoption.sh
+```
+
+It covers deterministic Native and Docker discovery, exact selection, hostile
+paths/selectors, core trust and cleanliness, unknown application preservation,
+immutable production reconstruction proof, preview non-mutation, schema-2
+metadata, and forbidden deployment mutation verbs. Disposable live Native and
+Docker acceptance remains deferred until separately authorized.
+
 **Current release:** v1.20.4
 **Current project version:** v1.20.4
 

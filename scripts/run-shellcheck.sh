@@ -44,6 +44,7 @@ targets=(
   lib/dashboard.sh
   lib/inventory.sh
   lib/planner.sh
+  lib/adoption.sh
   lib/removal.sh
   lib/healing.sh
   lib/menu.sh
@@ -52,6 +53,7 @@ targets=(
   scripts/validate-release.sh
   scripts/repo-workflow.sh
   scripts/test-repo-workflow.sh
+  scripts/test-existing-installation-adoption.sh
   scripts/test-repo-workflow-work.sh
   scripts/test-repo-workflow-pr.sh
   scripts/test-repo-workflow-release.sh

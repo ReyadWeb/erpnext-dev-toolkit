@@ -150,7 +150,8 @@ read_saved_config_value() {
 # never writes it, and deliberately keeps observed deployment state separate.
 # Schema 2 is the Phase 7 contract; missing schema remains legacy-compatible.
 read_installation_profile_metadata() {
-  local file="$1" schema="" profile="" apps=""
+  local file="$1" schema="" profile="" apps="" adoption_target="" adoption_site="" adoption_fingerprint=""
+  local adoption_engine="" adoption_environment="" adoption_bench="" adoption_workdir="" adoption_project=""
   local saved_requested_csv="${PROFILE_PLAN_REQUESTED_CSV-}"
   local saved_plan_error="${PROFILE_PLAN_ERROR-}"
   local normalized_apps=""
@@ -160,6 +161,15 @@ read_installation_profile_metadata() {
   PROFILE_METADATA_PROFILE="recommended"
   PROFILE_METADATA_APPS=""
   PROFILE_METADATA_EXPLICIT="false"
+  PROFILE_METADATA_ADOPTION_VALID="false"
+  PROFILE_METADATA_ADOPTION_TARGET=""
+  PROFILE_METADATA_ADOPTION_SITE=""
+  PROFILE_METADATA_ADOPTION_FINGERPRINT=""
+  PROFILE_METADATA_ADOPTION_ENGINE=""
+  PROFILE_METADATA_ADOPTION_ENVIRONMENT=""
+  PROFILE_METADATA_ADOPTION_BENCH_PATH=""
+  PROFILE_METADATA_ADOPTION_DOCKER_WORKDIR=""
+  PROFILE_METADATA_ADOPTION_DOCKER_PROJECT=""
   PROFILE_METADATA_DETAIL="Legacy configuration without profile metadata; recommended compatibility default applies."
 
   [[ -n "$file" && -f "$file" && ! -L "$file" ]] || {
@@ -251,10 +261,45 @@ read_installation_profile_metadata() {
       return 2
     fi
   fi
+  if [[ "$profile" == existing ]]; then
+    adoption_target="$(read_config_key_from_file "$file" ADOPTION_TARGET_ID 2>/dev/null || true)"
+    adoption_site="$(read_config_key_from_file "$file" ADOPTION_SITE 2>/dev/null || true)"
+    adoption_fingerprint="$(read_config_key_from_file "$file" ADOPTION_INVENTORY_FINGERPRINT 2>/dev/null || true)"
+    adoption_engine="$(read_config_key_from_file "$file" ADOPTION_ENGINE 2>/dev/null || true)"
+    adoption_environment="$(read_config_key_from_file "$file" ADOPTION_ENVIRONMENT 2>/dev/null || true)"
+    adoption_bench="$(read_config_key_from_file "$file" ADOPTION_BENCH_PATH 2>/dev/null || true)"
+    adoption_workdir="$(read_config_key_from_file "$file" ADOPTION_DOCKER_WORKDIR 2>/dev/null || true)"
+    adoption_project="$(read_config_key_from_file "$file" ADOPTION_DOCKER_PROJECT 2>/dev/null || true)"
+    if [[ "$adoption_target" =~ ^[nd]-[a-f0-9]{20}$ \
+      && "$adoption_site" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ \
+      && "$adoption_fingerprint" =~ ^[a-f0-9]{64}$ \
+      && ("$adoption_engine:$adoption_environment" == native:development \
+        || "$adoption_engine:$adoption_environment" == docker:development \
+        || "$adoption_engine:$adoption_environment" == docker:production) \
+      && ("$adoption_engine" != native || ("$adoption_bench" =~ ^/[A-Za-z0-9._/-]+$ \
+        && "$adoption_bench" != *'//'* && "$adoption_bench" != */../* && "$adoption_bench" != */./* \
+        && -z "$adoption_workdir$adoption_project")) \
+      && ("$adoption_engine" != docker || ("$adoption_workdir" =~ ^/[A-Za-z0-9._/-]+$ \
+        && "$adoption_workdir" != *'//'* && "$adoption_workdir" != */../* && "$adoption_workdir" != */./* \
+        && "$adoption_project" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ && -z "$adoption_bench")) ]]; then
+      PROFILE_METADATA_ADOPTION_VALID="true"
+      PROFILE_METADATA_ADOPTION_TARGET="$adoption_target"
+      PROFILE_METADATA_ADOPTION_SITE="$adoption_site"
+      PROFILE_METADATA_ADOPTION_FINGERPRINT="$adoption_fingerprint"
+      PROFILE_METADATA_ADOPTION_ENGINE="$adoption_engine"
+      PROFILE_METADATA_ADOPTION_ENVIRONMENT="$adoption_environment"
+      PROFILE_METADATA_ADOPTION_BENCH_PATH="$adoption_bench"
+      PROFILE_METADATA_ADOPTION_DOCKER_WORKDIR="$adoption_workdir"
+      PROFILE_METADATA_ADOPTION_DOCKER_PROJECT="$adoption_project"
+    else
+      PROFILE_METADATA_DETAIL="Schema 2 existing intent lacks validated adoption identifiers; target remains unmanaged."
+    fi
+  fi
 
   PROFILE_METADATA_PROFILE="$profile"
   PROFILE_METADATA_APPS="$apps"
-  PROFILE_METADATA_DETAIL="Schema 2 profile intent parsed without modifying configuration."
+  [[ "$profile" == existing && "$PROFILE_METADATA_ADOPTION_VALID" != true ]] \
+    || PROFILE_METADATA_DETAIL="Schema 2 profile intent parsed without modifying configuration."
 }
 
 read_saved_site_name() {
@@ -399,6 +444,26 @@ load_future_domain_config_if_available() {
     fi
   elif [[ "${HOST_OS_ENV_PROVIDED:-0}" -eq 1 ]] && validate_host_os_value "${HOST_OS:-}"; then
     HOST_OS="$(normalize_host_os "$HOST_OS")"
+  fi
+}
+
+load_adopted_operational_routing_if_available() {
+  local bench workdir project
+  read_installation_profile_metadata "$CONFIG_FILE" >/dev/null 2>&1 || return 0
+  [[ "$PROFILE_METADATA_PROFILE" == existing && "$PROFILE_METADATA_ADOPTION_VALID" == true ]] || return 0
+  if [[ "$PROFILE_METADATA_ADOPTION_ENGINE" == native ]]; then
+    bench="$PROFILE_METADATA_ADOPTION_BENCH_PATH"
+    if [[ "${BENCH_PARENT_ENV_PROVIDED:-0}" -ne 1 && "${BENCH_NAME_ENV_PROVIDED:-0}" -ne 1 \
+      && "${BENCH_DIR_ENV_PROVIDED:-0}" -ne 1 ]]; then
+      BENCH_PARENT="$(dirname "$bench")"
+      BENCH_NAME="$(basename "$bench")"
+      BENCH_DIR="$bench"
+    fi
+  else
+    workdir="$PROFILE_METADATA_ADOPTION_DOCKER_WORKDIR"
+    project="$PROFILE_METADATA_ADOPTION_DOCKER_PROJECT"
+    if [[ "${DOCKER_WORKDIR_ENV_PROVIDED:-0}" -ne 1 ]]; then DOCKER_WORKDIR="$workdir"; fi
+    if [[ "${DOCKER_PROJECT_NAME_ENV_PROVIDED:-0}" -ne 1 ]]; then DOCKER_PROJECT_NAME="$project"; fi
   fi
 }
 
@@ -911,6 +976,7 @@ show_site_name_guide() {
 
 load_saved_config_if_available
 load_future_domain_config_if_available
+load_adopted_operational_routing_if_available
 show_config_summary() {
   require_sudo
   local vm_ip prod_display mode_display ssl_display

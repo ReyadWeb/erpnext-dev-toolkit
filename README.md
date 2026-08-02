@@ -438,7 +438,16 @@ sudo erpnext-dev install --profile existing --preview --json
 
 The preview validates canonical catalog IDs, resolves dependencies, fingerprints
 read-only inventory, and reports reconciliation and Native/Docker capability.
-Advanced and existing profiles are planning-only until their later adapters ship.
+Advanced remains planning-only. Existing supports read-only discovery and
+configuration-only adoption with the exact selector printed by preview:
+
+```bash
+sudo erpnext-dev install --profile existing --preview
+sudo erpnext-dev install --profile existing --target native:n-0123456789abcdef0123:site.test --yes
+```
+
+Automation never selects an existing deployment implicitly. Adoption does not
+install, update, restart, build, migrate, or otherwise change the deployment.
 See [Docker durability](docs/DOCKER-DURABILITY.md).
 See [Interactive installation profiles](docs/INSTALLATION-PROFILES.md) for mode,
 precedence, cancellation, existing-installation, and legacy v1.20.4 behavior.
