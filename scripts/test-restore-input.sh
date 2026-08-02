@@ -66,14 +66,23 @@ status_line() { :; }
 path_is_file() { [[ -f "$1" ]]; }
 run_as_frappe() {
   : >"$RESTORE_TEST_TMP/MUTATION"
+  if [[ "${RESTORE_TEST_SUCCESS:-0}" == 1 ]]; then
+    if [[ "${RESTORE_TEST_DIVERT_OUTPUT:-0}" == 1 && ! -e "$RESTORE_TEST_TMP/OUTPUT_DIVERTED" ]]; then
+      : >"$RESTORE_TEST_TMP/OUTPUT_DIVERTED"
+      exec >/dev/tty 2>&1
+    fi
+    return 0
+  fi
   return 99
 }
 stop_erpnext_service() {
   : >"$RESTORE_TEST_TMP/MUTATION"
+  [[ "${RESTORE_TEST_SUCCESS:-0}" == 1 ]] && return 0
   return 99
 }
 run_post_restore_maintenance() {
   : >"$RESTORE_TEST_TMP/MUTATION"
+  [[ "${RESTORE_TEST_SUCCESS:-0}" == 1 ]] && return 0
   return 99
 }
 
@@ -105,11 +114,13 @@ run_pty_case() {
   local outer="$tmp/${name}.outer.log"
   local status_file="$tmp/${name}.status"
 
-  rm -f "$tmp/internal.log" "$tmp/MUTATION" "$transcript" "$outer" "$status_file"
+  rm -f "$tmp/internal.log" "$tmp/MUTATION" "$tmp/OUTPUT_DIVERTED" "$transcript" "$outer" "$status_file"
   RESTORE_TEST_ROOT="$ROOT_DIR" \
     RESTORE_TEST_TMP="$tmp" \
     RESTORE_TEST_MODE="$mode" \
     RESTORE_TEST_ASSUME_YES="$assume_yes" \
+    RESTORE_TEST_SUCCESS="$([[ "$name" == success-* ]] && printf 1 || printf 0)" \
+    RESTORE_TEST_DIVERT_OUTPUT="$([[ "$name" == success-* ]] && printf 1 || printf 0)" \
     RESTORE_TEST_CLOSE_STDIN="$([[ "$name" == legacy ]] && printf 1 || printf 0)" \
     RESTORE_TEST_HARNESS="$tmp/harness.sh" \
     RESTORE_TEST_OUTER="$outer" \
@@ -244,6 +255,33 @@ assert_contains "$tmp/db.transcript" 'Enter database backup filename or full pat
 assert_not_contains "$tmp/db.outer.log" 'db-secret-password' 'restore-db password absent from caller tee log'
 [[ "$(status_for db)" == 20 ]] || fail_case 'restore-db authorization failure returns status 20'
 assert_no_mutation 'restore-db pre-confirmation failure performs zero mutation'
+
+run_pty_case success-full full 0 \
+  'Use this latest complete backup set? [Y/n]: =yes\n' \
+  'Enter database admin user [frappe_db_admin]: =\n' \
+  'Database admin password: =success-secret-password\n' \
+  'Type RESTORE to continue: =RESTORE\n'
+assert_contains "$tmp/success-full.outer.log" 'Full restore completed' 'successful full restore marker reaches caller tee log'
+assert_contains "$tmp/internal.log" 'Full restore completed' 'successful full restore marker reaches toolkit log'
+[[ "$(status_for success-full)" == 0 ]] || fail_case 'successful full restore status survives nested pipelines'
+assert_not_contains "$tmp/success-full.outer.log" 'success-secret-password' 'successful full restore password absent from caller log'
+assert_not_contains "$tmp/internal.log" 'success-secret-password' 'successful full restore password absent from toolkit log'
+assert_contains "$tmp/success-full.outer.log" 'Restore backup set selected:' 'selected complete-set identity reaches caller log'
+assert_contains "$tmp/internal.log" 'Restore phase: restoring database and files' 'useful restore phase reaches toolkit log'
+[[ "$(grep -Fxc 'Full restore completed' "$tmp/success-full.outer.log")" == 1 ]] \
+  || fail_case 'caller log must contain Full restore completed exactly once'
+[[ "$(grep -Fxc 'Full restore completed' "$tmp/internal.log")" == 1 ]] \
+  || fail_case 'toolkit log must contain Full restore completed exactly once'
+
+run_pty_case success-db db 0 \
+  'Enter database backup filename or full path: =database.sql.gz\n' \
+  'Enter database admin user [frappe_db_admin]: =\n' \
+  'Database admin password: =success-db-secret-password\n' \
+  'Type RESTORE to continue: =RESTORE\n'
+assert_contains "$tmp/success-db.outer.log" 'Database restore completed' 'successful database restore marker reaches caller tee log'
+assert_contains "$tmp/internal.log" 'Database restore completed' 'successful database restore marker reaches toolkit log'
+[[ "$(status_for success-db)" == 0 ]] || fail_case 'successful database restore status survives nested pipelines'
+assert_not_contains "$tmp/success-db.outer.log" 'success-db-secret-password' 'successful database restore password absent from caller log'
 
 rm -f "$tmp/MUTATION" "$tmp/internal.log"
 set +e

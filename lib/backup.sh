@@ -218,6 +218,19 @@ RESTORE_DB_ADMIN_USER=""
 RESTORE_DB_ADMIN_PASSWORD=""
 RESTORE_INPUT_FAILURE_STATUS=20
 RESTORE_TTY_FD=""
+RESTORE_OUTPUT_FD=""
+
+restore_open_output_stream() {
+  if [[ -n "$RESTORE_OUTPUT_FD" ]]; then
+    return 0
+  fi
+  exec {RESTORE_OUTPUT_FD}>&1
+}
+
+restore_progress() {
+  restore_open_output_stream || return 1
+  printf '%s\n' "$*" >&"$RESTORE_OUTPUT_FD"
+}
 
 restore_pre_mutation_failure() {
   local phase="$1"
@@ -464,6 +477,7 @@ restore_site_database() {
   fi
 
   local bench_dir db_input db_file db_quoted db_admin_user_quoted db_admin_password_quoted
+  restore_open_output_stream || return 1
   bench_dir="$(require_site_environment)" || return 1
 
   list_site_backups
@@ -486,12 +500,15 @@ restore_site_database() {
     return "$RESTORE_INPUT_FAILURE_STATUS"
   fi
 
+  restore_progress "Restore database backup selected: ${db_file}"
+
   read_restore_database_admin_credentials || return "$?"
   confirm_restore || return "$?"
 
-  log "Creating emergency backup before restore"
+  restore_progress "Restore phase: creating emergency pre-restore backup"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' backup --with-files" || warn "Emergency backup failed; continuing only because restore was explicitly confirmed."
 
+  restore_progress "Restore phase: stopping managed services"
   stop_erpnext_service || true
 
   db_quoted="$(printf '%q' "$db_file")"
@@ -499,12 +516,13 @@ restore_site_database() {
   db_admin_user_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_USER")"
   db_admin_password_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_PASSWORD")"
 
-  log "Restoring database backup"
+  restore_progress "Restore phase: restoring database backup"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' restore ${db_quoted} --db-root-username ${db_admin_user_quoted} --db-root-password ${db_admin_password_quoted}"
 
+  restore_progress "Restore phase: running post-restore maintenance and readiness checks"
   run_post_restore_maintenance "$bench_dir" || return 1
 
-  ok "Database restore completed"
+  restore_progress "Database restore completed"
 }
 
 restore_site_full() {
@@ -518,6 +536,7 @@ restore_site_full() {
   local bench_dir db_input public_input private_input db_file public_file private_file cmd
   local db_quoted public_quoted private_quoted db_admin_user_quoted db_admin_password_quoted
   local latest_lines prefix config_file completeness
+  restore_open_output_stream || return 1
   bench_dir="$(require_site_environment)" || return 1
 
   list_site_backups
@@ -588,6 +607,12 @@ restore_site_full() {
     return "$RESTORE_INPUT_FAILURE_STATUS"
   fi
 
+  if [[ -n "${prefix:-}" ]]; then
+    restore_progress "Restore backup set selected: ${prefix}"
+  else
+    restore_progress "Restore database backup selected: ${db_file}"
+  fi
+
   cmd="bench --site '${SITE_NAME}' restore"
   db_quoted="$(printf '%q' "$db_file")"
   cmd="${cmd} ${db_quoted}"
@@ -619,21 +644,23 @@ restore_site_full() {
   read_restore_database_admin_credentials || return "$?"
   confirm_restore || return "$?"
 
-  log "Creating emergency backup before full restore"
+  restore_progress "Restore phase: creating emergency pre-restore backup"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' backup --with-files" || warn "Emergency backup failed; continuing only because restore was explicitly confirmed."
 
+  restore_progress "Restore phase: stopping managed services"
   stop_erpnext_service || true
 
   db_admin_user_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_USER")"
   db_admin_password_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_PASSWORD")"
   cmd="${cmd} --db-root-username ${db_admin_user_quoted} --db-root-password ${db_admin_password_quoted}"
 
-  log "Restoring database/files backup"
+  restore_progress "Restore phase: restoring database and files"
   run_as_frappe "cd '${bench_dir}' && ${cmd}"
 
+  restore_progress "Restore phase: running post-restore maintenance and readiness checks"
   run_post_restore_maintenance "$bench_dir" || return 1
 
-  ok "Full restore completed"
+  restore_progress "Full restore completed"
 }
 
 maintenance_migrate() {
