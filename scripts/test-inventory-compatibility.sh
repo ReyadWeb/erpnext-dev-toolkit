@@ -21,6 +21,22 @@ assert_eq() {
   local label="$1" expected="$2" actual="$3"
   if [[ "$expected" == "$actual" ]]; then pass "$label"; else fail_case "$label (expected ${expected}, got ${actual})"; fi
 }
+assert_process_gone() {
+  local label="$1" pid="$2" state
+  for _ in {1..40}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      pass "$label"
+      return 0
+    fi
+    state="$(ps -o stat= -p "$pid" 2>/dev/null || true)"
+    if [[ "$state" == Z* ]]; then
+      pass "$label"
+      return 0
+    fi
+    sleep 0.05
+  done
+  fail_case "$label (PID ${pid} survived the timeout)"
+}
 
 SITE_NAME="one.test"
 INSTALLATION_PROFILE="recommended"
@@ -39,6 +55,149 @@ deployment_engine_is_docker() { [[ "$DEPLOYMENT_ENGINE" == docker ]]; }
 docker_mode() { printf '%s\n' "$DOCKER_MODE"; }
 active_bench_dir() { printf '%s\n' "$fixture"; }
 source "$ROOT_DIR/lib/inventory.sh"
+
+# A root-run toolkit must inspect an app repository as its filesystem owner,
+# not suppress Git's dubious-ownership safeguard. Mock the account boundary so
+# this regression remains hermetic on both root and non-root CI runners.
+owner_bin="$fixture/owner-bin"
+owner_repo="$fixture/owner-repo"
+owner_probe_log="$fixture/owner-probe.log"
+owner_real_stat="$(command -v stat)"
+owner_real_getent="$(command -v getent)"
+mkdir -p "$owner_bin" "$owner_repo/.git"
+cat >"$owner_bin/stat" <<'EOF_OWNER_STAT'
+#!/usr/bin/env bash
+if [[ "$*" == *"%u"* && "${*: -1}" == "$ERPNEXT_TEST_OWNER_REPO" ]]; then
+  printf '4242\n'
+else
+  exec "$ERPNEXT_TEST_REAL_STAT" "$@"
+fi
+EOF_OWNER_STAT
+cat >"$owner_bin/getent" <<'EOF_OWNER_GETENT'
+#!/usr/bin/env bash
+if [[ "${1:-}" == passwd && "${2:-}" == 4242 ]]; then
+  printf 'frappe:x:4242:4242::/home/frappe:/bin/bash\n'
+else
+  exec "$ERPNEXT_TEST_REAL_GETENT" "$@"
+fi
+EOF_OWNER_GETENT
+cat >"$owner_bin/runuser" <<'EOF_OWNER_RUNUSER'
+#!/usr/bin/env bash
+printf '%q ' "$@" >>"$ERPNEXT_TEST_OWNER_LOG"
+printf '\n' >>"$ERPNEXT_TEST_OWNER_LOG"
+[[ "${1:-}" == -u && "${2:-}" == frappe && "${3:-}" == -- ]] || exit 64
+shift 3
+exec "$@"
+EOF_OWNER_RUNUSER
+cat >"$owner_bin/git" <<'EOF_OWNER_GIT'
+#!/usr/bin/env bash
+case " $* " in
+  *" symbolic-ref "*) printf 'version-16\n' ;;
+  *" rev-parse --quiet --verify MERGE_HEAD "*) exit 1 ;;
+  *" rev-parse --quiet --verify CHERRY_PICK_HEAD "*) printf '3333333333333333333333333333333333333333\n' ;;
+  *" rev-parse "*) printf '2222222222222222222222222222222222222222\n' ;;
+  *" remote get-url origin "*) exit 2 ;;
+  *" remote get-url upstream "*) printf 'https://github.com/frappe/erpnext\n' ;;
+  *" status "*) printf ' M banking/yarn.lock\n' ;;
+  *) exit 1 ;;
+esac
+EOF_OWNER_GIT
+chmod +x "$owner_bin"/*
+
+owner_records="$({
+  PATH="$owner_bin:$PATH"
+  ERPNEXT_TEST_OWNER_REPO="$owner_repo"
+  ERPNEXT_TEST_OWNER_LOG="$owner_probe_log"
+  ERPNEXT_TEST_REAL_STAT="$owner_real_stat"
+  ERPNEXT_TEST_REAL_GETENT="$owner_real_getent"
+  export PATH ERPNEXT_TEST_OWNER_REPO ERPNEXT_TEST_OWNER_LOG ERPNEXT_TEST_REAL_STAT ERPNEXT_TEST_REAL_GETENT
+  inventory_current_uid() { printf '0\n'; }
+  INVENTORY_RECORDS=()
+  inventory_emit_app "native:$fixture" erpnext "$owner_repo" 0
+  inventory_records_sorted
+  inventory_git_ref_absent "$owner_repo" MERGE_HEAD && printf 'REF_ABSENT\n'
+  if ! inventory_git_ref_absent "$owner_repo" CHERRY_PICK_HEAD; then
+    printf 'REF_PRESENT_REJECTED\n'
+  fi
+})"
+assert_contains "owner-aware Git probe reports genuine dirty state" "$owner_records" "|version-16|2222222222222222222222222222222222222222|https://github.com/frappe/erpnext|official|managed|dirty"
+assert_contains "owner-aware Git probe switches to repository owner" "$(<"$owner_probe_log")" "-u frappe -- env -u"
+assert_contains "owner-aware Git probe uses repository owner home" "$(<"$owner_probe_log")" "HOME=/home/frappe"
+assert_contains "upstream remote is accepted when origin is absent" "$owner_records" "|https://github.com/frappe/erpnext|"
+assert_contains "absent Git operation ref passes preflight" "$owner_records" "REF_ABSENT"
+assert_contains "present Git operation ref blocks preflight" "$owner_records" "REF_PRESENT_REJECTED"
+
+slow_bin="$fixture/slow-bin"
+slow_repo="$fixture/slow-repo"
+slow_pid_file="$fixture/slow-probe.pid"
+slow_db_pid_file="$fixture/slow-db.pid"
+slow_site="$fixture/slow-site"
+mkdir -p "$slow_bin" "$slow_repo/.git"
+cat >"$slow_bin/git" <<'EOF_SLOW_GIT'
+#!/usr/bin/env bash
+case " $* " in
+  *" status "*)
+    sleep 300 &
+    child=$!
+    printf '%s\n' "$child" >"$ERPNEXT_TEST_PID_FILE"
+    wait "$child"
+    ;;
+  *" symbolic-ref "*) printf 'version-16\n' ;;
+  *" rev-parse "*) printf '1111111111111111111111111111111111111111\n' ;;
+  *" remote get-url "*) printf 'https://github.com/frappe/frappe\n' ;;
+  *) exit 1 ;;
+esac
+EOF_SLOW_GIT
+chmod +x "$slow_bin/git"
+cat >"$slow_bin/mariadb" <<'EOF_SLOW_DB'
+#!/usr/bin/env bash
+sleep 300 &
+child=$!
+printf '%s\n' "$child" >"$ERPNEXT_TEST_PID_FILE"
+wait "$child"
+EOF_SLOW_DB
+chmod +x "$slow_bin/mariadb"
+
+INVENTORY_RECORDS=()
+started_at="$(date +%s)"
+original_path="$PATH"
+PATH="$slow_bin:$PATH"
+ERPNEXT_TEST_PID_FILE="$slow_pid_file"
+ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT=1
+export PATH ERPNEXT_TEST_PID_FILE ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+inventory_emit_app "native:$fixture" frappe "$slow_repo" 0
+elapsed=$(($(date +%s) - started_at))
+assert_contains "timed-out Git state is ambiguous" "$(inventory_records_sorted)" "|managed|ambiguous"
+if ((elapsed <= 4)); then pass "Git inventory probe is bounded"; else fail_case "Git inventory probe exceeded its deadline"; fi
+[[ -s "$slow_pid_file" ]] \
+  && assert_process_gone "Git timeout leaves no child process" "$(<"$slow_pid_file")" \
+  || fail_case "slow Git probe did not record its child PID"
+
+mkdir -p "$slow_site"
+printf '{\n  "db_name": "fixture_db",\n  "db_password": "fixture_password"\n}\n' >"$slow_site/site_config.json"
+ERPNEXT_TEST_PID_FILE="$slow_db_pid_file"
+export ERPNEXT_TEST_PID_FILE
+set +e
+inventory_native_site_db_apps "$slow_site" >/dev/null 2>&1
+slow_db_rc=$?
+set -e
+assert_eq "timed-out database inventory is ambiguous" 2 "$slow_db_rc"
+[[ -s "$slow_db_pid_file" ]] \
+  && assert_process_gone "database timeout leaves no child process" "$(<"$slow_db_pid_file")" \
+  || fail_case "slow database probe did not record its child PID"
+
+PATH="$original_path"
+unset ERPNEXT_TEST_PID_FILE ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+export PATH
+
+set +e
+ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT=invalid
+export ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+inventory_run_probe true >/dev/null 2>&1
+invalid_timeout_rc=$?
+set -e
+unset ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+assert_eq "invalid probe timeout fails closed" 125 "$invalid_timeout_rc"
 
 make_app() {
   local app="$1" version="$2" branch="$3" source="$4" state="${5:-clean}"
@@ -197,6 +356,11 @@ rm -rf "$fixture/sites/bad!site" "$fixture/apps/bad!app"
 rm -f "$fixture/sites/two.test/apps.txt"
 inventory_collect
 assert_contains "ambiguous site explicit" "$(inventory_records_sorted)" "|two.test|ambiguous"
+if inventory_has_ambiguous_state; then
+  pass "ambiguous inventory state is detected"
+else
+  fail_case "ambiguous inventory state was accepted"
+fi
 set +e
 inventory_compatibility_evaluate hrms
 rc=$?

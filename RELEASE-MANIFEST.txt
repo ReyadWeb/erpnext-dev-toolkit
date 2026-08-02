@@ -24,9 +24,11 @@ docs/security/PRODUCTION-HARDENING.md
 docs/security/SECURITY-HISTORY.md
 docs/HEALTH-ARCHITECTURE.md
 docs/INVENTORY-COMPATIBILITY.md
+docs/INSTALLATION-PROFILES.md
 docs/OPERATION-PLANNER.md
 docs/DOCKER-DURABILITY.md
 docs/SAFE-UPDATE-LIFECYCLE.md
+docs/APP-UNINSTALL-RECOVERY.md
 docs/LOCAL-VM-STABLE-IP.md
 docs/ROADMAP-BOARD.md
 docs/ROADMAP-HISTORY.md
@@ -44,6 +46,9 @@ scripts/test-inventory-compatibility.sh
 scripts/test-operation-planner.sh
 scripts/test-docker-durability.sh
 scripts/test-safe-update-lifecycle.sh
+scripts/test-app-uninstall-recovery.sh
+scripts/test-interactive-installation-profiles.sh
+scripts/test-frappe-platform-lifecycle.sh
 scripts/generate-release-checksums.sh
 scripts/run-shellcheck.sh
 scripts/check-module-consistency.sh
@@ -55,6 +60,7 @@ scripts/test-resolve-latest-release-tag.sh
 scripts/test-local-ip.sh
 scripts/test-healing.sh
 scripts/test-adversarial-inputs.sh
+scripts/test-restore-input.sh
 .gitleaks.toml
 .github/workflows/security-analysis.yml
 scripts/build-release-bundle.sh
@@ -84,6 +90,7 @@ lib/ops.sh
 lib/dashboard.sh
 lib/inventory.sh
 lib/planner.sh
+lib/removal.sh
 lib/healing.sh
 lib/menu.sh
 lib/security.sh

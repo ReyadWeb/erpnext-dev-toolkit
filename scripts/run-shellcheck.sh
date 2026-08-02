@@ -44,6 +44,7 @@ targets=(
   lib/dashboard.sh
   lib/inventory.sh
   lib/planner.sh
+  lib/removal.sh
   lib/healing.sh
   lib/menu.sh
   lib/security.sh
@@ -88,6 +89,9 @@ targets=(
   scripts/test-operation-planner.sh
   scripts/test-docker-durability.sh
   scripts/test-safe-update-lifecycle.sh
+  scripts/test-app-uninstall-recovery.sh
+  scripts/test-interactive-installation-profiles.sh
+  scripts/test-frappe-platform-lifecycle.sh
   scripts/test-host-os-output.sh
   scripts/test-install-self-path.sh
   scripts/test-legacy-modular-bootstrap.sh
@@ -102,6 +106,7 @@ targets=(
   scripts/test-offvm-host-key.sh
   scripts/test-risky-shell-patterns.sh
   scripts/test-adversarial-inputs.sh
+  scripts/test-restore-input.sh
   scripts/test-update-channel.sh
   scripts/test-local-ip.sh
   scripts/test-healing.sh

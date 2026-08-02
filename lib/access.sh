@@ -34,7 +34,7 @@ show_ready_summary() {
   echo "============================================================"
   echo "ERPNext Ready"
   echo "============================================================"
-  echo "ERPNext is running: ports, HTTP ping, and login static assets are OK."
+  echo "Frappe site is ready: ports, HTTP ping, and login static assets are OK."
   echo
   if is_public_vm_workflow; then
     if ssl_is_configured 2>/dev/null && port_listens 443; then
@@ -949,7 +949,7 @@ local_access_doctor() {
   if port_listens 8000; then
     status_line "Bench web port" "OK" "8000 listening"
   else
-    status_line "Bench web port" "WARN" "8000 is not listening; start ERPNext service or bench"
+    status_line "Bench web port" "WARN" "8000 is not listening; start the Frappe stack service or Bench"
   fi
 
   if port_listens 9000; then
@@ -2320,7 +2320,7 @@ credentials_delete() {
 
   warn "This removes the local plaintext credentials file from the VM."
   echo "Only continue after saving credentials in a password manager or completing handoff."
-  echo "This does not change the ERPNext Administrator password."
+  echo "This does not change the Site Administrator password."
   echo
 
   if [[ "$ASSUME_YES" -eq 1 ]]; then
@@ -2355,7 +2355,7 @@ reset_admin_password() {
 
   echo
   echo "============================================================"
-  echo "Reset ERPNext Administrator Password"
+  echo "Reset Site Administrator Password"
   echo "============================================================"
   status_line "Site" "INFO" "$site"
   if credentials_engine_is_docker; then

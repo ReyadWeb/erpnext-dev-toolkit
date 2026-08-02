@@ -90,7 +90,8 @@ choose_deployment_engine_for_setup() {
 
   current="$(effective_deployment_engine)"
 
-  if [[ -t 0 && "${ASSUME_YES:-0}" -ne 1 ]]; then
+  if { [[ -t 0 ]] || [[ "${ERPNEXT_DEV_TEST_INTERACTIVE:-0}" == "1" ]]; } \
+    && [[ "${ASSUME_YES:-0}" -ne 1 ]]; then
     echo
     echo "============================================================"
     echo "Choose Deployment Engine"

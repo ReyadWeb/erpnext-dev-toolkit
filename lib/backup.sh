@@ -216,6 +216,77 @@ show_restore_database_credentials_note() {
 
 RESTORE_DB_ADMIN_USER=""
 RESTORE_DB_ADMIN_PASSWORD=""
+RESTORE_INPUT_FAILURE_STATUS=20
+RESTORE_TTY_FD=""
+RESTORE_OUTPUT_FD=""
+
+restore_open_output_stream() {
+  if [[ -n "$RESTORE_OUTPUT_FD" ]]; then
+    return 0
+  fi
+  exec {RESTORE_OUTPUT_FD}>&1
+}
+
+restore_progress() {
+  restore_open_output_stream || return 1
+  printf '%s\n' "$*" >&"$RESTORE_OUTPUT_FD"
+}
+
+restore_pre_mutation_failure() {
+  local phase="$1"
+  local detail="$2"
+  local next_action="$3"
+
+  err "Restore ${phase} failed: ${detail}"
+  err "No restoration began; no emergency backup, service stop, database restore, or file restore was attempted."
+  err "Safe next action: ${next_action}"
+  return "$RESTORE_INPUT_FAILURE_STATUS"
+}
+
+restore_open_controlling_terminal() {
+  if [[ -n "$RESTORE_TTY_FD" ]] && [[ -t "$RESTORE_TTY_FD" ]]; then
+    return 0
+  fi
+
+  if ! { exec {RESTORE_TTY_FD}<>/dev/tty; } 2>/dev/null || [[ ! -t "$RESTORE_TTY_FD" ]]; then
+    RESTORE_TTY_FD=""
+    restore_pre_mutation_failure \
+      "terminal input" \
+      "no usable controlling terminal is available (exit status ${RESTORE_INPUT_FAILURE_STATUS})." \
+      "Run restore-db or restore-full directly from an interactive terminal; output may still be logged with '2>&1 | tee FILE'."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
+  fi
+}
+
+restore_terminal_read() {
+  local target="$1"
+  local prompt="$2"
+  local phase="$3"
+  local hidden="${4:-false}"
+  local __restore_prompt_reply=""
+
+  restore_open_controlling_terminal || return "$?"
+  printf '%s' "$prompt" >&"$RESTORE_TTY_FD"
+  if [[ "$hidden" == "true" ]]; then
+    if ! IFS= read -r -s -u "$RESTORE_TTY_FD" __restore_prompt_reply; then
+      printf '\n' >&"$RESTORE_TTY_FD"
+      restore_pre_mutation_failure \
+        "$phase" \
+        "the hidden response could not be read from the controlling terminal (exit status ${RESTORE_INPUT_FAILURE_STATUS})." \
+        "Confirm the terminal is still attached, then rerun the restore command."
+      return "$RESTORE_INPUT_FAILURE_STATUS"
+    fi
+    printf '\n' >&"$RESTORE_TTY_FD"
+  elif ! IFS= read -r -u "$RESTORE_TTY_FD" __restore_prompt_reply; then
+    restore_pre_mutation_failure \
+      "$phase" \
+      "the response could not be read from the controlling terminal (exit status ${RESTORE_INPUT_FAILURE_STATUS})." \
+      "Confirm the terminal is still attached, then rerun the restore command."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
+  fi
+
+  printf -v "$target" '%s' "$__restore_prompt_reply"
+}
 
 read_restore_database_password_from_credentials() {
   local cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
@@ -249,43 +320,92 @@ read_restore_database_admin_credentials() {
 
   show_restore_database_credentials_note
 
-  read -r -p "Enter database admin user [${default_user}]: " input_user
+  restore_terminal_read input_user "Enter database admin user [${default_user}]: " "database-admin username input" \
+    || return "$?"
   RESTORE_DB_ADMIN_USER="${input_user:-$default_user}"
 
-  read -r -s -p "Database admin password: " RESTORE_DB_ADMIN_PASSWORD
-  echo
+  restore_terminal_read RESTORE_DB_ADMIN_PASSWORD "Database admin password: " "database-admin password input" true \
+    || return "$?"
 
   if [[ -z "$RESTORE_DB_ADMIN_USER" ]]; then
-    fail "Database admin user is required for restore."
+    restore_pre_mutation_failure \
+      "database-admin username validation" \
+      "the database administrator username is empty." \
+      "Rerun the restore and enter a valid MariaDB administrator username."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
   fi
 
   if [[ -z "$RESTORE_DB_ADMIN_PASSWORD" ]]; then
-    fail "Database admin password is required for restore."
+    restore_pre_mutation_failure \
+      "database-admin password validation" \
+      "the database administrator password is empty." \
+      "Rerun the restore and enter the MariaDB Bench Admin password."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
   fi
 }
 
 confirm_restore() {
+  local restore_reply=""
+
   warn "Restore is destructive. It can overwrite the current site database and files."
   warn "The script will try to create an emergency backup before restore."
   echo
-  read -r -p "Type RESTORE to continue: " restore_reply
-  [[ "$restore_reply" == "RESTORE" ]]
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    printf '%s' "Type RESTORE to continue: "
+    if ! IFS= read -r restore_reply; then
+      restore_pre_mutation_failure \
+        "destructive authorization input" \
+        "the required RESTORE token could not be read from standard input (exit status ${RESTORE_INPUT_FAILURE_STATUS})." \
+        "Pipe the exact RESTORE token to the -y command and capture the restore command's pipeline status."
+      return "$RESTORE_INPUT_FAILURE_STATUS"
+    fi
+  else
+    restore_terminal_read restore_reply "Type RESTORE to continue: " "destructive authorization input" \
+      || return "$?"
+  fi
+
+  if [[ "$restore_reply" != "RESTORE" ]]; then
+    restore_pre_mutation_failure \
+      "destructive authorization" \
+      "the exact RESTORE token was not supplied." \
+      "Review the selected backup, then rerun the restore and type RESTORE only when ready."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
+  fi
+}
+
+read_restore_latest_set_choice() {
+  local reply=""
+
+  restore_terminal_read reply "Use this latest complete backup set? [Y/n]: " "latest-backup selection input" \
+    || return "$?"
+
+  case "${reply,,}" in
+    "" | y | yes) return 0 ;;
+    n | no) return 1 ;;
+    *)
+      restore_pre_mutation_failure \
+        "latest-backup selection validation" \
+        "'${reply}' is not a valid answer." \
+        "Rerun restore-full and answer Y/yes, N/no, or press Enter for the default (Yes)."
+      return "$RESTORE_INPUT_FAILURE_STATUS"
+      ;;
+  esac
 }
 
 run_post_restore_maintenance() {
   local bench_dir="$1"
   local maintenance_failed=0
 
-  log "Starting ERPNext service before post-restore maintenance"
+  log "Starting managed Frappe stack service before post-restore maintenance"
   if ! service_exists; then
-    warn "Restore completed, but the ERPNext service is not configured."
+    warn "Restore completed, but the managed Frappe stack service is not configured."
     echo "Run Bench manually before running migrate/clear-cache."
     return 1
   fi
 
   if ! systemctl is-active --quiet "${ERPNEXT_SERVICE_NAME}"; then
     if ! start_erpnext_service; then
-      warn "Restore completed, but the ERPNext service could not be started automatically."
+      warn "Restore completed, but the managed Frappe stack service could not be started automatically."
       echo
       echo "Run manually:"
       echo "  $(toolkit_cmd start)"
@@ -357,23 +477,38 @@ restore_site_database() {
   fi
 
   local bench_dir db_input db_file db_quoted db_admin_user_quoted db_admin_password_quoted
+  restore_open_output_stream || return 1
   bench_dir="$(require_site_environment)" || return 1
 
   list_site_backups
   echo
-  read -r -p "Enter database backup filename or full path: " db_input
-  db_file="$(resolve_backup_file_path "$db_input")" || fail "No database backup selected."
+  restore_terminal_read db_input "Enter database backup filename or full path: " "database-backup selection input" \
+    || return "$?"
+  db_file="$(resolve_backup_file_path "$db_input")" || {
+    restore_pre_mutation_failure \
+      "database-backup selection validation" \
+      "no database backup was selected." \
+      "Rerun restore-db and select an existing database backup."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
+  }
 
   if ! path_is_file "$db_file"; then
-    fail "Database backup file not found: ${db_file}"
+    restore_pre_mutation_failure \
+      "database-backup validation" \
+      "the database backup was not found: ${db_file}." \
+      "Verify the backup path with list-backups, then rerun restore-db."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
   fi
 
-  read_restore_database_admin_credentials
-  confirm_restore || fail "Restore cancelled."
+  restore_progress "Restore database backup selected: ${db_file}"
 
-  log "Creating emergency backup before restore"
+  read_restore_database_admin_credentials || return "$?"
+  confirm_restore || return "$?"
+
+  restore_progress "Restore phase: creating emergency pre-restore backup"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' backup --with-files" || warn "Emergency backup failed; continuing only because restore was explicitly confirmed."
 
+  restore_progress "Restore phase: stopping managed services"
   stop_erpnext_service || true
 
   db_quoted="$(printf '%q' "$db_file")"
@@ -381,12 +516,13 @@ restore_site_database() {
   db_admin_user_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_USER")"
   db_admin_password_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_PASSWORD")"
 
-  log "Restoring database backup"
+  restore_progress "Restore phase: restoring database backup"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' restore ${db_quoted} --db-root-username ${db_admin_user_quoted} --db-root-password ${db_admin_password_quoted}"
 
+  restore_progress "Restore phase: running post-restore maintenance and readiness checks"
   run_post_restore_maintenance "$bench_dir" || return 1
 
-  ok "Database restore completed"
+  restore_progress "Database restore completed"
 }
 
 restore_site_full() {
@@ -399,7 +535,8 @@ restore_site_full() {
 
   local bench_dir db_input public_input private_input db_file public_file private_file cmd
   local db_quoted public_quoted private_quoted db_admin_user_quoted db_admin_password_quoted
-  local latest_lines prefix config_file completeness use_latest
+  local latest_lines prefix config_file completeness
+  restore_open_output_stream || return 1
   bench_dir="$(require_site_environment)" || return 1
 
   list_site_backups
@@ -423,15 +560,18 @@ restore_site_full() {
       status_line "Database" "OK" "$(basename "$db_file")"
       status_line "Public files" "OK" "$(basename "$public_file")"
       status_line "Private files" "OK" "$(basename "$private_file")"
-      if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
-        read -r -p "Use this latest complete backup set? [Y/n]: " use_latest
-      else
-        use_latest="y"
-      fi
-      if [[ "$use_latest" =~ ^[Nn]$|^[Nn][Oo]$ ]]; then
-        db_file=""
-        public_file=""
-        private_file=""
+      if [[ "$ASSUME_YES" -ne 1 ]]; then
+        if read_restore_latest_set_choice; then
+          :
+        else
+          case "$?" in
+            1)
+              warn "Restore cancelled before any changes were made."
+              return 0
+              ;;
+            *) return "$RESTORE_INPUT_FAILURE_STATUS" ;;
+          esac
+        fi
       fi
     else
       status_line "Latest backup set" "WARN" "${prefix:-none} is partial; manual selection required"
@@ -442,16 +582,35 @@ restore_site_full() {
   fi
 
   if [[ -z "${db_file:-}" ]]; then
-    read -r -p "Enter database backup filename or full path: " db_input
-    read -r -p "Enter public files backup filename/path, or leave blank: " public_input
-    read -r -p "Enter private files backup filename/path, or leave blank: " private_input
-    db_file="$(resolve_backup_file_path "$db_input")" || fail "No database backup selected."
+    restore_terminal_read db_input "Enter database backup filename or full path: " "database-backup selection input" \
+      || return "$?"
+    restore_terminal_read public_input "Enter public files backup filename/path, or leave blank: " "public-files backup selection input" \
+      || return "$?"
+    restore_terminal_read private_input "Enter private files backup filename/path, or leave blank: " "private-files backup selection input" \
+      || return "$?"
+    db_file="$(resolve_backup_file_path "$db_input")" || {
+      restore_pre_mutation_failure \
+        "database-backup selection validation" \
+        "no database backup was selected." \
+        "Rerun restore-full and select an existing complete backup set."
+      return "$RESTORE_INPUT_FAILURE_STATUS"
+    }
     if [[ -n "$public_input" ]]; then public_file="$(resolve_backup_file_path "$public_input")"; else public_file=""; fi
     if [[ -n "$private_input" ]]; then private_file="$(resolve_backup_file_path "$private_input")"; else private_file=""; fi
   fi
 
   if ! path_is_file "$db_file"; then
-    fail "Database backup file not found: ${db_file}"
+    restore_pre_mutation_failure \
+      "database-backup validation" \
+      "the database backup was not found: ${db_file}." \
+      "Verify the complete set with backup-verify, then rerun restore-full."
+    return "$RESTORE_INPUT_FAILURE_STATUS"
+  fi
+
+  if [[ -n "${prefix:-}" ]]; then
+    restore_progress "Restore backup set selected: ${prefix}"
+  else
+    restore_progress "Restore database backup selected: ${db_file}"
   fi
 
   cmd="bench --site '${SITE_NAME}' restore"
@@ -460,7 +619,11 @@ restore_site_full() {
 
   if [[ -n "${public_file:-}" ]]; then
     if ! path_is_file "$public_file"; then
-      fail "Public files backup not found: ${public_file}"
+      restore_pre_mutation_failure \
+        "public-files backup validation" \
+        "the public-files backup was not found: ${public_file}." \
+        "Verify the complete set with backup-verify, then rerun restore-full."
+      return "$RESTORE_INPUT_FAILURE_STATUS"
     fi
     public_quoted="$(printf '%q' "$public_file")"
     cmd="${cmd} --with-public-files ${public_quoted}"
@@ -468,30 +631,36 @@ restore_site_full() {
 
   if [[ -n "${private_file:-}" ]]; then
     if ! path_is_file "$private_file"; then
-      fail "Private files backup not found: ${private_file}"
+      restore_pre_mutation_failure \
+        "private-files backup validation" \
+        "the private-files backup was not found: ${private_file}." \
+        "Verify the complete set with backup-verify, then rerun restore-full."
+      return "$RESTORE_INPUT_FAILURE_STATUS"
     fi
     private_quoted="$(printf '%q' "$private_file")"
     cmd="${cmd} --with-private-files ${private_quoted}"
   fi
 
-  read_restore_database_admin_credentials
-  confirm_restore || fail "Restore cancelled."
+  read_restore_database_admin_credentials || return "$?"
+  confirm_restore || return "$?"
 
-  log "Creating emergency backup before full restore"
+  restore_progress "Restore phase: creating emergency pre-restore backup"
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' backup --with-files" || warn "Emergency backup failed; continuing only because restore was explicitly confirmed."
 
+  restore_progress "Restore phase: stopping managed services"
   stop_erpnext_service || true
 
   db_admin_user_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_USER")"
   db_admin_password_quoted="$(printf '%q' "$RESTORE_DB_ADMIN_PASSWORD")"
   cmd="${cmd} --db-root-username ${db_admin_user_quoted} --db-root-password ${db_admin_password_quoted}"
 
-  log "Restoring database/files backup"
+  restore_progress "Restore phase: restoring database and files"
   run_as_frappe "cd '${bench_dir}' && ${cmd}"
 
+  restore_progress "Restore phase: running post-restore maintenance and readiness checks"
   run_post_restore_maintenance "$bench_dir" || return 1
 
-  ok "Full restore completed"
+  restore_progress "Full restore completed"
 }
 
 maintenance_migrate() {
@@ -547,7 +716,7 @@ run_maintenance_menu() {
       "1) Run migrate" \
       "2) Build assets" \
       "3) Clear cache" \
-      "4) Restart ERPNext service" \
+      "4) Restart Frappe stack service" \
       "5) Verify frontend assets" \
       "6) Wait for frontend assets" \
       "7) Repair frontend assets" \

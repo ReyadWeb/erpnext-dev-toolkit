@@ -5,12 +5,65 @@ _ERPNEXT_DEV_INVENTORY_LOADED=1
 
 declare -ag INVENTORY_RECORDS=()
 
+inventory_probe_timeout_seconds() {
+  local value="${ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT:-8}"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || return 1
+  ((value <= 300)) || return 1
+  printf '%s\n' "$value"
+}
+
+inventory_run_probe() {
+  local timeout_seconds
+  timeout_seconds="$(inventory_probe_timeout_seconds)" || return 125
+  command -v timeout >/dev/null 2>&1 || return 125
+  command timeout --signal=TERM --kill-after=2s "$timeout_seconds" "$@"
+}
+
 inventory_valid_name() {
   [[ "${1:-}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]
 }
 
 inventory_safe_field() {
   [[ "${1:-}" != *"|"* && "${1:-}" != *$'\n'* && "${1:-}" != *$'\r'* && "${1:-}" != *$'\t'* ]]
+}
+
+inventory_current_uid() {
+  printf '%s\n' "${EUID:-$(id -u)}"
+}
+
+inventory_run_git_probe() {
+  local dir="$1"
+  shift
+  local current_uid owner_record owner_name owner_uid owner_home resolved_uid
+
+  current_uid="$(inventory_current_uid)" || return 125
+  owner_uid="$(inventory_run_probe stat -c '%u' -- "$dir" 2>/dev/null)" || return 125
+  [[ "$owner_uid" =~ ^[0-9]+$ ]] || return 125
+
+  if [[ "$owner_uid" == "$current_uid" ]]; then
+    inventory_run_probe env \
+      -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+      -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_CONFIG_COUNT \
+      GIT_OPTIONAL_LOCKS=0 git -C "$dir" "$@"
+    return
+  fi
+
+  # Never bypass Git's dubious-ownership protection with safe.directory. A
+  # root-run inventory must inspect a repository as its actual filesystem
+  # owner, just as Bench does. Unknown owners and non-root cross-user probes
+  # fail closed and are reported as ambiguous by the caller.
+  [[ "$current_uid" == 0 ]] || return 125
+  command -v runuser >/dev/null 2>&1 || return 125
+  command -v getent >/dev/null 2>&1 || return 125
+  owner_record="$(inventory_run_probe getent passwd "$owner_uid" 2>/dev/null)" || return 125
+  IFS=: read -r owner_name _ resolved_uid _ _ owner_home _ <<<"$owner_record"
+  [[ -n "$owner_name" && "$resolved_uid" == "$owner_uid" && "$owner_home" == /* ]] || return 125
+
+  inventory_run_probe runuser -u "$owner_name" -- env \
+    -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+    -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_CONFIG_COUNT \
+    HOME="$owner_home" \
+    GIT_OPTIONAL_LOCKS=0 git -C "$dir" "$@"
 }
 
 inventory_add_record() {
@@ -33,20 +86,55 @@ inventory_catalog_classification() {
 }
 
 inventory_git_value() {
-  local dir="$1" key="$2"
+  local dir="$1" key="$2" value="" rc=0 remotes="" remote=""
   [[ -d "$dir/.git" || -f "$dir/.git" ]] || return 0
   case "$key" in
-    branch) GIT_OPTIONAL_LOCKS=0 git -C "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached\n' ;;
-    commit) GIT_OPTIONAL_LOCKS=0 git -C "$dir" rev-parse --verify HEAD 2>/dev/null || true ;;
-    source) GIT_OPTIONAL_LOCKS=0 git -C "$dir" remote get-url origin 2>/dev/null || true ;;
-    state)
-      if [[ -n "$(GIT_OPTIONAL_LOCKS=0 git -C "$dir" status --porcelain --untracked-files=normal 2>/dev/null)" ]]; then
-        printf 'dirty\n'
+    branch)
+      if value="$(inventory_run_git_probe "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null)"; then
+        printf '%s\n' "$value"
       else
-        printf 'clean\n'
+        rc=$?
+        [[ "$rc" -eq 1 ]] && printf 'detached\n'
+      fi
+      ;;
+    commit)
+      value="$(inventory_run_git_probe "$dir" rev-parse --verify HEAD 2>/dev/null)" \
+        && printf '%s\n' "$value"
+      ;;
+    source)
+      if value="$(inventory_run_git_probe "$dir" remote get-url origin 2>/dev/null)"; then
+        printf '%s\n' "$value"
+      elif value="$(inventory_run_git_probe "$dir" remote get-url upstream 2>/dev/null)"; then
+        printf '%s\n' "$value"
+      elif remotes="$(inventory_run_git_probe "$dir" remote 2>/dev/null)"; then
+        remote="$(printf '%s\n' "$remotes" | sed '/^$/d')"
+        if [[ -n "$remote" && "$remote" != *$'\n'* ]]; then
+          value="$(inventory_run_git_probe "$dir" remote get-url "$remote" 2>/dev/null)" \
+            && printf '%s\n' "$value"
+        fi
+      fi
+      ;;
+    state)
+      if value="$(inventory_run_git_probe "$dir" status --porcelain --untracked-files=normal 2>/dev/null)"; then
+        if [[ -n "$value" ]]; then
+          printf 'dirty\n'
+        else
+          printf 'clean\n'
+        fi
       fi
       ;;
   esac
+  return 0
+}
+
+inventory_git_ref_absent() {
+  local dir="$1" ref="$2" rc
+  if inventory_run_git_probe "$dir" rev-parse --quiet --verify "$ref" >/dev/null 2>&1; then
+    return 1
+  else
+    rc=$?
+  fi
+  [[ "$rc" -eq 1 ]]
 }
 
 inventory_app_version_from_tree() {
@@ -101,7 +189,7 @@ inventory_native_site_db_apps() {
   db_name="$(sed -nE 's/^[[:space:]]*"db_name"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)".*/\1/p' "$site_dir/site_config.json" | head -n 1)"
   db_password="$(sed -nE 's/^[[:space:]]*"db_password"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$site_dir/site_config.json" | head -n 1)"
   [[ "$db_name" =~ ^[A-Za-z0-9_]+$ && -n "$db_password" ]] || return 2
-  raw="$(MYSQL_PWD="$db_password" mariadb --batch --skip-column-names "$db_name" \
+  raw="$(MYSQL_PWD="$db_password" inventory_run_probe mariadb --batch --skip-column-names "$db_name" \
     -e "SELECT defvalue FROM tabDefaultValue WHERE defkey='installed_apps' AND parent='__global' LIMIT 1" 2>/dev/null)" || return 2
   [[ -n "$raw" ]] || return 2
   printf '%s\n' "$raw" | grep -oE '"[A-Za-z0-9][A-Za-z0-9_-]*"' | tr -d '"'
@@ -109,7 +197,7 @@ inventory_native_site_db_apps() {
 
 inventory_collect_tree() {
   local engine="$1" mode="$2" root="$3" fixture="${4:-0}" requested_management="${5:-}"
-  local stack management state site_dir site app_dir app site_state installed
+  local stack management state site_dir site app_dir app site_state installed app_dirs="" site_dirs=""
   stack="${engine}:${root}"
   management="${requested_management:-${ERPNEXT_DEV_INVENTORY_FIXTURE_MANAGEMENT:-managed}}"
   state="clean"
@@ -117,7 +205,11 @@ inventory_collect_tree() {
   inventory_add_record STACK "$stack" "$engine" "$mode" "$(effective_installation_profile)" "$management" "$state"
   [[ "$state" == clean ]] || return 0
 
+  if ! app_dirs="$(inventory_run_probe find "$root/apps" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null)"; then
+    inventory_add_record ISSUE "$stack" apps discovery ambiguous
+  fi
   while IFS= read -r app_dir; do
+    [[ -n "$app_dir" ]] || continue
     app="${app_dir##*/}"
     if ! inventory_valid_name "$app"; then
       inventory_add_record ISSUE "$stack" app invalid-name malformed
@@ -125,9 +217,13 @@ inventory_collect_tree() {
     fi
     inventory_emit_app "$stack" "$app" "$app_dir" "$fixture" \
       || inventory_add_record ISSUE "$stack" app "$app" ambiguous
-  done < <(find "$root/apps" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | LC_ALL=C sort)
+  done < <(printf '%s\n' "$app_dirs" | sed '/^$/d' | LC_ALL=C sort)
 
+  if ! site_dirs="$(inventory_run_probe find "$root/sites" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null)"; then
+    inventory_add_record ISSUE "$stack" sites discovery ambiguous
+  fi
   while IFS= read -r site_dir; do
+    [[ -n "$site_dir" ]] || continue
     site="${site_dir##*/}"
     [[ "$site" != assets ]] || continue
     if ! inventory_valid_name "$site"; then
@@ -152,7 +248,7 @@ inventory_collect_tree() {
         inventory_add_record ISSUE "$stack" site-app invalid-name malformed
       fi
     done <<<"$installed"
-  done < <(find "$root/sites" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | LC_ALL=C sort)
+  done < <(printf '%s\n' "$site_dirs" | sed '/^$/d' | LC_ALL=C sort)
 }
 
 inventory_collect_native_live() {
@@ -173,8 +269,14 @@ inventory_collect_native_live() {
   fi
 }
 
+inventory_docker_exec() {
+  local timeout_seconds
+  timeout_seconds="$(inventory_probe_timeout_seconds)" || return 125
+  ERPNEXT_DEV_DOCKER_COMPOSE_TIMEOUT="$timeout_seconds" docker_compose exec -T "$@"
+}
+
 inventory_docker_read() {
-  docker_compose exec -T backend "$@" 2>/dev/null | tr -d '\r'
+  inventory_docker_exec backend "$@" 2>/dev/null | tr -d '\r'
 }
 
 inventory_docker_site_apps() {
@@ -184,7 +286,7 @@ inventory_docker_site_apps() {
   db_name="$(printf '%s\n' "$config" | sed -nE 's/^[[:space:]]*"db_name"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)".*/\1/p' | head -n 1)"
   db_password="$(docker_db_root_password 2>/dev/null || true)"
   [[ "$db_name" =~ ^[A-Za-z0-9_]+$ && -n "$db_password" ]] || return 2
-  raw="$(docker_compose exec -T -e "MYSQL_PWD=${db_password}" db mariadb -uroot --batch --skip-column-names "$db_name" \
+  raw="$(inventory_docker_exec -e "MYSQL_PWD=${db_password}" db mariadb -uroot --batch --skip-column-names "$db_name" \
     -e "SELECT defvalue FROM tabDefaultValue WHERE defkey='installed_apps' AND parent='__global' LIMIT 1" 2>/dev/null)" || return 2
   [[ -n "$raw" ]] || return 2
   printf '%s\n' "$raw" | grep -oE '"[A-Za-z0-9][A-Za-z0-9_-]*"' | tr -d '"'
@@ -349,6 +451,16 @@ inventory_deployment_supported() {
 
 inventory_has_ambiguous_site() {
   inventory_records_sorted | awk -F'|' '$1=="SITE" && $4!="known" {found=1} END {exit !found}'
+}
+
+inventory_has_ambiguous_state() {
+  inventory_records_sorted | awk -F'|' '
+    $1=="ISSUE" {found=1}
+    $1=="STACK" && $7!="clean" {found=1}
+    $1=="SITE" && $4!="known" {found=1}
+    $1=="APP" && $11=="ambiguous" {found=1}
+    END {exit !found}
+  '
 }
 
 inventory_dependency_rules_evaluate() {

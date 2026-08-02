@@ -15,7 +15,7 @@ toolkit_release_lib_files() {
   printf '%s\n' \
     common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
-    dashboard.sh inventory.sh planner.sh healing.sh menu.sh security.sh update.sh
+    dashboard.sh inventory.sh planner.sh removal.sh healing.sh menu.sh security.sh update.sh
 }
 
 find_toolkit_checksum_file() {
@@ -627,7 +627,7 @@ prompt_production_credential_handoff_if_needed() {
 
   echo
   warn "Optional: remove the local plaintext credentials file now."
-  echo "This does not change the ERPNext Administrator password."
+  echo "This does not change the Site Administrator password."
   read -r -p "Type DELETE to remove ${cred_file} now: " reply || reply=""
   if [[ "$reply" == "DELETE" ]]; then
     credentials_delete

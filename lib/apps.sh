@@ -71,7 +71,7 @@ app_profile_defaults() {
   LIB_APP_NATIVE_SUPPORT="supported"
   LIB_APP_DOCKER_DEV_SUPPORT="supported"
   LIB_APP_DOCKER_PROD_STRATEGY="custom-image"
-  LIB_APP_UNINSTALL_CAPABILITY="manual-review"
+  LIB_APP_UNINSTALL_CAPABILITY="supported"
   LIB_APP_TRUST="official"
   LIB_APP_RISK="standard"
   LIB_APP_VERIFY="source-match,platform-major,dependencies"
@@ -96,7 +96,7 @@ app_profile_defaults() {
       LIB_APP_BRANCH="${ERPNEXT_BRANCH:-version-16}"
       LIB_APP_REQUIRES="frappe"
       LIB_APP_SUPPORTED_ERPNEXT="16"
-      LIB_APP_UNINSTALL_CAPABILITY="unsupported"
+      LIB_APP_UNINSTALL_CAPABILITY="erpnext-scoped"
       LIB_APP_RISK="core"
       LIB_APP_NOTES="Recommended business application profile."
       ;;
@@ -248,7 +248,7 @@ validate_app_catalog_record() {
   [[ "${LIB_APP_NATIVE_SUPPORT:-}" == "supported" || "${LIB_APP_NATIVE_SUPPORT:-}" == "unsupported" ]] || return 1
   [[ "${LIB_APP_DOCKER_DEV_SUPPORT:-}" == "supported" || "${LIB_APP_DOCKER_DEV_SUPPORT:-}" == "unsupported" ]] || return 1
   [[ "${LIB_APP_DOCKER_PROD_STRATEGY:-}" =~ ^(custom-image|built-in|unsupported)$ ]] || return 1
-  [[ "${LIB_APP_UNINSTALL_CAPABILITY:-}" =~ ^(manual-review|unsupported|never)$ ]] || return 1
+  [[ "${LIB_APP_UNINSTALL_CAPABILITY:-}" =~ ^(supported|manual-review|erpnext-scoped|unsupported|never)$ ]] || return 1
   [[ "${LIB_APP_TRUST:-}" =~ ^(official|community)$ ]] || return 1
   [[ "${LIB_APP_RISK:-}" =~ ^(core|standard|elevated)$ ]] || return 1
   [[ -n "${LIB_APP_VERIFY:-}" ]] || return 1
@@ -1892,6 +1892,7 @@ render_app_library_menu_options() {
     ui_box_line mid "$width"
 
     app_menu_render_pair "$width" "S" "Status" "C" "Compatibility"
+    app_menu_render_pair "$width" "U" "Uninstall & recovery"
   else
     app_menu_render_pair "$width" "1" "CRM"
     app_menu_render_pair "$width" "2" "HRMS"
@@ -1914,6 +1915,8 @@ render_app_library_menu_options() {
     app_menu_render_pair "$width" "16" "Dev"
     app_menu_render_pair "$width" "17" "Solutions"
     app_menu_render_pair "$width" "18" "Compliance"
+
+    app_menu_render_pair "$width" "U" "Uninstall & recovery"
 
     ui_box_line mid "$width"
 
@@ -1994,7 +1997,7 @@ show_app_profile_collection_menu() {
           warn "Invalid option"
         fi
         ;;
-      r | R)
+      u | U)
         if [[ "$category" == "all" ]]; then
           show_app_rollback_guide
           pause_after_screen "Press Enter to return to All Apps..."
@@ -2143,6 +2146,10 @@ show_app_library_menu() {
         ;;
       c | C)
         show_app_compatibility_matrix
+        pause_after_screen "Press Enter to return to Apps..."
+        ;;
+      r | R)
+        show_app_removal_guide
         pause_after_screen "Press Enter to return to Apps..."
         ;;
 

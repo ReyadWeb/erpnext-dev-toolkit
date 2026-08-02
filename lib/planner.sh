@@ -23,6 +23,13 @@ OPERATION_TARGET_SET=""
 OPERATION_AFFECTED_SITES=""
 OPERATION_PREVIOUS_REVISIONS=""
 OPERATION_ORIGINAL_STATE=""
+OPERATION_REMOVAL_SCOPE=""
+OPERATION_SELECTED_SITES=""
+OPERATION_PER_SITE_STATE=""
+OPERATION_CODE_DECISION=""
+OPERATION_PREVIOUS_PROFILE=""
+OPERATION_RECOVERY_ELIGIBLE=""
+OPERATION_BACKUP_TARGETS=""
 
 planner_exit_code() {
   case "$1" in
@@ -70,7 +77,9 @@ planner_record_write() {
     "$OPERATION_FAILURE_REASON" "$OPERATION_BACKUP_REFERENCE" "$OPERATION_RECOVERY" \
     "$OPERATION_PREVIOUS_IMAGE" "$OPERATION_REPLACEMENT_IMAGE" "$OPERATION_TYPE" \
     "$OPERATION_UPDATE_MODE" "$OPERATION_TARGET_SET" "$OPERATION_AFFECTED_SITES" "$OPERATION_PREVIOUS_REVISIONS" \
-    "$OPERATION_ORIGINAL_STATE"; do
+    "$OPERATION_ORIGINAL_STATE" "$OPERATION_REMOVAL_SCOPE" "$OPERATION_SELECTED_SITES" \
+    "$OPERATION_PER_SITE_STATE" "$OPERATION_CODE_DECISION" "$OPERATION_PREVIOUS_PROFILE" \
+    "$OPERATION_RECOVERY_ELIGIBLE" "$OPERATION_BACKUP_TARGETS"; do
     planner_safe_value "$value" || return 1
   done
   {
@@ -82,6 +91,12 @@ planner_record_write() {
     printf 'affected_sites=%s\n' "$OPERATION_AFFECTED_SITES"
     printf 'previous_revisions=%s\n' "$OPERATION_PREVIOUS_REVISIONS"
     printf 'original_runtime_state=%s\n' "$OPERATION_ORIGINAL_STATE"
+    printf 'removal_scope=%s\n' "$OPERATION_REMOVAL_SCOPE"
+    printf 'selected_sites=%s\n' "$OPERATION_SELECTED_SITES"
+    printf 'per_site_state=%s\n' "$OPERATION_PER_SITE_STATE"
+    printf 'code_decision=%s\n' "$OPERATION_CODE_DECISION"
+    printf 'previous_profile=%s\n' "$OPERATION_PREVIOUS_PROFILE"
+    printf 'recovery_eligible=%s\n' "$OPERATION_RECOVERY_ELIGIBLE"
     printf 'requested_app=%s\n' "$PLAN_APP"
     printf 'catalog_id=%s\n' "$PLAN_CATALOG_ID"
     printf 'install_app_name=%s\n' "$PLAN_INSTALL_NAME"
@@ -97,7 +112,7 @@ planner_record_write() {
     printf 'compatibility=%s\n' "$PLAN_COMPATIBILITY"
     printf 'trust=%s\n' "$PLAN_TRUST"
     printf 'shared_sites=%s\n' "$PLAN_SHARED_SITES"
-    printf 'backup_targets=%s\n' "$PLAN_SITE"
+    printf 'backup_targets=%s\n' "${OPERATION_BACKUP_TARGETS:-$PLAN_SITE}"
     printf 'planned_actions=%s\n' "$PLAN_ACTIONS"
     printf 'verification=%s\n' "$PLAN_VERIFICATION"
     printf 'status=%s\n' "$OPERATION_STATUS"

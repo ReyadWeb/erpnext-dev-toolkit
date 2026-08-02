@@ -321,8 +321,8 @@ docker_active_env_file() {
 # Run docker compose with the project name, the mode-appropriate file set, and
 # the mode-appropriate env file. All extra args are passed straight through.
 docker_compose() {
-  local envf primary f
-  local -a compose_cmd=() file_args=()
+  local envf primary f compose_timeout="${ERPNEXT_DEV_DOCKER_COMPOSE_TIMEOUT:-}"
+  local -a compose_cmd=() file_args=() timeout_cmd=()
   docker_compose_resolve compose_cmd || {
     err "Docker Compose is not available."
     return 1
@@ -337,10 +337,16 @@ docker_compose() {
     return 1
   fi
   envf="$(docker_active_env_file)"
+  if [[ -n "$compose_timeout" ]]; then
+    [[ "$compose_timeout" =~ ^[1-9][0-9]*$ ]] || return 2
+    ((compose_timeout <= 300)) || return 2
+    command -v timeout >/dev/null 2>&1 || return 127
+    timeout_cmd=(timeout --signal=TERM --kill-after=2s "$compose_timeout")
+  fi
   # $SUDO is a single token ("sudo" or empty) so it is safe to leave unquoted;
   # the compose program is expanded from an array to survive the restricted IFS.
   # shellcheck disable=SC2086
-  ${SUDO:-} "${compose_cmd[@]}" -p "$DOCKER_PROJECT_NAME" --env-file "$envf" "${file_args[@]}" "$@"
+  ${SUDO:-} "${timeout_cmd[@]}" "${compose_cmd[@]}" -p "$DOCKER_PROJECT_NAME" --env-file "$envf" "${file_args[@]}" "$@"
 }
 
 # ------------------------------------------------------------
@@ -4176,7 +4182,7 @@ docker_guided_credentials_checkpoint() {
 
   echo
   ui_box_start "Docker setup: login credentials"
-  echo "Your ERPNext Administrator login is ready. Save it before security hardening."
+  echo "Your Site Administrator login is ready. Save it before security hardening."
   ui_box_end
   show_credentials_info || true
 

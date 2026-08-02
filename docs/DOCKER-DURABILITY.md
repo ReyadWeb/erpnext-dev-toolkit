@@ -4,6 +4,8 @@ Phase 4 supports both installation profiles in Docker development and
 production. `recommended` remains the default and includes Frappe plus ERPNext.
 `frappe-only` builds an explicit Frappe image and creates the site without
 ERPNext; ERPNext can be added later with `app install erpnext --site SITE`.
+Interactive fresh setup exposes Docker through Advanced installation, where the
+profile is selected explicitly and confirmed before configuration is saved.
 
 ## Cumulative immutable manifest
 

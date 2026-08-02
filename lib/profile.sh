@@ -35,6 +35,30 @@ installation_profile_label() {
   esac
 }
 
+installation_profile_erpnext_action() {
+  case "${1:-$(effective_installation_profile)}" in
+    recommended) printf 'Will be installed\n' ;;
+    frappe-only) printf 'Will not be installed\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+# Shared runtime terminology is deliberately profile-neutral: Frappe owns the
+# site, Bench/container processes, and service lifecycle. ERPNext is an app.
+frappe_runtime_label() { printf 'Frappe stack\n'; }
+frappe_service_label() { printf 'managed Frappe stack service\n'; }
+frappe_ready_label() { printf 'Frappe site is ready\n'; }
+site_administrator_label() { printf 'Site Administrator\n'; }
+
+installation_mode_label() {
+  case "${INSTALLATION_MODE:-}" in
+    quick) printf 'Quick\n' ;;
+    advanced) printf 'Advanced\n' ;;
+    existing) printf 'Existing installation\n' ;;
+    *) printf 'Non-interactive\n' ;;
+  esac
+}
+
 installation_profile_requires_app() {
   local app="$1"
   case "$(effective_installation_profile):${app}" in

@@ -402,8 +402,12 @@ Install with the local quickstart (press **Enter** to accept the default site
 sudo ./erpnext-dev.sh local-dev-quickstart
 ```
 
-Run interactively, `local-dev-quickstart` guides you end to end: it offers a
-**stable guest IP** (static Netplan or hypervisor reservation) before install,
+Run interactively, `local-dev-quickstart` first offers **Quick** or **Advanced**
+installation. Quick clearly selects Recommended (Frappe + ERPNext). Advanced
+asks for Recommended or Frappe-only and then Native or Docker. Its final
+confirmation displays the profile and whether ERPNext will be installed before
+settings are saved. It then offers a **stable guest IP** (static Netplan or
+hypervisor reservation) after confirmation,
 installs ERPNext, then walks through the optional follow-ups — **stable IP**
 (again if still on DHCP), **trusted local HTTPS**, a **service-restart
 confirmation** to settle the stack, the **local security profile / firewall**,
@@ -413,7 +417,7 @@ below. (The non-interactive `sudo ./erpnext-dev.sh -y install` only installs;
 use it for automation.)
 
 The recommended profile remains Frappe + ERPNext for native and Docker
-installations. To install Frappe without ERPNext, select the profile explicitly:
+installations. To automate Frappe without ERPNext, select the profile explicitly:
 
 ```bash
 sudo ./erpnext-dev.sh install --profile frappe-only --yes
@@ -424,12 +428,19 @@ uses immutable cumulative application images: Frappe-only omits ERPNext, while
 the recommended default requires it. A later `app install erpnext --site SITE`
 builds and verifies a replacement image before changing the selected site or
 managed profile. See [Docker durability](docs/DOCKER-DURABILITY.md).
+See [Interactive installation profiles](docs/INSTALLATION-PROFILES.md) for mode,
+precedence, cancellation, existing-installation, and legacy v1.20.4 behavior.
 
 Managed updates are separate from `update-toolkit`. Use `app updates`,
 `app update APP`, or `stack update --mode safe|full` for preview-first,
 release-line-constrained updates. Native plans cover every site sharing Bench
 code; Docker production plans retain the cumulative manifest and use verified
 replacement images. See [Safe update management](docs/SAFE-UPDATE-LIFECYCLE.md).
+
+Application removal separates site data lifecycle from shared Bench/image code.
+Use `app removal-check`, then an explicit `app uninstall` scope and data-loss
+acknowledgement. ERPNext-to-Frappe-only conversion is a separate stack action;
+Frappe is never removable. See [application uninstall and recovery](docs/APP-UNINSTALL-RECOVERY.md).
 
 After install, map the local domain and enable HTTPS:
 
@@ -632,7 +643,7 @@ sudo erpnext-dev install-cli    # or: repair-cli
 
 ## Credentials
 
-The toolkit saves the generated ERPNext Administrator password and database
+The toolkit saves the generated Site Administrator password and database
 credentials on the VM. The safe overview does **not** print passwords. The
 Credentials / Login commands are engine-aware: native installs use the native
 credential record, while Docker installs use the root-only Docker credential
