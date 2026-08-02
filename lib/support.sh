@@ -105,6 +105,15 @@ doctor_collect() {
   DOCTOR_OPTIONAL_LABELS=()
   DOCTOR_OPTIONAL_DETAILS=()
 
+  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+  DOCTOR_PROFILE="${PROFILE_CONTEXT_PROFILE:-recommended}"
+  DOCTOR_RECONCILIATION="${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
+  DOCTOR_DESIRED_APPS="${PROFILE_CONTEXT_DESIRED_APPS:-}"
+  DOCTOR_OBSERVED_APPS="${PROFILE_CONTEXT_OBSERVED_APPS:-}"
+  DOCTOR_PROFILE_DETAIL="${PROFILE_CONTEXT_DETAIL:-Inventory unavailable.}"
+  doctor_add_check "Installation profile" "INFO" "${DOCTOR_PROFILE}"
+  doctor_add_check "Profile reconciliation" "$(installation_profile_reconciliation_status "$DOCTOR_RECONCILIATION")" "${DOCTOR_RECONCILIATION}; ${DOCTOR_PROFILE_DETAIL}"
+
   if ssl_is_configured 2>/dev/null; then
     DOCTOR_SSL_STATE="configured"
   fi
@@ -191,7 +200,7 @@ doctor_collect() {
 
   if check_bench_app_installed erpnext; then
     doctor_add_check "ERPNext app files" "OK" "apps/erpnext exists"
-  elif installation_profile_requires_erpnext; then
+  elif installation_profile_context_requires_app erpnext; then
     doctor_add_check "ERPNext app files" "WARN" "required by profile; apps/erpnext missing"
   else
     doctor_add_check "ERPNext app files" "OK" "absent by design for Frappe-only profile"
@@ -211,7 +220,7 @@ doctor_collect() {
 
   if site_app_installed erpnext 2>/dev/null; then
     doctor_add_check "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
-  elif installation_profile_requires_erpnext; then
+  elif installation_profile_context_requires_app erpnext; then
     doctor_add_check "Site app: erpnext" "WARN" "required by profile; not confirmed on ${SITE_NAME}"
   else
     doctor_add_check "Site app: erpnext" "OK" "absent by design for Frappe-only profile"
@@ -336,6 +345,10 @@ run_doctor_plain() {
   echo "Note:      Secrets, passwords, tokens, private keys, and credential contents are intentionally excluded."
   echo
   echo "Context:"
+  status_line_plain "Installation profile" "INFO" "$DOCTOR_PROFILE"
+  status_line_plain "Reconciliation" "$(installation_profile_reconciliation_status "$DOCTOR_RECONCILIATION")" "$DOCTOR_RECONCILIATION"
+  status_line_plain "Desired applications" "INFO" "${DOCTOR_DESIRED_APPS:-none}"
+  status_line_plain "Observed applications" "INFO" "${DOCTOR_OBSERVED_APPS:-none}"
   status_line_plain "Hostname" "INFO" "$DOCTOR_HOSTNAME"
   status_line_plain "Current user" "INFO" "$DOCTOR_CURRENT_USER"
   status_line_plain "VM IP" "INFO" "$DOCTOR_VM_IP"
@@ -396,12 +409,17 @@ run_doctor_json() {
 
   local i
   printf '{\n'
-  printf '  "schema_version": "1",\n'
+  printf '  "schema_version": "2",\n'
   printf '  "safe_to_share": true,\n'
   printf '  "redaction_note": ' ; json_escape "Secrets, passwords, tokens, private keys, and credential contents are intentionally excluded." ; printf ',\n'
   printf '  "generated_at": ' ; json_escape "$DOCTOR_GENERATED_AT" ; printf ',\n'
   printf '  "script": {"name": ' ; json_escape "$APP_NAME" ; printf ', "version": ' ; json_escape "$SCRIPT_VERSION" ; printf '},\n'
   printf '  "context": {\n'
+  printf '    "profile": ' ; json_escape "$DOCTOR_PROFILE" ; printf ',\n'
+  printf '    "reconciliation": ' ; json_escape "$DOCTOR_RECONCILIATION" ; printf ',\n'
+  printf '    "desired_applications": ' ; installation_profile_plan_json_array "$DOCTOR_DESIRED_APPS" ; printf ',\n'
+  printf '    "observed_applications": ' ; installation_profile_plan_json_array "$DOCTOR_OBSERVED_APPS" ; printf ',\n'
+  printf '    "inventory_fingerprint": ' ; json_escape "${PROFILE_CONTEXT_FINGERPRINT:-unavailable}" ; printf ',\n'
   printf '    "hostname": ' ; json_escape "$DOCTOR_HOSTNAME" ; printf ',\n'
   printf '    "current_user": ' ; json_escape "$DOCTOR_CURRENT_USER" ; printf ',\n'
   printf '    "vm_ip": ' ; json_escape "$DOCTOR_VM_IP" ; printf ',\n'

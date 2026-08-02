@@ -44,6 +44,25 @@ assert_eq "rank HEALTHY" "0" "$(health_status_rank HEALTHY)"
 assert_eq "legacy CRITICAL→FAIL" "FAIL" "$(health_legacy_ok_warn CRITICAL)"
 assert_eq "legacy HEALTHY→OK" "OK" "$(health_legacy_ok_warn HEALTHY)"
 
+SNAPSHOT_SCHEMA_VERSION=2
+SNAPSHOT_PROFILE=frappe-only
+SNAPSHOT_RECONCILIATION=consistent
+SNAPSHOT_PROFILE_STATUS=HEALTHY
+SNAPSHOT_PROFILE_DESIRED=frappe
+SNAPSHOT_PROFILE_OBSERVED=frappe
+SNAPSHOT_PROFILE_CAPABILITY=supported
+SNAPSHOT_PROFILE_DURABLE_IMAGE=false
+SNAPSHOT_PROFILE_DETAIL="Observed installed applications match the desired plan."
+PROFILE_CONTEXT_FINGERPRINT=fixture-fingerprint
+snapshot_json="$(health_snapshot_emit_json)"
+assert_eq "health JSON schema bumped" "2" "$(printf '%s' "$snapshot_json" | sed -n 's/.*"schema_version": "\([^"]*\)".*/\1/p' | head -n1)"
+assert_eq "health JSON profile" "frappe-only" "$(printf '%s' "$snapshot_json" | sed -n 's/.*"intent": "\([^"]*\)".*/\1/p' | head -n1)"
+assert_eq "health JSON reconciliation" "consistent" "$(printf '%s' "$snapshot_json" | sed -n 's/.*"reconciliation": "\([^"]*\)".*/\1/p' | head -n1)"
+printf '%s' "$snapshot_json" | python3 -m json.tool >/dev/null || {
+  echo "FAIL: profile-aware health snapshot is not valid JSON" >&2
+  fail=$((fail + 1))
+}
+
 # CPU / iowait sample (shape)
 cpu_out="$(health_probe_cpu_iowait)"
 IFS='|' read -r c_status _ c_pct c_io <<<"$cpu_out"
@@ -83,7 +102,7 @@ rm -rf "$tmpdir_cert"
 
 # Disk probe against real / (shape only)
 disk_out="$(health_probe_disk)"
-IFS='|' read -r d_status d_detail d_pct <<<"$disk_out"
+IFS='|' read -r d_status _ d_pct <<<"$disk_out"
 case "$d_status" in
   HEALTHY | DEGRADED | CRITICAL | UNKNOWN) echo "OK: disk probe status ${d_status}" ;;
   *)

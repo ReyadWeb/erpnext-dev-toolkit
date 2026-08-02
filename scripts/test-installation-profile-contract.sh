@@ -62,6 +62,8 @@ docker_mode() { printf '%s\n' "${TEST_DOCKER_MODE:-development}"; }
 require_sudo() { :; }
 source lib/inventory.sh
 source lib/planner.sh
+source lib/support.sh
+path_is_dir() { [[ -d "$1" ]]; }
 
 for pair in \
   recommended:recommended default:recommended erpnext:recommended frappe-erpnext:recommended \
@@ -105,6 +107,16 @@ for value in "${bad_apps[@]}"; do
     pass "unsafe app input rejected"
   fi
 done
+
+assess_app_compatibility "$fixture/no-bench" crm "Frappe CRM" main \
+  https://github.com/frappe/crm false
+assert_eq "absent ERPNext branch is not fabricated" not-installed "$APP_COMPAT_ERPNEXT_BRANCH"
+grep -q 'blocked: requires ERPNext through an explicit reviewed plan' lib/apps.sh \
+  && pass "App Management explains ERPNext dependency blocking" \
+  || fail_case "App Management lacks ERPNext dependency explanation"
+grep -q 'shared-code impact preserved' lib/apps.sh \
+  && pass "App Management exposes shared-code impact" \
+  || fail_case "App Management lacks shared-code impact"
 
 profile_plan_parse_requested_apps helpdesk
 profile_plan_resolve_apps advanced || fail_case "dependency plan rejected"
@@ -209,6 +221,7 @@ PROFILE_PLAN_ENVIRONMENT=native
 PROFILE_METADATA_STATUS=compatible
 supported_single_site
 assert_reconciliation "trusted v16 single-site reconciliation" consistent
+assert_eq "consistent presentation severity" OK "$(installation_profile_reconciliation_status consistent)"
 fingerprint_one="$(planner_inventory_fingerprint)"
 INVENTORY_RECORDS=("${INVENTORY_RECORDS[@]:3}" "${INVENTORY_RECORDS[@]:0:3}")
 fingerprint_two="$(planner_inventory_fingerprint)"
@@ -218,11 +231,40 @@ assert_reconciliation "ordering does not alter reconciliation" consistent
 supported_single_site
 INVENTORY_RECORDS+=("$(app_record native:/bench crm 1.0.0 https://github.com/frappe/crm)" 'SITE_APP|native:/bench|one.test|crm|installed')
 assert_reconciliation "reconciliation drift extra" drift-extra
+assert_eq "drift-extra presentation severity" INFO "$(installation_profile_reconciliation_status drift-extra)"
 supported_single_site
 INVENTORY_RECORDS=("${INVENTORY_RECORDS[@]/SITE_APP|native:\/bench|one.test|erpnext|installed/}")
 assert_reconciliation "reconciliation drift missing" drift-missing
+assert_eq "drift-missing presentation severity" WARN "$(installation_profile_reconciliation_status drift-missing)"
 INVENTORY_RECORDS+=('ISSUE|native:/bench|site|discovery|ambiguous')
 assert_reconciliation "reconciliation ambiguous" ambiguous
+assert_eq "ambiguous presentation severity" WARN "$(installation_profile_reconciliation_status ambiguous)"
+
+PROFILE_PLAN_PROFILE=frappe-only
+PROFILE_PLAN_DESIRED_CSV=frappe
+set_inventory \
+  'STACK|native:/bench|native|native|frappe-only|managed|clean' \
+  "$(app_record native:/bench frappe 16.2.0 https://github.com/frappe/frappe)" \
+  'SITE|native:/bench|one.test|known' \
+  'SITE_APP|native:/bench|one.test|frappe|installed'
+assert_reconciliation "Frappe-only is consistent without ERPNext" consistent
+PROFILE_CONTEXT_DESIRED_APPS=frappe
+if installation_profile_context_requires_app erpnext; then
+  fail_case "Frappe-only incorrectly requires ERPNext"
+else
+  pass "Frappe-only ERPNext absence is optional"
+fi
+INVENTORY_RECORDS+=("$(app_record native:/bench erpnext 16.1.0 https://github.com/frappe/erpnext)" 'SITE_APP|native:/bench|one.test|erpnext|installed')
+assert_reconciliation "Frappe-only preserves ERPNext as drift-extra" drift-extra
+
+PROFILE_PLAN_PROFILE=advanced
+PROFILE_PLAN_DESIRED_CSV=frappe,telephony,helpdesk
+supported_single_site
+assert_reconciliation "advanced desired apps missing" drift-missing
+PROFILE_CONTEXT_DESIRED_APPS=frappe,erpnext,webshop
+installation_profile_context_requires_app erpnext \
+  && pass "advanced dependency closure requires ERPNext" \
+  || fail_case "advanced dependency closure lost ERPNext requirement"
 
 supported_single_site
 INVENTORY_RECORDS[1]="$(app_record native:/bench frappe 17.0.0 https://github.com/frappe/frappe)"
@@ -268,12 +310,35 @@ assert_reconciliation "multiple existing candidates" ambiguous
 supported_single_site supported-unadopted
 INVENTORY_RECORDS[1]="$(app_record native:/bench frappe 17.0.0 https://github.com/frappe/frappe)"
 assert_reconciliation "incompatible existing candidate" incompatible
+assert_eq "incompatible presentation severity" FAIL "$(installation_profile_reconciliation_status incompatible)"
 
 PROFILE_PLAN_PROFILE=recommended
 PROFILE_PLAN_DESIRED_CSV=frappe,erpnext
 PROFILE_METADATA_STATUS=incompatible
 assert_reconciliation "configuration reconciliation incompatible" incompatible
 PROFILE_METADATA_STATUS=compatible
+
+# Operational surfaces consume the same metadata/plan/inventory context and do
+# not rewrite configuration while doing so.
+eval "$(declare -f inventory_collect | sed '1s/inventory_collect/inventory_collect_original/')"
+inventory_collect() {
+  supported_single_site
+  if [[ "${PROFILE_PLAN_PROFILE:-recommended}" == frappe-only ]]; then
+    INVENTORY_RECORDS=("${INVENTORY_RECORDS[@]/APP|native:\/bench|erpnext|available|16.1.0|version-16|0000000000000000000000000000000000000001|https:\/\/github.com\/frappe\/erpnext|official|managed|clean/}")
+    INVENTORY_RECORDS=("${INVENTORY_RECORDS[@]/SITE_APP|native:\/bench|one.test|erpnext|installed/}")
+  fi
+}
+for context_profile in recommended frappe-only; do
+  printf 'CONFIG_SCHEMA=2\nINSTALLATION_PROFILE=%s\n' "$context_profile" >"$CONFIG_FILE"
+  context_before="$(sha256sum "$CONFIG_FILE")"
+  installation_profile_operational_context_collect "$CONFIG_FILE" || fail_case "operational context rejected ${context_profile}"
+  assert_eq "operational context profile ${context_profile}" "$context_profile" "$PROFILE_CONTEXT_PROFILE"
+  assert_eq "operational context reconciliation ${context_profile}" consistent "$PROFILE_CONTEXT_RECONCILIATION"
+  assert_eq "operational context is read only ${context_profile}" "$context_before" "$(sha256sum "$CONFIG_FILE")"
+done
+unset -f inventory_collect
+eval "$(declare -f inventory_collect_original | sed '1s/inventory_collect_original/inventory_collect/')"
+unset -f inventory_collect_original
 
 # End-to-end CLI preview fixture. It must not lock, configure, journal, mutate
 # inventory, or invoke any Bench/Docker mutation command.
@@ -367,6 +432,44 @@ for args in \
   set -e
   [[ "$rc" -ne 0 ]] && pass "invalid option scope rejected" || fail_case "invalid option scope accepted"
 done
+
+# Doctor v2 is a deterministic, safe-to-share view of the same context.
+doctor_collect() {
+  DOCTOR_GENERATED_AT=2026-08-02T00:00:00Z
+  DOCTOR_HOSTNAME=fixture-host
+  DOCTOR_CURRENT_USER=fixture-user
+  DOCTOR_VM_IP=192.0.2.10
+  DOCTOR_BENCH_DIR=/redacted/bench
+  DOCTOR_BENCH_VERSION=16.0.0
+  DOCTOR_INSTALL_STATE=Installed
+  DOCTOR_RUNTIME_STATE=Running
+  DOCTOR_SERVICE_STATE=Running
+  DOCTOR_AUTOSTART_STATE=Enabled
+  DOCTOR_SSL_STATE='not configured'
+  DOCTOR_PROFILE=frappe-only
+  DOCTOR_RECONCILIATION=consistent
+  DOCTOR_DESIRED_APPS=frappe
+  DOCTOR_OBSERVED_APPS=frappe
+  PROFILE_CONTEXT_FINGERPRINT=fixture-fingerprint
+  DOCTOR_CHECK_NAMES=('Installation profile' 'Profile reconciliation')
+  DOCTOR_CHECK_STATUSES=(INFO OK)
+  DOCTOR_CHECK_DETAILS=(frappe-only consistent)
+  DOCTOR_OPTIONAL_APPS=()
+  DOCTOR_OPTIONAL_LABELS=()
+  DOCTOR_OPTIONAL_DETAILS=()
+}
+APP_NAME='ERPNext Developer Toolkit'
+SCRIPT_VERSION=1.20.4
+ERPNEXT_SERVICE_NAME=erpnext-dev.service
+SITE_NAME_SOURCE=fixture
+doctor_json="$(run_doctor_json)"
+printf '%s' "$doctor_json" | python3 -m json.tool >/dev/null \
+  && pass "Doctor v2 JSON is valid" \
+  || fail_case "Doctor v2 JSON is invalid"
+assert_has "Doctor schema version" "$doctor_json" '"schema_version": "2"'
+assert_has "Doctor profile context" "$doctor_json" '"profile": "frappe-only"'
+assert_has "Doctor reconciliation context" "$doctor_json" '"reconciliation": "consistent"'
+[[ "$doctor_json" != *$'\033'* ]] && pass "Doctor JSON has no ANSI" || fail_case "Doctor JSON contains ANSI"
 
 if ((failures > 0)); then
   printf 'installation profile contract tests: %s failure(s)\n' "$failures" >&2

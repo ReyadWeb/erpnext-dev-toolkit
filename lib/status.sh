@@ -5,6 +5,15 @@
 [[ -n "${_ERPNEXT_DEV_STATUS_LOADED:-}" ]] && return 0
 _ERPNEXT_DEV_STATUS_LOADED=1
 
+status_profile_context() {
+  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+  status_line "Profile" "INFO" "${PROFILE_CONTEXT_PROFILE:-recommended}"
+  status_line "Reconciliation" "$(installation_profile_reconciliation_status)" \
+    "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
+  status_line "Desired apps" "INFO" "${PROFILE_CONTEXT_DESIRED_APPS:-none}"
+  status_line "Observed apps" "INFO" "${PROFILE_CONTEXT_OBSERVED_APPS:-none}"
+}
+
 recommended_action() {
   local installed runtime auto
   installed="$1"
@@ -41,10 +50,11 @@ run_status() {
     runtime="$(runtime_state)"
     echo
     echo "============================================================"
-    echo "ERPNext Developer Status (Docker)"
+    echo "ERPNext Developer Toolkit — Frappe Stack Status (Docker)"
     echo "============================================================"
     status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
     status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"
+    status_profile_context
     status_line "Docker mode" "INFO" "$(docker_mode_label)"
     status_line "Internal site" "INFO" "$(docker_site_name)"
     if docker_is_production; then
@@ -68,7 +78,7 @@ run_status() {
 
   echo
   echo "============================================================"
-  echo "ERPNext Developer Status"
+  echo "ERPNext Developer Toolkit — Frappe Stack Status"
   echo "============================================================"
   printf "  %-18s %s\n" "Install:" "$installed"
   printf "  %-18s %s\n" "Runtime:" "$runtime"
@@ -76,6 +86,7 @@ run_status() {
   printf "  %-18s %s\n" "Autostart:" "$auto"
   printf "  %-18s %s\n" "Site:" "$SITE_NAME"
   printf "  %-18s %s\n" "VM IP:" "$vm_ip"
+  status_profile_context
   printf "  %-18s http://%s:8000\n" "Direct URL:" "$vm_ip"
   printf "  %-18s http://%s:8000\n" "Friendly URL:" "$SITE_NAME"
   echo
@@ -95,7 +106,7 @@ run_runtime_status() {
   if deployment_engine_is_docker; then
     echo
     echo "============================================================"
-    echo "ERPNext Runtime Status (Docker)"
+    echo "Frappe Stack Runtime Status (Docker)"
     echo "============================================================"
     status_line "Runtime" "INFO" "$(runtime_state)"
     status_line "Mode" "INFO" "$(docker_mode_label)"
@@ -108,7 +119,7 @@ run_runtime_status() {
 
   echo
   echo "============================================================"
-  echo "ERPNext Runtime Status"
+  echo "Frappe Stack Runtime Status"
   echo "============================================================"
   local runtime_status service_status autostart_status
   runtime_status="$(runtime_state)"
@@ -176,9 +187,10 @@ run_installation_status() {
     install_status="$(install_state)"
     echo
     echo "============================================================"
-    echo "ERPNext Installation Status (Docker)"
+    echo "Frappe Stack Installation Status (Docker)"
     echo "============================================================"
     status_line "Install status" "$([[ "$install_status" == "Installed" ]] && echo OK || echo FAIL)" "$install_status"
+    status_profile_context
     status_line "Docker mode" "INFO" "$(docker_mode_label)"
     status_line "Compose project" "INFO" "$DOCKER_PROJECT_NAME"
     status_line "Internal site" "INFO" "$(docker_site_name)"
@@ -195,9 +207,9 @@ run_installation_status() {
 
   echo
   echo "============================================================"
-  echo "ERPNext Installation Status"
+  echo "Frappe Stack Installation Status"
   echo "============================================================"
-  status_line "Install profile" "INFO" "$(installation_profile_label)"
+  status_profile_context
   local install_status
   install_status="$(install_state)"
   if [[ "$install_status" == "Installed" ]]; then
@@ -226,7 +238,7 @@ run_installation_status() {
     status_line "Frappe app files" "FAIL" "apps/frappe missing"
   fi
 
-  if installation_profile_requires_erpnext; then
+  if installation_profile_context_requires_app erpnext; then
     if check_bench_app_installed erpnext; then
       status_line "ERPNext app files" "OK" "apps/erpnext exists"
     else
@@ -248,7 +260,7 @@ run_installation_status() {
     status_line "Site app: frappe" "WARN" "not confirmed on ${SITE_NAME}"
   fi
 
-  if installation_profile_requires_erpnext; then
+  if installation_profile_context_requires_app erpnext; then
     if site_app_installed erpnext; then
       status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
     else
@@ -265,7 +277,7 @@ run_service_summary() {
   if deployment_engine_is_docker; then
     echo
     echo "============================================================"
-    echo "ERPNext Service / Autostart Status (Docker)"
+    echo "Frappe Stack Service / Autostart Status (Docker)"
     echo "============================================================"
     status_line "Runtime model" "INFO" "Docker Compose (no native erpnext-dev.service)"
     status_line "Runtime" "INFO" "$(runtime_state)"
@@ -284,7 +296,7 @@ run_service_summary() {
 
   echo
   echo "============================================================"
-  echo "ERPNext Service / Autostart Status"
+  echo "Frappe Stack Service / Autostart Status"
   echo "============================================================"
   local service_status autostart_status
   service_status="$(service_state)"
@@ -452,9 +464,10 @@ run_full_status() {
     docker_runtime="$(runtime_state)"
     echo
     echo "============================================================"
-    echo "ERPNext Developer Full Health Report (Docker)"
+    echo "ERPNext Developer Toolkit — Frappe Stack Health Report (Docker)"
     echo "============================================================"
     status_line "Install" "INFO" "$(install_state)"
+    status_profile_context
     case "$docker_runtime" in
       Running*) status_line "Runtime" "OK" "$docker_runtime" ;;
       *) status_line "Runtime" "FAIL" "$docker_runtime" ;;
@@ -481,8 +494,9 @@ run_full_status() {
 
   echo
   echo "============================================================"
-  echo "ERPNext Developer Full Health Report"
+  echo "ERPNext Developer Toolkit — Frappe Stack Health Report"
   echo "============================================================"
+  status_profile_context
 
   if [[ -f /etc/os-release ]]; then
     # shellcheck disable=SC1091
@@ -554,7 +568,7 @@ run_full_status() {
 
   if check_bench_app_installed erpnext; then
     status_line "ERPNext app files" "OK" "apps/erpnext exists"
-  elif installation_profile_requires_erpnext; then
+  elif installation_profile_context_requires_app erpnext; then
     status_line "ERPNext app files" "WARN" "required by profile; apps/erpnext missing"
   else
     status_line "ERPNext app files" "OK" "absent by design for Frappe-only profile"
@@ -574,8 +588,10 @@ run_full_status() {
 
   if site_app_installed erpnext; then
     status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
+  elif installation_profile_context_requires_app erpnext; then
+    status_line "Site app: erpnext" "WARN" "required by profile; not confirmed on ${SITE_NAME}"
   else
-    status_line "Site app: erpnext" "WARN" "not confirmed on ${SITE_NAME}"
+    status_line "Site app: erpnext" "INFO" "absent by profile"
   fi
 
   local optional_app optional_label optional_item

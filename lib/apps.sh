@@ -727,6 +727,12 @@ run_docker_app_status() {
   status_line "Site" "INFO" "$site"
   status_line "Docker mode" "INFO" "$(docker_mode_label)"
   status_line "Runtime" "INFO" "$(runtime_state)"
+  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+  status_line "Profile" "INFO" "${PROFILE_CONTEXT_PROFILE:-recommended}"
+  status_line "Reconciliation" "$(installation_profile_reconciliation_status)" "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
+  if [[ "${PROFILE_CONTEXT_PROFILE:-recommended}" == frappe-only ]]; then
+    status_line "ERPNext" "INFO" "recommended later addition; include it in an explicit reviewed plan"
+  fi
 
   echo
   echo "Installed on site:"
@@ -767,7 +773,13 @@ run_docker_app_status() {
     ' "$installed_tmp"; then
       status_line "$label" "OK" "installed on ${site}"
     else
-      status_line "$label" "INFO" "not installed"
+      if [[ " $LIB_APP_REQUIRES " == *" erpnext " ]] && [[ " ${PROFILE_CONTEXT_OBSERVED_APPS//,/ } " != *" erpnext "* ]]; then
+        status_line "$label" "WARN" "blocked: requires ERPNext through an explicit reviewed plan"
+      elif docker_is_production && [[ "$LIB_APP_DOCKER_PROD_STRATEGY" == custom-image ]]; then
+        status_line "$label" "INFO" "not installed; durable custom image required"
+      else
+        status_line "$label" "INFO" "not installed"
+      fi
     fi
   done < <(app_profile_list)
 
@@ -802,6 +814,12 @@ run_app_status() {
   echo "============================================================"
   echo "Site: ${SITE_NAME}"
   echo "Bench: ${bench_dir}"
+  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+  status_line "Profile" "INFO" "${PROFILE_CONTEXT_PROFILE:-recommended}"
+  status_line "Reconciliation" "$(installation_profile_reconciliation_status)" "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
+  if [[ "${PROFILE_CONTEXT_PROFILE:-recommended}" == frappe-only ]]; then
+    status_line "ERPNext" "INFO" "recommended later addition; include it in an explicit reviewed plan"
+  fi
   echo
 
   echo "Installed on site:"
@@ -828,7 +846,11 @@ run_app_status() {
     elif app_folder_exists "$bench_dir" "$app"; then
       status_line "$label" "WARN" "downloaded, not registered in sites/apps.txt"
     else
-      status_line "$label" "INFO" "not installed"
+      if [[ " $LIB_APP_REQUIRES " == *" erpnext " ]] && [[ " ${PROFILE_CONTEXT_OBSERVED_APPS//,/ } " != *" erpnext "* ]]; then
+        status_line "$label" "WARN" "blocked: requires ERPNext through an explicit reviewed plan"
+      else
+        status_line "$label" "INFO" "not installed"
+      fi
     fi
   done
 
@@ -943,7 +965,9 @@ assess_app_compatibility() {
   frappe_branch="$(get_app_current_branch "$bench_dir" frappe | tail -1 | tr -d '[:space:]' || true)"
   erpnext_branch="$(get_app_current_branch "$bench_dir" erpnext | tail -1 | tr -d '[:space:]' || true)"
   frappe_branch="${frappe_branch:-${FRAPPE_BRANCH:-unknown}}"
-  erpnext_branch="${erpnext_branch:-${ERPNEXT_BRANCH:-unknown}}"
+  # Absence is an observed fact, not permission to fabricate a configured
+  # ERPNext branch. Frappe compatibility remains independently available.
+  erpnext_branch="${erpnext_branch:-not-installed}"
 
   APP_COMPAT_FRAPPE_BRANCH="$frappe_branch"
   APP_COMPAT_ERPNEXT_BRANCH="$erpnext_branch"
@@ -1195,7 +1219,7 @@ confirm_app_compatibility_before_install() {
 show_app_compatibility_matrix() {
   require_sudo
 
-  local bench_dir profile app_state
+  local bench_dir profile app_state dependencies engine_strategy dependency_note
   bench_dir="$(require_site_environment)" || return 1
 
   normalize_apps_txt "$bench_dir" "" "true" || warn "Could not normalize sites/apps.txt before compatibility check."
@@ -1206,6 +1230,9 @@ show_app_compatibility_matrix() {
   echo "============================================================"
   echo "Site:  ${SITE_NAME}"
   echo "Bench: ${bench_dir}"
+  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+  status_line "Profile" "INFO" "${PROFILE_CONTEXT_PROFILE:-recommended}"
+  status_line "Reconciliation" "$(installation_profile_reconciliation_status)" "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
   echo
   echo "This check is a pre-install guide. It does not guarantee upstream app compatibility."
   echo "The selected app is checked locally first; bench get-app validates the requested remote branch during the actual download."
@@ -1215,7 +1242,23 @@ show_app_compatibility_matrix() {
     app_profile_defaults "$profile" || continue
     assess_app_compatibility "$bench_dir" "$LIB_APP_NAME" "$LIB_APP_DISPLAY" "$LIB_APP_BRANCH" "$LIB_APP_REPO" "false"
     app_state="$(app_install_state_detail "$bench_dir" "$LIB_APP_NAME")"
-    status_line "$LIB_APP_DISPLAY" "$APP_COMPAT_STATUS" "target=${APP_COMPAT_TARGET_BRANCH}; state=${app_state}; ${APP_COMPAT_DETAIL}"
+    dependencies="${LIB_APP_REQUIRES:-frappe}"
+    dependency_note="dependencies=${dependencies}"
+    if [[ " $dependencies " == *" erpnext " ]] && [[ " ${PROFILE_CONTEXT_OBSERVED_APPS//,/ } " != *" erpnext "* ]]; then
+      APP_COMPAT_STATUS="WARN"
+      dependency_note="blocked: requires ERPNext through an explicit reviewed plan"
+    fi
+    if deployment_engine_is_docker; then
+      if docker_is_production; then
+        engine_strategy="docker-production/${LIB_APP_DOCKER_PROD_STRATEGY}"
+      else
+        engine_strategy="docker-development/${LIB_APP_DOCKER_DEV_SUPPORT}"
+      fi
+    else
+      engine_strategy="native/${LIB_APP_NATIVE_SUPPORT}"
+    fi
+    status_line "$LIB_APP_DISPLAY" "$APP_COMPAT_STATUS" \
+      "state=${app_state}; ${dependency_note}; engine=${engine_strategy}; shared-code impact preserved; target=${APP_COMPAT_TARGET_BRANCH}"
   done
 
   echo
