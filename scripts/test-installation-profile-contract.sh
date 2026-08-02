@@ -70,7 +70,11 @@ for pair in \
   assert_eq "profile normalization ${pair%%:*}" "${pair#*:}" \
     "$(normalize_installation_profile "${pair%%:*}")"
 done
-for bad in '' unknown '../frappe' 'frappe only' 'advanced;id' $'existing\001'; do
+bad_profiles=('' unknown '../frappe' 'frappe only' 'advanced;id' ' recommended' 'recommended ' $'ad\tvanced' $'ad\nvanced' $'ad\rvanced' $'existing\001')
+for profile in recommended frappe-only advanced existing; do
+  bad_profiles+=("${profile:0:1} ${profile:1}")
+done
+for bad in "${bad_profiles[@]}"; do
   if normalize_installation_profile "$bad" >/dev/null 2>&1; then
     fail_case "malformed profile accepted"
   else
@@ -163,6 +167,12 @@ printf 'CONFIG_SCHEMA=2\nINSTALLATION_PROFILE=advanced\nINSTALLATION_PROFILE_APP
 read_installation_profile_metadata "$CONFIG_FILE"
 assert_eq "schema 2 profile" advanced "$PROFILE_METADATA_PROFILE"
 assert_eq "schema 2 apps" crm,helpdesk "$PROFILE_METADATA_APPS"
+printf 'CONFIG_SCHEMA=2\nINSTALLATION_PROFILE= advanced \n' >"$CONFIG_FILE"
+if read_installation_profile_metadata "$CONFIG_FILE" >/dev/null 2>&1; then
+  fail_case "unsafe persisted profile accepted"
+else
+  assert_eq "unsafe persisted profile incompatible" incompatible "$PROFILE_METADATA_STATUS"
+fi
 printf 'CONFIG_SCHEMA=99\nINSTALLATION_PROFILE=recommended\n' >"$CONFIG_FILE"
 if read_installation_profile_metadata "$CONFIG_FILE" >/dev/null 2>&1; then
   fail_case "unknown config schema accepted"
@@ -171,46 +181,99 @@ else
 fi
 
 set_inventory() { INVENTORY_RECORDS=("$@"); }
+app_record() {
+  local stack="$1" app="$2" version="$3" source="$4" state="${5:-clean}" availability="${6:-available}"
+  printf 'APP|%s|%s|%s|%s|version-16|%040d|%s|official|managed|%s' \
+    "$stack" "$app" "$availability" "$version" 1 "$source" "$state"
+}
+supported_single_site() {
+  local management="${1:-managed}"
+  set_inventory \
+    'STACK|native:/bench|native|native|recommended|'"$management"'|clean' \
+    "$(app_record native:/bench frappe 16.2.0 https://github.com/frappe/frappe)" \
+    "$(app_record native:/bench erpnext 16.1.0 https://github.com/frappe/erpnext)" \
+    'SITE|native:/bench|one.test|known' \
+    'SITE_APP|native:/bench|one.test|frappe|installed' \
+    'SITE_APP|native:/bench|one.test|erpnext|installed'
+}
+assert_reconciliation() {
+  local label="$1" expected="$2"
+  installation_profile_reconcile
+  assert_eq "$label" "$expected" "$PROFILE_PLAN_RECONCILIATION"
+}
 PROFILE_PLAN_PROFILE=recommended
 PROFILE_PLAN_DESIRED_CSV=frappe,erpnext
 PROFILE_PLAN_CAPABILITY=supported
+PROFILE_PLAN_ENGINE=native
+PROFILE_PLAN_ENVIRONMENT=native
 PROFILE_METADATA_STATUS=compatible
-set_inventory \
-  'STACK|native:/bench|native|native|recommended|managed|clean' \
-  'SITE|native:/bench|one.test|known' \
-  'SITE_APP|native:/bench|one.test|frappe|installed' \
-  'SITE_APP|native:/bench|one.test|erpnext|installed'
-installation_profile_reconcile
-assert_eq "reconciliation consistent" consistent "$PROFILE_PLAN_RECONCILIATION"
+supported_single_site
+assert_reconciliation "trusted v16 single-site reconciliation" consistent
 fingerprint_one="$(planner_inventory_fingerprint)"
-set_inventory \
-  'SITE_APP|native:/bench|one.test|erpnext|installed' \
-  'SITE|native:/bench|one.test|known' \
-  'STACK|native:/bench|native|native|recommended|managed|clean' \
-  'SITE_APP|native:/bench|one.test|frappe|installed'
+INVENTORY_RECORDS=("${INVENTORY_RECORDS[@]:3}" "${INVENTORY_RECORDS[@]:0:3}")
 fingerprint_two="$(planner_inventory_fingerprint)"
 assert_eq "inventory fingerprint ordering invariance" "$fingerprint_one" "$fingerprint_two"
-installation_profile_reconcile
-assert_eq "ordering does not alter reconciliation" consistent "$PROFILE_PLAN_RECONCILIATION"
+assert_reconciliation "ordering does not alter reconciliation" consistent
 
-INVENTORY_RECORDS+=('SITE_APP|native:/bench|one.test|crm|installed')
-installation_profile_reconcile
-assert_eq "reconciliation drift extra" drift-extra "$PROFILE_PLAN_RECONCILIATION"
-set_inventory \
-  'STACK|native:/bench|native|native|recommended|managed|clean' \
-  'SITE|native:/bench|one.test|known' \
-  'SITE_APP|native:/bench|one.test|frappe|installed'
-installation_profile_reconcile
-assert_eq "reconciliation drift missing" drift-missing "$PROFILE_PLAN_RECONCILIATION"
+supported_single_site
+INVENTORY_RECORDS+=("$(app_record native:/bench crm 1.0.0 https://github.com/frappe/crm)" 'SITE_APP|native:/bench|one.test|crm|installed')
+assert_reconciliation "reconciliation drift extra" drift-extra
+supported_single_site
+INVENTORY_RECORDS=("${INVENTORY_RECORDS[@]/SITE_APP|native:\/bench|one.test|erpnext|installed/}")
+assert_reconciliation "reconciliation drift missing" drift-missing
 INVENTORY_RECORDS+=('ISSUE|native:/bench|site|discovery|ambiguous')
-installation_profile_reconcile
-assert_eq "reconciliation ambiguous" ambiguous "$PROFILE_PLAN_RECONCILIATION"
-set_inventory 'STACK|native:/bench|native|native|recommended|supported-unadopted|clean'
-installation_profile_reconcile
-assert_eq "reconciliation unmanaged" unmanaged "$PROFILE_PLAN_RECONCILIATION"
+assert_reconciliation "reconciliation ambiguous" ambiguous
+
+supported_single_site
+INVENTORY_RECORDS[1]="$(app_record native:/bench frappe 17.0.0 https://github.com/frappe/frappe)"
+assert_reconciliation "unsupported Frappe major" incompatible
+supported_single_site
+INVENTORY_RECORDS[2]="$(app_record native:/bench erpnext 17.0.0 https://github.com/frappe/erpnext)"
+assert_reconciliation "unsupported ERPNext major" incompatible
+supported_single_site
+INVENTORY_RECORDS[2]="$(app_record native:/bench erpnext 16.1.0 https://example.invalid/erpnext)"
+assert_reconciliation "known catalog source mismatch" incompatible
+mismatch_fingerprint="$(planner_inventory_fingerprint)"
+[[ "$mismatch_fingerprint" != "$fingerprint_one" ]] \
+  && pass "source trust classification changes fingerprint" \
+  || fail_case "source trust change did not alter fingerprint"
+supported_single_site
+INVENTORY_RECORDS[1]="$(app_record native:/bench frappe 16.2.0 unknown)"
+assert_reconciliation "unknown source is ambiguous" ambiguous
+supported_single_site
+INVENTORY_RECORDS[1]="$(app_record native:/bench frappe 16.2.0 https://github.com/frappe/frappe dirty)"
+assert_reconciliation "dirty code is ambiguous" ambiguous
+supported_single_site
+INVENTORY_RECORDS[1]='APP|native:/bench|frappe|missing|unknown|unknown|unknown|unknown|official|managed|missing'
+assert_reconciliation "missing desired code is not consistent" ambiguous
+
+supported_single_site
+INVENTORY_RECORDS+=('STACK|native:/other|native|native|recommended|supported-unadopted|clean')
+assert_reconciliation "two stacks are ambiguous" ambiguous
+supported_single_site
+INVENTORY_RECORDS+=('SITE|native:/bench|two.test|known' 'SITE_APP|native:/bench|two.test|frappe|installed')
+assert_reconciliation "two sites are ambiguous" ambiguous
+supported_single_site
+INVENTORY_RECORDS=("${INVENTORY_RECORDS[@]:0:3}"
+  'SITE|native:/bench|one.test|known' 'SITE|native:/bench|two.test|known'
+  'SITE_APP|native:/bench|one.test|frappe|installed' 'SITE_APP|native:/bench|two.test|erpnext|installed')
+assert_reconciliation "applications split across sites" ambiguous
+
+PROFILE_PLAN_PROFILE=existing
+PROFILE_PLAN_DESIRED_CSV=""
+supported_single_site supported-unadopted
+assert_reconciliation "one compatible existing candidate" unmanaged
+INVENTORY_RECORDS+=('STACK|native:/other|native|native|recommended|supported-unadopted|clean')
+assert_reconciliation "multiple existing candidates" ambiguous
+supported_single_site supported-unadopted
+INVENTORY_RECORDS[1]="$(app_record native:/bench frappe 17.0.0 https://github.com/frappe/frappe)"
+assert_reconciliation "incompatible existing candidate" incompatible
+
+PROFILE_PLAN_PROFILE=recommended
+PROFILE_PLAN_DESIRED_CSV=frappe,erpnext
 PROFILE_METADATA_STATUS=incompatible
-installation_profile_reconcile
-assert_eq "reconciliation incompatible" incompatible "$PROFILE_PLAN_RECONCILIATION"
+assert_reconciliation "configuration reconciliation incompatible" incompatible
+PROFILE_METADATA_STATUS=compatible
 
 # End-to-end CLI preview fixture. It must not lock, configure, journal, mutate
 # inventory, or invoke any Bench/Docker mutation command.
@@ -268,6 +331,18 @@ set -e
 [[ "$bad_profile_rc" -ne 0 ]] && pass "invalid profile preview returns failure" || fail_case "invalid profile preview succeeded"
 assert_has "invalid profile JSON contract" "$bad_profile_json" '"valid":false'
 [[ "$bad_profile_json" != *'../advanced'* ]] && pass "unsafe profile not reflected" || fail_case "unsafe profile leaked"
+
+unsafe_cli_profiles=(' advanced' 'advanced ' 'a d v a n c e d' $'ad\tvanced' $'ad\nvanced' $'ad\rvanced' $'ad\001vanced')
+for bad in "${unsafe_cli_profiles[@]}"; do
+  set +e
+  bad_profile_json="$(run_cli install --profile "$bad" --preview --json --no-color 2>"$fixture/bad-profile.err")"
+  bad_profile_rc=$?
+  set -e
+  [[ "$bad_profile_rc" -ne 0 ]] && pass "unsafe CLI profile rejected" || fail_case "unsafe CLI profile accepted"
+  assert_has "unsafe CLI profile keeps JSON contract" "$bad_profile_json" '"valid":false'
+  assert_has "unsafe CLI profile declares non-mutation" "$bad_profile_json" '"mutation_performed":false'
+  [[ "$bad_profile_json" != *"$bad"* ]] && pass "unsafe CLI profile not reflected" || fail_case "unsafe CLI profile leaked"
+done
 
 printf 'CONFIG_SCHEMA=99\nINSTALLATION_PROFILE=recommended\n' >"$fixture/cli-config"
 set +e

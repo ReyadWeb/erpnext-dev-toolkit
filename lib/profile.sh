@@ -6,7 +6,10 @@ _ERPNEXT_DEV_PROFILE_LOADED=1
 
 normalize_installation_profile() {
   local raw="${1:-}"
-  raw="$(printf '%s' "$raw" | tr '[:upper:]_' '[:lower:]-' | tr -d '[:space:]')"
+  # Reject separators and control bytes before compatibility normalization.
+  # Removing them would turn malformed, untrusted input into a valid profile.
+  [[ -n "$raw" && ! "$raw" =~ [[:space:][:cntrl:]] ]] || return 1
+  raw="$(printf '%s' "$raw" | tr '[:upper:]_' '[:lower:]-')"
   case "$raw" in
     recommended | default | erpnext | frappe-erpnext) printf 'recommended\n' ;;
     frappe-only | frappe) printf 'frappe-only\n' ;;
