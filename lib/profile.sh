@@ -6,12 +6,38 @@ _ERPNEXT_DEV_PROFILE_LOADED=1
 
 normalize_installation_profile() {
   local raw="${1:-}"
-  raw="$(printf '%s' "$raw" | tr '[:upper:]_' '[:lower:]-' | tr -d '[:space:]')"
+  # Reject separators and control bytes before compatibility normalization.
+  # Removing them would turn malformed, untrusted input into a valid profile.
+  [[ -n "$raw" && ! "$raw" =~ [[:space:][:cntrl:]] ]] || return 1
+  raw="$(printf '%s' "$raw" | tr '[:upper:]_' '[:lower:]-')"
   case "$raw" in
     recommended | default | erpnext | frappe-erpnext) printf 'recommended\n' ;;
     frappe-only | frappe) printf 'frappe-only\n' ;;
+    advanced) printf 'advanced\n' ;;
+    existing) printf 'existing\n' ;;
     *) return 1 ;;
   esac
+}
+
+installation_profile_is_setup_intent() {
+  case "${1:-}" in
+    recommended | frappe-only | advanced | existing) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+installation_profile_requires_explicit_apps() {
+  [[ "${1:-$(effective_installation_profile)}" == advanced ]]
+}
+
+installation_profile_allows_apps_option() {
+  installation_profile_requires_explicit_apps "${1:-$(effective_installation_profile)}"
+}
+
+installation_profile_plan_preview_requested() {
+  [[ "${INSTALLATION_PROFILE_OPTION_PROVIDED:-0}" -eq 1 \
+    && "${QUICK_INSTALL_PREVIEW:-0}" -eq 1 \
+    && ("${ACTION:-}" == install || "${ACTION:-}" == setup) ]]
 }
 
 validate_installation_profile_value() {
@@ -31,6 +57,8 @@ installation_profile_label() {
   case "${1:-$(effective_installation_profile)}" in
     recommended) printf 'Recommended (Frappe + ERPNext)\n' ;;
     frappe-only) printf 'Frappe only\n' ;;
+    advanced) printf 'Advanced (explicit supported applications)\n' ;;
+    existing) printf 'Existing installation management (preview only)\n' ;;
     *) return 1 ;;
   esac
 }
@@ -39,6 +67,8 @@ installation_profile_erpnext_action() {
   case "${1:-$(effective_installation_profile)}" in
     recommended) printf 'Will be installed\n' ;;
     frappe-only) printf 'Will not be installed\n' ;;
+    advanced) printf 'Depends on the validated application plan\n' ;;
+    existing) printf 'Observed only; no installation planned\n' ;;
     *) return 1 ;;
   esac
 }
@@ -63,6 +93,7 @@ installation_profile_requires_app() {
   local app="$1"
   case "$(effective_installation_profile):${app}" in
     recommended:frappe | recommended:erpnext | frappe-only:frappe) return 0 ;;
+    advanced:frappe) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -78,13 +109,18 @@ validate_platform_profile_combination() {
 }
 
 installation_profile_required_apps() {
-  printf 'frappe\n'
-  installation_profile_requires_erpnext && printf 'erpnext\n'
+  case "$(effective_installation_profile)" in
+    recommended) printf 'frappe\nerpnext\n' ;;
+    frappe-only | advanced) printf 'frappe\n' ;;
+    existing) return 0 ;;
+  esac
 }
 
 installation_profile_asset_policy() {
   if installation_profile_requires_erpnext; then
     printf 'frappe-and-erpnext\n'
+  elif [[ "$(effective_installation_profile)" == existing ]]; then
+    printf 'observed-existing\n'
   else
     printf 'frappe-only\n'
   fi

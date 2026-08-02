@@ -427,7 +427,19 @@ Automation may also pass `--profile recommended` explicitly. Docker production
 uses immutable cumulative application images: Frappe-only omits ERPNext, while
 the recommended default requires it. A later `app install erpnext --site SITE`
 builds and verifies a replacement image before changing the selected site or
-managed profile. See [Docker durability](docs/DOCKER-DURABILITY.md).
+managed profile.
+
+Phase 7 profile planning is available without changing a deployment:
+
+```bash
+sudo erpnext-dev install --profile advanced --apps crm,helpdesk --preview
+sudo erpnext-dev install --profile existing --preview --json
+```
+
+The preview validates canonical catalog IDs, resolves dependencies, fingerprints
+read-only inventory, and reports reconciliation and Native/Docker capability.
+Advanced and existing profiles are planning-only until their later adapters ship.
+See [Docker durability](docs/DOCKER-DURABILITY.md).
 See [Interactive installation profiles](docs/INSTALLATION-PROFILES.md) for mode,
 precedence, cancellation, existing-installation, and legacy v1.20.4 behavior.
 
