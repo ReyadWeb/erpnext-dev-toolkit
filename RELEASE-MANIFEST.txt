@@ -42,6 +42,7 @@ scripts/test-repo-workflow-release-finalize.sh
 scripts/test-repo-workflow-release-run.sh
 scripts/test-health-snapshot.sh
 scripts/test-platform-profiles.sh
+scripts/test-installation-profile-contract.sh
 scripts/test-inventory-compatibility.sh
 scripts/test-operation-planner.sh
 scripts/test-docker-durability.sh

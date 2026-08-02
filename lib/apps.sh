@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2034
 # Curated Frappe app library, install wizards, and compatibility helpers.
 [[ -n "${_ERPNEXT_DEV_APPS_LOADED:-}" ]] && return 0
 _ERPNEXT_DEV_APPS_LOADED=1
@@ -275,6 +275,132 @@ validate_app_name() {
 validate_branch_name() {
   local branch="$1"
   [[ -z "$branch" || "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]
+}
+
+# Phase 7 setup-profile application input is intentionally narrower than the
+# interactive app library aliases: automation accepts canonical catalog IDs
+# only. These helpers parse data and build plans; they never fetch or execute app
+# code.
+profile_plan_parse_requested_apps() {
+  local raw="${1:-}" item catalog_id
+  local -A selected=()
+
+  PROFILE_PLAN_REQUESTED_APPS=()
+  PROFILE_PLAN_REQUESTED_CSV=""
+  PROFILE_PLAN_ERROR=""
+
+  [[ -n "$raw" ]] || {
+    PROFILE_PLAN_ERROR="The advanced profile requires a non-empty --apps list."
+    return 1
+  }
+  [[ "$raw" =~ ^[a-z][a-z0-9_]*(,[a-z][a-z0-9_]*)*$ ]] || {
+    PROFILE_PLAN_ERROR="Application selection must be canonical comma-separated catalog identifiers."
+    return 1
+  }
+
+  IFS=',' read -r -a PROFILE_PLAN_INPUT_ITEMS <<<"$raw"
+  for item in "${PROFILE_PLAN_INPUT_ITEMS[@]}"; do
+    [[ "$item" != frappe ]] || {
+      PROFILE_PLAN_ERROR="Frappe is implicit and must not be listed in --apps."
+      return 1
+    }
+    load_validated_app_catalog_record "$item" >/dev/null 2>&1 || {
+      PROFILE_PLAN_ERROR="Application selection contains an unknown catalog identifier."
+      return 1
+    }
+    [[ "$item" == "$LIB_APP_ID" ]] || {
+      PROFILE_PLAN_ERROR="Application selection must use canonical catalog identifiers."
+      return 1
+    }
+    [[ -z "${selected[$item]:-}" ]] || {
+      PROFILE_PLAN_ERROR="Application selection contains a duplicate identifier."
+      return 1
+    }
+    selected["$item"]=1
+  done
+
+  # Normalize by trusted catalog order, independent of option/input ordering.
+  while IFS= read -r catalog_id; do
+    [[ "$catalog_id" != frappe && -n "${selected[$catalog_id]:-}" ]] || continue
+    PROFILE_PLAN_REQUESTED_APPS+=("$catalog_id")
+  done < <(app_catalog_ids)
+  PROFILE_PLAN_REQUESTED_CSV="$(printf '%s\n' "${PROFILE_PLAN_REQUESTED_APPS[@]}" | paste -sd, -)"
+}
+
+profile_plan_dependency_visit() {
+  local app="$1" dependency requires
+  case "${PROFILE_PLAN_VISIT_STATE[$app]:-}" in
+    visiting)
+      PROFILE_PLAN_ERROR="Catalog dependency cycle detected."
+      return 1
+      ;;
+    complete) return 0 ;;
+  esac
+
+  PROFILE_PLAN_VISIT_STATE["$app"]="visiting"
+  load_validated_app_catalog_record "$app" >/dev/null 2>&1 || {
+    PROFILE_PLAN_ERROR="Catalog dependency is missing or invalid."
+    return 1
+  }
+  requires="${LIB_APP_REQUIRES:-}"
+  while IFS= read -r dependency; do
+    [[ -n "$dependency" ]] || continue
+    load_validated_app_catalog_record "$dependency" >/dev/null 2>&1 || {
+      PROFILE_PLAN_ERROR="Catalog dependency is missing or invalid."
+      return 1
+    }
+    profile_plan_dependency_visit "$dependency" || return 1
+  done < <(printf '%s\n' "$requires" | tr ',' '\n')
+  PROFILE_PLAN_VISIT_STATE["$app"]="complete"
+  [[ -n "${PROFILE_PLAN_CLOSURE_SET[$app]:-}" ]] || {
+    PROFILE_PLAN_CLOSURE_SET["$app"]=1
+    PROFILE_PLAN_DESIRED_APPS+=("$app")
+  }
+}
+
+profile_plan_resolve_apps() {
+  local profile="$1" app conflicts conflict
+  PROFILE_PLAN_DESIRED_APPS=()
+  PROFILE_PLAN_DESIRED_CSV=""
+  PROFILE_PLAN_ERROR=""
+  declare -gA PROFILE_PLAN_VISIT_STATE=()
+  declare -gA PROFILE_PLAN_CLOSURE_SET=()
+
+  case "$profile" in
+    recommended)
+      profile_plan_dependency_visit frappe || return 1
+      profile_plan_dependency_visit erpnext || return 1
+      ;;
+    frappe-only)
+      profile_plan_dependency_visit frappe || return 1
+      ;;
+    advanced)
+      profile_plan_dependency_visit frappe || return 1
+      for app in "${PROFILE_PLAN_REQUESTED_APPS[@]}"; do
+        profile_plan_dependency_visit "$app" || return 1
+      done
+      ;;
+    existing)
+      PROFILE_PLAN_DESIRED_CSV=""
+      return 0
+      ;;
+    *)
+      PROFILE_PLAN_ERROR="Unknown canonical installation profile."
+      return 1
+      ;;
+  esac
+
+  for app in "${PROFILE_PLAN_DESIRED_APPS[@]}"; do
+    load_validated_app_catalog_record "$app" >/dev/null 2>&1 || return 1
+    conflicts="${LIB_APP_CONFLICTS:-}"
+    while IFS= read -r conflict; do
+      [[ -z "$conflict" || -z "${PROFILE_PLAN_CLOSURE_SET[$conflict]:-}" ]] || {
+        PROFILE_PLAN_ERROR="Resolved applications contain a declared catalog conflict."
+        return 1
+      }
+    done < <(printf '%s\n' "$conflicts" | tr ',' '\n')
+  done
+  PROFILE_PLAN_DESIRED_CSV="$(printf '%s\n' "${PROFILE_PLAN_DESIRED_APPS[@]}" | paste -sd, -)"
 }
 
 app_folder_exists() {

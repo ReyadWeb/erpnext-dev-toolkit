@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2034
 # Site name, domain, and toolkit config file helpers for erpnext-dev.sh.
 # Sourced by the toolkit entry point; do not execute directly.
 
@@ -144,6 +144,117 @@ read_saved_config_value() {
     fi
   done
   return 1
+}
+
+# Read installation-profile intent as data. This parser never sources the file,
+# never writes it, and deliberately keeps observed deployment state separate.
+# Schema 2 is the Phase 7 contract; missing schema remains legacy-compatible.
+read_installation_profile_metadata() {
+  local file="$1" schema="" profile="" apps=""
+  local saved_requested_csv="${PROFILE_PLAN_REQUESTED_CSV-}"
+  local saved_plan_error="${PROFILE_PLAN_ERROR-}"
+  local normalized_apps=""
+
+  PROFILE_METADATA_SCHEMA="legacy"
+  PROFILE_METADATA_STATUS="compatible"
+  PROFILE_METADATA_PROFILE="recommended"
+  PROFILE_METADATA_APPS=""
+  PROFILE_METADATA_EXPLICIT="false"
+  PROFILE_METADATA_DETAIL="Legacy configuration without profile metadata; recommended compatibility default applies."
+
+  [[ -n "$file" && -f "$file" && ! -L "$file" ]] || {
+    PROFILE_METADATA_STATUS="unmanaged"
+    PROFILE_METADATA_DETAIL="No readable managed profile configuration was found."
+    return 0
+  }
+
+  schema="$(read_config_key_from_file "$file" CONFIG_SCHEMA 2>/dev/null || true)"
+  profile="$(read_config_key_from_file "$file" INSTALLATION_PROFILE 2>/dev/null || true)"
+  apps="$(read_config_key_from_file "$file" INSTALLATION_PROFILE_APPS 2>/dev/null || true)"
+
+  if [[ -z "$schema" ]]; then
+    if [[ -n "$profile" ]]; then
+      PROFILE_METADATA_EXPLICIT="true"
+      profile="$(normalize_installation_profile "$profile" 2>/dev/null)" || {
+        PROFILE_METADATA_STATUS="incompatible"
+        PROFILE_METADATA_DETAIL="Legacy configuration contains an invalid installation profile."
+        return 2
+      }
+      case "$profile" in
+        recommended|frappe-only) ;;
+        *)
+          PROFILE_METADATA_STATUS="incompatible"
+          PROFILE_METADATA_DETAIL="Advanced or existing intent requires configuration schema 2."
+          return 2
+          ;;
+      esac
+      PROFILE_METADATA_PROFILE="$profile"
+      PROFILE_METADATA_DETAIL="Legacy profile metadata is compatible and remains read-only."
+    fi
+    [[ -z "$apps" ]] || {
+      PROFILE_METADATA_STATUS="incompatible"
+      PROFILE_METADATA_DETAIL="Legacy configuration cannot define installation-profile applications."
+      return 2
+    }
+    return 0
+  fi
+
+  if [[ "$schema" != 2 ]]; then
+    PROFILE_METADATA_SCHEMA="$schema"
+    PROFILE_METADATA_STATUS="incompatible"
+    PROFILE_METADATA_DETAIL="Unsupported installation-profile configuration schema."
+    return 2
+  fi
+
+  PROFILE_METADATA_SCHEMA=2
+  PROFILE_METADATA_EXPLICIT="true"
+  [[ -n "$profile" ]] || {
+    PROFILE_METADATA_STATUS="incompatible"
+    PROFILE_METADATA_DETAIL="Schema 2 requires INSTALLATION_PROFILE."
+    return 2
+  }
+  profile="$(normalize_installation_profile "$profile" 2>/dev/null)" || {
+    PROFILE_METADATA_STATUS="incompatible"
+    PROFILE_METADATA_DETAIL="Schema 2 contains an invalid installation profile."
+    return 2
+  }
+  if [[ "$profile" != advanced && -n "$apps" ]]; then
+    PROFILE_METADATA_STATUS="incompatible"
+    PROFILE_METADATA_DETAIL="INSTALLATION_PROFILE_APPS is valid only for the advanced profile."
+    return 2
+  fi
+  if [[ "$profile" == advanced && -z "$apps" ]]; then
+    PROFILE_METADATA_STATUS="incompatible"
+    PROFILE_METADATA_DETAIL="The advanced profile requires explicit applications."
+    return 2
+  fi
+  if [[ "$profile" == advanced ]]; then
+    if declare -F profile_plan_parse_requested_apps >/dev/null 2>&1; then
+      profile_plan_parse_requested_apps "$apps" >/dev/null 2>&1 || {
+        PROFILE_PLAN_REQUESTED_APPS=()
+        PROFILE_PLAN_REQUESTED_CSV="$saved_requested_csv"
+        [[ -z "$saved_requested_csv" ]] || IFS=',' read -r -a PROFILE_PLAN_REQUESTED_APPS <<<"$saved_requested_csv"
+        PROFILE_PLAN_ERROR="$saved_plan_error"
+        PROFILE_METADATA_STATUS="incompatible"
+        PROFILE_METADATA_DETAIL="Schema 2 contains an invalid advanced application selection."
+        return 2
+      }
+      normalized_apps="$PROFILE_PLAN_REQUESTED_CSV"
+      PROFILE_PLAN_REQUESTED_APPS=()
+      PROFILE_PLAN_REQUESTED_CSV="$saved_requested_csv"
+      [[ -z "$saved_requested_csv" ]] || IFS=',' read -r -a PROFILE_PLAN_REQUESTED_APPS <<<"$saved_requested_csv"
+      PROFILE_PLAN_ERROR="$saved_plan_error"
+      apps="$normalized_apps"
+    elif [[ ! "$apps" =~ ^[a-z][a-z0-9_]*(,[a-z][a-z0-9_]*)*$ ]]; then
+      PROFILE_METADATA_STATUS="incompatible"
+      PROFILE_METADATA_DETAIL="Schema 2 contains malformed advanced application identifiers."
+      return 2
+    fi
+  fi
+
+  PROFILE_METADATA_PROFILE="$profile"
+  PROFILE_METADATA_APPS="$apps"
+  PROFILE_METADATA_DETAIL="Schema 2 profile intent parsed without modifying configuration."
 }
 
 read_saved_site_name() {

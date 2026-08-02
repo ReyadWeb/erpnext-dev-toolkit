@@ -38,6 +38,23 @@ extend it instead of adding a negative boolean such as `--no-erpnext`:
 --profile existing
 ```
 
+PR 7.1 exposes this contract through the existing setup command family as a
+strictly read-only preview:
+
+```bash
+erpnext-dev install --profile recommended --preview
+erpnext-dev install --profile frappe-only --preview --json
+erpnext-dev install --profile advanced --apps crm,helpdesk --preview
+erpnext-dev install --profile existing --preview
+```
+
+`setup` is an alias-equivalent placement for these previews. `advanced` and
+`existing` are preview-only until their later adapters ship. The PR 7.1 CLI
+requires `--apps` for advanced because setup-wizard selection is deferred. A
+preview reads validated configuration and inventory, prints schema version 1
+output, and prominently reports that no deployment mutation occurred. It does
+not acquire the mutation lock or create an operation journal.
+
 The names are lowercase ASCII identifiers. Input normalization may retain the
 documented legacy aliases for `recommended` and `frappe-only`, but new automation
 should use only the canonical values. Profile and app identifiers are untrusted:
@@ -482,3 +499,11 @@ Each PR must keep `VERSION` unchanged until a separately authorized release.
   explicit options/JSON, and test non-TTY, EOF, and `--yes` combinations.
 - **Secret exposure:** persist identifiers only, use existing credential stores,
   redact plans/journals/support bundles, and prohibit credential-bearing URLs.
+
+## Deferred acceptance after PR 7.1
+
+PR 7.1 deliberately does not change the setup wizard, status wording, installer
+adapters, or browser access behavior. Frappe-only web accessibility and remaining
+ERPNext-specific stack labels stay as explicit acceptance work for PR 7.2 and the
+later Native/Docker vertical slices. A successful read-only plan is not evidence
+that those deferred runtime paths have passed live acceptance.

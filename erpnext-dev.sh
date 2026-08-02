@@ -112,6 +112,9 @@ if [[ -n "${INSTALLATION_PROFILE+x}" ]]; then
   INSTALLATION_PROFILE_ENV_PROVIDED=1
 fi
 INSTALLATION_PROFILE="${INSTALLATION_PROFILE:-}"
+INSTALLATION_PROFILE_OPTION_PROVIDED=0
+INSTALLATION_PROFILE_APPS_OPTION_PROVIDED=0
+INSTALLATION_PROFILE_APPS_RAW=""
 # Docker engine settings (used only when DEPLOYMENT_ENGINE=docker). See lib/docker.sh.
 DOCKER_WORKDIR="${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}"
 FRAPPE_DOCKER_REPO="${FRAPPE_DOCKER_REPO:-https://github.com/frappe/frappe_docker.git}"
@@ -1630,10 +1633,12 @@ Examples:
 Options:
   -y, --yes  Assume yes for supported confirmations
   --profile PROFILE
-             Explicit installation content: recommended or frappe-only.
+             Setup intent: recommended, frappe-only, advanced, or existing.
              Interactive Quick discloses the recommended Frappe+ERPNext choice;
-             Advanced asks for profile and engine before final confirmation.
-             Both profiles support native and Docker installations.
+             current installation behavior is unchanged without a new explicit option.
+  --apps APP[,APP...]
+             Canonical catalog IDs for --profile advanced only.
+  --preview  With an explicit setup profile, print a read-only plan and do not install.
 
 Verified signed-release bootstrap:
 $(verified_release_bundle_bootstrap "first-run" "  ")
@@ -1714,12 +1719,14 @@ parse_args() {
         ;;
       --profile)
         shift
-        [[ $# -gt 0 ]] || fail "--profile requires recommended or frappe-only."
+        [[ $# -gt 0 ]] || fail "--profile requires a canonical installation profile."
         if [[ "${ACTION:-}" == stack && "${ACTION_ARG:-}" == convert ]]; then
           REMOVAL_TARGET_PROFILE="$1"
         else
+          [[ "$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 0 ]] || fail "--profile may be supplied only once."
           INSTALLATION_PROFILE="$1"
           INSTALLATION_PROFILE_ENV_PROVIDED=1
+          INSTALLATION_PROFILE_OPTION_PROVIDED=1
         fi
         shift
         ;;
@@ -1728,10 +1735,27 @@ parse_args() {
           REMOVAL_TARGET_PROFILE="${1#*=}"
           [[ -n "$REMOVAL_TARGET_PROFILE" ]] || fail "--profile requires a non-empty value."
         else
+          [[ "$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 0 ]] || fail "--profile may be supplied only once."
           INSTALLATION_PROFILE="${1#*=}"
           INSTALLATION_PROFILE_ENV_PROVIDED=1
+          INSTALLATION_PROFILE_OPTION_PROVIDED=1
           [[ -n "$INSTALLATION_PROFILE" ]] || fail "--profile requires a non-empty value."
         fi
+        shift
+        ;;
+      --apps)
+        shift
+        [[ $# -gt 0 ]] || fail "--apps requires a non-empty comma-separated catalog list."
+        [[ "$INSTALLATION_PROFILE_APPS_OPTION_PROVIDED" -eq 0 ]] || fail "--apps may be supplied only once."
+        INSTALLATION_PROFILE_APPS_RAW="$1"
+        INSTALLATION_PROFILE_APPS_OPTION_PROVIDED=1
+        shift
+        ;;
+      --apps=*)
+        [[ "$INSTALLATION_PROFILE_APPS_OPTION_PROVIDED" -eq 0 ]] || fail "--apps may be supplied only once."
+        INSTALLATION_PROFILE_APPS_RAW="${1#*=}"
+        INSTALLATION_PROFILE_APPS_OPTION_PROVIDED=1
+        [[ -n "$INSTALLATION_PROFILE_APPS_RAW" ]] || fail "--apps requires a non-empty comma-separated catalog list."
         shift
         ;;
       --site)
@@ -1816,13 +1840,33 @@ parse_args() {
   if [[ -z "${ACTION}" && "${DOCTOR_FORMAT}" != "human" ]]; then
     ACTION="doctor"
   fi
+
+  if [[ "$INSTALLATION_PROFILE_APPS_OPTION_PROVIDED" -eq 1 ]]; then
+    [[ "${ACTION:-}" == install || "${ACTION:-}" == setup ]] \
+      || fail "--apps is valid only for an explicit install/setup profile preview."
+    [[ "$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 ]] \
+      || fail "--apps requires an explicit --profile advanced selection."
+  fi
+  if [[ "$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 ]]; then
+    [[ "${ACTION:-}" == install || "${ACTION:-}" == setup ]] \
+      || fail "--profile is setup-scoped; use it with install or setup."
+  fi
 }
 
 main() {
+  local normalized_profile=""
   parse_args "$@"
   if [[ "$INSTALLATION_PROFILE_ENV_PROVIDED" -eq 1 ]]; then
-    INSTALLATION_PROFILE="$(normalize_installation_profile "$INSTALLATION_PROFILE" 2>/dev/null)" \
-      || fail "Invalid installation profile: ${INSTALLATION_PROFILE}. Supported: recommended, frappe-only."
+    if normalized_profile="$(normalize_installation_profile "$INSTALLATION_PROFILE" 2>/dev/null)"; then
+      INSTALLATION_PROFILE="$normalized_profile"
+    elif ! installation_profile_plan_preview_requested; then
+      fail "Invalid installation profile. Supported: recommended, frappe-only, advanced, existing."
+    fi
+  fi
+  if [[ ("$INSTALLATION_PROFILE" == advanced || "$INSTALLATION_PROFILE" == existing) \
+    && ("${ACTION:-}" == install || "${ACTION:-}" == setup) \
+    && ! ("$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 && "$QUICK_INSTALL_PREVIEW" -eq 1) ]]; then
+    fail "The ${INSTALLATION_PROFILE} profile is preview-only in PR 7.1; add --preview."
   fi
   validate_platform_profile_combination \
     || fail "Invalid platform/profile selection; no system changes were made."
@@ -1841,7 +1885,7 @@ main() {
       || fail "Application removal is prohibited by trusted catalog policy."
   fi
 
-  if action_requires_lock "${ACTION:-menu}" \
+  if { action_requires_lock "${ACTION:-menu}" && ! installation_profile_plan_preview_requested; } \
     || [[ "${ACTION:-}" == app && ("${ACTION_ARG:-}" == install || "${ACTION_ARG:-}" == update || "${ACTION_ARG:-}" == uninstall) && "$QUICK_INSTALL_PREVIEW" -ne 1 && "$MANAGED_UPDATE_PREVIEW" -ne 1 && "$REMOVAL_PREVIEW" -ne 1 ]] \
     || [[ "${ACTION:-}" == stack && ("${ACTION_ARG:-}" == update || "${ACTION_ARG:-}" == convert) && "$MANAGED_UPDATE_PREVIEW" -ne 1 && "$REMOVAL_PREVIEW" -ne 1 ]] \
     || [[ "${ACTION:-}" == operation && "${ACTION_ARG:-}" == recover && "$REMOVAL_PREVIEW" -ne 1 ]]; then
@@ -1871,7 +1915,13 @@ main() {
     set-domain) prompt_and_save_public_domain ;;
     show-config) show_config_summary ;;
     guided-setup) run_guided_setup ;;
-    setup | install) run_install ;;
+    setup | install)
+      if installation_profile_plan_preview_requested; then
+        run_installation_profile_preview
+      else
+        run_install
+      fi
+      ;;
     repair) run_repair ;;
     status) run_status ;;
     status-menu) show_status_menu ;;

@@ -25,6 +25,8 @@ err() { :; }
 assert_eq "compatibility default" recommended "$(effective_installation_profile)"
 assert_eq "recommended alias" recommended "$(normalize_installation_profile erpnext)"
 assert_eq "frappe-only alias" frappe-only "$(normalize_installation_profile frappe_only)"
+assert_eq "advanced canonical profile" advanced "$(normalize_installation_profile advanced)"
+assert_eq "existing canonical profile" existing "$(normalize_installation_profile existing)"
 if normalize_installation_profile invalid >/dev/null 2>&1; then
   fail "invalid profile accepted"
 fi
@@ -72,10 +74,10 @@ echo "OK: invalid CLI profile rejected before mutation lock"
 
 LOG_DIR="$tmp/valid-log" LOCK_DIR="$tmp/valid-lock" CONFIG_FILE="$tmp/valid-config" \
   LEGACY_CONFIG_FILE="$tmp/valid-legacy" DEPLOYMENT_ENGINE=native \
-  bash "${ROOT_DIR}/erpnext-dev.sh" help --profile frappe-only >"$tmp/valid-out" 2>&1 \
-  || fail "valid non-interactive --profile selection failed"
+  bash "${ROOT_DIR}/erpnext-dev.sh" help >"$tmp/valid-out" 2>&1 \
+  || fail "existing help command regressed"
 grep -q -- '--profile PROFILE' "$tmp/valid-out" || fail "profile CLI help missing"
-echo "OK: explicit non-interactive profile selection accepted"
+echo "OK: existing help behavior preserved without explicit profile options"
 
 grep -q 'INSTALLATION_PROFILE="$(effective_installation_profile)"' lib/install.sh \
   || fail "native installer does not pass the selected profile"

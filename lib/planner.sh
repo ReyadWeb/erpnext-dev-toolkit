@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2034
 # Unified application operation planner. Phase 3 enables native Quick installs.
 [[ -n "${_ERPNEXT_DEV_PLANNER_LOADED:-}" ]] && return 0
 _ERPNEXT_DEV_PLANNER_LOADED=1
@@ -149,7 +149,261 @@ planner_fail_record() {
 }
 
 planner_inventory_fingerprint() {
-  inventory_records_sorted | sha256sum | awk '{print $1}'
+  # Hash normalized observable fields only. Repository URLs, credentials, and
+  # other potentially sensitive/raw values are deliberately excluded.
+  inventory_records_sorted | awk -F'|' '
+    $1=="STACK" {print $1,$3,$4,$5,$6,$7}
+    $1=="APP" {print $1,$3,$4,$5,$6,$9,$10,$11}
+    $1=="SITE" {print $1,$3,$4}
+    $1=="SITE_APP" {print $1,$3,$4,$5}
+    $1=="ISSUE" {print $1,$3,$4,$5}
+  ' | LC_ALL=C sort | sha256sum | awk '{print $1}'
+}
+
+installation_profile_capability_evaluate() {
+  local profile="$1" engine="$2" environment="$3" app
+  PROFILE_PLAN_CAPABILITY="unsupported"
+  PROFILE_PLAN_DURABLE_IMAGE="false"
+  PROFILE_PLAN_CAPABILITY_DETAIL="Unsupported engine/environment/profile combination."
+
+  case "${engine}:${environment}" in
+    native:native | docker:development | docker:production) ;;
+    *) return 1 ;;
+  esac
+
+  if [[ "$profile" == existing ]]; then
+    PROFILE_PLAN_CAPABILITY="preview-only"
+    PROFILE_PLAN_CAPABILITY_DETAIL="Existing-installation management is validation and preview only in PR 7.1."
+    return 0
+  fi
+
+  for app in "${PROFILE_PLAN_DESIRED_APPS[@]}"; do
+    load_validated_app_catalog_record "$app" >/dev/null 2>&1 || return 1
+    case "${engine}:${environment}" in
+      native:native)
+        [[ "$LIB_APP_NATIVE_SUPPORT" == supported ]] || return 1
+        ;;
+      docker:development)
+        [[ "$LIB_APP_DOCKER_DEV_SUPPORT" == supported ]] || return 1
+        ;;
+      docker:production)
+        [[ "$LIB_APP_DOCKER_PROD_STRATEGY" != unsupported ]] || return 1
+        ;;
+    esac
+  done
+
+  if [[ "$engine" == docker && "$environment" == production ]] \
+    && { [[ "$profile" == advanced ]] || [[ "$profile" == frappe-only ]]; }; then
+    PROFILE_PLAN_CAPABILITY="durable-image-required"
+    PROFILE_PLAN_DURABLE_IMAGE="true"
+    PROFILE_PLAN_CAPABILITY_DETAIL="A verified cumulative custom image is required; running containers must not be mutated."
+  elif [[ "$profile" == advanced ]]; then
+    PROFILE_PLAN_CAPABILITY="preview-only"
+    PROFILE_PLAN_CAPABILITY_DETAIL="The shared plan is valid; the installation adapter is intentionally deferred."
+  else
+    PROFILE_PLAN_CAPABILITY="supported"
+    PROFILE_PLAN_CAPABILITY_DETAIL="The existing profile adapter supports this engine and environment."
+  fi
+}
+
+installation_profile_reconcile() {
+  local record management state app desired observed_csv desired_csv
+  local -A observed=() wanted=()
+  local extra=0 missing=0 stack_count=0
+
+  PROFILE_PLAN_RECONCILIATION="ambiguous"
+  PROFILE_PLAN_OBSERVED_APPS=""
+  PROFILE_PLAN_OBSERVED_SUMMARY="Inventory is incomplete or unavailable."
+
+  if [[ "${PROFILE_METADATA_STATUS:-compatible}" == incompatible \
+    || "$PROFILE_PLAN_CAPABILITY" == unsupported ]]; then
+    PROFILE_PLAN_RECONCILIATION="incompatible"
+    PROFILE_PLAN_OBSERVED_SUMMARY="Configuration schema or capability validation is incompatible."
+    return 0
+  fi
+
+  while IFS= read -r record; do
+    case "${record%%|*}" in
+      STACK)
+        stack_count=$((stack_count + 1))
+        management="$(printf '%s' "$record" | cut -d'|' -f6)"
+        state="$(printf '%s' "$record" | cut -d'|' -f7)"
+        [[ "$management" == managed ]] || PROFILE_PLAN_RECONCILIATION="unmanaged"
+        [[ "$state" == clean ]] || PROFILE_PLAN_OBSERVED_SUMMARY="Observed stack state is incomplete or ambiguous."
+        ;;
+      SITE_APP)
+        app="$(printf '%s' "$record" | cut -d'|' -f4)"
+        inventory_valid_name "$app" && observed["$app"]=1
+        ;;
+      ISSUE)
+        PROFILE_PLAN_OBSERVED_SUMMARY="Inventory reported an ambiguous discovery issue."
+        ;;
+    esac
+  done < <(inventory_records_sorted)
+
+  observed_csv="$(printf '%s\n' "${!observed[@]}" | sed '/^$/d' | LC_ALL=C sort | paste -sd, -)"
+  PROFILE_PLAN_OBSERVED_APPS="$observed_csv"
+
+  if [[ "${PROFILE_PLAN_PROFILE:-}" == existing || "$PROFILE_PLAN_RECONCILIATION" == unmanaged ]]; then
+    PROFILE_PLAN_RECONCILIATION="unmanaged"
+    PROFILE_PLAN_OBSERVED_SUMMARY="Observed deployment remains unmanaged; no adoption occurred."
+    return 0
+  fi
+  if [[ "$stack_count" -ne 1 ]] || inventory_has_ambiguous_state; then
+    PROFILE_PLAN_RECONCILIATION="ambiguous"
+    return 0
+  fi
+
+  desired_csv="$PROFILE_PLAN_DESIRED_CSV"
+  while IFS= read -r desired; do
+    [[ -n "$desired" ]] && wanted["$desired"]=1
+  done < <(printf '%s\n' "$desired_csv" | tr ',' '\n')
+  for desired in "${!wanted[@]}"; do
+    [[ -n "${observed[$desired]:-}" ]] || missing=1
+  done
+  for app in "${!observed[@]}"; do
+    [[ -n "${wanted[$app]:-}" ]] || extra=1
+  done
+  if ((missing)); then
+    PROFILE_PLAN_RECONCILIATION="drift-missing"
+    PROFILE_PLAN_OBSERVED_SUMMARY="One or more desired applications are not observed as installed."
+  elif ((extra)); then
+    PROFILE_PLAN_RECONCILIATION="drift-extra"
+    PROFILE_PLAN_OBSERVED_SUMMARY="Additional observed applications will be preserved."
+  else
+    PROFILE_PLAN_RECONCILIATION="consistent"
+    PROFILE_PLAN_OBSERVED_SUMMARY="Observed installed applications match the desired plan."
+  fi
+}
+
+installation_profile_plan_build() {
+  local profile="$1" apps_raw="${2:-}" engine environment metadata_file="${3:-${CONFIG_FILE:-}}"
+  PROFILE_PLAN_VALID="false"
+  PROFILE_PLAN_ERROR=""
+  PROFILE_PLAN_PROFILE="$profile"
+  PROFILE_PLAN_REQUESTED_APPS=()
+  PROFILE_PLAN_REQUESTED_CSV=""
+  PROFILE_PLAN_DESIRED_APPS=()
+  PROFILE_PLAN_DESIRED_CSV=""
+  PROFILE_PLAN_RECONCILIATION="ambiguous"
+  PROFILE_PLAN_METADATA_STATE="unavailable"
+
+  installation_profile_is_setup_intent "$profile" || {
+    PROFILE_PLAN_ERROR="Invalid canonical installation profile."
+    return 20
+  }
+  if [[ "$profile" == advanced ]]; then
+    profile_plan_parse_requested_apps "$apps_raw" || return 20
+  elif [[ -n "$apps_raw" ]]; then
+    PROFILE_PLAN_ERROR="--apps is valid only with --profile advanced."
+    return 20
+  fi
+  profile_plan_resolve_apps "$profile" || return 22
+
+  engine="$(effective_deployment_engine)"
+  if [[ "$engine" == docker ]]; then
+    environment="$(docker_mode 2>/dev/null || printf development)"
+  else
+    environment="native"
+  fi
+  PROFILE_PLAN_ENGINE="$engine"
+  PROFILE_PLAN_ENVIRONMENT="$environment"
+  installation_profile_capability_evaluate "$profile" "$engine" "$environment" || {
+    PROFILE_PLAN_ERROR="$PROFILE_PLAN_CAPABILITY_DETAIL"
+    return 23
+  }
+
+  read_installation_profile_metadata "$metadata_file" >/dev/null 2>&1 || true
+  if [[ "${PROFILE_METADATA_STATUS:-unmanaged}" == incompatible ]]; then
+    PROFILE_PLAN_METADATA_STATE="incompatible"
+  elif [[ "${PROFILE_METADATA_STATUS:-unmanaged}" == unmanaged ]]; then
+    PROFILE_PLAN_METADATA_STATE="unavailable"
+  elif [[ "${PROFILE_METADATA_EXPLICIT:-false}" != true ]]; then
+    PROFILE_PLAN_METADATA_STATE="unavailable"
+  elif [[ "${PROFILE_METADATA_PROFILE:-recommended}" == "$profile" ]]; then
+    PROFILE_PLAN_METADATA_STATE="matches-request"
+  else
+    PROFILE_PLAN_METADATA_STATE="stale"
+    PROFILE_PLAN_CAPABILITY_DETAIL="${PROFILE_PLAN_CAPABILITY_DETAIL} Persisted intent differs from this explicit request and was not treated as installed reality."
+  fi
+  inventory_collect
+  PROFILE_PLAN_INVENTORY_FINGERPRINT="$(planner_inventory_fingerprint)"
+  installation_profile_reconcile
+  if [[ "$PROFILE_PLAN_RECONCILIATION" == incompatible ]]; then
+    PROFILE_PLAN_ERROR="Observed configuration or capability is incompatible with read-only planning."
+    return 22
+  fi
+  PROFILE_PLAN_VALID="true"
+}
+
+installation_profile_plan_json_array() {
+  local csv="${1:-}" first=1 item
+  printf '['
+  while IFS= read -r item; do
+    [[ -n "$item" ]] || continue
+    ((first)) || printf ','
+    first=0
+    inventory_json_escape "$item"
+  done < <(printf '%s\n' "$csv" | tr ',' '\n')
+  printf ']'
+}
+
+installation_profile_plan_emit_json() {
+  printf '{"schema_version":1,"read_only":true,"valid":%s' "$PROFILE_PLAN_VALID"
+  printf ',"profile":'; inventory_json_escape "${PROFILE_PLAN_PROFILE:-unknown}"
+  printf ',"requested_applications":'; installation_profile_plan_json_array "${PROFILE_PLAN_REQUESTED_CSV:-}"
+  printf ',"desired_applications":'; installation_profile_plan_json_array "${PROFILE_PLAN_DESIRED_CSV:-}"
+  printf ',"engine":'; inventory_json_escape "${PROFILE_PLAN_ENGINE:-unknown}"
+  printf ',"environment":'; inventory_json_escape "${PROFILE_PLAN_ENVIRONMENT:-unknown}"
+  printf ',"capability":'; inventory_json_escape "${PROFILE_PLAN_CAPABILITY:-unsupported}"
+  printf ',"durable_image_required":%s' "${PROFILE_PLAN_DURABLE_IMAGE:-false}"
+  printf ',"observed_applications":'; installation_profile_plan_json_array "${PROFILE_PLAN_OBSERVED_APPS:-}"
+  printf ',"observed_summary":'; inventory_json_escape "${PROFILE_PLAN_OBSERVED_SUMMARY:-Inventory unavailable.}"
+  printf ',"inventory_fingerprint":'; inventory_json_escape "${PROFILE_PLAN_INVENTORY_FINGERPRINT:-unavailable}"
+  printf ',"configuration_schema":'; inventory_json_escape "${PROFILE_METADATA_SCHEMA:-unavailable}"
+  printf ',"metadata_state":'; inventory_json_escape "${PROFILE_PLAN_METADATA_STATE:-unavailable}"
+  printf ',"reconciliation":'; inventory_json_escape "${PROFILE_PLAN_RECONCILIATION:-incompatible}"
+  printf ',"warning":'; inventory_json_escape "${PROFILE_PLAN_CAPABILITY_DETAIL:-}"
+  printf ',"blocking_error":'; inventory_json_escape "${PROFILE_PLAN_ERROR:-}"
+  printf ',"mutation_performed":false}\n'
+}
+
+installation_profile_plan_emit_human() {
+  printf 'Installation Profile Plan (schema 1)\n'
+  printf 'Read only: yes\n'
+  printf 'Profile: %s\n' "${PROFILE_PLAN_PROFILE:-unknown}"
+  printf 'Requested applications: %s\n' "${PROFILE_PLAN_REQUESTED_CSV:-none}"
+  printf 'Desired applications: %s\n' "${PROFILE_PLAN_DESIRED_CSV:-none}"
+  printf 'Engine/environment: %s/%s\n' "${PROFILE_PLAN_ENGINE:-unknown}" "${PROFILE_PLAN_ENVIRONMENT:-unknown}"
+  printf 'Capability: %s\n' "${PROFILE_PLAN_CAPABILITY:-unsupported}"
+  printf 'Durable Docker image required: %s\n' "${PROFILE_PLAN_DURABLE_IMAGE:-false}"
+  printf 'Observed applications: %s\n' "${PROFILE_PLAN_OBSERVED_APPS:-none}"
+  printf 'Observed inventory: %s\n' "${PROFILE_PLAN_OBSERVED_SUMMARY:-Inventory unavailable.}"
+  printf 'Inventory fingerprint: %s\n' "${PROFILE_PLAN_INVENTORY_FINGERPRINT:-unavailable}"
+  printf 'Configuration schema: %s\n' "${PROFILE_METADATA_SCHEMA:-unavailable}"
+  printf 'Persisted metadata: %s\n' "${PROFILE_PLAN_METADATA_STATE:-unavailable}"
+  printf 'Reconciliation: %s\n' "${PROFILE_PLAN_RECONCILIATION:-incompatible}"
+  [[ -z "${PROFILE_PLAN_CAPABILITY_DETAIL:-}" ]] || printf 'Warning: %s\n' "$PROFILE_PLAN_CAPABILITY_DETAIL"
+  [[ -z "${PROFILE_PLAN_ERROR:-}" ]] || printf 'Blocking error: %s\n' "$PROFILE_PLAN_ERROR"
+  printf 'NO DEPLOYMENT MUTATION OCCURRED.\n'
+}
+
+run_installation_profile_preview() {
+  local rc=0 profile
+  profile="$(normalize_installation_profile "${INSTALLATION_PROFILE:-}" 2>/dev/null)" || rc=20
+  if ((rc == 0)); then
+    installation_profile_plan_build "$profile" "${INSTALLATION_PROFILE_APPS_RAW:-}" || rc=$?
+  else
+    PROFILE_PLAN_VALID="false"
+    PROFILE_PLAN_PROFILE="invalid"
+    PROFILE_PLAN_ERROR="Invalid installation profile."
+  fi
+  if [[ "${DOCTOR_FORMAT:-human}" == json ]]; then
+    installation_profile_plan_emit_json
+  else
+    installation_profile_plan_emit_human
+  fi
+  return "$rc"
 }
 
 planner_site_installed() {
