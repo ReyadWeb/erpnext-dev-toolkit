@@ -106,6 +106,7 @@ targets=(
   scripts/test-offvm-host-key.sh
   scripts/test-risky-shell-patterns.sh
   scripts/test-adversarial-inputs.sh
+  scripts/test-restore-input.sh
   scripts/test-update-channel.sh
   scripts/test-local-ip.sh
   scripts/test-healing.sh

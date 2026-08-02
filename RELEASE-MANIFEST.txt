@@ -60,6 +60,7 @@ scripts/test-resolve-latest-release-tag.sh
 scripts/test-local-ip.sh
 scripts/test-healing.sh
 scripts/test-adversarial-inputs.sh
+scripts/test-restore-input.sh
 .gitleaks.toml
 .github/workflows/security-analysis.yml
 scripts/build-release-bundle.sh
