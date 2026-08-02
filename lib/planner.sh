@@ -555,8 +555,57 @@ installation_profile_context_requires_app() {
   local app="$1" item
   while IFS= read -r item; do
     [[ "$item" == "$app" ]] && return 0
-  done < <(printf '%s' "${PROFILE_CONTEXT_DESIRED_APPS:-}" | tr ',' '\n')
+  done < <(printf '%s\n' "${PROFILE_CONTEXT_DESIRED_APPS:-}" | tr ',' '\n')
   return 1
+}
+
+installation_profile_context_observes_app() {
+  local app="$1" item
+  while IFS= read -r item; do
+    [[ "$item" == "$app" ]] && return 0
+  done < <(printf '%s\n' "${PROFILE_CONTEXT_OBSERVED_APPS:-}" | tr ',' '\n')
+  return 1
+}
+
+installation_profile_context_missing_apps() {
+  local desired missing=()
+  while IFS= read -r desired; do
+    [[ -n "$desired" ]] || continue
+    installation_profile_context_observes_app "$desired" || missing+=("$desired")
+  done < <(printf '%s\n' "${PROFILE_CONTEXT_DESIRED_APPS:-}" | tr ',' '\n')
+  ((${#missing[@]} > 0)) || return 0
+  local IFS=,
+  printf '%s\n' "${missing[*]}"
+}
+
+installation_profile_context_policy_pair() {
+  local reconciliation="${PROFILE_CONTEXT_RECONCILIATION:-incompatible}" missing
+  case "$reconciliation" in
+    consistent) printf 'OK|desired applications match observed inventory: %s\n' "${PROFILE_CONTEXT_DESIRED_APPS:-none}" ;;
+    drift-extra) printf 'INFO|additional observed applications are preserved: %s\n' "${PROFILE_CONTEXT_OBSERVED_APPS:-none}" ;;
+    unmanaged) printf 'INFO|compatible target is unmanaged; release readiness requires explicit adoption\n' ;;
+    drift-missing)
+      missing="$(installation_profile_context_missing_apps)"
+      printf 'WARN|desired applications missing or unproven: %s\n' "${missing:-unknown}"
+      ;;
+    ambiguous) printf 'WARN|profile reconciliation is ambiguous; application requirements are not fully proven\n' ;;
+    incompatible) printf 'FAIL|profile reconciliation is incompatible\n' ;;
+    *) printf 'WARN|profile reconciliation is unknown\n' ;;
+  esac
+}
+
+installation_profile_context_erpnext_pair() {
+  case "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}" in
+    incompatible) printf 'FAIL|ERPNext state is incompatible with the validated inventory\n'; return ;;
+    ambiguous) printf 'WARN|ERPNext installation state is not proven by the ambiguous inventory\n'; return ;;
+  esac
+  if installation_profile_context_observes_app erpnext; then
+    printf 'OK|installed on the selected site\n'
+  elif installation_profile_context_requires_app erpnext; then
+    printf 'WARN|required by current profile intent; not observed on the selected site\n'
+  else
+    printf 'INFO|absent by current profile intent\n'
+  fi
 }
 
 installation_profile_reconciliation_status() {

@@ -89,10 +89,13 @@ for bad in "Creating ERPNext service" "ERPNext autostart" "Starting ERPNext serv
 done
 pass "shared lifecycle transcript uses Frappe terminology"
 
-grep -q 'absent by design for Frappe-only profile' lib/status.sh \
-  || fail "profile-aware status wording missing"
-grep -q 'absent by design for Frappe-only profile' lib/support.sh \
-  || fail "profile-aware doctor wording missing"
-pass "Frappe-only ERPNext absence is expected"
+grep -q 'installation_profile_context_erpnext_pair' lib/status.sh \
+  || fail "profile-aware status policy missing"
+grep -q 'installation_profile_context_erpnext_pair' lib/support.sh \
+  || fail "profile-aware doctor policy missing"
+if grep -q 'absent by design for Frappe-only profile' lib/status.sh lib/support.sh; then
+  fail "status or Doctor still uses profile-specific absence wording"
+fi
+pass "ERPNext absence is derived from canonical intent and reconciliation"
 
 echo "frappe platform lifecycle tests: all checks passed"

@@ -64,6 +64,7 @@ source lib/inventory.sh
 source lib/planner.sh
 source lib/support.sh
 path_is_dir() { [[ -d "$1" ]]; }
+path_is_file() { [[ -f "$1" ]]; }
 
 for pair in \
   recommended:recommended default:recommended erpnext:recommended frappe-erpnext:recommended \
@@ -265,6 +266,23 @@ PROFILE_CONTEXT_DESIRED_APPS=frappe,erpnext,webshop
 installation_profile_context_requires_app erpnext \
   && pass "advanced dependency closure requires ERPNext" \
   || fail_case "advanced dependency closure lost ERPNext requirement"
+PROFILE_CONTEXT_OBSERVED_APPS=frappe
+PROFILE_CONTEXT_RECONCILIATION=drift-missing
+assert_eq "advanced missing desired apps health policy" WARN "$(installation_profile_context_policy_pair | cut -d'|' -f1)"
+assert_has "advanced health policy identifies missing apps" "$(installation_profile_context_policy_pair)" 'erpnext,webshop'
+assert_eq "Docker does not infer desired apps from Installed state" WARN "$(installation_profile_context_policy_pair | cut -d'|' -f1)"
+PROFILE_CONTEXT_DESIRED_APPS=frappe,crm
+PROFILE_CONTEXT_OBSERVED_APPS=frappe,crm
+PROFILE_CONTEXT_RECONCILIATION=consistent
+advanced_erpnext_pair="$(installation_profile_context_erpnext_pair)"
+assert_eq "advanced without ERPNext is informational" INFO "${advanced_erpnext_pair%%|*}"
+[[ "$advanced_erpnext_pair" != *Frappe-only* ]] \
+  && pass "advanced absence uses profile-neutral wording" \
+  || fail_case "advanced absence uses Frappe-only wording"
+PROFILE_CONTEXT_DESIRED_APPS=frappe
+PROFILE_CONTEXT_OBSERVED_APPS=frappe,erpnext
+PROFILE_CONTEXT_RECONCILIATION=drift-extra
+assert_has "observed ERPNext shown installed under drift-extra" "$(installation_profile_context_erpnext_pair)" 'installed on the selected site'
 
 supported_single_site
 INVENTORY_RECORDS[1]="$(app_record native:/bench frappe 17.0.0 https://github.com/frappe/frappe)"
@@ -318,6 +336,20 @@ PROFILE_METADATA_STATUS=incompatible
 assert_reconciliation "configuration reconciliation incompatible" incompatible
 PROFILE_METADATA_STATUS=compatible
 
+for read_only_fn in run_app_status show_installed_apps show_app_compatibility_matrix; do
+  if declare -f "$read_only_fn" | grep -q normalize_apps_txt; then
+    fail_case "${read_only_fn} invokes mutating registry normalization"
+  else
+    pass "${read_only_fn} has no registry mutation path"
+  fi
+done
+declare -f repair_app_registry | grep -q normalize_apps_txt \
+  && pass "explicit registry repair retains normalization" \
+  || fail_case "explicit registry repair lost normalization"
+declare -f ensure_app_in_apps_txt | grep -q normalize_apps_txt \
+  && pass "installation workflow retains normalization" \
+  || fail_case "installation workflow lost normalization"
+
 # Operational surfaces consume the same metadata/plan/inventory context and do
 # not rewrite configuration while doing so.
 eval "$(declare -f inventory_collect | sed '1s/inventory_collect/inventory_collect_original/')"
@@ -354,7 +386,16 @@ for app in frappe telephony helpdesk; do
     1 "$repo" >"$fixture/cli-bench/apps/$app/.inventory-meta"
 done
 printf 'frappe\ntelephony\nhelpdesk\n' >"$fixture/cli-bench/sites/one.test/apps.txt"
+printf 'frappe\ntelephony\nhelpdesk\n' >"$fixture/cli-bench/sites/apps.txt"
 printf 'SITE_NAME=one.test\nINSTALLATION_PROFILE=frappe-only\n' >"$fixture/cli-config"
+registry_before="$(sha256sum "$fixture/cli-bench/sites/apps.txt")"
+run_as_frappe() { bash -c "$1"; }
+registry_pair="$(app_registry_status_pair "$fixture/cli-bench")"
+assert_has "read-only registry inspection succeeds" "$registry_pair" 'inspected read-only'
+assert_eq "registry checksum unchanged by inspection" "$registry_before" "$(sha256sum "$fixture/cli-bench/sites/apps.txt")"
+[[ ! -e "$fixture/cli-bench/sites/apps.txt.bak.registry-repair" ]] \
+  && pass "read-only registry inspection creates no repair backup" \
+  || fail_case "read-only registry inspection created repair backup"
 cli_before="$(find "$fixture/cli-bench" "$fixture/cli-config" -type f -print0 | sort -z | xargs -0 sha256sum)"
 run_cli() {
   LOG_DIR="$fixture/logs" LOCK_DIR="$fixture/locks" CONFIG_FILE="$fixture/cli-config" \

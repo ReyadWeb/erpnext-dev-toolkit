@@ -652,6 +652,20 @@ app_in_apps_txt() {
   run_as_frappe "cd ${bench_q} && grep -qxF ${app_q} sites/apps.txt" >/dev/null 2>&1
 }
 
+app_registry_status_pair() {
+  local bench_dir="$1" bench_q
+  bench_q="$(printf '%q' "$bench_dir")"
+  if ! path_is_file "${bench_dir}/sites/apps.txt"; then
+    printf 'WARN|sites/apps.txt is missing; run %s to inspect and repair it\n' "$(toolkit_cmd repair-app-registry)"
+    return 0
+  fi
+  if run_as_frappe "cd ${bench_q} && awk 'NF && (seen[\$0]++ || \$0 !~ /^[a-z][a-z0-9_]*\$/) { exit 1 }' sites/apps.txt" >/dev/null 2>&1; then
+    printf 'OK|sites/apps.txt inspected read-only; no duplicate or malformed entries detected\n'
+  else
+    printf 'WARN|sites/apps.txt needs review; run %s for an explicit repair\n' "$(toolkit_cmd repair-app-registry)"
+  fi
+}
+
 print_downloaded_app_comparisons() {
   local bench_q="$1"
   local site_q="$2"
@@ -730,8 +744,12 @@ run_docker_app_status() {
   installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
   status_line "Profile" "INFO" "${PROFILE_CONTEXT_PROFILE:-recommended}"
   status_line "Reconciliation" "$(installation_profile_reconciliation_status)" "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
-  if [[ "${PROFILE_CONTEXT_PROFILE:-recommended}" == frappe-only ]]; then
-    status_line "ERPNext" "INFO" "recommended later addition; include it in an explicit reviewed plan"
+  local erpnext_pair
+  erpnext_pair="$(installation_profile_context_erpnext_pair)"
+  status_line "ERPNext" "${erpnext_pair%%|*}" "${erpnext_pair#*|}"
+  if [[ "${PROFILE_CONTEXT_PROFILE:-recommended}" == frappe-only ]] \
+    && ! installation_profile_context_observes_app erpnext; then
+    status_line "ERPNext plan" "INFO" "recommended later addition; include it in an explicit reviewed plan"
   fi
 
   echo
@@ -806,8 +824,6 @@ run_app_status() {
   bench_q="$(printf '%q' "$bench_dir")"
   site_q="$(printf '%q' "$SITE_NAME")"
 
-  normalize_apps_txt "$bench_dir" "" "true" || warn "Could not normalize sites/apps.txt before app status."
-
   echo
   echo "============================================================"
   echo "App Status"
@@ -817,9 +833,11 @@ run_app_status() {
   installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
   status_line "Profile" "INFO" "${PROFILE_CONTEXT_PROFILE:-recommended}"
   status_line "Reconciliation" "$(installation_profile_reconciliation_status)" "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
-  if [[ "${PROFILE_CONTEXT_PROFILE:-recommended}" == frappe-only ]]; then
-    status_line "ERPNext" "INFO" "recommended later addition; include it in an explicit reviewed plan"
-  fi
+  local erpnext_pair registry_pair
+  erpnext_pair="$(installation_profile_context_erpnext_pair)"
+  status_line "ERPNext" "${erpnext_pair%%|*}" "${erpnext_pair#*|}"
+  registry_pair="$(app_registry_status_pair "$bench_dir")"
+  status_line "App registry" "${registry_pair%%|*}" "${registry_pair#*|}"
   echo
 
   echo "Installed on site:"
@@ -871,14 +889,15 @@ show_installed_apps() {
   bench_q="$(printf '%q' "$bench_dir")"
   site_q="$(printf '%q' "$SITE_NAME")"
 
-  normalize_apps_txt "$bench_dir" "" "true" || warn "Could not normalize sites/apps.txt before listing apps."
-
   echo
   echo "============================================================"
   echo "Frappe / ERPNext Apps"
   echo "============================================================"
   echo "Site: ${SITE_NAME}"
   echo "Bench: ${bench_dir}"
+  local registry_pair
+  registry_pair="$(app_registry_status_pair "$bench_dir")"
+  status_line "App registry" "${registry_pair%%|*}" "${registry_pair#*|}"
   echo
   echo "Installed on site:"
   run_as_frappe "cd ${bench_q} && bench --site ${site_q} list-apps" || warn "Could not list installed apps."
@@ -1222,8 +1241,6 @@ show_app_compatibility_matrix() {
   local bench_dir profile app_state dependencies engine_strategy dependency_note
   bench_dir="$(require_site_environment)" || return 1
 
-  normalize_apps_txt "$bench_dir" "" "true" || warn "Could not normalize sites/apps.txt before compatibility check."
-
   echo
   echo "============================================================"
   echo "Optional App Compatibility Matrix"
@@ -1233,6 +1250,9 @@ show_app_compatibility_matrix() {
   installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
   status_line "Profile" "INFO" "${PROFILE_CONTEXT_PROFILE:-recommended}"
   status_line "Reconciliation" "$(installation_profile_reconciliation_status)" "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
+  local registry_pair
+  registry_pair="$(app_registry_status_pair "$bench_dir")"
+  status_line "App registry" "${registry_pair%%|*}" "${registry_pair#*|}"
   echo
   echo "This check is a pre-install guide. It does not guarantee upstream app compatibility."
   echo "The selected app is checked locally first; bench get-app validates the requested remote branch during the actual download."

@@ -238,14 +238,12 @@ run_installation_status() {
     status_line "Frappe app files" "FAIL" "apps/frappe missing"
   fi
 
-  if installation_profile_context_requires_app erpnext; then
-    if check_bench_app_installed erpnext; then
-      status_line "ERPNext app files" "OK" "apps/erpnext exists"
-    else
-      status_line "ERPNext app files" "WARN" "required by profile; apps/erpnext missing"
-    fi
+  if check_bench_app_installed erpnext; then
+    status_line "ERPNext app files" "OK" "apps/erpnext exists"
   else
-    status_line "ERPNext app files" "INFO" "not required by Frappe-only profile"
+    local erpnext_pair
+    erpnext_pair="$(installation_profile_context_erpnext_pair)"
+    status_line "ERPNext app files" "${erpnext_pair%%|*}" "${erpnext_pair#*|}"
   fi
 
   if site_exists; then
@@ -260,13 +258,9 @@ run_installation_status() {
     status_line "Site app: frappe" "WARN" "not confirmed on ${SITE_NAME}"
   fi
 
-  if installation_profile_context_requires_app erpnext; then
-    if site_app_installed erpnext; then
-      status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
-    else
-      status_line "Site app: erpnext" "WARN" "required by profile; not confirmed on ${SITE_NAME}"
-    fi
-  fi
+  local erpnext_pair
+  erpnext_pair="$(installation_profile_context_erpnext_pair)"
+  status_line "Site app: erpnext" "${erpnext_pair%%|*}" "${erpnext_pair#*|}"
 
   echo "============================================================"
 }
@@ -568,10 +562,10 @@ run_full_status() {
 
   if check_bench_app_installed erpnext; then
     status_line "ERPNext app files" "OK" "apps/erpnext exists"
-  elif installation_profile_context_requires_app erpnext; then
-    status_line "ERPNext app files" "WARN" "required by profile; apps/erpnext missing"
   else
-    status_line "ERPNext app files" "OK" "absent by design for Frappe-only profile"
+    local erpnext_pair
+    erpnext_pair="$(installation_profile_context_erpnext_pair)"
+    status_line "ERPNext app files" "${erpnext_pair%%|*}" "${erpnext_pair#*|}"
   fi
 
   if path_is_dir "${bench_dir}/sites/${SITE_NAME}"; then
@@ -586,13 +580,9 @@ run_full_status() {
     status_line "Site app: frappe" "WARN" "not confirmed on ${SITE_NAME}"
   fi
 
-  if site_app_installed erpnext; then
-    status_line "Site app: erpnext" "OK" "installed on ${SITE_NAME}"
-  elif installation_profile_context_requires_app erpnext; then
-    status_line "Site app: erpnext" "WARN" "required by profile; not confirmed on ${SITE_NAME}"
-  else
-    status_line "Site app: erpnext" "INFO" "absent by profile"
-  fi
+  local erpnext_pair
+  erpnext_pair="$(installation_profile_context_erpnext_pair)"
+  status_line "Site app: erpnext" "${erpnext_pair%%|*}" "${erpnext_pair#*|}"
 
   local optional_app optional_label optional_item
   local optional_apps=(
