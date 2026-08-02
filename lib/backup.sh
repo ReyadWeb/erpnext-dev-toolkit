@@ -272,6 +272,24 @@ confirm_restore() {
   [[ "$restore_reply" == "RESTORE" ]]
 }
 
+read_restore_latest_set_choice() {
+  local reply=""
+
+  if ! read -r -p "Use this latest complete backup set? [Y/n]: " reply; then
+    err "Could not read the backup selection. Run restore-full from an interactive terminal, or use -y only after reviewing the validated latest complete backup set."
+    return 2
+  fi
+
+  case "${reply,,}" in
+    "" | y | yes) return 0 ;;
+    n | no) return 1 ;;
+    *)
+      err "Invalid backup selection '${reply}'. Answer Y/yes, N/no, or press Enter for the default (Yes)."
+      return 2
+      ;;
+  esac
+}
+
 run_post_restore_maintenance() {
   local bench_dir="$1"
   local maintenance_failed=0
@@ -399,7 +417,7 @@ restore_site_full() {
 
   local bench_dir db_input public_input private_input db_file public_file private_file cmd
   local db_quoted public_quoted private_quoted db_admin_user_quoted db_admin_password_quoted
-  local latest_lines prefix config_file completeness use_latest
+  local latest_lines prefix config_file completeness
   bench_dir="$(require_site_environment)" || return 1
 
   list_site_backups
@@ -423,15 +441,18 @@ restore_site_full() {
       status_line "Database" "OK" "$(basename "$db_file")"
       status_line "Public files" "OK" "$(basename "$public_file")"
       status_line "Private files" "OK" "$(basename "$private_file")"
-      if [[ -t 0 && "$ASSUME_YES" -ne 1 ]]; then
-        read -r -p "Use this latest complete backup set? [Y/n]: " use_latest
-      else
-        use_latest="y"
-      fi
-      if [[ "$use_latest" =~ ^[Nn]$|^[Nn][Oo]$ ]]; then
-        db_file=""
-        public_file=""
-        private_file=""
+      if [[ "$ASSUME_YES" -ne 1 ]]; then
+        if read_restore_latest_set_choice; then
+          :
+        else
+          case "$?" in
+            1)
+              warn "Restore cancelled before any changes were made."
+              return 0
+              ;;
+            *) return 2 ;;
+          esac
+        fi
       fi
     else
       status_line "Latest backup set" "WARN" "${prefix:-none} is partial; manual selection required"
