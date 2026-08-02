@@ -30,6 +30,11 @@ OPERATION_CODE_DECISION=""
 OPERATION_PREVIOUS_PROFILE=""
 OPERATION_RECOVERY_ELIGIBLE=""
 OPERATION_BACKUP_TARGETS=""
+OPERATION_ADOPTION_ENGINE=""
+OPERATION_ADOPTION_ENVIRONMENT=""
+OPERATION_ADOPTION_FINGERPRINT=""
+OPERATION_PREVIOUS_CONFIG_FINGERPRINT=""
+OPERATION_CANDIDATE_CONFIG_FINGERPRINT=""
 
 planner_exit_code() {
   case "$1" in
@@ -79,7 +84,9 @@ planner_record_write() {
     "$OPERATION_UPDATE_MODE" "$OPERATION_TARGET_SET" "$OPERATION_AFFECTED_SITES" "$OPERATION_PREVIOUS_REVISIONS" \
     "$OPERATION_ORIGINAL_STATE" "$OPERATION_REMOVAL_SCOPE" "$OPERATION_SELECTED_SITES" \
     "$OPERATION_PER_SITE_STATE" "$OPERATION_CODE_DECISION" "$OPERATION_PREVIOUS_PROFILE" \
-    "$OPERATION_RECOVERY_ELIGIBLE" "$OPERATION_BACKUP_TARGETS"; do
+    "$OPERATION_RECOVERY_ELIGIBLE" "$OPERATION_BACKUP_TARGETS" "$OPERATION_ADOPTION_ENGINE" \
+    "$OPERATION_ADOPTION_ENVIRONMENT" "$OPERATION_ADOPTION_FINGERPRINT" \
+    "$OPERATION_PREVIOUS_CONFIG_FINGERPRINT" "$OPERATION_CANDIDATE_CONFIG_FINGERPRINT"; do
     planner_safe_value "$value" || return 1
   done
   {
@@ -113,6 +120,11 @@ planner_record_write() {
     printf 'trust=%s\n' "$PLAN_TRUST"
     printf 'shared_sites=%s\n' "$PLAN_SHARED_SITES"
     printf 'backup_targets=%s\n' "${OPERATION_BACKUP_TARGETS:-$PLAN_SITE}"
+    printf 'adoption_engine=%s\n' "$OPERATION_ADOPTION_ENGINE"
+    printf 'adoption_environment=%s\n' "$OPERATION_ADOPTION_ENVIRONMENT"
+    printf 'adoption_inventory_fingerprint=%s\n' "$OPERATION_ADOPTION_FINGERPRINT"
+    printf 'previous_config_fingerprint=%s\n' "$OPERATION_PREVIOUS_CONFIG_FINGERPRINT"
+    printf 'candidate_config_fingerprint=%s\n' "$OPERATION_CANDIDATE_CONFIG_FINGERPRINT"
     printf 'planned_actions=%s\n' "$PLAN_ACTIONS"
     printf 'verification=%s\n' "$PLAN_VERIFICATION"
     printf 'status=%s\n' "$OPERATION_STATUS"
@@ -219,8 +231,8 @@ installation_profile_capability_evaluate() {
   esac
 
   if [[ "$profile" == existing ]]; then
-    PROFILE_PLAN_CAPABILITY="preview-only"
-    PROFILE_PLAN_CAPABILITY_DETAIL="Existing-installation management is validation and preview only in PR 7.1."
+    PROFILE_PLAN_CAPABILITY="configuration-only"
+    PROFILE_PLAN_CAPABILITY_DETAIL="Existing-installation adoption changes protected Toolkit configuration only."
     return 0
   fi
 
@@ -369,8 +381,18 @@ installation_profile_reconcile() {
     PROFILE_PLAN_RECONCILIATION="unmanaged"
     PROFILE_PLAN_OBSERVED_SUMMARY="One compatible target remains unmanaged; no adoption occurred."
   elif [[ "${PROFILE_PLAN_PROFILE:-}" == existing ]]; then
-    PROFILE_PLAN_RECONCILIATION="unmanaged"
-    PROFILE_PLAN_OBSERVED_SUMMARY="One compatible existing target was discovered; no adoption occurred."
+    if [[ "${PROFILE_METADATA_ADOPTION_VALID:-false}" == true ]] \
+      && declare -F adoption_metadata_matches_discovery >/dev/null 2>&1 \
+      && adoption_metadata_matches_discovery; then
+      PROFILE_PLAN_RECONCILIATION="consistent"
+      PROFILE_PLAN_OBSERVED_SUMMARY="The compatible discovered target exactly matches explicit validated adoption identifiers."
+    elif [[ "${PROFILE_METADATA_ADOPTION_VALID:-false}" == true ]]; then
+      PROFILE_PLAN_RECONCILIATION="ambiguous"
+      PROFILE_PLAN_OBSERVED_SUMMARY="Recorded adoption identifiers conflict with current discovery."
+    else
+      PROFILE_PLAN_RECONCILIATION="unmanaged"
+      PROFILE_PLAN_OBSERVED_SUMMARY="One compatible existing target was discovered; no adoption occurred."
+    fi
   elif ((missing)); then
     PROFILE_PLAN_RECONCILIATION="drift-missing"
     PROFILE_PLAN_OBSERVED_SUMMARY="One or more desired applications are not observed as installed."

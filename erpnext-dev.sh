@@ -260,6 +260,7 @@ ACTION_ARG="${ACTION_ARG:-}"
 ACTION_ARG2="${ACTION_ARG2:-}"
 QUICK_INSTALL_SITE="${QUICK_INSTALL_SITE:-}"
 QUICK_INSTALL_PREVIEW="${QUICK_INSTALL_PREVIEW:-0}"
+EXISTING_TARGET_SELECTOR="${EXISTING_TARGET_SELECTOR:-}"
 HEALTH_CHECK_ON_CALENDAR="${HEALTH_CHECK_ON_CALENDAR:-hourly}"
 HEALTH_CHECK_RANDOM_DELAY="${HEALTH_CHECK_RANDOM_DELAY:-10m}"
 HEALTH_CHECK_DISK_WARN_PERCENT="${HEALTH_CHECK_DISK_WARN_PERCENT:-80}"
@@ -674,6 +675,12 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/planner.sh" ]]; then
 fi
 # shellcheck source=lib/planner.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/planner.sh"
+if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/adoption.sh" ]]; then
+  echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/adoption.sh" >&2
+  exit 1
+fi
+# shellcheck source=lib/adoption.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/adoption.sh"
 if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/removal.sh" ]]; then
   echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/removal.sh" >&2
   exit 1
@@ -1638,6 +1645,8 @@ Options:
              current installation behavior is unchanged without a new explicit option.
   --apps APP[,APP...]
              Canonical catalog IDs for --profile advanced only.
+  --target ENGINE:IDENTITY:SITE
+             Exact sanitized target for --profile existing discovery/adoption.
   --preview  With an explicit setup profile, print a read-only plan and do not install.
 
 Verified signed-release bootstrap:
@@ -1769,6 +1778,17 @@ parse_args() {
         [[ -n "$QUICK_INSTALL_SITE" ]] || fail "--site requires an exact site name."
         shift
         ;;
+      --target)
+        shift
+        [[ $# -gt 0 ]] || fail "--target requires an exact existing-installation target."
+        EXISTING_TARGET_SELECTOR="$1"
+        shift
+        ;;
+      --target=*)
+        EXISTING_TARGET_SELECTOR="${1#*=}"
+        [[ -n "$EXISTING_TARGET_SELECTOR" ]] || fail "--target requires an exact existing-installation target."
+        shift
+        ;;
       --mode)
         shift
         [[ $# -gt 0 ]] || fail "--mode requires safe or full."
@@ -1851,6 +1871,12 @@ parse_args() {
     [[ "${ACTION:-}" == install || "${ACTION:-}" == setup ]] \
       || fail "--profile is setup-scoped; use it with install or setup."
   fi
+  if [[ -n "$EXISTING_TARGET_SELECTOR" ]]; then
+    [[ "${ACTION:-}" == install || "${ACTION:-}" == setup ]] \
+      || fail "--target is setup-scoped; use it with install or setup."
+    [[ "$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 && "$INSTALLATION_PROFILE" == existing ]] \
+      || fail "--target requires explicit --profile existing."
+  fi
 }
 
 main() {
@@ -1863,7 +1889,7 @@ main() {
       fail "Invalid installation profile. Supported: recommended, frappe-only, advanced, existing."
     fi
   fi
-  if [[ ("$INSTALLATION_PROFILE" == advanced || "$INSTALLATION_PROFILE" == existing) \
+  if [[ "$INSTALLATION_PROFILE" == advanced \
     && ("${ACTION:-}" == install || "${ACTION:-}" == setup) \
     && ! ("$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 && "$QUICK_INSTALL_PREVIEW" -eq 1) ]]; then
     fail "The ${INSTALLATION_PROFILE} profile is preview-only in PR 7.1; add --preview."
@@ -1916,7 +1942,9 @@ main() {
     show-config) show_config_summary ;;
     guided-setup) run_guided_setup ;;
     setup | install)
-      if installation_profile_plan_preview_requested; then
+      if [[ "$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 && "$INSTALLATION_PROFILE" == existing ]]; then
+        run_existing_installation_workflow
+      elif installation_profile_plan_preview_requested; then
         run_installation_profile_preview
       else
         run_install

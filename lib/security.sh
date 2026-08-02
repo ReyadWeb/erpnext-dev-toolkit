@@ -15,7 +15,7 @@ toolkit_release_lib_files() {
   printf '%s\n' \
     common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
-    dashboard.sh inventory.sh planner.sh removal.sh healing.sh menu.sh security.sh update.sh
+    dashboard.sh inventory.sh planner.sh adoption.sh removal.sh healing.sh menu.sh security.sh update.sh
 }
 
 find_toolkit_checksum_file() {

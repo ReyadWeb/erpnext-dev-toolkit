@@ -162,7 +162,7 @@ for matrix in \
   assert_eq "durable image $engine/$environment" "$durable" "$PROFILE_PLAN_DURABLE_IMAGE"
 done
 installation_profile_capability_evaluate existing native native
-assert_eq "existing remains preview only" preview-only "$PROFILE_PLAN_CAPABILITY"
+assert_eq "existing is configuration-only" configuration-only "$PROFILE_PLAN_CAPABILITY"
 if installation_profile_capability_evaluate advanced docker unsupported >/dev/null 2>&1; then
   fail_case "unsupported environment accepted"
 else

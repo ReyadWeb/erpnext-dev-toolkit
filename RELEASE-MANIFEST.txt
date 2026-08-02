@@ -43,6 +43,7 @@ scripts/test-repo-workflow-release-run.sh
 scripts/test-health-snapshot.sh
 scripts/test-platform-profiles.sh
 scripts/test-installation-profile-contract.sh
+scripts/test-existing-installation-adoption.sh
 scripts/test-inventory-compatibility.sh
 scripts/test-operation-planner.sh
 scripts/test-docker-durability.sh
@@ -91,6 +92,7 @@ lib/ops.sh
 lib/dashboard.sh
 lib/inventory.sh
 lib/planner.sh
+lib/adoption.sh
 lib/removal.sh
 lib/healing.sh
 lib/menu.sh
