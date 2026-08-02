@@ -32,7 +32,7 @@ show_ready_summary() {
 
   echo
   echo "============================================================"
-  echo "ERPNext Ready"
+  echo "Frappe Site Ready"
   echo "============================================================"
   echo "Frappe site is ready: ports, HTTP ping, and login static assets are OK."
   echo
@@ -1002,9 +1002,9 @@ show_access_instructions() {
   echo "Browser / Hostname Instructions"
   echo "============================================================"
   echo
-  echo "ERPNext must be running before any browser URL will work."
+  echo "The Frappe stack must be running before any browser URL will work."
   echo
-  echo "Start ERPNext inside the VM with:"
+  echo "Start the Frappe stack inside the VM with:"
   echo "  $(toolkit_cmd start)"
   echo
   echo "Or manually:"
@@ -1163,14 +1163,14 @@ print_primary_access_urls() {
     base="https://${PRODUCTION_DOMAIN:-$SITE_NAME}"
     echo "Primary URLs:"
     echo "  Website / portal root: ${base}"
-    echo "  ERPNext / Frappe Desk: ${base}/app"
+    echo "  Frappe Desk:           ${base}/app"
     echo "  Login page:            ${base}/login"
   else
     if ssl_is_configured 2>/dev/null && port_listens 443; then
       base="https://${SITE_NAME}"
       echo "Primary URLs from the HOST (after /etc/hosts is set):"
       echo "  Website / portal root: ${base}"
-      echo "  ERPNext / Frappe Desk: ${base}/app"
+      echo "  Frappe Desk:           ${base}/app"
       echo "  Login page:            ${base}/login"
       echo
       echo "HTTP fallback:"
@@ -1178,7 +1178,7 @@ print_primary_access_urls() {
     else
       echo "Primary URLs from the HOST (after /etc/hosts is set):"
       echo "  Website / portal root: http://${SITE_NAME}:8000"
-      echo "  ERPNext / Frappe Desk: http://${SITE_NAME}:8000/app"
+      echo "  Frappe Desk:           http://${SITE_NAME}:8000/app"
       echo "  Login page:            http://${SITE_NAME}:8000/login"
     fi
     echo
@@ -1195,25 +1195,25 @@ print_education_access_note() {
   warn "Education access note"
   echo "  Education can make the normal website root open the Education portal."
   echo "  This is expected after installing the Education app."
-  echo "  Use /app for ERPNext/Frappe Desk and /login for the login page."
+  echo "  Use /app for Frappe Desk and /login for the login page."
   echo
 
   if is_public_vm_workflow; then
     base="https://${PRODUCTION_DOMAIN:-$SITE_NAME}"
     echo "Education-aware URLs:"
-    echo "  ERPNext / Frappe Desk: ${base}/app"
+    echo "  Frappe Desk:           ${base}/app"
     echo "  Login page:            ${base}/login"
     echo "  Education portal:      ${base}/edu-portal/students"
   else
     if ssl_is_configured 2>/dev/null && port_listens 443; then
       base="https://${SITE_NAME}"
       echo "Education-aware URLs (after /etc/hosts is set):"
-      echo "  ERPNext / Frappe Desk: ${base}/app"
+      echo "  Frappe Desk:           ${base}/app"
       echo "  Login page:            ${base}/login"
       echo "  Education portal:      ${base}/edu-portal/students"
     else
       echo "Education-aware URLs after /etc/hosts is set:"
-      echo "  ERPNext / Frappe Desk: http://${SITE_NAME}:8000/app"
+      echo "  Frappe Desk:           http://${SITE_NAME}:8000/app"
       echo "  Login page:            http://${SITE_NAME}:8000/login"
       echo "  Education portal:      http://${SITE_NAME}:8000/edu-portal/students"
     fi
@@ -2131,7 +2131,7 @@ show_credentials_info() {
   cred_file="$(credentials_file_path)"
   current_site="$(credentials_display_site)"
 
-  ui_box_start "ERPNext Login"
+  ui_box_start "Frappe Site Login"
   status_line "Username" "INFO" "Administrator"
   status_line "Site" "INFO" "$current_site"
   if path_is_file "$cred_file"; then
@@ -2228,7 +2228,7 @@ credentials_show() {
 
   echo
   echo "============================================================"
-  echo "Show ERPNext Credentials"
+  echo "Show Frappe Site Credentials"
   echo "============================================================"
 
   if ! path_is_file "$cred_file"; then
@@ -2265,7 +2265,7 @@ credentials_show() {
   if [[ -w /dev/tty ]]; then
     {
       echo "============================================================"
-      echo "ERPNext Credentials"
+      echo "Frappe Site Credentials"
       echo "============================================================"
       $SUDO awk '
         /^Login:/ { section="login"; next }
@@ -2273,8 +2273,8 @@ credentials_show() {
         /^Start ERPNext:/ { exit }
         /^Administrator password:/ {
           value=$0; sub(/^Administrator password:[[:space:]]*/, "", value);
-          print "ERPNext Username: Administrator";
-          print "ERPNext Password: " value;
+          print "Frappe Username: Administrator";
+          print "Frappe Password: " value;
           next
         }
         /^MariaDB root password:/ {

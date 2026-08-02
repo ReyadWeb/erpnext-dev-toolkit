@@ -39,6 +39,9 @@ grep -q "Monitoring & auto-healing" "$tmp" || note_fail "missing Monitoring sect
 grep -q "CRITICAL" "$tmp" || note_fail "missing overall CRITICAL from fixture"
 grep -q "Web / HTTP" "$tmp" || note_fail "missing Web / HTTP row"
 grep -q "Engine runtime" "$tmp" || note_fail "missing Engine runtime row"
+grep -q "Profile: frappe-only" "$tmp" || note_fail "missing profile header"
+grep -q "Reconciliation: consistent" "$tmp" || note_fail "missing reconciliation header"
+grep -q "Desired: frappe" "$tmp" || note_fail "missing desired application summary"
 
 # Must not use the legacy ==== box style for section headers.
 if grep -qE '^={10,}$' "$tmp"; then
@@ -54,6 +57,7 @@ export COLUMNS=70
 tmp2="$(mktemp /tmp/erpnext-dev-dashboard-render-compact.XXXXXX)"
 ./erpnext-dev.sh dashboard-render-test >"$tmp2" 2>/dev/null || note_fail "compact dashboard-render-test failed"
 grep -q "Resources" "$tmp2" || note_fail "compact layout missing Resources"
+grep -q "Profile: frappe-only" "$tmp2" || note_fail "compact layout missing profile"
 if grep -q $'\033' "$tmp2"; then
   note_fail "ANSI escape codes in compact layout with NO_COLOR=1"
 fi

@@ -871,7 +871,7 @@ health_snapshot_collect() {
   if declare -F healing_load_policy >/dev/null 2>&1; then
     healing_load_policy || true
   fi
-  SNAPSHOT_SCHEMA_VERSION="1"
+  SNAPSHOT_SCHEMA_VERSION="2"
   SNAPSHOT_GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   SNAPSHOT_SITE="${PRODUCTION_DOMAIN:-${SITE_NAME:-unknown}}"
   SNAPSHOT_ENGINE="$(effective_deployment_engine 2>/dev/null || echo native)"
@@ -883,6 +883,21 @@ health_snapshot_collect() {
   runtime_value="$(runtime_state 2>/dev/null || echo Unknown)"
   SNAPSHOT_INSTALL="$install_value"
   SNAPSHOT_RUNTIME="$runtime_value"
+
+  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+  SNAPSHOT_PROFILE="${PROFILE_CONTEXT_PROFILE:-recommended}"
+  SNAPSHOT_RECONCILIATION="${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
+  SNAPSHOT_PROFILE_DESIRED="${PROFILE_CONTEXT_DESIRED_APPS:-}"
+  SNAPSHOT_PROFILE_OBSERVED="${PROFILE_CONTEXT_OBSERVED_APPS:-}"
+  SNAPSHOT_PROFILE_CAPABILITY="${PROFILE_CONTEXT_CAPABILITY:-unsupported}"
+  SNAPSHOT_PROFILE_DURABLE_IMAGE="${PROFILE_CONTEXT_DURABLE_IMAGE:-false}"
+  SNAPSHOT_PROFILE_DETAIL="${PROFILE_CONTEXT_DETAIL:-Inventory unavailable.}"
+  case "$SNAPSHOT_RECONCILIATION" in
+    consistent | drift-extra | unmanaged) SNAPSHOT_PROFILE_STATUS="HEALTHY" ;;
+    drift-missing | ambiguous) SNAPSHOT_PROFILE_STATUS="DEGRADED" ;;
+    incompatible) SNAPSHOT_PROFILE_STATUS="CRITICAL" ;;
+    *) SNAPSHOT_PROFILE_STATUS="UNKNOWN" ;;
+  esac
 
   pair="$(health_probe_disk)"; SNAPSHOT_DISK_STATUS="${pair%%|*}"; SNAPSHOT_DISK_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_DISK_PERCENT="$(echo "$pair" | cut -d'|' -f3)"
   pair="$(health_probe_inodes)"; SNAPSHOT_INODE_STATUS="${pair%%|*}"; SNAPSHOT_INODE_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_INODE_PERCENT="$(echo "$pair" | cut -d'|' -f3)"
@@ -964,6 +979,7 @@ health_snapshot_collect() {
   done
   [[ "$install_value" == "Installed" ]] || SNAPSHOT_APP_STATUS="$(health_status_worst "$SNAPSHOT_APP_STATUS" DEGRADED)"
   [[ "$runtime_value" == Running* ]] || SNAPSHOT_APP_STATUS="$(health_status_worst "$SNAPSHOT_APP_STATUS" DEGRADED)"
+  SNAPSHOT_APP_STATUS="$(health_status_worst "$SNAPSHOT_APP_STATUS" "$SNAPSHOT_PROFILE_STATUS")"
 
   SNAPSHOT_PROTECTION_STATUS="HEALTHY"
   for pair in "$SNAPSHOT_HTTPS_STATUS" "$SNAPSHOT_FIREWALL_STATUS" "$SNAPSHOT_FAIL2BAN_STATUS" "$SNAPSHOT_BACKUP_STATUS" "$SNAPSHOT_REHEARSAL_STATUS" "$SNAPSHOT_INTEGRITY_STATUS"; do
@@ -1258,6 +1274,18 @@ health_snapshot_write_compat_state() {
   fi
 }
 
+dashboard_json_csv_array() {
+  local csv="${1:-}" item first=1
+  printf '['
+  while IFS= read -r item; do
+    [[ -n "$item" ]] || continue
+    ((first == 1)) || printf ','
+    json_escape "$item"
+    first=0
+  done < <(printf '%s' "$csv" | tr ',' '\n')
+  printf ']'
+}
+
 health_snapshot_emit_json() {
   printf '{\n'
   printf '  "schema_version": ' ; json_escape "${SNAPSHOT_SCHEMA_VERSION:-1}" ; printf ',\n'
@@ -1271,6 +1299,17 @@ health_snapshot_emit_json() {
   printf '    "install_state": ' ; json_escape "${SNAPSHOT_INSTALL:-}" ; printf ',\n'
   printf '    "runtime_state": ' ; json_escape "${SNAPSHOT_RUNTIME:-}" ; printf ',\n'
   printf '    "toolkit_version": ' ; json_escape "${SNAPSHOT_TOOLKIT_VERSION:-}" ; printf '\n'
+  printf '  },\n'
+  printf '  "profile": {\n'
+  printf '    "intent": ' ; json_escape "${SNAPSHOT_PROFILE:-recommended}" ; printf ',\n'
+  printf '    "reconciliation": ' ; json_escape "${SNAPSHOT_RECONCILIATION:-incompatible}" ; printf ',\n'
+  printf '    "status": ' ; json_escape "${SNAPSHOT_PROFILE_STATUS:-UNKNOWN}" ; printf ',\n'
+  printf '    "desired_applications": ' ; dashboard_json_csv_array "${SNAPSHOT_PROFILE_DESIRED:-}" ; printf ',\n'
+  printf '    "observed_applications": ' ; dashboard_json_csv_array "${SNAPSHOT_PROFILE_OBSERVED:-}" ; printf ',\n'
+  printf '    "inventory_fingerprint": ' ; json_escape "${PROFILE_CONTEXT_FINGERPRINT:-unavailable}" ; printf ',\n'
+  printf '    "capability": ' ; json_escape "${SNAPSHOT_PROFILE_CAPABILITY:-unsupported}" ; printf ',\n'
+  printf '    "durable_image_required": %s,\n' "${SNAPSHOT_PROFILE_DURABLE_IMAGE:-false}"
+  printf '    "detail": ' ; json_escape "${SNAPSHOT_PROFILE_DETAIL:-Inventory unavailable.}" ; printf '\n'
   printf '  },\n'
   printf '  "resources": {\n'
   printf '    "status": ' ; json_escape "${SNAPSHOT_HOST_STATUS:-UNKNOWN}" ; printf ',\n'
@@ -1420,6 +1459,12 @@ render_operations_dashboard_screen() {
   ui_row_begin
   ui_row_add_colored muted "Last check: ${SNAPSHOT_GENERATED_AT:-unknown}   Auto-healing: ${healing_label}"
   ui_row_end
+  ui_row_begin
+  ui_row_add "Profile: ${SNAPSHOT_PROFILE:-recommended}   Reconciliation: ${SNAPSHOT_RECONCILIATION:-incompatible}"
+  ui_row_end
+  ui_row_begin
+  ui_row_add_colored muted "Desired: ${SNAPSHOT_PROFILE_DESIRED:-none}   Observed: ${SNAPSHOT_PROFILE_OBSERVED:-none}"
+  ui_row_end
   ui_section_close
 
   ui_section_open "Resources"
@@ -1516,6 +1561,14 @@ dashboard_render_test() {
   SNAPSHOT_ENGINE_LABEL="Native VM"
   SNAPSHOT_OS="Debian 13"
   SNAPSHOT_GENERATED_AT="2026-07-17T18:06:26Z"
+  SNAPSHOT_PROFILE="frappe-only"
+  SNAPSHOT_RECONCILIATION="consistent"
+  SNAPSHOT_PROFILE_DESIRED="frappe"
+  SNAPSHOT_PROFILE_OBSERVED="frappe"
+  SNAPSHOT_PROFILE_CAPABILITY="supported"
+  SNAPSHOT_PROFILE_DURABLE_IMAGE="false"
+  SNAPSHOT_PROFILE_DETAIL="Observed installed applications match the desired plan."
+  SNAPSHOT_PROFILE_STATUS="HEALTHY"
   SNAPSHOT_HEALING_MODE="monitor"
   SNAPSHOT_HEALING_STATE="observing"
   SNAPSHOT_HEALING_DETAIL="Observe only (monitor mode)"

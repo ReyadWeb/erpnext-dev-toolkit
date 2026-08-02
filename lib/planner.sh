@@ -518,6 +518,106 @@ installation_profile_plan_build() {
   PROFILE_PLAN_VALID="true"
 }
 
+# Build the profile context used by operational read-only surfaces. Intent is
+# read as data, inventory is collected once by installation_profile_plan_build,
+# and no configuration or deployment state is written.
+installation_profile_operational_context_collect() {
+  local metadata_file="${1:-${CONFIG_FILE:-}}" profile apps rc=0
+
+  read_installation_profile_metadata "$metadata_file" >/dev/null 2>&1 || true
+  profile="${PROFILE_METADATA_PROFILE:-recommended}"
+  apps="${PROFILE_METADATA_APPS:-}"
+  if [[ "${PROFILE_METADATA_STATUS:-unmanaged}" == unmanaged ]]; then
+    profile="$(effective_installation_profile)"
+    [[ "$profile" == advanced ]] && apps="${INSTALLATION_PROFILE_APPS_RAW:-}"
+  fi
+
+  installation_profile_plan_build "$profile" "$apps" "$metadata_file" || rc=$?
+  PROFILE_CONTEXT_VALID="${PROFILE_PLAN_VALID:-false}"
+  PROFILE_CONTEXT_PROFILE="${PROFILE_PLAN_PROFILE:-$profile}"
+  PROFILE_CONTEXT_REQUESTED_APPS="${PROFILE_PLAN_REQUESTED_CSV:-}"
+  PROFILE_CONTEXT_DESIRED_APPS="${PROFILE_PLAN_DESIRED_CSV:-}"
+  PROFILE_CONTEXT_OBSERVED_APPS="${PROFILE_PLAN_OBSERVED_APPS:-}"
+  PROFILE_CONTEXT_ENGINE="${PROFILE_PLAN_ENGINE:-unknown}"
+  PROFILE_CONTEXT_ENVIRONMENT="${PROFILE_PLAN_ENVIRONMENT:-unknown}"
+  PROFILE_CONTEXT_CAPABILITY="${PROFILE_PLAN_CAPABILITY:-unsupported}"
+  PROFILE_CONTEXT_DURABLE_IMAGE="${PROFILE_PLAN_DURABLE_IMAGE:-false}"
+  PROFILE_CONTEXT_METADATA_STATE="${PROFILE_PLAN_METADATA_STATE:-unavailable}"
+  PROFILE_CONTEXT_FINGERPRINT="${PROFILE_PLAN_INVENTORY_FINGERPRINT:-unavailable}"
+  PROFILE_CONTEXT_RECONCILIATION="${PROFILE_PLAN_RECONCILIATION:-incompatible}"
+  PROFILE_CONTEXT_DETAIL="${PROFILE_PLAN_OBSERVED_SUMMARY:-Inventory unavailable.}"
+  PROFILE_CONTEXT_WARNING="${PROFILE_PLAN_CAPABILITY_DETAIL:-}"
+  PROFILE_CONTEXT_ERROR="${PROFILE_PLAN_ERROR:-}"
+  return "$rc"
+}
+
+installation_profile_context_requires_app() {
+  local app="$1" item
+  while IFS= read -r item; do
+    [[ "$item" == "$app" ]] && return 0
+  done < <(printf '%s\n' "${PROFILE_CONTEXT_DESIRED_APPS:-}" | tr ',' '\n')
+  return 1
+}
+
+installation_profile_context_observes_app() {
+  local app="$1" item
+  while IFS= read -r item; do
+    [[ "$item" == "$app" ]] && return 0
+  done < <(printf '%s\n' "${PROFILE_CONTEXT_OBSERVED_APPS:-}" | tr ',' '\n')
+  return 1
+}
+
+installation_profile_context_missing_apps() {
+  local desired missing=()
+  while IFS= read -r desired; do
+    [[ -n "$desired" ]] || continue
+    installation_profile_context_observes_app "$desired" || missing+=("$desired")
+  done < <(printf '%s\n' "${PROFILE_CONTEXT_DESIRED_APPS:-}" | tr ',' '\n')
+  ((${#missing[@]} > 0)) || return 0
+  local IFS=,
+  printf '%s\n' "${missing[*]}"
+}
+
+installation_profile_context_policy_pair() {
+  local reconciliation="${PROFILE_CONTEXT_RECONCILIATION:-incompatible}" missing
+  case "$reconciliation" in
+    consistent) printf 'OK|desired applications match observed inventory: %s\n' "${PROFILE_CONTEXT_DESIRED_APPS:-none}" ;;
+    drift-extra) printf 'INFO|additional observed applications are preserved: %s\n' "${PROFILE_CONTEXT_OBSERVED_APPS:-none}" ;;
+    unmanaged) printf 'INFO|compatible target is unmanaged; release readiness requires explicit adoption\n' ;;
+    drift-missing)
+      missing="$(installation_profile_context_missing_apps)"
+      printf 'WARN|desired applications missing or unproven: %s\n' "${missing:-unknown}"
+      ;;
+    ambiguous) printf 'WARN|profile reconciliation is ambiguous; application requirements are not fully proven\n' ;;
+    incompatible) printf 'FAIL|profile reconciliation is incompatible\n' ;;
+    *) printf 'WARN|profile reconciliation is unknown\n' ;;
+  esac
+}
+
+installation_profile_context_erpnext_pair() {
+  case "${PROFILE_CONTEXT_RECONCILIATION:-incompatible}" in
+    incompatible) printf 'FAIL|ERPNext state is incompatible with the validated inventory\n'; return ;;
+    ambiguous) printf 'WARN|ERPNext installation state is not proven by the ambiguous inventory\n'; return ;;
+  esac
+  if installation_profile_context_observes_app erpnext; then
+    printf 'OK|installed on the selected site\n'
+  elif installation_profile_context_requires_app erpnext; then
+    printf 'WARN|required by current profile intent; not observed on the selected site\n'
+  else
+    printf 'INFO|absent by current profile intent\n'
+  fi
+}
+
+installation_profile_reconciliation_status() {
+  case "${1:-${PROFILE_CONTEXT_RECONCILIATION:-incompatible}}" in
+    consistent) printf 'OK\n' ;;
+    drift-extra|unmanaged) printf 'INFO\n' ;;
+    drift-missing|ambiguous) printf 'WARN\n' ;;
+    incompatible) printf 'FAIL\n' ;;
+    *) printf 'WARN\n' ;;
+  esac
+}
+
 installation_profile_plan_json_array() {
   local csv="${1:-}" first=1 item
   printf '['

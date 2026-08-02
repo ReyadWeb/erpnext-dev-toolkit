@@ -85,4 +85,13 @@ grep -q 'Frappe-only profile selected; ERPNext will not be downloaded or install
   || fail "native Frappe-only install path missing"
 echo "OK: native installer contains profile-aware app selection"
 
+grep -q 'The Frappe stack must be running' lib/access.sh \
+  || fail "access guidance is not Frappe-first"
+if grep -q 'ERPNext must be running before any browser URL will work' lib/access.sh; then
+  fail "access guidance still requires ERPNext"
+fi
+grep -q 'Frappe Desk:' lib/access.sh || fail "access guidance lacks Frappe Desk route"
+grep -q 'Frappe Site Login' lib/access.sh || fail "platform credential label is not Frappe-first"
+echo "OK: Frappe-only access and credential terminology"
+
 echo "platform-profile tests: all checks passed"

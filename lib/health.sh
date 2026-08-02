@@ -111,8 +111,8 @@ run_health_check() {
   ui_box_start "Health Check"
   status_line "Site" "INFO" "${SNAPSHOT_SITE:-$SITE_NAME}"
   status_line "Engine" "INFO" "${SNAPSHOT_ENGINE_LABEL:-native}"
-  status_line "Install profile" "INFO" "$(installation_profile_label)"
-  profile_pair="$(installation_profile_health_pair)"
+  status_line "Install profile" "INFO" "$(installation_profile_label "${PROFILE_CONTEXT_PROFILE:-recommended}")"
+  profile_pair="$(installation_profile_context_policy_pair)"
   status_line "Profile policy" "${profile_pair%%|*}" "${profile_pair#*|}"
   if [[ "${SNAPSHOT_INSTALL:-}" == "Installed" ]]; then
     status_line "Install" "OK" "${SNAPSHOT_INSTALL}"
@@ -684,7 +684,8 @@ show_release_readiness() {
   fi
 
   installed="$(install_state 2>/dev/null || echo "Unknown")"
-  profile_pair="$(installation_profile_health_pair)"
+  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+  profile_pair="$(installation_profile_context_policy_pair)"
   runtime="$(runtime_state 2>/dev/null || echo "Unknown")"
   if deployment_engine_is_docker; then
     if docker_is_production && docker_https_enabled; then
@@ -749,7 +750,7 @@ show_release_readiness() {
   status_line "Syntax" "$syntax_status" "$syntax_detail"
   status_line "Site" "INFO" "${SITE_NAME} (${SITE_NAME_SOURCE})"
   status_line "Deployment mode" "INFO" "${DEPLOYMENT_MODE:-unknown}"
-  status_line "Install profile" "INFO" "$(installation_profile_label)"
+  status_line "Install profile" "INFO" "$(installation_profile_label "${PROFILE_CONTEXT_PROFILE:-recommended}")"
   status_line "Profile policy" "${profile_pair%%|*}" "${profile_pair#*|}"
   status_line "Install" "$([[ "$installed" == "Installed" ]] && echo OK || echo WARN)" "$installed"
   status_line "Runtime" "$([[ "$runtime" == Running* ]] && echo OK || echo WARN)" "$runtime"

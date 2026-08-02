@@ -358,6 +358,13 @@ Each PR must keep `VERSION` unchanged until a separately authorized release.
   Frappe-only and recommended installations for both engines where available.
 - **Exclusions:** no install/adoption or app mutation.
 
+Machine-readable Doctor and health/dashboard output use schema version 2 when
+profile context is present. Version 2 preserves the version 1 fields and adds
+canonical intent, desired and observed application sets, reconciliation,
+capability, durability, and the secret-free inventory fingerprint. Runtime
+health and profile reconciliation remain separate values even when missing
+required applications make the aggregate application health degraded.
+
 ### PR 7.3 — Existing-installation discovery and explicit adoption
 
 - **Scope:** implement `--profile existing` discovery, selection, compatibility

@@ -10,7 +10,7 @@ sudo erpnext-dev dashboard --json
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "overall_status": "HEALTHY",
   "timestamp": "2026-07-17T00:10:00Z",
   "deployment": {
@@ -20,6 +20,17 @@ sudo erpnext-dev dashboard --json
     "install_state": "Installed",
     "runtime_state": "Running",
     "toolkit_version": "1.17.2"
+  },
+  "profile": {
+    "intent": "recommended",
+    "reconciliation": "consistent",
+    "status": "HEALTHY",
+    "desired_applications": ["frappe", "erpnext"],
+    "observed_applications": ["frappe", "erpnext"],
+    "inventory_fingerprint": "sha256:example",
+    "capability": "supported",
+    "durable_image_required": false,
+    "detail": "Observed installed applications match the desired plan."
   },
   "resources": {
     "status": "HEALTHY",
