@@ -74,9 +74,15 @@ SCRIPT_VERSION="$(_erpnext_dev_project_version)"
 
 FRAPPE_USER="${FRAPPE_USER:-frappe}"
 FRAPPE_HOME="/home/${FRAPPE_USER}"
+BENCH_PARENT_ENV_PROVIDED=0
+[[ -n "${BENCH_PARENT+x}" ]] && BENCH_PARENT_ENV_PROVIDED=1
 BENCH_PARENT="${BENCH_PARENT:-${FRAPPE_HOME}/frappe}"
+BENCH_NAME_ENV_PROVIDED=0
+[[ -n "${BENCH_NAME+x}" ]] && BENCH_NAME_ENV_PROVIDED=1
 BENCH_NAME="${BENCH_NAME:-frappe-bench}"
-BENCH_DIR="${BENCH_PARENT}/${BENCH_NAME}"
+BENCH_DIR_ENV_PROVIDED=0
+[[ -n "${BENCH_DIR+x}" ]] && BENCH_DIR_ENV_PROVIDED=1
+BENCH_DIR="${BENCH_DIR:-${BENCH_PARENT}/${BENCH_NAME}}"
 SITE_NAME_ENV_PROVIDED=0
 if [[ -n "${SITE_NAME+x}" ]]; then
   SITE_NAME_ENV_PROVIDED=1
@@ -116,6 +122,8 @@ INSTALLATION_PROFILE_OPTION_PROVIDED=0
 INSTALLATION_PROFILE_APPS_OPTION_PROVIDED=0
 INSTALLATION_PROFILE_APPS_RAW=""
 # Docker engine settings (used only when DEPLOYMENT_ENGINE=docker). See lib/docker.sh.
+DOCKER_WORKDIR_ENV_PROVIDED=0
+[[ -n "${DOCKER_WORKDIR+x}" ]] && DOCKER_WORKDIR_ENV_PROVIDED=1
 DOCKER_WORKDIR="${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}"
 FRAPPE_DOCKER_REPO="${FRAPPE_DOCKER_REPO:-https://github.com/frappe/frappe_docker.git}"
 # Audited immutable default (frappe/frappe_docker @ 2026-07-15). Override with
@@ -123,6 +131,8 @@ FRAPPE_DOCKER_REPO="${FRAPPE_DOCKER_REPO:-https://github.com/frappe/frappe_docke
 # moving tip; the resolved SHA is still recorded in erpnext-dev.pins.
 FRAPPE_DOCKER_REF="${FRAPPE_DOCKER_REF:-c004361e790125ed13aaa933d11f7838711a8960}"
 DOCKER_ERPNEXT_IMAGE="${DOCKER_ERPNEXT_IMAGE:-frappe/erpnext:v16.26.2}"
+DOCKER_PROJECT_NAME_ENV_PROVIDED=0
+[[ -n "${DOCKER_PROJECT_NAME+x}" ]] && DOCKER_PROJECT_NAME_ENV_PROVIDED=1
 DOCKER_PROJECT_NAME="${DOCKER_PROJECT_NAME:-erpnext-dev}"
 # Track whether the published port was set via the environment this run, so the
 # saved config value only overrides the default (not an explicit env choice).

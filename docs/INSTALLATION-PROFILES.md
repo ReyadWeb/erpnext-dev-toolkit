@@ -406,14 +406,30 @@ implicitly. Interactive adoption requires exact entry and final confirmation.
 Discovery is bounded to configured Bench candidates and the configured Docker
 project. Roots and every path component must be canonical, non-symlinked, safely
 owned, and not group/other writable. Native discovery reads Git metadata,
-versions, site directories, and `apps.txt` strictly as data. Docker uses bounded
+versions, site directories, and bounded read-only site inventory strictly as
+data; it never imports or executes candidate application code. A stack is
+published only after every sibling site and required clean application-code
+record is proven. Docker uses bounded
 `docker ps`/`inspect` and image-inspect probes, requiring Compose labels, a fixed
 topology, one immutable application-service digest, and safely mounted site
 inventory. Production also requires the validated cumulative app manifest and
-an exact reconstructible app set.
+an exact reconstructible app set at
+`$DOCKER_WORKDIR/erpnext-dev.app-manifest.tsv`. Partial or mixed-project results
+are rejected as a whole.
 
-Confirmed adoption writes schema-2 `ADOPTION_TARGET_ID`, `ADOPTION_SITE`,
-`ADOPTION_INVENTORY_FINGERPRINT`, and Docker `ADOPTION_DOCKER_PROJECT` metadata.
+The normalized fingerprint covers the complete stack: canonical routing,
+ownership/permission facts, all sites and their per-site applications, clean
+code commits, and Native core trust; or Compose services, mounts, immutable
+image identity/digest, and the cumulative production manifest. Exact
+idempotency requires engine, environment, canonical Bench or Docker
+workdir/project, site, and fingerprint all to match.
+
+Confirmed adoption writes schema-2 `ADOPTION_TARGET_ID`, `ADOPTION_ENGINE`,
+`ADOPTION_ENVIRONMENT`, `ADOPTION_SITE`, `ADOPTION_INVENTORY_FINGERPRINT`, and
+the exact `ADOPTION_BENCH_PATH` or
+`ADOPTION_DOCKER_WORKDIR`/`ADOPTION_DOCKER_PROJECT` binding. These validated
+data fields restore operational routing on later invocations unless an explicit
+environment override takes precedence.
 The journal records engine/environment, inventory and configuration fingerprints,
 the exact target, checkpoints, protected prior config, and recovery guidance.
 The lock is acquired only after confirmation; discovery is repeated before the
