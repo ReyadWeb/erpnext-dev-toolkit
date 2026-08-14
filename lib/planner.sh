@@ -203,9 +203,8 @@ installation_profile_inventory_source_classification() {
     printf 'unmanaged\n'
     return
   }
-  expected_repo="$LIB_APP_REPO"
   if [[ "$source" != image:* ]]; then
-    [[ "${source%.git}" == "${expected_repo%.git}" ]] && printf 'catalog-match\n' || printf 'catalog-mismatch\n'
+    [[ "$source" == catalog-match ]] && printf 'catalog-match\n' || printf 'catalog-mismatch\n'
     return
   fi
   engine="${PROFILE_PLAN_ENGINE:-$(effective_deployment_engine)}"
@@ -414,7 +413,6 @@ installation_profile_app_record_known_incompatible() {
   branch="$(printf '%s' "$record" | cut -d'|' -f6)"
   source="$(printf '%s' "$record" | cut -d'|' -f8)"
   trust="$(printf '%s' "$record" | cut -d'|' -f9)"
-  expected_repo="$LIB_APP_REPO"
   engine="${PROFILE_PLAN_ENGINE:-$(effective_deployment_engine)}"
   environment="${PROFILE_PLAN_ENVIRONMENT:-$(docker_mode 2>/dev/null || printf native)}"
 
@@ -422,8 +420,7 @@ installation_profile_app_record_known_incompatible() {
   inventory_deployment_supported "$engine" "$environment" "$LIB_APP_NATIVE_SUPPORT" \
     "$LIB_APP_DOCKER_DEV_SUPPORT" "$LIB_APP_DOCKER_PROD_STRATEGY" || return 0
   [[ "$trust" == "$LIB_APP_TRUST" ]] || return 0
-  if [[ "$source" != unknown && "$source" != image:* \
-    && "${source%.git}" != "${expected_repo%.git}" ]]; then
+  if [[ "$source" != unknown && "$source" != image:* && "$source" != catalog-match ]]; then
     return 0
   fi
   if [[ "$source" == image:* && "$engine" != docker ]]; then

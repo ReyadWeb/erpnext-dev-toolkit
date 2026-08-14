@@ -32,41 +32,65 @@ inventory_current_uid() {
 }
 
 inventory_run_git_probe() {
-  local dir="$1"
+  local dir="$1" git_snapshot owner_uid snapshot
   shift
-  local current_uid owner_record owner_name owner_uid owner_home resolved_uid
+  local current_uid owner_record owner_name owner_home resolved_uid
 
-  current_uid="$(inventory_current_uid)" || return 125
+  inventory_git_proof_safe "$dir" || return 125
   owner_uid="$(inventory_run_probe stat -c '%u' -- "$dir" 2>/dev/null)" || return 125
   [[ "$owner_uid" =~ ^[0-9]+$ ]] || return 125
+  snapshot="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-git-proof.XXXXXX")" || return 125
+  if ! cp -a -- "$dir/.git/." "$snapshot/" 2>/dev/null; then
+    rm -rf -- "$snapshot"
+    return 125
+  fi
+  rm -f -- "$snapshot/config" "$snapshot/commondir" "$snapshot/gitdir" "$snapshot/worktrees" \
+    "$snapshot/objects/info/alternates"
+  if [[ "$owner_uid" != "$(id -u)" && "$(id -u)" == 0 ]]; then
+    chown -R -- "$owner_uid:$owner_uid" "$snapshot" 2>/dev/null || { rm -rf -- "$snapshot"; return 125; }
+  fi
+  git_snapshot="$snapshot"
+
+  current_uid="$(inventory_current_uid)" || return 125
 
   if [[ "$owner_uid" == "$current_uid" ]]; then
     inventory_run_probe env \
       -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_CONFIG_COUNT \
+      -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE \
+      -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_DIFF_OPTS -u GIT_SSH \
+      -u GIT_SSH_COMMAND -u SSH_COMMAND -u GIT_ASKPASS -u SSH_ASKPASS -u GIT_TRACE \
+      -u GIT_TRACE_PACKET -u GIT_TRACE_PERFORMANCE -u GIT_TRACE_SETUP -u GIT_CREDENTIAL_HELPER \
       GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
-      GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
-      git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c core.pager=cat \
-      -c pager.status=false -C "$dir" "$@"
-    return
+      GIT_ATTR_NOSYSTEM=1 GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
+      git --git-dir="$git_snapshot" --work-tree="$dir" "$@"
+    rc=$?
+    rm -rf -- "$snapshot"
+    return "$rc"
   fi
 
   # Never bypass Git's dubious-ownership protection with safe.directory. A
   # root-run inventory must inspect a repository as its actual filesystem
   # owner, just as Bench does. Unknown owners and non-root cross-user probes
   # fail closed and are reported as ambiguous by the caller.
-  [[ "$current_uid" == 0 ]] || return 125
-  command -v runuser >/dev/null 2>&1 || return 125
-  command -v getent >/dev/null 2>&1 || return 125
-  owner_record="$(inventory_run_probe getent passwd "$owner_uid" 2>/dev/null)" || return 125
+  [[ "$current_uid" == 0 ]] || { rm -rf -- "$snapshot"; return 125; }
+  command -v runuser >/dev/null 2>&1 || { rm -rf -- "$snapshot"; return 125; }
+  command -v getent >/dev/null 2>&1 || { rm -rf -- "$snapshot"; return 125; }
+  owner_record="$(inventory_run_probe getent passwd "$owner_uid" 2>/dev/null)" || { rm -rf -- "$snapshot"; return 125; }
   IFS=: read -r owner_name _ resolved_uid _ _ owner_home _ <<<"$owner_record"
-  [[ -n "$owner_name" && "$resolved_uid" == "$owner_uid" && "$owner_home" == /* ]] || return 125
+  [[ -n "$owner_name" && "$resolved_uid" == "$owner_uid" && "$owner_home" == /* ]] || { rm -rf -- "$snapshot"; return 125; }
 
   inventory_run_probe runuser -u "$owner_name" -- env \
     -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_CONFIG_COUNT \
+    -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE \
+    -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_DIFF_OPTS -u GIT_SSH \
+    -u GIT_SSH_COMMAND -u SSH_COMMAND -u GIT_ASKPASS -u SSH_ASKPASS -u GIT_TRACE \
+    -u GIT_TRACE_PACKET -u GIT_TRACE_PERFORMANCE -u GIT_TRACE_SETUP -u GIT_CREDENTIAL_HELPER \
     HOME="$owner_home" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
-    GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
-    git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c core.pager=cat \
-    -c pager.status=false -C "$dir" "$@"
+    GIT_ATTR_NOSYSTEM=1 GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
+    git --git-dir="$git_snapshot" --work-tree="$dir" "$@"
+  rc=$?
+  rm -rf -- "$snapshot"
+  return "$rc"
 }
 
 inventory_git_proof_safe() {
@@ -92,13 +116,17 @@ inventory_git_proof_safe() {
   if [[ -f "$git_dir/config" ]]; then
     ! grep -Eiq '^[[:space:]]*\[(include|includeIf)([[:space:]]|\])|^[[:space:]]*(include|includeIf)\.' "$git_dir/config" || return 1
     ! grep -Eiq '^[[:space:]]*(insteadOf|pushInsteadOf)[[:space:]]*=' "$git_dir/config" || return 1
+    ! grep -Eiq '^[[:space:]]*((core\.)?(worktree|gitdir|attributesfile|excludesfile|fsmonitor|hooksPath)|extensions\.worktreeConfig|config\.worktree|index(\.file)?|objects\.(info\.)?alternates|submodule\.|filter\.|diff\..*external|credential\.|sshCommand|include\.)[[:space:]]*=' "$git_dir/config" || return 1
+    ! grep -Eiq '^[[:space:]]*bare[[:space:]]*=[[:space:]]*(true|yes|on|1)[[:space:]]*$' "$git_dir/config" || return 1
   fi
 }
 
 inventory_git_raw_source() {
-  local dir="$1" config="$1/.git/config" value
+  local dir="$1" config="$1/.git/config" snapshot value rc
   inventory_git_proof_safe "$dir" || return 1
   [[ -f "$config" ]] || return 1
+  snapshot="$(mktemp "${TMPDIR:-/tmp}/erpnext-git-config.XXXXXX")" || return 1
+  cp -p -- "$config" "$snapshot" 2>/dev/null || { rm -f -- "$snapshot"; return 1; }
   value="$(awk '
     BEGIN { section=""; count=0 }
     /^[[:space:]]*[#;]/ { next }
@@ -116,8 +144,18 @@ inventory_git_raw_source() {
       print section "\t" line; count++
     }
     END { if (count != 1) exit 3 }
-  ' "$config")" || return 1
+  ' "$snapshot")"
+  rc=$?
+  rm -f -- "$snapshot"
+  ((rc == 0)) || return 1
   printf '%s\n' "${value#*$'\t'}"
+}
+
+inventory_git_proof_identity() {
+  local dir="$1" config="$1/.git/config"
+  inventory_git_proof_safe "$dir" || return 1
+  sha256sum -- "$dir/.git/HEAD" "$dir/.git/index" "$config" 2>/dev/null \
+    | sha256sum | awk '{print $1}'
 }
 
 inventory_add_record() {
@@ -136,6 +174,21 @@ inventory_catalog_classification() {
     printf '%s|managed\n' "${LIB_APP_TRUST}"
   else
     printf 'unknown|unmanaged\n'
+  fi
+}
+
+inventory_source_safe_value() {
+  local app="$1" raw="$2" digest
+  [[ -n "$raw" && "$raw" != unknown ]] || { printf 'unknown\n'; return; }
+  digest="$(printf '%s' "$raw" | sha256sum | awk '{print $1}')"
+  if load_validated_app_catalog_record "$app" 2>/dev/null; then
+    if [[ "${raw%.git}" == "${LIB_APP_REPO%.git}" ]]; then
+      printf 'catalog-match\n'
+    else
+      printf 'catalog-mismatch:%s\n' "$digest"
+    fi
+  else
+    printf 'custom-source:%s\n' "$digest"
   fi
 }
 
@@ -224,6 +277,9 @@ inventory_emit_app() {
     repo_state="$(inventory_git_value "$dir" state)"
     repo_state="${repo_state:-ambiguous}"
   fi
+  if [[ "$source" != image:* ]]; then
+    source="$(inventory_source_safe_value "$app" "$source")"
+  fi
   inventory_add_record APP "$stack" "$app" available "$version" "$branch" "$commit" "$source" "$trust" "$management" "$repo_state"
 }
 
@@ -235,6 +291,22 @@ inventory_native_site_db_apps() {
   [[ "$db_name" =~ ^[A-Za-z0-9_]+$ && -n "$db_password" ]] || return 2
   raw="$(MYSQL_PWD="$db_password" inventory_run_probe mariadb --batch --skip-column-names "$db_name" \
     -e "SELECT defvalue FROM tabDefaultValue WHERE defkey='installed_apps' AND parent='__global' LIMIT 1" 2>/dev/null)" || return 2
+  [[ -n "$raw" ]] || return 2
+  printf '%s\n' "$raw" | grep -oE '"[A-Za-z0-9][A-Za-z0-9_-]*"' | tr -d '"'
+}
+
+inventory_docker_host_site_apps() {
+  local site_dir="$1" endpoint="$2" db_name db_user db_password raw query
+  [[ -d "$site_dir" && -f "$site_dir/site_config.json" ]] || return 2
+  [[ "$endpoint" =~ ^[A-Za-z0-9_.:-]{1,255}$ ]] || return 2
+  db_name="$(sed -nE 's/^[[:space:]]*"db_name"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)"[[:space:]]*,?[[:space:]]*$/\1/p' "$site_dir/site_config.json" | head -n 1)"
+  db_user="$(sed -nE 's/^[[:space:]]*"db_user"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)"[[:space:]]*,?[[:space:]]*$/\1/p' "$site_dir/site_config.json" | head -n 1)"
+  db_password="$(sed -nE 's/^[[:space:]]*"db_password"[[:space:]]*:[[:space:]]*"([^"]*)"[[:space:]]*,?[[:space:]]*$/\1/p' "$site_dir/site_config.json" | head -n 1)"
+  db_user="${db_user:-root}"
+  [[ "$db_name" =~ ^[A-Za-z0-9_]+$ && "$db_user" =~ ^[A-Za-z0-9_]+$ && -n "$db_password" ]] || return 2
+  query="SELECT defvalue FROM tabDefaultValue WHERE defkey='installed_apps' AND parent='__global' LIMIT 1"
+  raw="$(MYSQL_PWD="$db_password" inventory_run_probe mariadb --protocol=tcp --host="$endpoint" --user="$db_user" \
+    --batch --skip-column-names --skip-reconnect --local-infile=0 "$db_name" -e "$query" 2>/dev/null)" || return 2
   [[ -n "$raw" ]] || return 2
   printf '%s\n' "$raw" | grep -oE '"[A-Za-z0-9][A-Za-z0-9_-]*"' | tr -d '"'
 }
@@ -600,7 +672,7 @@ inventory_compatibility_evaluate() {
         INVENTORY_COMPAT_DETAIL="Available image source is not a trusted built-in platform source."
         return 2
       fi
-    elif [[ "${actual_source%.git}" != "${LIB_APP_REPO%.git}" ]]; then
+    elif [[ "$actual_source" != catalog-match ]]; then
       INVENTORY_COMPAT_DETAIL="Available code source does not match the trusted catalog source."
       return 2
     fi

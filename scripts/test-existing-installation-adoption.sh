@@ -242,6 +242,60 @@ adoption_discover
 assert_eq "Git include configuration fails closed" 0 "${#ADOPTION_CANDIDATES[@]}"
 cp "$tmp/git-config.safe" "$git_config"
 
+filter_marker="$tmp/filter-executed"
+printf '#!/usr/bin/env bash\ntouch %q\ncat\n' "$filter_marker" >"$tmp/filter-clean"
+chmod 755 "$tmp/filter-clean"
+printf 'tracked\n' >"$git_attack/apps/frappe/tracked.txt"
+printf 'tracked.txt filter=hostile\n' >"$git_attack/apps/frappe/.gitattributes"
+git -C "$git_attack/apps/frappe" add tracked.txt .gitattributes
+git -C "$git_attack/apps/frappe" commit -qm filter-fixture
+chmod -R go-w "$git_attack/apps/frappe/.git"
+git -C "$git_attack/apps/frappe" config filter.hostile.clean "$tmp/filter-clean"
+git -C "$git_attack/apps/frappe" config core.trustctime false
+git -C "$git_attack/apps/frappe" config core.checkStat minimal
+printf 'changed\n' >"$git_attack/apps/frappe/tracked.txt"
+adoption_discover
+assert_eq "candidate clean filter cannot execute" 0 "${#ADOPTION_CANDIDATES[@]}"
+assert "candidate clean filter marker remains absent" test ! -e "$filter_marker"
+git -C "$git_attack/apps/frappe" config --unset-all filter.hostile.clean
+git -C "$git_attack/apps/frappe" config --unset core.trustctime
+git -C "$git_attack/apps/frappe" config --unset core.checkStat
+git -C "$git_attack/apps/frappe" checkout -q -- tracked.txt .gitattributes
+chmod -R go-w "$git_attack/apps/frappe/.git"
+printf '[core]\n\tworktree = %s\n' "$tmp/outside-worktree" >>"$git_config"
+mkdir -p "$tmp/outside-worktree"
+adoption_discover
+assert_eq "external Git worktree rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+cp "$tmp/git-config.safe" "$git_config"
+
+private_app="$tmp/private-app"
+mkdir -p "$private_app"
+printf 'VERSION=1.0\nBRANCH=main\nCOMMIT=%040d\nSOURCE=https://private-user:private-token@example.invalid/custom_app.git\nSTATE=clean\n' 1 >"$private_app/.inventory-meta"
+INVENTORY_RECORDS=()
+inventory_emit_app "native:$tmp" private_app "$private_app" 1
+DOCTOR_FORMAT=json
+private_json="$(inventory_emit_json)"
+assert "private URL absent from inventory JSON" test "$private_json" != *private-token* -a "$private_json" != *private-user*
+assert "private source digest retained" grep -Eq 'custom-source:[a-f0-9]{64}' <<<"$private_json"
+DOCTOR_FORMAT=human
+
+canonical_sites="$tmp/canonical-sites"
+mkdir -p "$canonical_sites/prod.test"
+printf 'frappe\nerpnext\n' >"$canonical_sites/apps.txt"
+printf '{\n  "db_name": "prod_db",\n  "db_password": "host-only-secret"\n}\n' >"$canonical_sites/prod.test/site_config.json"
+eval "$(declare -f inventory_run_probe | sed '1s/inventory_run_probe/inventory_run_probe_before_canonical/')"
+inventory_run_probe() {
+  [[ "${1:-}" == mariadb ]] && {
+    printf '["frappe"]\n'
+    return
+  }
+  inventory_run_probe_before_canonical "$@"
+}
+canonical_db_apps="$(inventory_docker_host_site_apps "$canonical_sites/prod.test" 172.30.0.10)"
+assert_eq "canonical shared sites registry is host data" 'frappe' "$canonical_db_apps"
+assert "canonical layout has no per-site apps registry" test ! -e "$canonical_sites/prod.test/apps.txt"
+inventory_run_probe() { inventory_run_probe_before_canonical "$@"; }
+
 git -C "$git_attack/apps/frappe" remote set-url origin local-untrusted-source
 git -C "$git_attack/apps/frappe" config url.https://github.com/frappe/frappe.git.insteadOf local-untrusted-source
 adoption_discover
@@ -352,6 +406,7 @@ docker_live_root="$docker_live_work/frappe_docker"
 docker_live_sites="$docker_live_work/sites"
 mkdir -p "$docker_live_root" "$docker_live_sites/prod.test" "$tmp/bin"
 touch "$docker_live_root/compose.yaml"
+printf 'frappe\nerpnext\n' >"$docker_live_sites/apps.txt"
 printf 'frappe\n' >"$docker_live_sites/prod.test/apps.txt"
 printf '#!/usr/bin/env bash\nexit 99\n' >"$tmp/bin/docker"
 chmod 755 "$tmp/bin/docker"
@@ -382,6 +437,7 @@ inventory_run_probe() {
       '{{.Image}}') [[ $i -lt 6 ]] && printf '%s\n' "$docker_image_id" || printf 'sha256:%064d\n' "$i" ;;
       '{{.Config.Image}}') printf '%s\n' "$docker_image_ref" ;;
       *'.Mounts'*) printf '%s\n' "$docker_mount" ;;
+      *'NetworkSettings.Networks'*) printf '172.30.0.10\n' ;;
       *) return 1 ;;
     esac
     return
@@ -436,6 +492,7 @@ docker_services[8]=redis-queue
 docker_mount="$docker_live_work/other/sites"
 mkdir -p "$docker_mount/prod.test"
 cp "$docker_live_sites/prod.test/apps.txt" "$docker_mount/prod.test/apps.txt"
+cp "$docker_live_sites/apps.txt" "$docker_mount/apps.txt"
 chmod -R go-w "$docker_live_work/other"
 ADOPTION_CANDIDATES=()
 adoption_docker_probe_live "$docker_live_root"
@@ -454,6 +511,10 @@ ADOPTION_CANDIDATES=()
 adoption_docker_probe_live "$docker_live_root"
 assert "Docker digest and manifest identity change fingerprint" test "$docker_live_fp" != "${ADOPTION_CANDIDATES[0]##*|}"
 docker_digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+printf 'FORMAT\t1\nPROFILE\tfrappe-only\nAPP\tfrappe\thttps://github.com/frappe/frappe\tversion-16\tfrappe\nCREATED\t2026-08-02T00:00:00Z\nIMAGE\t%s\t%s\n' \
+  "$docker_image_ref" "$docker_digest" >"$docker_live_work/erpnext-dev.app-manifest.tsv"
+chmod go-w "$docker_live_work/erpnext-dev.app-manifest.tsv"
+
 unset ERPNEXT_DEV_HERMETIC_ADOPTION_FIXTURES
 inventory_run_probe() { inventory_run_probe_original "$@"; }
 

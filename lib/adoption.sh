@@ -112,7 +112,7 @@ adoption_native_site_apps() {
 }
 
 adoption_native_probe() {
-  local bench="$1" source state version major commit site apps app app_source app_state app_commit app_trust sites_seen=0 id apps_csv fingerprint snapshot=""
+  local bench="$1" source state version major commit proof_identity site apps app app_source app_state app_commit app_trust app_proof sites_seen=0 id apps_csv fingerprint snapshot=""
   local -a private_candidates=()
   ADOPTION_PROBE_STATUS=ambiguous
   ADOPTION_PROBE_REASON=unsafe-path
@@ -125,6 +125,7 @@ adoption_native_probe() {
   ADOPTION_PROBE_REASON=unsafe-version-proof
   adoption_path_safe "$bench/apps/frappe/frappe/__init__.py" file "$bench" || { ADOPTION_PROBE_STATUS=ambiguous; return 1; }
   source="$(inventory_git_value "$bench/apps/frappe" source)"
+  proof_identity="$(inventory_git_proof_identity "$bench/apps/frappe")" || { ADOPTION_PROBE_STATUS=ambiguous; ADOPTION_PROBE_REASON=unproven-git-proof; return 1; }
   state="$(inventory_git_value "$bench/apps/frappe" state)"
   commit="$(inventory_git_value "$bench/apps/frappe" commit)"
   version="$(sed -nE 's/^[[:space:]]*(__version__|version)[[:space:]]*=[[:space:]]*["'\'']([^"'\'']+)["'\''].*/\2/p' "$bench/apps/frappe/frappe/__init__.py" | head -n 1)"
@@ -137,7 +138,7 @@ adoption_native_probe() {
   snapshot+="apps=$(adoption_path_fact "$bench/apps")\nsites=$(adoption_path_fact "$bench/sites")\n"
   snapshot+="frappe=$(adoption_path_fact "$bench/apps/frappe")\ngit=$(adoption_path_fact "$bench/apps/frappe/.git")\n"
   snapshot+="version_file=$(adoption_path_fact "$bench/apps/frappe/frappe/__init__.py")\n"
-  snapshot+="frappe_commit=$commit\nfrappe_major=$major\nfrappe_source=trusted-official\nfrappe_state=clean\n"
+  snapshot+="frappe_commit=$commit\nfrappe_major=$major\nfrappe_source=trusted-official\nfrappe_state=clean\nfrappe_proof=$proof_identity\n"
   while IFS= read -r site; do
     [[ -n "$site" && "$site" != assets ]] || continue
     adoption_valid_atom "$site" || { ADOPTION_PROBE_STATUS=ambiguous; return 1; }
@@ -159,7 +160,8 @@ adoption_native_probe() {
           || { ADOPTION_PROBE_STATUS=incompatible; ADOPTION_PROBE_REASON=untrusted-app-source; return 2; }
         app_trust=trusted-catalog
       fi
-      snapshot+="code=$app:$(adoption_path_fact "$bench/apps/$app"):commit=$app_commit:state=clean:source=$app_trust:source_digest=$(adoption_sha256 "$app_source")\n"
+      app_proof="$(inventory_git_proof_identity "$bench/apps/$app")" || { ADOPTION_PROBE_STATUS=ambiguous; ADOPTION_PROBE_REASON=unproven-app-proof; return 1; }
+      snapshot+="code=$app:$(adoption_path_fact "$bench/apps/$app"):commit=$app_commit:state=clean:source=$app_trust:source_digest=$(adoption_sha256 "$app_source"):proof=$app_proof\n"
     done <<<"$apps"
     apps_csv="$(printf '%s\n' "$apps" | LC_ALL=C sort -u | paste -sd, -)"
     snapshot+="site=$site:$(adoption_path_fact "$bench/sites/$site"):apps=$apps_csv\n"
@@ -224,20 +226,28 @@ adoption_docker_manifest_apps() {
 }
 
 adoption_docker_site_apps() {
-  local workdir="$1" project="$2" sites_source="$3" site="$4" line app
+  local workdir="$1" project="$2" sites_source="$3" site="$4" endpoint="$5" line app
   : "$workdir" "$project"
-  adoption_path_safe "$sites_source/$site/apps.txt" file "$sites_source" || return 1
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    app="${line%%[[:space:]]*}"
-    [[ -z "$app" ]] && continue
-    adoption_valid_atom "$app" || return 1
-    printf '%s\n' "$app"
-  done <"$sites_source/$site/apps.txt"
+  if [[ "${ERPNEXT_DEV_HERMETIC_ADOPTION_FIXTURES:-0}" == 1 ]]; then
+    adoption_path_safe "$sites_source/$site/apps.txt" file "$sites_source" || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      app="${line%%[[:space:]]*}"
+      [[ -z "$app" ]] && continue
+      adoption_valid_atom "$app" || return 1
+      printf '%s\n' "$app"
+    done <"$sites_source/$site/apps.txt"
+  else
+    adoption_path_safe "$sites_source/$site/site_config.json" file "$sites_source" || return 1
+    inventory_docker_host_site_apps "$sites_source/$site" "$endpoint" || {
+      ADOPTION_PROBE_REASON=database-inventory-unproven
+      return 1
+    }
+  fi
 }
 
 adoption_docker_probe_live() {
-  local root="$1" workdir ids id project="" observed_project="" service image_id app_image_id="" digest="" sites_source="" mount=""
-  local mode=development site apps apps_csv major manifest_apps reconstructible=false candidate_id image_version repo_digest image_ref="" observed_image_ref=""
+  local root="$1" workdir ids id project="" observed_project="" service image_id app_image_id="" digest="" sites_source="" mount="" db_id="" db_endpoint=""
+  local mode=development site apps apps_csv shared_apps major manifest_apps reconstructible=false candidate_id image_version repo_digest image_ref="" observed_image_ref=""
   local manifest_file="" manifest_hash=none manifest_image="" manifest_digest="" snapshot="" fingerprint record sites_seen=0
   local -A services=()
   local -a private_candidates=()
@@ -261,6 +271,7 @@ adoption_docker_probe_live() {
     case "$service" in backend|frontend|websocket|queue-short|queue-long|scheduler|configurator|db|redis-cache|redis-queue) ;; *) return 2 ;; esac
     [[ -z "${services[$service]:-}" ]] || return 2
     services["$service"]=1
+    [[ "$service" != db ]] || db_id="$id"
     image_id="$(inventory_run_probe docker inspect --format '{{.Image}}' "$id" 2>/dev/null)" || return 1
     [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || { ADOPTION_PROBE_STATUS=ambiguous; ADOPTION_PROBE_REASON=unproven-image-id; return 1; }
     case "$service" in backend|frontend|websocket|queue-short|queue-long|scheduler)
@@ -278,10 +289,12 @@ adoption_docker_probe_live() {
     snapshot+="service=$service:id=$id:image=$image_id:mount=$mount\n"
   done <<<"$ids"
   project="$observed_project"
-  [[ -n "$project" && -n "$app_image_id" && -n "$sites_source" ]] || return 1
+  [[ -n "$project" && -n "$app_image_id" && -n "$sites_source" && -n "$db_id" ]] || return 1
   for service in backend frontend websocket queue-short queue-long scheduler db redis-cache redis-queue; do
     [[ -n "${services[$service]:-}" ]] || { ADOPTION_PROBE_STATUS=incompatible; return 2; }
   done
+  db_endpoint="$(inventory_run_probe docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$db_id" 2>/dev/null)" || return 1
+  [[ "$db_endpoint" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { ADOPTION_PROBE_REASON=unproven-database-endpoint; return 1; }
   adoption_path_safe "$sites_source" || return 1
   repo_digest="$(inventory_run_probe docker image inspect --format '{{index .RepoDigests 0}}' "$app_image_id" 2>/dev/null)" || return 1
   digest="${repo_digest##*@}"
@@ -292,12 +305,12 @@ adoption_docker_probe_live() {
   if [[ "$mode" == production ]]; then
     manifest_file="$workdir/erpnext-dev.app-manifest.tsv"
     adoption_path_safe "$manifest_file" file "$workdir" || { ADOPTION_PROBE_STATUS=ambiguous; return 1; }
-    docker_validate_app_manifest "$manifest_file" || { ADOPTION_PROBE_STATUS=incompatible; return 2; }
-    manifest_apps="$(adoption_docker_manifest_apps "$manifest_file" 2>/dev/null)" || return 2
-    printf '%s\n' "$manifest_apps" | grep -Fxq frappe || return 2
+    docker_validate_app_manifest "$manifest_file" || { ADOPTION_PROBE_STATUS=incompatible; ADOPTION_PROBE_REASON=invalid-manifest; return 2; }
+    manifest_apps="$(adoption_docker_manifest_apps "$manifest_file" 2>/dev/null)" || { ADOPTION_PROBE_REASON=invalid-manifest-apps; return 2; }
+    printf '%s\n' "$manifest_apps" | grep -Fxq frappe || { ADOPTION_PROBE_REASON=manifest-missing-frappe; return 2; }
     IFS=$'\t' read -r _ manifest_image manifest_digest < <(awk -F'\t' '$1=="IMAGE" {print; exit}' "$manifest_file")
     [[ -n "$manifest_image" && "$manifest_image" == "$observed_image_ref" && "$manifest_digest" == "$digest" ]] \
-      || { ADOPTION_PROBE_STATUS=incompatible; return 2; }
+      || { ADOPTION_PROBE_STATUS=incompatible; ADOPTION_PROBE_REASON=manifest-image-mismatch; return 2; }
     manifest_hash="$(sha256sum "$manifest_file" | awk '{print $1}')"
     reconstructible=true
   elif [[ "$repo_digest" != frappe/erpnext@* && "$repo_digest" != ghcr.io/frappe/*@* ]]; then
@@ -305,15 +318,19 @@ adoption_docker_probe_live() {
   fi
   snapshot+="engine=docker\nenvironment=$mode\nworkdir=$(adoption_path_fact "$workdir")\nroot=$(adoption_path_fact "$root")\n"
   snapshot+="project=$project\nimage_id=$app_image_id\nimage_ref=$observed_image_ref\ndigest=$digest\n"
-  snapshot+="sites_mount=$(adoption_path_fact "$sites_source")\nmanifest=$manifest_hash\nreconstructible=$reconstructible\nfrappe_major=$major\n"
+  adoption_path_safe "$sites_source/apps.txt" file "$sites_source" || { ADOPTION_PROBE_REASON=missing-shared-app-registry; return 1; }
+  shared_apps="$(sed '/^[[:space:]]*$/d' "$sites_source/apps.txt" | awk '{print $1}' | LC_ALL=C sort -u)"
+  [[ -n "$shared_apps" ]] || { ADOPTION_PROBE_REASON=empty-shared-app-registry; return 1; }
+  snapshot+="sites_mount=$(adoption_path_fact "$sites_source")\nshared_apps=$(adoption_sha256 "$shared_apps")\ndb_endpoint=$db_endpoint\nmanifest=$manifest_hash\nreconstructible=$reconstructible\nfrappe_major=$major\n"
   while IFS= read -r site; do
     [[ -n "$site" && "$site" != assets ]] || continue
     adoption_valid_atom "$site" || return 1
     adoption_path_safe "$sites_source/$site" directory "$sites_source" || return 1
-    apps="$(adoption_docker_site_apps "$workdir" "$project" "$sites_source" "$site")" || return 1
-    printf '%s\n' "$apps" | grep -Fxq frappe || return 2
+    apps="$(adoption_docker_site_apps "$workdir" "$project" "$sites_source" "$site" "$db_endpoint")" || return 1
+    printf '%s\n' "$apps" | grep -Fxq frappe || { ADOPTION_PROBE_REASON=installed-apps-missing-frappe; return 2; }
+    while IFS= read -r app; do printf '%s\n' "$shared_apps" | grep -Fxq "$app" || { ADOPTION_PROBE_REASON=installed-app-not-in-registry; return 2; }; done <<<"$apps"
     if [[ "$mode" == production ]]; then
-      while IFS= read -r app; do printf '%s\n' "$manifest_apps" | grep -Fxq "$app" || return 2; done <<<"$apps"
+      while IFS= read -r app; do printf '%s\n' "$manifest_apps" | grep -Fxq "$app" || { ADOPTION_PROBE_REASON=installed-app-not-in-manifest; return 2; }; done <<<"$apps"
     fi
     apps_csv="$(printf '%s\n' "$apps" | LC_ALL=C sort -u | paste -sd, -)"
     snapshot+="site=$site:$(adoption_path_fact "$sites_source/$site"):apps=$apps_csv\n"

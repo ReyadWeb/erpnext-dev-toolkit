@@ -136,10 +136,10 @@ owner_records="$({
     printf 'REF_PRESENT_REJECTED\n'
   fi
 })"
-assert_contains "owner-aware Git probe reports genuine dirty state" "$owner_records" "|version-16|2222222222222222222222222222222222222222|https://github.com/frappe/erpnext|official|managed|dirty"
+assert_contains "owner-aware Git probe reports genuine dirty state" "$owner_records" "|version-16|2222222222222222222222222222222222222222|catalog-match|official|managed|dirty"
 assert_contains "owner-aware Git probe switches to repository owner" "$(<"$owner_probe_log")" "-u frappe -- env -u"
 assert_contains "owner-aware Git probe uses repository owner home" "$(<"$owner_probe_log")" "HOME=/home/frappe"
-assert_contains "validated raw upstream source is accepted when origin is absent" "$owner_records" "|https://github.com/frappe/erpnext|"
+assert_contains "validated raw upstream source is accepted when origin is absent" "$owner_records" "|catalog-match|"
 assert_contains "absent Git operation ref passes preflight" "$owner_records" "REF_ABSENT"
 assert_contains "present Git operation ref blocks preflight" "$owner_records" "REF_PRESENT_REJECTED"
 
