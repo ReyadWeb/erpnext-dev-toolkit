@@ -159,7 +159,7 @@ adoption_native_probe() {
           || { ADOPTION_PROBE_STATUS=incompatible; ADOPTION_PROBE_REASON=untrusted-app-source; return 2; }
         app_trust=trusted-catalog
       fi
-      snapshot+="code=$app:$(adoption_path_fact "$bench/apps/$app"):commit=$app_commit:state=clean:source=$app_trust\n"
+      snapshot+="code=$app:$(adoption_path_fact "$bench/apps/$app"):commit=$app_commit:state=clean:source=$app_trust:source_digest=$(adoption_sha256 "$app_source")\n"
     done <<<"$apps"
     apps_csv="$(printf '%s\n' "$apps" | LC_ALL=C sort -u | paste -sd, -)"
     snapshot+="site=$site:$(adoption_path_fact "$bench/sites/$site"):apps=$apps_csv\n"
@@ -224,19 +224,15 @@ adoption_docker_manifest_apps() {
 }
 
 adoption_docker_site_apps() {
-  local workdir="$1" project="$2" sites_source="$3" site="$4"
-  local saved_workdir="${DOCKER_WORKDIR:-}" saved_project="${DOCKER_PROJECT_NAME:-}" rc=0
-  if [[ "${ERPNEXT_DEV_HERMETIC_ADOPTION_FIXTURES:-0}" == 1 ]]; then
-    adoption_native_site_apps "${sites_source%/sites}" "$site"
-    return
-  fi
-  adoption_path_safe "$sites_source/$site/site_config.json" file "$sites_source" || return 1
-  DOCKER_WORKDIR="$workdir"
-  DOCKER_PROJECT_NAME="$project"
-  inventory_docker_site_apps "$site" || rc=$?
-  DOCKER_WORKDIR="$saved_workdir"
-  DOCKER_PROJECT_NAME="$saved_project"
-  return "$rc"
+  local workdir="$1" project="$2" sites_source="$3" site="$4" line app
+  : "$workdir" "$project"
+  adoption_path_safe "$sites_source/$site/apps.txt" file "$sites_source" || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    app="${line%%[[:space:]]*}"
+    [[ -z "$app" ]] && continue
+    adoption_valid_atom "$app" || return 1
+    printf '%s\n' "$app"
+  done <"$sites_source/$site/apps.txt"
 }
 
 adoption_docker_probe_live() {

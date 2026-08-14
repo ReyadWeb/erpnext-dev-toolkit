@@ -56,6 +56,24 @@ docker_mode() { printf '%s\n' "$DOCKER_MODE"; }
 active_bench_dir() { printf '%s\n' "$fixture"; }
 source "$ROOT_DIR/lib/inventory.sh"
 
+# The owner-boundary and timeout fixtures below stub Git itself; the adoption
+# suite separately exercises the real metadata proof and raw-config parser.
+eval "$(declare -f inventory_git_proof_safe | sed '1s/inventory_git_proof_safe/inventory_git_proof_safe_real/')"
+eval "$(declare -f inventory_git_raw_source | sed '1s/inventory_git_raw_source/inventory_git_raw_source_real/')"
+inventory_git_proof_safe() {
+  case "${1##*/}" in
+    owner-repo | slow-repo) return 0 ;;
+    *) inventory_git_proof_safe_real "$@" ;;
+  esac
+}
+inventory_git_raw_source() {
+  case "${1##*/}" in
+    owner-repo) printf 'https://github.com/frappe/erpnext\n' ;;
+    slow-repo) printf 'https://github.com/frappe/frappe\n' ;;
+    *) inventory_git_raw_source_real "$@" ;;
+  esac
+}
+
 # A root-run toolkit must inspect an app repository as its filesystem owner,
 # not suppress Git's dubious-ownership safeguard. Mock the account boundary so
 # this regression remains hermetic on both root and non-root CI runners.
@@ -96,8 +114,6 @@ case " $* " in
   *" rev-parse --quiet --verify MERGE_HEAD "*) exit 1 ;;
   *" rev-parse --quiet --verify CHERRY_PICK_HEAD "*) printf '3333333333333333333333333333333333333333\n' ;;
   *" rev-parse "*) printf '2222222222222222222222222222222222222222\n' ;;
-  *" remote get-url origin "*) exit 2 ;;
-  *" remote get-url upstream "*) printf 'https://github.com/frappe/erpnext\n' ;;
   *" status "*) printf ' M banking/yarn.lock\n' ;;
   *) exit 1 ;;
 esac
@@ -123,7 +139,7 @@ owner_records="$({
 assert_contains "owner-aware Git probe reports genuine dirty state" "$owner_records" "|version-16|2222222222222222222222222222222222222222|https://github.com/frappe/erpnext|official|managed|dirty"
 assert_contains "owner-aware Git probe switches to repository owner" "$(<"$owner_probe_log")" "-u frappe -- env -u"
 assert_contains "owner-aware Git probe uses repository owner home" "$(<"$owner_probe_log")" "HOME=/home/frappe"
-assert_contains "upstream remote is accepted when origin is absent" "$owner_records" "|https://github.com/frappe/erpnext|"
+assert_contains "validated raw upstream source is accepted when origin is absent" "$owner_records" "|https://github.com/frappe/erpnext|"
 assert_contains "absent Git operation ref passes preflight" "$owner_records" "REF_ABSENT"
 assert_contains "present Git operation ref blocks preflight" "$owner_records" "REF_PRESENT_REJECTED"
 
@@ -144,7 +160,6 @@ case " $* " in
     ;;
   *" symbolic-ref "*) printf 'version-16\n' ;;
   *" rev-parse "*) printf '1111111111111111111111111111111111111111\n' ;;
-  *" remote get-url "*) printf 'https://github.com/frappe/frappe\n' ;;
   *) exit 1 ;;
 esac
 EOF_SLOW_GIT

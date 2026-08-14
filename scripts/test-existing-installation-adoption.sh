@@ -90,6 +90,7 @@ make_native() {
   git -C "$bench/apps/custom_app" config user.name Test
   git -C "$bench/apps/custom_app" add .
   git -C "$bench/apps/custom_app" commit -qm initial
+  git -C "$bench/apps/custom_app" remote add origin https://example.invalid/custom_app.git
   chmod -R go-w "$bench"
 }
 
@@ -102,6 +103,7 @@ make_custom_code() {
   git -C "$dir" config user.name Test
   git -C "$dir" add .
   git -C "$dir" commit -qm initial
+  git -C "$dir" remote add origin "https://example.invalid/${dir##*/}.git"
   chmod -R go-w "$dir"
 }
 
@@ -181,13 +183,93 @@ make_native "$wrong" wrong.test 16.0.0 https://example.invalid/frappe.git
 ERPNEXT_DEV_EXISTING_DISCOVERY_ROOTS="$wrong"
 adoption_discover
 assert_eq "incorrect core remote rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+
+git_attack="$tmp/git-attack-bench"
+make_native "$git_attack" attack.test
+ERPNEXT_DEV_EXISTING_DISCOVERY_ROOTS="$git_attack"
+git_config="$git_attack/apps/frappe/.git/config"
+cp "$git_config" "$tmp/git-config.safe"
+mv "$git_config" "$git_config.real"
+ln -s "$tmp/git-config.safe" "$git_config"
+adoption_discover
+assert_eq "symlinked Git config rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+rm "$git_config"
+mv "$git_config.real" "$git_config"
+for git_proof in HEAD index; do
+  mv "$git_attack/apps/frappe/.git/$git_proof" "$git_attack/apps/frappe/.git/$git_proof.real"
+  ln -s "$git_attack/apps/frappe/.git/$git_proof.real" "$git_attack/apps/frappe/.git/$git_proof"
+  adoption_discover
+  assert_eq "symlinked Git $git_proof rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+  rm "$git_attack/apps/frappe/.git/$git_proof"
+  mv "$git_attack/apps/frappe/.git/$git_proof.real" "$git_attack/apps/frappe/.git/$git_proof"
+done
+mv "$git_attack/apps/frappe/.git/refs" "$git_attack/apps/frappe/.git/refs.real"
+ln -s "$git_attack/apps/frappe/.git/refs.real" "$git_attack/apps/frappe/.git/refs"
+adoption_discover
+assert_eq "symlinked Git refs rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+rm "$git_attack/apps/frappe/.git/refs"
+mv "$git_attack/apps/frappe/.git/refs.real" "$git_attack/apps/frappe/.git/refs"
+mv "$git_attack/apps/frappe/.git/info" "$git_attack/apps/frappe/.git/info.real"
+ln -s "$git_attack/apps/frappe/.git/info.real" "$git_attack/apps/frappe/.git/info"
+adoption_discover
+assert_eq "symlinked Git info rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+rm "$git_attack/apps/frappe/.git/info"
+mv "$git_attack/apps/frappe/.git/info.real" "$git_attack/apps/frappe/.git/info"
+mkdir -p "$git_attack/apps/frappe/.git/objects/info"
+printf '%s\n' "$tmp" >"$git_attack/apps/frappe/.git/objects/info/alternates"
+adoption_discover
+assert_eq "Git object alternates rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+rm "$git_attack/apps/frappe/.git/objects/info/alternates"
+printf '../outside\n' >"$git_attack/apps/frappe/.git/commondir"
+adoption_discover
+assert_eq "Git commondir rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+rm "$git_attack/apps/frappe/.git/commondir"
+
+marker="$tmp/candidate-config-executed"
+printf '#!/usr/bin/env bash\ntouch %q\n' "$marker" >"$tmp/fsmonitor-marker"
+chmod 755 "$tmp/fsmonitor-marker"
+git -C "$git_attack/apps/frappe" config core.fsmonitor "$tmp/fsmonitor-marker"
+git -C "$git_attack/apps/frappe" config core.hooksPath "$tmp/hostile-hooks"
+mkdir -p "$tmp/hostile-hooks"
+printf '#!/usr/bin/env bash\ntouch %q\n' "$marker" >"$tmp/hostile-hooks/post-index-change"
+chmod 755 "$tmp/hostile-hooks/post-index-change"
+adoption_discover
+assert "repository execution-capable config is inert" test ! -e "$marker"
+git -C "$git_attack/apps/frappe" config --unset core.fsmonitor
+git -C "$git_attack/apps/frappe" config --unset core.hooksPath
+printf '[include]\n\tpath = %s\n' "$tmp/outside-config" >>"$git_config"
+adoption_discover
+assert_eq "Git include configuration fails closed" 0 "${#ADOPTION_CANDIDATES[@]}"
+cp "$tmp/git-config.safe" "$git_config"
+
+git -C "$git_attack/apps/frappe" remote set-url origin local-untrusted-source
+git -C "$git_attack/apps/frappe" config url.https://github.com/frappe/frappe.git.insteadOf local-untrusted-source
+adoption_discover
+assert_eq "URL rewrite cannot spoof raw source trust" 0 "${#ADOPTION_CANDIDATES[@]}"
+git -C "$git_attack/apps/frappe" config --unset-all url.https://github.com/frappe/frappe.git.insteadOf
+git -C "$git_attack/apps/frappe" remote set-url origin https://github.com/frappe/frappe.git
+git -C "$git_attack/apps/frappe" remote add upstream https://example.invalid/conflict.git
+adoption_discover
+assert_eq "conflicting raw remotes rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
+git -C "$git_attack/apps/frappe" remote remove upstream
+
+global_marker="$tmp/global-config-executed"
+printf '[core]\n\tfsmonitor = %s\n' "$tmp/fsmonitor-marker" >"$tmp/global.gitconfig"
+GIT_CONFIG_GLOBAL="$tmp/global.gitconfig" GIT_CONFIG_SYSTEM="$tmp/global.gitconfig" adoption_discover
+assert "global and system Git config are inert" test ! -e "$global_marker" -a ! -e "$marker"
+
+adoption_discover
+custom_source_fp="${ADOPTION_CANDIDATES[0]##*|}"
+git -C "$git_attack/apps/custom_app" remote set-url origin https://private.example.invalid/second.git
+adoption_discover
+assert "custom raw source identity changes secret-free fingerprint" test "$custom_source_fp" != "${ADOPTION_CANDIDATES[0]##*|}"
 printf '# dirty\n' >>"$native/apps/frappe/frappe/__init__.py"
 ERPNEXT_DEV_EXISTING_DISCOVERY_ROOTS="$native"
 adoption_discover
 assert_eq "dirty core rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
 assert "dirty core outcome retained" grep -q '|dirty-unknown|' <<<"${ADOPTION_OUTCOMES[*]}"
 git -C "$native/apps/frappe" checkout -q -- frappe/__init__.py
-chmod go-w "$native/apps/frappe/frappe/__init__.py"
+chmod go-w "$native/apps/frappe/frappe/__init__.py" "$native/apps/frappe/.git/index"
 mv "$native/sites/site.test/apps.txt" "$native/sites/site.test/apps.missing"
 adoption_discover
 assert_eq "incomplete site inventory rejected" 0 "${#ADOPTION_CANDIDATES[@]}"
@@ -203,6 +285,7 @@ rmdir "$native/sites/z.test"
 adoption_discover
 base_fingerprint="${ADOPTION_CANDIDATES[0]##*|}"
 git -C "$native/apps/frappe" commit --allow-empty -qm second-clean-commit
+chmod -R go-w "$native/apps/frappe/.git"
 adoption_discover
 commit_fingerprint="${ADOPTION_CANDIDATES[0]##*|}"
 assert "clean Frappe commit changes fingerprint" test "$base_fingerprint" != "$commit_fingerprint"
@@ -310,6 +393,14 @@ inventory_run_probe() {
   fi
   return 1
 }
+docker_compose() {
+  printf 'forbidden docker compose operation: %s\n' "$*" >&2
+  return 97
+}
+inventory_docker_exec() {
+  printf 'forbidden docker exec operation: %s\n' "$*" >&2
+  return 97
+}
 printf 'FORMAT\t1\nPROFILE\tfrappe-only\nAPP\tfrappe\thttps://github.com/frappe/frappe\tversion-16\tfrappe\nCREATED\t2026-08-02T00:00:00Z\nIMAGE\t%s\t%s\n' \
   "$docker_image_ref" "$docker_digest" >"$docker_live_work/erpnext-dev.app-manifest.tsv"
 chmod go-w "$docker_live_work/erpnext-dev.app-manifest.tsv"
@@ -317,6 +408,7 @@ ERPNEXT_DEV_HERMETIC_ADOPTION_FIXTURES=1
 ADOPTION_CANDIDATES=()
 adoption_docker_probe_live "$docker_live_root"
 assert_eq "canonical production manifest and complete topology accepted" 1 "${#ADOPTION_CANDIDATES[@]}"
+assert "Docker exact site inventory is host-mounted" grep -Fxq frappe "$docker_live_sites/prod.test/apps.txt"
 docker_live_fp="${ADOPTION_CANDIDATES[0]##*|}"
 docker_mixed_project=1
 if adoption_docker_probe_live "$docker_live_root" >/dev/null 2>&1; then

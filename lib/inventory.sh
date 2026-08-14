@@ -42,9 +42,11 @@ inventory_run_git_probe() {
 
   if [[ "$owner_uid" == "$current_uid" ]]; then
     inventory_run_probe env \
-      -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
-      -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_CONFIG_COUNT \
-      GIT_OPTIONAL_LOCKS=0 git -C "$dir" "$@"
+      -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_CONFIG_COUNT \
+      GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+      GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
+      git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c core.pager=cat \
+      -c pager.status=false -C "$dir" "$@"
     return
   fi
 
@@ -60,10 +62,62 @@ inventory_run_git_probe() {
   [[ -n "$owner_name" && "$resolved_uid" == "$owner_uid" && "$owner_home" == /* ]] || return 125
 
   inventory_run_probe runuser -u "$owner_name" -- env \
-    -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
-    -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM -u GIT_CONFIG_COUNT \
-    HOME="$owner_home" \
-    GIT_OPTIONAL_LOCKS=0 git -C "$dir" "$@"
+    -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_CONFIG_COUNT \
+    HOME="$owner_home" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
+    git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c core.pager=cat \
+    -c pager.status=false -C "$dir" "$@"
+}
+
+inventory_git_proof_safe() {
+  local dir="$1" git_dir="$1/.git" repo_uid proof_count path owner mode group_digit other_digit
+  [[ -d "$dir" && ! -L "$dir" && -d "$git_dir" && ! -L "$git_dir" ]] || return 1
+  repo_uid="$(stat -c %u -- "$dir" 2>/dev/null)" || return 1
+  [[ "$repo_uid" =~ ^[0-9]+$ ]] || return 1
+  proof_count="$(find -P "$git_dir" -xdev -mindepth 0 -maxdepth 32 -printf x 2>/dev/null)" || return 1
+  ((${#proof_count} > 0 && ${#proof_count} <= 100000)) || return 1
+  ! find -P "$git_dir" -xdev -mindepth 32 -maxdepth 32 -type d -print -quit 2>/dev/null | grep -q . || return 1
+  while IFS= read -r -d '' path; do
+    [[ ! -L "$path" && (-f "$path" || -d "$path") ]] || return 1
+    owner="$(stat -c %u -- "$path" 2>/dev/null)" || return 1
+    mode="$(stat -c %a -- "$path" 2>/dev/null)" || return 1
+    [[ "$owner" == "$repo_uid" && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    group_digit=$(((10#$mode / 10) % 10))
+    other_digit=$((10#$mode % 10))
+    (((group_digit & 2) == 0 && (other_digit & 2) == 0)) || return 1
+  done < <(find -P "$git_dir" -xdev -mindepth 0 -maxdepth 32 -print0 2>/dev/null) || return 1
+  [[ ! -e "$git_dir/commondir" && ! -e "$git_dir/objects/info/alternates" ]] || return 1
+  [[ -f "$git_dir/HEAD" && ! -L "$git_dir/HEAD" ]] || return 1
+  [[ ! -e "$git_dir/config" || (-f "$git_dir/config" && ! -L "$git_dir/config") ]] || return 1
+  if [[ -f "$git_dir/config" ]]; then
+    ! grep -Eiq '^[[:space:]]*\[(include|includeIf)([[:space:]]|\])|^[[:space:]]*(include|includeIf)\.' "$git_dir/config" || return 1
+    ! grep -Eiq '^[[:space:]]*(insteadOf|pushInsteadOf)[[:space:]]*=' "$git_dir/config" || return 1
+  fi
+}
+
+inventory_git_raw_source() {
+  local dir="$1" config="$1/.git/config" value
+  inventory_git_proof_safe "$dir" || return 1
+  [[ -f "$config" ]] || return 1
+  value="$(awk '
+    BEGIN { section=""; count=0 }
+    /^[[:space:]]*[#;]/ { next }
+    /^[[:space:]]*\[/ {
+      line=$0
+      if (line ~ /^[[:space:]]*\[remote[[:space:]]+"(origin|upstream)"\][[:space:]]*$/) {
+        sub(/^[[:space:]]*\[remote[[:space:]]+"/, "", line)
+        sub(/"\][[:space:]]*$/, "", line); section=line
+      } else section=""
+      next
+    }
+    section != "" && /^[[:space:]]*url[[:space:]]*=/ {
+      line=$0; sub(/^[^=]*=[[:space:]]*/, "", line)
+      if (line == "" || line ~ /[[:cntrl:]]/) exit 2
+      print section "\t" line; count++
+    }
+    END { if (count != 1) exit 3 }
+  ' "$config")" || return 1
+  printf '%s\n' "${value#*$'\t'}"
 }
 
 inventory_add_record() {
@@ -86,8 +140,8 @@ inventory_catalog_classification() {
 }
 
 inventory_git_value() {
-  local dir="$1" key="$2" value="" rc=0 remotes="" remote=""
-  [[ -d "$dir/.git" || -f "$dir/.git" ]] || return 0
+  local dir="$1" key="$2" value="" rc=0
+  inventory_git_proof_safe "$dir" || return 0
   case "$key" in
     branch)
       if value="$(inventory_run_git_probe "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null)"; then
@@ -102,17 +156,7 @@ inventory_git_value() {
         && printf '%s\n' "$value"
       ;;
     source)
-      if value="$(inventory_run_git_probe "$dir" remote get-url origin 2>/dev/null)"; then
-        printf '%s\n' "$value"
-      elif value="$(inventory_run_git_probe "$dir" remote get-url upstream 2>/dev/null)"; then
-        printf '%s\n' "$value"
-      elif remotes="$(inventory_run_git_probe "$dir" remote 2>/dev/null)"; then
-        remote="$(printf '%s\n' "$remotes" | sed '/^$/d')"
-        if [[ -n "$remote" && "$remote" != *$'\n'* ]]; then
-          value="$(inventory_run_git_probe "$dir" remote get-url "$remote" 2>/dev/null)" \
-            && printf '%s\n' "$value"
-        fi
-      fi
+      inventory_git_raw_source "$dir" 2>/dev/null || true
       ;;
     state)
       if value="$(inventory_run_git_probe "$dir" status --porcelain --untracked-files=normal 2>/dev/null)"; then
