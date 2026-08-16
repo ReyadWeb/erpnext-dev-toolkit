@@ -196,6 +196,13 @@ fi
 set_inventory() { INVENTORY_RECORDS=("$@"); }
 app_record() {
   local stack="$1" app="$2" version="$3" source="$4" state="${5:-clean}" availability="${6:-available}"
+  if [[ "$source" == https://github.com/frappe/* ]]; then
+    source=catalog-match
+  elif [[ "$source" == http*://* ]]; then
+    local digest
+    digest="$(printf '%s' "$source" | sha256sum | awk '{print $1}')"
+    if [[ "$app" == frappe || "$app" == erpnext ]]; then source="catalog-mismatch:$digest"; else source="custom-source:$digest"; fi
+  fi
   printf 'APP|%s|%s|%s|%s|version-16|%040d|%s|official|managed|%s' \
     "$stack" "$app" "$availability" "$version" 1 "$source" "$state"
 }

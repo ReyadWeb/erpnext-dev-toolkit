@@ -12,11 +12,27 @@ inventory_probe_timeout_seconds() {
   printf '%s\n' "$value"
 }
 
+inventory_trusted_binary() {
+  local name="$1" candidate owner mode group_digit other_digit
+  [[ "$name" =~ ^[A-Za-z0-9._+-]+$ ]] || return 1
+  for candidate in "/usr/bin/$name" "/bin/$name"; do
+    [[ -f "$candidate" && -x "$candidate" && ! -L "$candidate" ]] || continue
+    owner="$(stat -c %u -- "$candidate" 2>/dev/null)" || continue
+    mode="$(stat -c %a -- "$candidate" 2>/dev/null)" || continue
+    [[ "$owner" == 0 && "$mode" =~ ^[0-7]{3,4}$ ]] || continue
+    group_digit=$(((10#$mode / 10) % 10)); other_digit=$((10#$mode % 10))
+    (((group_digit & 2) == 0 && (other_digit & 2) == 0)) || continue
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  return 1
+}
+
 inventory_run_probe() {
-  local timeout_seconds
+  local timeout_seconds timeout_bin
   timeout_seconds="$(inventory_probe_timeout_seconds)" || return 125
-  command -v timeout >/dev/null 2>&1 || return 125
-  command timeout --signal=TERM --kill-after=2s "$timeout_seconds" "$@"
+  timeout_bin="$(inventory_trusted_binary timeout)" || return 125
+  "$timeout_bin" --signal=TERM --kill-after=2s "$timeout_seconds" "$@"
 }
 
 inventory_valid_name() {
@@ -32,37 +48,39 @@ inventory_current_uid() {
 }
 
 inventory_run_git_probe() {
-  local dir="$1" git_snapshot owner_uid snapshot
+  local dir="$1" git_snapshot owner_uid snapshot git_bin env_bin stat_bin cp_bin rm_bin id_bin runuser_bin getent_bin
   shift
   local current_uid owner_record owner_name owner_home resolved_uid
 
   inventory_git_proof_safe "$dir" || return 125
-  owner_uid="$(inventory_run_probe stat -c '%u' -- "$dir" 2>/dev/null)" || return 125
+  git_bin="$(inventory_trusted_binary git)" || return 125
+  env_bin="$(inventory_trusted_binary env)" || return 125
+  stat_bin="$(inventory_trusted_binary stat)" || return 125
+  cp_bin="$(inventory_trusted_binary cp)" || return 125
+  rm_bin="$(inventory_trusted_binary rm)" || return 125
+  id_bin="$(inventory_trusted_binary id)" || return 125
+  owner_uid="$(inventory_run_probe "$stat_bin" -c '%u' -- "$dir" 2>/dev/null)" || return 125
   [[ "$owner_uid" =~ ^[0-9]+$ ]] || return 125
   snapshot="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-git-proof.XXXXXX")" || return 125
-  if ! cp -a -- "$dir/.git/." "$snapshot/" 2>/dev/null; then
-    rm -rf -- "$snapshot"
+  if ! "$cp_bin" -a -- "$dir/.git/." "$snapshot/" 2>/dev/null; then
+    "$rm_bin" -rf -- "$snapshot"
     return 125
   fi
-  rm -f -- "$snapshot/config" "$snapshot/commondir" "$snapshot/gitdir" "$snapshot/worktrees" \
+  "$rm_bin" -rf -- "$snapshot/config" "$snapshot/commondir" "$snapshot/gitdir" "$snapshot/worktrees" "$snapshot/hooks" \
     "$snapshot/objects/info/alternates"
   if [[ "$owner_uid" != "$(id -u)" && "$(id -u)" == 0 ]]; then
     chown -R -- "$owner_uid:$owner_uid" "$snapshot" 2>/dev/null || { rm -rf -- "$snapshot"; return 125; }
   fi
   git_snapshot="$snapshot"
 
-  current_uid="$(inventory_current_uid)" || return 125
+  current_uid="$(inventory_current_uid)" || { "$rm_bin" -rf -- "$snapshot"; return 125; }
 
   if [[ "$owner_uid" == "$current_uid" ]]; then
-    inventory_run_probe env \
-      -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_CONFIG_COUNT \
-      -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE \
-      -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_DIFF_OPTS -u GIT_SSH \
-      -u GIT_SSH_COMMAND -u SSH_COMMAND -u GIT_ASKPASS -u SSH_ASKPASS -u GIT_TRACE \
-      -u GIT_TRACE_PACKET -u GIT_TRACE_PERFORMANCE -u GIT_TRACE_SETUP -u GIT_CREDENTIAL_HELPER \
+    inventory_run_probe "$env_bin" -i \
+      HOME=/nonexistent PATH=/usr/bin:/bin LC_ALL=C LANG=C TMPDIR=/tmp \
       GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
       GIT_ATTR_NOSYSTEM=1 GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
-      git --git-dir="$git_snapshot" --work-tree="$dir" "$@"
+      "$git_bin" --git-dir="$git_snapshot" --work-tree="$dir" "$@"
     rc=$?
     rm -rf -- "$snapshot"
     return "$rc"
@@ -73,21 +91,16 @@ inventory_run_git_probe() {
   # owner, just as Bench does. Unknown owners and non-root cross-user probes
   # fail closed and are reported as ambiguous by the caller.
   [[ "$current_uid" == 0 ]] || { rm -rf -- "$snapshot"; return 125; }
-  command -v runuser >/dev/null 2>&1 || { rm -rf -- "$snapshot"; return 125; }
-  command -v getent >/dev/null 2>&1 || { rm -rf -- "$snapshot"; return 125; }
-  owner_record="$(inventory_run_probe getent passwd "$owner_uid" 2>/dev/null)" || { rm -rf -- "$snapshot"; return 125; }
+  runuser_bin="$(inventory_trusted_binary runuser)" || { "$rm_bin" -rf -- "$snapshot"; return 125; }
+  getent_bin="$(inventory_trusted_binary getent)" || { "$rm_bin" -rf -- "$snapshot"; return 125; }
+  owner_record="$(inventory_run_probe "$getent_bin" passwd "$owner_uid" 2>/dev/null)" || { "$rm_bin" -rf -- "$snapshot"; return 125; }
   IFS=: read -r owner_name _ resolved_uid _ _ owner_home _ <<<"$owner_record"
   [[ -n "$owner_name" && "$resolved_uid" == "$owner_uid" && "$owner_home" == /* ]] || { rm -rf -- "$snapshot"; return 125; }
 
-  inventory_run_probe runuser -u "$owner_name" -- env \
-    -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_CONFIG_COUNT \
-    -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE \
-    -u GIT_REPLACE_REF_BASE -u GIT_EXTERNAL_DIFF -u GIT_DIFF_OPTS -u GIT_SSH \
-    -u GIT_SSH_COMMAND -u SSH_COMMAND -u GIT_ASKPASS -u SSH_ASKPASS -u GIT_TRACE \
-    -u GIT_TRACE_PACKET -u GIT_TRACE_PERFORMANCE -u GIT_TRACE_SETUP -u GIT_CREDENTIAL_HELPER \
+  inventory_run_probe "$runuser_bin" -u "$owner_name" -- "$env_bin" -i \
     HOME="$owner_home" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
-    GIT_ATTR_NOSYSTEM=1 GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
-    git --git-dir="$git_snapshot" --work-tree="$dir" "$@"
+    PATH=/usr/bin:/bin LC_ALL=C LANG=C TMPDIR=/tmp GIT_ATTR_NOSYSTEM=1 GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat PAGER=cat \
+    "$git_bin" --git-dir="$git_snapshot" --work-tree="$dir" "$@"
   rc=$?
   rm -rf -- "$snapshot"
   return "$rc"
@@ -122,11 +135,14 @@ inventory_git_proof_safe() {
 }
 
 inventory_git_raw_source() {
-  local dir="$1" config="$1/.git/config" snapshot value rc
+  local dir="$1" config="$1/.git/config" snapshot_dir snapshot value rc
   inventory_git_proof_safe "$dir" || return 1
   [[ -f "$config" ]] || return 1
-  snapshot="$(mktemp "${TMPDIR:-/tmp}/erpnext-git-config.XXXXXX")" || return 1
-  cp -p -- "$config" "$snapshot" 2>/dev/null || { rm -f -- "$snapshot"; return 1; }
+  snapshot_dir="$(mktemp -d /tmp/erpnext-git-config.XXXXXX)" || return 1
+  chmod 700 "$snapshot_dir" || { rm -rf -- "$snapshot_dir"; return 1; }
+  snapshot="$snapshot_dir/config"
+  cp -- "$config" "$snapshot" 2>/dev/null || { rm -rf -- "$snapshot_dir"; return 1; }
+  chmod 600 "$snapshot" || { rm -rf -- "$snapshot_dir"; return 1; }
   value="$(awk '
     BEGIN { section=""; count=0 }
     /^[[:space:]]*[#;]/ { next }
@@ -146,7 +162,7 @@ inventory_git_raw_source() {
     END { if (count != 1) exit 3 }
   ' "$snapshot")"
   rc=$?
-  rm -f -- "$snapshot"
+  rm -rf -- "$snapshot_dir"
   ((rc == 0)) || return 1
   printf '%s\n' "${value#*$'\t'}"
 }
@@ -296,19 +312,50 @@ inventory_native_site_db_apps() {
 }
 
 inventory_docker_host_site_apps() {
-  local site_dir="$1" endpoint="$2" db_name db_user db_password raw query
+  local site_dir="$1" endpoint="$2" db_name db_user db_password raw query mariadb_bin
   [[ -d "$site_dir" && -f "$site_dir/site_config.json" ]] || return 2
   [[ "$endpoint" =~ ^[A-Za-z0-9_.:-]{1,255}$ ]] || return 2
-  db_name="$(sed -nE 's/^[[:space:]]*"db_name"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)"[[:space:]]*,?[[:space:]]*$/\1/p' "$site_dir/site_config.json" | head -n 1)"
-  db_user="$(sed -nE 's/^[[:space:]]*"db_user"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_]+)"[[:space:]]*,?[[:space:]]*$/\1/p' "$site_dir/site_config.json" | head -n 1)"
-  db_password="$(sed -nE 's/^[[:space:]]*"db_password"[[:space:]]*:[[:space:]]*"([^"]*)"[[:space:]]*,?[[:space:]]*$/\1/p' "$site_dir/site_config.json" | head -n 1)"
-  db_user="${db_user:-root}"
+  IFS=$'\t' read -r db_name db_user db_password < <(inventory_parse_site_config "$site_dir/site_config.json") || return 2
   [[ "$db_name" =~ ^[A-Za-z0-9_]+$ && "$db_user" =~ ^[A-Za-z0-9_]+$ && -n "$db_password" ]] || return 2
+  mariadb_bin="$(inventory_trusted_binary mariadb)" || return 2
   query="SELECT defvalue FROM tabDefaultValue WHERE defkey='installed_apps' AND parent='__global' LIMIT 1"
-  raw="$(MYSQL_PWD="$db_password" inventory_run_probe mariadb --protocol=tcp --host="$endpoint" --user="$db_user" \
+  raw="$(MYSQL_PWD="$db_password" inventory_run_probe "$mariadb_bin" --protocol=tcp --host="$endpoint" --user="$db_user" \
     --batch --skip-column-names --skip-reconnect --local-infile=0 "$db_name" -e "$query" 2>/dev/null)" || return 2
   [[ -n "$raw" ]] || return 2
   printf '%s\n' "$raw" | grep -oE '"[A-Za-z0-9][A-Za-z0-9_-]*"' | tr -d '"'
+}
+
+inventory_parse_site_config() {
+  local file="$1" py
+  [[ -f "$file" ]] || return 1
+  [[ "$(stat -c %s -- "$file" 2>/dev/null)" =~ ^[0-9]+$ ]] || return 1
+  (( $(stat -c %s -- "$file") <= 1048576 )) || return 1
+  py="$(inventory_trusted_binary python3)" || return 1
+  inventory_run_probe "$py" - "$file" <<'PY'
+import json,sys
+class D(dict):
+  def __init__(self,*a,**k):
+    self.dup=False; super().__init__(*a,**k)
+  def __setitem__(self,k,v):
+    if k in self: self.dup=True
+    super().__setitem__(k,v)
+def hook(pairs):
+  d=D()
+  for k,v in pairs: d[k]=v
+  if d.dup: raise ValueError()
+  return d
+try:
+  d=json.load(open(sys.argv[1]), object_pairs_hook=hook)
+  vals=[]
+  for k in ('db_name','db_user','db_password'):
+    v=d.get(k)
+    if k=='db_user' and v is None: v=d.get('db_name')
+    if not isinstance(v,str) or not v: raise ValueError()
+    vals.append(v)
+  if not __import__('re').fullmatch(r'[A-Za-z0-9_]+',vals[0]) or not __import__('re').fullmatch(r'[A-Za-z0-9_]+',vals[1]): raise ValueError()
+  print('\t'.join(vals))
+except Exception: sys.exit(2)
+PY
 }
 
 inventory_collect_tree() {

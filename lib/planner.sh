@@ -459,7 +459,17 @@ installation_profile_app_proof() {
   source="$(printf '%s' "$record" | cut -d'|' -f8)"
   management="$(printf '%s' "$record" | cut -d'|' -f10)"
   repo_state="$(printf '%s' "$record" | cut -d'|' -f11)"
-  [[ "$availability" == available && "$management" == managed ]] || return 2
+  [[ "$availability" == available ]] || return 2
+  if [[ "$scope" == desired ]]; then
+    [[ "$management" == managed ]] || return 2
+  else
+    # Observed custom code is intentionally unmanaged at app level, but may
+    # still prove an existing stack when its code and source identity are
+    # complete and secret-free.
+    if [[ "$management" != managed ]]; then
+      [[ "$source" =~ ^custom-source:[a-f0-9]{64}$ ]] || return 2
+    fi
+  fi
   [[ "$repo_state" == clean || "$repo_state" == immutable ]] || return 2
   [[ "$source" != unknown ]] || return 2
   if [[ "$scope" == desired ]]; then
