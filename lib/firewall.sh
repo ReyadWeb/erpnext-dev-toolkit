@@ -1451,7 +1451,6 @@ security_guidance_page() {
 security_hardening_wizard() {
   local production_mode=0
 
-  require_sudo
   security_menu_is_production && production_mode=1
 
   while true; do

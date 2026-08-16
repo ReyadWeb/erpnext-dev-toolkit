@@ -55,7 +55,7 @@ if grep -q $'\033' "$tmp"; then
   note_fail "ANSI escape codes present with NO_COLOR=1 / TERM=dumb"
 fi
 
-# Wide / two-column layout (no MENU_FORCE_TWO_COLUMNS): item 1 and 7 share a row.
+# Wide / two-column layout (no MENU_FORCE_TWO_COLUMNS): item 1 and 8 share a row.
 export COLUMNS=100
 export MENU_TERMINAL_COLS=100
 export MENU_FORCE_ONE_COLUMN=false
@@ -63,8 +63,8 @@ unset MENU_FORCE_TWO_COLUMNS
 tmp2="$(mktemp /tmp/erpnext-dev-ui-render-wide.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp2" 2>/dev/null || note_fail "wide menu-render-test failed"
 grep -q "Operations" "$tmp2" || note_fail "wide layout missing Operations"
-if ! grep -qE '\[1\].*\[7\]' "$tmp2"; then
-  note_fail "expected two-column row with [1] and [7] at COLUMNS=100"
+if ! grep -qE '\[1\].*\[8\]' "$tmp2"; then
+  note_fail "expected two-column row with [1] and [8] at COLUMNS=100"
   echo "----- wide render -----" >&2
   cat "$tmp2" >&2 || true
 else
@@ -120,7 +120,7 @@ export MENU_FORCE_ONE_COLUMN=false
 unset MENU_FORCE_TWO_COLUMNS
 tmp3="$(mktemp /tmp/erpnext-dev-ui-render-80.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp3" 2>/dev/null || note_fail "80-col menu-render-test failed"
-if ! grep -qE '\[1\].*\[7\]' "$tmp3"; then
+if ! grep -qE '\[1\].*\[8\]' "$tmp3"; then
   note_fail "expected two-column menu at COLUMNS=80"
   echo "----- 80-col render -----" >&2
   cat "$tmp3" >&2 || true
@@ -135,7 +135,7 @@ export COLUMNS=70
 export MENU_TERMINAL_COLS=70
 tmpn="$(mktemp /tmp/erpnext-dev-ui-render-70.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmpn" 2>/dev/null || note_fail "70-col menu-render-test failed"
-if grep -qE '\[1\].*\[7\]' "$tmpn"; then
+if grep -qE '\[1\].*\[8\]' "$tmpn"; then
   note_fail "expected single-column menu at COLUMNS=70"
   cat "$tmpn" >&2 || true
 else
@@ -150,7 +150,7 @@ export MENU_FORCE_ONE_COLUMN=false
 unset MENU_FORCE_TWO_COLUMNS
 tmp4="$(mktemp /tmp/erpnext-dev-ui-render-120.XXXXXX)"
 ./erpnext-dev.sh menu-render-test >"$tmp4" 2>/dev/null || note_fail "120-col menu-render-test failed"
-if ! grep -qE '\[1\].*\[7\]' "$tmp4"; then
+if ! grep -qE '\[1\].*\[8\]' "$tmp4"; then
   note_fail "expected two-column menu at COLUMNS=120"
   echo "----- 120-col render -----" >&2
   cat "$tmp4" >&2 || true
@@ -1023,4 +1023,27 @@ if ((fail > 0)); then
   cat "$tmp" >&2 || true
   exit 1
 fi
+permission_test="$(mktemp /tmp/erpnext-dev-menu-permission.XXXXXX)"
+trap 'rm -f "$permission_test"' EXIT
+cat >"$permission_test" <<'EOF_PERMISSION'
+set -Eeuo pipefail
+source lib/common.sh
+source lib/ui.sh
+source lib/firewall.sh
+security_menu_is_production() { return 1; }
+ui_submenu_header() { :; }
+render_security_state_strip() { :; }
+render_local_security_hub_options() { :; }
+ui_submenu_footer() { :; }
+menu_read_choice() { printf -v "$1" '%s' q; }
+require_sudo() { return 77; }
+security_hardening_wizard >/dev/null
+configure_vm_firewall >/dev/null 2>&1 && exit 1 || :
+EOF_PERMISSION
+bash "$permission_test"
+if grep -Eiq 'connect_existing|adoption' lib/menu.sh; then
+  echo "FAIL: lib/menu.sh contains connection/adoption command references" >&2
+  exit 1
+fi
+pass "menu has no connection/adoption command references"
 echo "test-ui-render: all checks passed"
