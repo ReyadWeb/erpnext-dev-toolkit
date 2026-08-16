@@ -721,6 +721,7 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/update.sh" ]]; then
 fi
 # shellcheck source=lib/update.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
+source "${_ERPNEXT_DEV_ROOT}/lib/connect.sh"
 erpnext_dev_init_terminal_colors
 # Capture width/TTY before tee turns stdout into a pipe (otherwise the main menu
 # often falls back to 80-col single-column layout).
@@ -2198,6 +2199,9 @@ main() {
     change-local-domain | local-domain-wizard | rename-local-site | change-site-domain) change_local_domain_wizard ;;
     set-host-os | host-os | choose-host-os) run_set_host_os ;;
     set-engine | engine | choose-engine | deployment-engine) run_set_engine ;;
+    connect-existing-preview) connect_existing_preview "$@" ;;
+    connect-existing) connect_existing "$@" ;;
+    disconnect-existing) connect_existing_disconnect ;;
     engine-status) show_engine_status ;;
     engine-restore) engine_restore ;;
     engine-upgrade) engine_upgrade ;;

@@ -50,10 +50,12 @@ targets=(
   lib/menu.sh
   lib/security.sh
   lib/update.sh
+  lib/connect.sh
   scripts/validate-release.sh
   scripts/repo-workflow.sh
   scripts/test-repo-workflow.sh
   scripts/test-existing-installation-adoption.sh
+  scripts/test-connect-existing.sh
   scripts/test-repo-workflow-work.sh
   scripts/test-repo-workflow-pr.sh
   scripts/test-repo-workflow-release.sh

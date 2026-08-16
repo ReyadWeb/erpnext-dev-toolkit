@@ -48,7 +48,7 @@ inventory_current_uid() {
 }
 
 inventory_run_git_probe() {
-  local dir="$1" git_snapshot owner_uid snapshot git_bin env_bin stat_bin cp_bin rm_bin id_bin runuser_bin getent_bin
+  local dir="$1" git_snapshot owner_uid snapshot git_bin env_bin stat_bin cp_bin rm_bin runuser_bin getent_bin
   shift
   local current_uid owner_record owner_name owner_home resolved_uid
 
@@ -58,7 +58,6 @@ inventory_run_git_probe() {
   stat_bin="$(inventory_trusted_binary stat)" || return 125
   cp_bin="$(inventory_trusted_binary cp)" || return 125
   rm_bin="$(inventory_trusted_binary rm)" || return 125
-  id_bin="$(inventory_trusted_binary id)" || return 125
   owner_uid="$(inventory_run_probe "$stat_bin" -c '%u' -- "$dir" 2>/dev/null)" || return 125
   [[ "$owner_uid" =~ ^[0-9]+$ ]] || return 125
   snapshot="$(mktemp -d "${TMPDIR:-/tmp}/erpnext-git-proof.XXXXXX")" || return 125

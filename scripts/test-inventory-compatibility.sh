@@ -127,6 +127,10 @@ owner_records="$({
   ERPNEXT_TEST_REAL_STAT="$owner_real_stat"
   ERPNEXT_TEST_REAL_GETENT="$owner_real_getent"
   export PATH ERPNEXT_TEST_OWNER_REPO ERPNEXT_TEST_OWNER_LOG ERPNEXT_TEST_REAL_STAT ERPNEXT_TEST_REAL_GETENT
+  eval "$(declare -f inventory_trusted_binary | sed '1s/inventory_trusted_binary/inventory_trusted_binary_real/')"
+  inventory_trusted_binary() {
+    case "$1" in stat | getent | runuser | git) printf '%s/%s\n' "$owner_bin" "$1" ;; *) inventory_trusted_binary_real "$@" ;; esac
+  }
   inventory_current_uid() { printf '0\n'; }
   INVENTORY_RECORDS=()
   inventory_emit_app "native:$fixture" erpnext "$owner_repo" 0
@@ -137,7 +141,7 @@ owner_records="$({
   fi
 })"
 assert_contains "owner-aware Git probe reports genuine dirty state" "$owner_records" "|version-16|2222222222222222222222222222222222222222|catalog-match|official|managed|dirty"
-assert_contains "owner-aware Git probe switches to repository owner" "$(<"$owner_probe_log")" "-u frappe -- env -u"
+assert_contains "owner-aware Git probe switches to repository owner" "$(<"$owner_probe_log")" "-u frappe --"
 assert_contains "owner-aware Git probe uses repository owner home" "$(<"$owner_probe_log")" "HOME=/home/frappe"
 assert_contains "validated raw upstream source is accepted when origin is absent" "$owner_records" "|catalog-match|"
 assert_contains "absent Git operation ref passes preflight" "$owner_records" "REF_ABSENT"
@@ -164,6 +168,7 @@ case " $* " in
 esac
 EOF_SLOW_GIT
 chmod +x "$slow_bin/git"
+sed -i "s#\"\$ERPNEXT_TEST_PID_FILE\"#\"$slow_pid_file\"#g" "$slow_bin/git"
 cat >"$slow_bin/mariadb" <<'EOF_SLOW_DB'
 #!/usr/bin/env bash
 sleep 300 &
@@ -172,6 +177,7 @@ printf '%s\n' "$child" >"$ERPNEXT_TEST_PID_FILE"
 wait "$child"
 EOF_SLOW_DB
 chmod +x "$slow_bin/mariadb"
+sed -i "s#\"\$ERPNEXT_TEST_PID_FILE\"#\"$slow_db_pid_file\"#g" "$slow_bin/mariadb"
 
 INVENTORY_RECORDS=()
 started_at="$(date +%s)"
@@ -180,6 +186,10 @@ PATH="$slow_bin:$PATH"
 ERPNEXT_TEST_PID_FILE="$slow_pid_file"
 ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT=1
 export PATH ERPNEXT_TEST_PID_FILE ERPNEXT_DEV_INVENTORY_PROBE_TIMEOUT
+eval "$(declare -f inventory_trusted_binary | sed '1s/inventory_trusted_binary/inventory_trusted_binary_before_slow/')"
+inventory_trusted_binary() {
+  if [[ "$1" == git ]]; then printf '%s\n' "$slow_bin/git"; else inventory_trusted_binary_before_slow "$@"; fi
+}
 inventory_emit_app "native:$fixture" frappe "$slow_repo" 0
 elapsed=$(($(date +%s) - started_at))
 assert_contains "timed-out Git state is ambiguous" "$(inventory_records_sorted)" "|managed|ambiguous"
