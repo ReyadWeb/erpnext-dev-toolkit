@@ -704,6 +704,7 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/update.sh" ]]; then
 fi
 # shellcheck source=lib/update.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
+source "${_ERPNEXT_DEV_ROOT}/lib/commands.sh"
 erpnext_dev_init_terminal_colors
 # Capture width/TTY before tee turns stdout into a pipe (otherwise the main menu
 # often falls back to 80-col single-column layout).
@@ -2234,6 +2235,7 @@ main() {
     site-name-guide | custom-site-guide) show_site_name_guide ;;
     multi-env-guide) show_multi_environment_guide ;;
     help | -h | --help) show_help ;;
+    command-registry-check) command_registry_check ;;
     *) fail "Unknown action: ${ACTION}" ;;
   esac
 }
