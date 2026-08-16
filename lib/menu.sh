@@ -757,8 +757,7 @@ show_toolkit_menu() {
     ui_submenu_header "Toolkit" "Integrity, version, updates, rollback, and installation paths"
     print_two_column_menu \
       "1) Toolkit integrity" "2) Version and install paths" \
-      "3) Update toolkit" "4) Roll back toolkit" \
-      "5) Connection status"
+      "3) Update toolkit" "4) Roll back toolkit"
     menu_footer back "Main menu"
     local choice=""
     menu_read_choice choice
@@ -767,7 +766,6 @@ show_toolkit_menu() {
       2) show_config_summary; pause_after_screen "Press Enter to return to Toolkit..." ;;
       3) update_toolkit ;;
       4) rollback_toolkit ;;
-      5) connect_existing_preview "${DEPLOYMENT_ENGINE:-native}" "${DOCKER_WORKDIR:-$BENCH_DIR}" "${DOCKER_PROJECT_NAME:-}" "${SITE_NAME:-erp.test}" ;;
       b|B|"") return 0 ;;
       q|Q) exit 0 ;;
       *) warn "Invalid option" ;;

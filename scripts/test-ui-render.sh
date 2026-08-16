@@ -1023,8 +1023,6 @@ if ((fail > 0)); then
   cat "$tmp" >&2 || true
   exit 1
 fi
-echo "test-ui-render: all checks passed"
-
 permission_test="$(mktemp /tmp/erpnext-dev-menu-permission.XXXXXX)"
 trap 'rm -f "$permission_test"' EXIT
 cat >"$permission_test" <<'EOF_PERMISSION'
@@ -1043,3 +1041,9 @@ security_hardening_wizard >/dev/null
 configure_vm_firewall >/dev/null 2>&1 && exit 1 || :
 EOF_PERMISSION
 bash "$permission_test"
+if grep -Eiq 'connect_existing|adoption' lib/menu.sh; then
+  echo "FAIL: lib/menu.sh contains connection/adoption command references" >&2
+  exit 1
+fi
+pass "menu has no connection/adoption command references"
+echo "test-ui-render: all checks passed"
