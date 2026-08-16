@@ -1024,3 +1024,22 @@ if ((fail > 0)); then
   exit 1
 fi
 echo "test-ui-render: all checks passed"
+
+permission_test="$(mktemp /tmp/erpnext-dev-menu-permission.XXXXXX)"
+trap 'rm -f "$permission_test"' EXIT
+cat >"$permission_test" <<'EOF_PERMISSION'
+set -Eeuo pipefail
+source lib/common.sh
+source lib/ui.sh
+source lib/firewall.sh
+security_menu_is_production() { return 1; }
+ui_submenu_header() { :; }
+render_security_state_strip() { :; }
+render_local_security_hub_options() { :; }
+ui_submenu_footer() { :; }
+menu_read_choice() { printf -v "$1" '%s' q; }
+require_sudo() { return 77; }
+security_hardening_wizard >/dev/null
+configure_vm_firewall >/dev/null 2>&1 && exit 1 || :
+EOF_PERMISSION
+bash "$permission_test"
