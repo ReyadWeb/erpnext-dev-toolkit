@@ -94,8 +94,8 @@ v1.20.1                         Release coherence and pre-sudo trust
 v1.20.2                         Shipped — workflow hardening and maintainer reliability
 v1.20.3                         Shipped — one-command setup and Debian native-install reliability
 v1.20.4                         Menu status refresh and update safety
-v1.20.5                         Transaction journal MVP
-v1.20.6                         Declarative command architecture
+v1.20.5                         Transaction journal MVP (deferred to v1.21.1 jobs)
+v1.20.6                         Declarative command architecture (moved into v1.21 API foundation)
 v1.21.0                         Machine-readable API foundation
 v1.21.1+                        Jobs, privileged agent, watchdog, panel contract
 v1.22.0                         Real VPS validation matrix
@@ -232,7 +232,11 @@ Authoritative design: [Release-State Contract](docs/RELEASE-STATE.md).
 
 ## v1.20.5 — Transaction journal MVP
 
-**Status:** Planned
+**Status:** Deferred to v1.21.1 operation/job model
+
+Existing atomic Toolkit update and rollback protections remain in force. The
+transaction journal is not on the v1.21 critical path until the operation/job
+model can define durable recovery, resume, and audit semantics.
 
 Start with toolkit update and restore: preflight, capture, recovery point, mutation,
 verification, commit, rollback, recovery evidence, SIGTERM handling, resume, and
@@ -240,7 +244,7 @@ idempotency.
 
 ## v1.20.6 — Declarative command architecture
 
-**Status:** Planned
+**Status:** Moved into the v1.21 machine-readable API foundation
 
 Create one command registry to drive or validate dispatch, root policy, locking,
 destructive confirmation, help, menu consistency, audit class, supported engines,

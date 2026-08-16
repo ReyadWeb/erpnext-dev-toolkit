@@ -96,6 +96,7 @@ lib/healing.sh
 lib/menu.sh
 lib/security.sh
 lib/update.sh
+lib/commands.sh
 scripts/test-legacy-modular-bootstrap.sh
 scripts/test-docker-access-routing.sh
 scripts/test-docker-reliability.sh

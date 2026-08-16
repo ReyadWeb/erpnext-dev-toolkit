@@ -49,6 +49,7 @@ targets=(
   lib/menu.sh
   lib/security.sh
   lib/update.sh
+  lib/commands.sh
   scripts/validate-release.sh
   scripts/repo-workflow.sh
   scripts/test-repo-workflow.sh
