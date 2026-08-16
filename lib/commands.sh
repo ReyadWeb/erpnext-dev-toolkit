@@ -8,7 +8,8 @@ command_registry_records() {
 	cat <<'EOF_COMMANDS'
 menu||show_menu|user|read-only|none|interactive|safe|native,docker|no
 doctor||run_doctor_plain|user|read-only|none|both|safe|native,docker|yes
-status|status-menu|show_status_menu|user|read-only|none|interactive|safe|native,docker|yes
+status||run_status|user|read-only|none|both|safe|native,docker|yes
+status-menu||show_status_menu|user|read-only|none|interactive|safe|native,docker|no
 health-check|health-check-run-now|run_health_check|user|read-only|none|both|safe|native,docker|yes
 health-check-status||show_health_check_status|user|read-only|none|both|safe|native,docker|yes
 verify-toolkit|toolkit-verify,verify-install|verify_toolkit_integrity|user|read-only|none|both|safe|native,docker|no

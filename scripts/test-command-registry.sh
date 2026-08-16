@@ -11,14 +11,58 @@ records="$(command_registry_records)"
 [[ "$(printf '%s\n' "$records" | wc -l)" -ge 8 ]] || fail 'record count'
 require_sudo() { :; }
 
-dispatcher_source="$(sed -n '/^main() {/,$p' "$root_dir/erpnext-dev.sh")"
-while IFS='|' read -r name aliases handler _; do
-  IFS=',' read -ra names <<<"$name${aliases:+,$aliases}"
-  for token in "${names[@]}"; do
-    grep -Fq -- "$token" <<<"$dispatcher_source" || fail "dispatch rejected $token"
-  done
-  grep -Fq -- "$handler" <<<"$dispatcher_source" || fail "handler drift for $name"
-done <<<"$records"
+dispatcher_arm_for_token() {
+  local source_file="$1" command_name="$2"
+  awk -v command_name="$command_name" '
+    /^  case / && index($0, "ACTION:-menu") { in_dispatcher = 1; next }
+    !in_dispatcher { next }
+    /^  esac$/ { exit }
+    /^    [^[:space:]].*\)/ {
+      if (matched) exit
+      pattern = $0
+      sub(/^    /, "", pattern)
+      sub(/\).*/, "", pattern)
+      count = split(pattern, tokens, /[[:space:]]*\|[[:space:]]*/)
+      for (i = 1; i <= count; i++) {
+        if (tokens[i] == command_name) matched = 1
+      }
+    }
+    matched { print }
+  ' "$source_file"
+}
+
+dispatcher_bindings_valid() {
+  local source_file="$1" name aliases handler command_name arm
+  while IFS='|' read -r name aliases handler _; do
+    IFS=',' read -ra names <<<"$name${aliases:+,$aliases}"
+    for command_name in "${names[@]}"; do
+      arm="$(dispatcher_arm_for_token "$source_file" "$command_name")"
+      [[ -n "$arm" ]] || {
+        echo "missing dispatcher arm for ${command_name}" >&2
+        return 1
+      }
+      grep -Eq "(^|[^a-zA-Z0-9_])${handler}([^a-zA-Z0-9_]|$)" <<<"$arm" \
+        || {
+          echo "dispatcher arm for ${command_name} does not call ${handler}" >&2
+          return 1
+        }
+    done
+  done <<<"$records"
+}
+
+dispatcher_bindings_valid "$root_dir/erpnext-dev.sh" || fail 'registry dispatcher binding mismatch'
+
+swapped_dispatcher="$(mktemp)"
+trap 'rm -f "$swapped_dispatcher"' EXIT
+sed -e 's/update_toolkit/registry_swap_placeholder/g' \
+  -e 's/rollback_toolkit/update_toolkit/g' \
+  -e 's/registry_swap_placeholder/rollback_toolkit/g' \
+  "$root_dir/erpnext-dev.sh" >"$swapped_dispatcher"
+if dispatcher_bindings_valid "$swapped_dispatcher" 2>/dev/null; then
+  fail 'swapped dispatcher handlers were accepted'
+fi
+rm -f "$swapped_dispatcher"
+trap - EXIT
 
 help_text="$(show_help 2>/dev/null || true)"
 while IFS='|' read -r name _ _ _ _ _ _ _ _ json; do
