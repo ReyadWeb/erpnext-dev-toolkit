@@ -19,8 +19,6 @@ MAIN_MENU_ITEMS=(
   "10|Operations"
   "11|Advanced"
   "12|Help"
-  "13|Toolkit"
-  "14|Files"
 )
 
 menu_json_string_field() {
@@ -747,50 +745,6 @@ show_local_development_menu() {
         ;;
       b | B | "") return 0 ;;
       q | Q) exit 0 ;;
-      *) warn "Invalid option" ;;
-    esac
-  done
-}
-
-show_toolkit_menu() {
-  while true; do
-    ui_submenu_header "Toolkit" "Integrity, version, updates, rollback, and installation paths"
-    print_two_column_menu \
-      "1) Toolkit integrity" "2) Version and install paths" \
-      "3) Update toolkit" "4) Roll back toolkit" \
-      "5) Connection status"
-    menu_footer back "Main menu"
-    local choice=""
-    menu_read_choice choice
-    case "$choice" in
-      1) verify_toolkit_integrity; pause_after_screen "Press Enter to return to Toolkit..." ;;
-      2) show_config_summary; pause_after_screen "Press Enter to return to Toolkit..." ;;
-      3) update_toolkit ;;
-      4) rollback_toolkit ;;
-      5) connect_existing_preview "${DEPLOYMENT_ENGINE:-native}" "${DOCKER_WORKDIR:-$BENCH_DIR}" "${DOCKER_PROJECT_NAME:-}" "${SITE_NAME:-erp.test}" ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
-      *) warn "Invalid option" ;;
-    esac
-  done
-}
-
-show_files_menu() {
-  while true; do
-    ui_submenu_header "Files" "Safe paths and read-only artifact inspection"
-    print_two_column_menu \
-      "1) Configuration status" "2) Toolkit install status" \
-      "3) Health and incident paths" "4) Support bundle guide"
-    menu_footer back "Main menu"
-    local choice=""
-    menu_read_choice choice
-    case "$choice" in
-      1) show_config_summary; pause_after_screen "Press Enter to return to Files..." ;;
-      2) verify_toolkit_integrity; pause_after_screen "Press Enter to return to Files..." ;;
-      3) show_health_check_status; pause_after_screen "Press Enter to return to Files..." ;;
-      4) support_bundle_manifest; pause_after_screen "Press Enter to return to Files..." ;;
-      b|B|"") return 0 ;;
-      q|Q) exit 0 ;;
       *) warn "Invalid option" ;;
     esac
   done
@@ -1819,8 +1773,6 @@ show_menu() {
       12)
         show_help_menu
         ;;
-      13) show_toolkit_menu ;;
-      14) show_files_menu ;;
       d | D)
         run_operations_dashboard
         pause_after_screen "Press Enter to return to Main menu..."
