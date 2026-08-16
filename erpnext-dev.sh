@@ -2235,7 +2235,6 @@ main() {
     site-name-guide | custom-site-guide) show_site_name_guide ;;
     multi-env-guide) show_multi_environment_guide ;;
     help | -h | --help) show_help ;;
-    command-registry-check) command_registry_check ;;
     *) fail "Unknown action: ${ACTION}" ;;
   esac
 }
