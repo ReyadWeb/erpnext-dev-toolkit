@@ -30,10 +30,16 @@ docs/API.md
 schemas/api/v1/api-version.schema.json
 schemas/api/v1/capabilities.schema.json
 schemas/api/v1/response-envelope.schema.json
+schemas/api/v1/deployment-info.schema.json
 tests/fixtures/api/v1/api-version-success.json
 tests/fixtures/api/v1/api-version-invalid-arguments.json
 tests/fixtures/api/v1/capabilities-success.json
 tests/fixtures/api/v1/capabilities-invalid-arguments.json
+tests/fixtures/api/v1/deployment-info-native.json
+tests/fixtures/api/v1/deployment-info-docker.json
+tests/fixtures/api/v1/deployment-info-legacy.json
+tests/fixtures/api/v1/deployment-info-missing.json
+tests/fixtures/api/v1/deployment-info-invalid-arguments.json
 docs/DOCKER-DURABILITY.md
 docs/SAFE-UPDATE-LIFECYCLE.md
 docs/APP-UNINSTALL-RECOVERY.md
@@ -106,7 +112,9 @@ lib/security.sh
 lib/update.sh
 lib/commands.sh
 lib/api.sh
+lib/deployment_info.sh
 scripts/test-json-api-contract.sh
+scripts/test-deployment-info-api.sh
 scripts/test-legacy-modular-bootstrap.sh
 scripts/test-docker-access-routing.sh
 scripts/test-docker-reliability.sh

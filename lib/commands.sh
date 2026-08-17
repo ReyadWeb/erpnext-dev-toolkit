@@ -9,6 +9,7 @@ command_registry_records() {
 api-version||run_api_version|user|read-only|none|both|safe|native,docker|yes|1.0
 backup-status||show_backup_status|user|read-only|none|both|safe|native,docker|yes|none
 capabilities||run_capabilities|user|read-only|none|both|safe|native,docker|yes|1.0
+deployment-info||run_deployment_info|user|read-only|none|both|safe|native,docker|yes|1.0
 doctor||run_doctor_plain|user|read-only|none|both|safe|native,docker|yes|none
 health-check|health-check-run-now|run_health_check|user|read-only|none|both|safe|native,docker|yes|none
 health-check-status||show_health_check_status|user|read-only|none|both|safe|native,docker|yes|none

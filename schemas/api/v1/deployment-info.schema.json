@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ReyadWeb/erpnext-dev-toolkit/schemas/api/v1/deployment-info.schema.json",
+  "title": "ERPNext Developer Toolkit deployment-info response",
+  "$defs": {
+    "hostname": {"type": ["string", "null"], "pattern": "^(?![0-9.]+$)(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"},
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "engine_source", "installation_profile", "profile_source", "requested_applications", "deployment_mode", "runtime_mode", "docker_mode", "site_name", "public_domain"],
+      "properties": {
+        "engine": {"type": ["string", "null"], "enum": ["native", "docker", null]},
+        "engine_source": {"type": ["string", "null"], "enum": ["explicit", "legacy-default", null]},
+        "installation_profile": {"type": ["string", "null"], "enum": ["recommended", "frappe-only", "advanced", null]},
+        "profile_source": {"type": ["string", "null"], "enum": ["explicit", "legacy-default", null]},
+        "requested_applications": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "uniqueItems": true},
+        "deployment_mode": {"type": ["string", "null"], "enum": ["development", "public-vm", null]},
+        "runtime_mode": {"type": ["string", "null"], "enum": ["dev", "production", null]},
+        "docker_mode": {"type": ["string", "null"], "enum": ["development", "production", null]},
+        "site_name": {"$ref": "#/$defs/hostname"},
+        "public_domain": {"$ref": "#/$defs/hostname"}
+      },
+      "oneOf": [
+        {"properties": {"engine": {"const": "native"}, "docker_mode": {"type": "null"}}},
+        {"properties": {"engine": {"const": "docker"}, "docker_mode": {"enum": ["development", "production"]}}},
+        {"properties": {"engine": {"type": "null"}, "engine_source": {"type": "null"}, "installation_profile": {"type": "null"}, "profile_source": {"type": "null"}, "requested_applications": {"maxItems": 0}, "deployment_mode": {"type": "null"}, "runtime_mode": {"type": "null"}, "docker_mode": {"type": "null"}, "site_name": {"type": "null"}, "public_domain": {"type": "null"}}}
+      ]
+    }
+  },
+  "allOf": [
+    {"$ref": "response-envelope.schema.json"},
+    {
+      "properties": {"command": {"const": "deployment-info"}},
+      "oneOf": [
+        {
+          "properties": {
+            "success": {"const": true},
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["toolkit_version", "configuration", "deployment", "observation", "issues"],
+              "properties": {
+                "toolkit_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$"},
+                "configuration": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["status", "source", "schema_version"],
+                  "properties": {
+                    "status": {"enum": ["managed", "legacy-compatible", "missing", "unreadable", "unsafe", "invalid", "conflict"]},
+                    "source": {"type": ["string", "null"], "enum": ["primary", "legacy", null]},
+                    "schema_version": {"type": ["string", "null"], "enum": ["2", "legacy", null]}
+                  }
+                },
+                "deployment": {"$ref": "#/$defs/deployment"},
+                "observation": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["management_scope", "runtime_probed", "inventory_probed"],
+                  "properties": {
+                    "management_scope": {"enum": ["configuration-only", "none"]},
+                    "runtime_probed": {"const": false},
+                    "inventory_probed": {"const": false}
+                  }
+                },
+                "issues": {"type": "array", "items": {"enum": ["configuration_missing", "configuration_unreadable", "configuration_unsafe", "configuration_invalid", "configuration_conflict", "legacy_configuration"]}, "uniqueItems": true}
+              },
+              "oneOf": [
+                {"properties": {"configuration": {"properties": {"status": {"const": "managed"}, "source": {"enum": ["primary", "legacy"]}, "schema_version": {"const": "2"}}}, "observation": {"properties": {"management_scope": {"const": "configuration-only"}}}}},
+                {"properties": {"configuration": {"properties": {"status": {"const": "legacy-compatible"}, "source": {"enum": ["primary", "legacy"]}, "schema_version": {"const": "legacy"}}}, "observation": {"properties": {"management_scope": {"const": "configuration-only"}}}, "issues": {"contains": {"const": "legacy_configuration"}}}},
+                {"properties": {"configuration": {"properties": {"status": {"enum": ["missing", "unreadable", "unsafe", "invalid", "conflict"]}, "source": {"type": "null"}, "schema_version": {"type": "null"}}}, "deployment": {"properties": {"engine": {"type": "null"}}}, "observation": {"properties": {"management_scope": {"const": "none"}}}}}
+              ]
+            },
+            "error": {"type": "null"}
+          }
+        },
+        {"properties": {"success": {"const": false}, "data": {"type": "null"}, "error": {"$ref": "response-envelope.schema.json#/$defs/error"}}}
+      ]
+    }
+  ]
+}

@@ -275,6 +275,9 @@ pass "operation planner tests passed"
 scripts/test-json-api-contract.sh
 pass "stable JSON API contract tests passed"
 
+scripts/test-deployment-info-api.sh
+pass "deployment-info API contract tests passed"
+
 scripts/test-docker-durability.sh
 pass "Docker durability tests passed"
 

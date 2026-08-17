@@ -11,7 +11,7 @@ STABLE_API_JSON=0
 STABLE_API_INVALID_ARGUMENTS=0
 
 stable_api_parse() {
-	local token
+	local token pending_invalid=0
 	STABLE_API_ACTION=""
 	STABLE_API_JSON=0
 	STABLE_API_INVALID_ARGUMENTS=0
@@ -20,7 +20,11 @@ stable_api_parse() {
 			case "$token" in
 			--json) STABLE_API_JSON=1 ;;
 			--no-color) : ;;
-			api-version | capabilities) STABLE_API_ACTION="$token" ;;
+			-*) pending_invalid=1 ;;
+			api-version | capabilities | deployment-info)
+				STABLE_API_ACTION="$token"
+				STABLE_API_INVALID_ARGUMENTS="$pending_invalid"
+				;;
 			*) return 1 ;;
 			esac
 		else
@@ -69,6 +73,10 @@ elif kind == "capabilities":
     payload = {"api_version": api_version, "generated_at": now, "command": command,
                "success": True, "data": {"capabilities": sorted(records, key=lambda item: item["name"])},
                "error": None}
+elif kind == "deployment-info":
+    data = json.load(sys.stdin)
+    payload = {"api_version": api_version, "generated_at": now, "command": command,
+               "success": True, "data": data, "error": None}
 else:
     raise ValueError("unsupported encoder operation")
 sys.stdout.write(json.dumps(payload, separators=(",", ":")) + "\n")
@@ -150,5 +158,6 @@ stable_api_dispatch() {
 	case "$STABLE_API_ACTION" in
 	api-version) run_api_version ;;
 	capabilities) run_capabilities ;;
+	deployment-info) run_deployment_info ;;
 	esac
 }
