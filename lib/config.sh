@@ -909,8 +909,10 @@ show_site_name_guide() {
   echo "============================================================"
 }
 
-load_saved_config_if_available
-load_future_domain_config_if_available
+if [[ "${ERPNEXT_DEV_STABLE_EARLY:-0}" -ne 1 ]]; then
+	load_saved_config_if_available
+	load_future_domain_config_if_available
+fi
 show_config_summary() {
   require_sudo
   local vm_ip prod_display mode_display ssl_display

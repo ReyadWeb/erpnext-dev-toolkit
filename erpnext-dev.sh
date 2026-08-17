@@ -537,6 +537,16 @@ if [[ -n "$(_erpnext_dev_missing_lib_files)" ]]; then
   _erpnext_dev_recover_legacy_modular_install "$@" || exit 1
 fi
 
+# Classify stable discovery commands before loading legacy configuration.  The
+# parser is deliberately side-effect free; the handlers are dispatched only
+# after their static modules have been loaded below.
+# shellcheck source=lib/api.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/api.sh"
+ERPNEXT_DEV_STABLE_EARLY=0
+if stable_api_parse "$@"; then
+  ERPNEXT_DEV_STABLE_EARLY=1
+fi
+
 if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/common.sh" ]]; then
   echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/common.sh" >&2
   exit 1
@@ -705,10 +715,12 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/update.sh" ]]; then
 fi
 # shellcheck source=lib/update.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
+# shellcheck source=lib/deployment_info.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/deployment_info.sh"
 # shellcheck source=lib/api.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/api.sh"
 source "${_ERPNEXT_DEV_ROOT}/lib/commands.sh"
-if stable_api_parse "$@"; then
+if [[ "$ERPNEXT_DEV_STABLE_EARLY" -eq 1 ]]; then
   stable_api_dispatch
   exit $?
 fi
@@ -1394,6 +1406,7 @@ Core:
   version             Print toolkit version
   api-version [--json] Report stable machine API and toolkit versions
   capabilities [--json] Report safe public command-registry metadata
+  deployment-info [--json] Report trusted persisted deployment configuration intent
   versions            Show the pinned compatibility matrix (Node/nvm/uv/Python/branches/bench)
   where-installed     Show active script, stable /opt path, CLI path, and config path
   verify-toolkit      Show installed script SHA256 and compare against SHA256SUMS when available
@@ -1918,6 +1931,7 @@ main() {
     version | --version) echo "${APP_NAME} v${SCRIPT_VERSION}" ;;
     api-version) run_api_version ;;
     capabilities) run_capabilities ;;
+    deployment-info) run_deployment_info ;;
     versions | version-matrix | toolchain) show_toolkit_versions ;;
     where-installed) show_where_installed ;;
     verify-toolkit | toolkit-verify | verify-install) verify_toolkit_integrity ;;
