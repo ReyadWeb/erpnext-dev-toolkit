@@ -272,6 +272,9 @@ pass "inventory/compatibility tests passed"
 scripts/test-operation-planner.sh
 pass "operation planner tests passed"
 
+scripts/test-json-api-contract.sh
+pass "stable JSON API contract tests passed"
+
 scripts/test-docker-durability.sh
 pass "Docker durability tests passed"
 

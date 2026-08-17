@@ -1,0 +1,1 @@
+{"api_version":"1.0","generated_at":"2026-01-02T03:04:05Z","command":"api-version","success":false,"data":null,"error":{"id":"invalid_arguments","message":"api-version accepts only --json and --no-color.","details":{}}}

@@ -26,6 +26,14 @@ docs/HEALTH-ARCHITECTURE.md
 docs/INVENTORY-COMPATIBILITY.md
 docs/INSTALLATION-PROFILES.md
 docs/OPERATION-PLANNER.md
+docs/API.md
+schemas/api/v1/api-version.schema.json
+schemas/api/v1/capabilities.schema.json
+schemas/api/v1/response-envelope.schema.json
+tests/fixtures/api/v1/api-version-success.json
+tests/fixtures/api/v1/api-version-invalid-arguments.json
+tests/fixtures/api/v1/capabilities-success.json
+tests/fixtures/api/v1/capabilities-invalid-arguments.json
 docs/DOCKER-DURABILITY.md
 docs/SAFE-UPDATE-LIFECYCLE.md
 docs/APP-UNINSTALL-RECOVERY.md
@@ -97,6 +105,8 @@ lib/menu.sh
 lib/security.sh
 lib/update.sh
 lib/commands.sh
+lib/api.sh
+scripts/test-json-api-contract.sh
 scripts/test-legacy-modular-bootstrap.sh
 scripts/test-docker-access-routing.sh
 scripts/test-docker-reliability.sh
