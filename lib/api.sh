@@ -6,6 +6,8 @@ ERPNEXT_DEV_API_VERSION="1.0"
 ERPNEXT_DEV_API_EXIT_INVALID_ARGUMENTS=64
 ERPNEXT_DEV_API_EXIT_UNAVAILABLE=69
 ERPNEXT_DEV_API_EXIT_INTERNAL=70
+ERPNEXT_DEV_API_EXIT_PERMISSION=77
+export ERPNEXT_DEV_API_EXIT_PERMISSION
 STABLE_API_ACTION=""
 STABLE_API_JSON=0
 STABLE_API_INVALID_ARGUMENTS=0
@@ -21,7 +23,7 @@ stable_api_parse() {
 			--json) STABLE_API_JSON=1 ;;
 			--no-color) : ;;
 			-*) pending_invalid=1 ;;
-			api-version | capabilities | deployment-info)
+			api-version | capabilities | deployment-info | dashboard | health-snapshot | incidents)
 				STABLE_API_ACTION="$token"
 				STABLE_API_INVALID_ARGUMENTS="$pending_invalid"
 				;;
@@ -35,7 +37,11 @@ stable_api_parse() {
 			esac
 		fi
 	done
-	[[ -n "$STABLE_API_ACTION" ]]
+	[[ -n "$STABLE_API_ACTION" ]] || return 1
+	case "$STABLE_API_ACTION" in
+		dashboard | health-snapshot | incidents) [[ "$STABLE_API_JSON" -eq 1 ]] ;;
+		*) return 0 ;;
+	esac
 }
 
 api_encoder_available() { command -v python3 >/dev/null 2>&1; }
@@ -75,6 +81,12 @@ elif kind == "capabilities":
                "error": None}
 elif kind == "deployment-info":
     data = json.load(sys.stdin)
+    payload = {"api_version": api_version, "generated_at": now, "command": command,
+               "success": True, "data": data, "error": None}
+elif kind == "operations":
+    data = json.load(sys.stdin)
+    if not isinstance(data, dict):
+        raise ValueError("operations data must be an object")
     payload = {"api_version": api_version, "generated_at": now, "command": command,
                "success": True, "data": data, "error": None}
 else:
@@ -159,5 +171,7 @@ stable_api_dispatch() {
 	api-version) run_api_version ;;
 	capabilities) run_capabilities ;;
 	deployment-info) run_deployment_info ;;
+	dashboard | health-snapshot) run_operations_api_snapshot "$STABLE_API_ACTION" ;;
+	incidents) run_operations_api_incidents ;;
 	esac
 }

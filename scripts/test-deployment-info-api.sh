@@ -251,7 +251,7 @@ def validate(value, schema, doc=None):
     types=schema.get("type")
     if types:
         types=[types] if isinstance(types,str) else types
-        checks={"object":lambda x:isinstance(x,dict),"array":lambda x:isinstance(x,list),"string":lambda x:isinstance(x,str),"boolean":lambda x:isinstance(x,bool),"null":lambda x:x is None}
+        checks={"object":lambda x:isinstance(x,dict),"array":lambda x:isinstance(x,list),"string":lambda x:isinstance(x,str),"boolean":lambda x:isinstance(x,bool),"null":lambda x:x is None,"integer":lambda x:isinstance(x,int) and not isinstance(x,bool),"number":lambda x:isinstance(x,(int,float)) and not isinstance(x,bool)}
         assert any(checks[t](value) for t in types)
     if "pattern" in schema and value is not None: assert re.fullmatch(schema["pattern"],value)
     if isinstance(value,dict):
@@ -275,6 +275,9 @@ def load(path):
 
 for path in sorted((root/"tests/fixtures/api/v1").glob("deployment-info-*.json")):
     value=json.loads(path.read_text()); validate(value,schemas["response-envelope.schema.json"]); validate(value,schemas["deployment-info.schema.json"])
+for prefix, schema_name in (("dashboard-","dashboard.schema.json"),("health-snapshot-","health-snapshot.schema.json"),("incidents-","incidents.schema.json")):
+    for path in sorted((root/"tests/fixtures/api/v1").glob(prefix+"*.json")):
+        value=json.loads(path.read_text()); validate(value,schemas["response-envelope.schema.json"]); validate(value,schemas[schema_name])
 for path in sorted(work.glob("*.out")):
     if path.name.startswith(("human","legacy-command","encoder","serialization")) or not path.stat().st_size: continue
     try: value=load(path)
