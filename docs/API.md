@@ -15,4 +15,6 @@ Every v1 response has `api_version`, a UTC RFC3339 `generated_at` ending in `Z`,
 
 These classes apply only to stable API commands. Legacy commands retain their existing output and exit behavior. Schemas are in `schemas/api/v1/` and examples used by compatibility tests are in `tests/fixtures/api/v1/`.
 
+Stable discovery commands are dispatched before installation-profile, platform, lock, UI, and logging initialization. They accept only `--json` and the global `--no-color` option; every other token after the command is `invalid_arguments`. If the required JSON encoder is unavailable, no partial document can be produced and the command exits 69 with a concise stderr diagnostic. Registry and serialization failures exit 70; in JSON mode they return `internal_error` whenever the encoder remains usable.
+
 `api-version --json` reports `current_api_version`, the array `supported_api_versions`, and `toolkit_version`. `capabilities --json` reports sorted public registry metadata. Handler names, paths, deployment values, URLs, credentials, and environment values are never included.

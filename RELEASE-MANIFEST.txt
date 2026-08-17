@@ -33,6 +33,7 @@ schemas/api/v1/response-envelope.schema.json
 tests/fixtures/api/v1/api-version-success.json
 tests/fixtures/api/v1/api-version-invalid-arguments.json
 tests/fixtures/api/v1/capabilities-success.json
+tests/fixtures/api/v1/capabilities-invalid-arguments.json
 docs/DOCKER-DURABILITY.md
 docs/SAFE-UPDATE-LIFECYCLE.md
 docs/APP-UNINSTALL-RECOVERY.md

@@ -708,27 +708,18 @@ source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
 # shellcheck source=lib/api.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/api.sh"
 source "${_ERPNEXT_DEV_ROOT}/lib/commands.sh"
+if stable_api_parse "$@"; then
+  stable_api_dispatch
+  exit $?
+fi
 erpnext_dev_init_terminal_colors
 # Capture width/TTY before tee turns stdout into a pipe (otherwise the main menu
 # often falls back to 80-col single-column layout).
 erpnext_dev_snapshot_terminal_cols
 ui_init
 
-_ERPNEXT_DEV_MACHINE_JSON_BOOTSTRAP=0
-_ERPNEXT_DEV_MACHINE_JSON_FLAG=0
-_ERPNEXT_DEV_MACHINE_JSON_COMMAND=0
-for _ERPNEXT_DEV_BOOTSTRAP_ARG in "$@"; do
-  [[ "$_ERPNEXT_DEV_BOOTSTRAP_ARG" == --json ]] && _ERPNEXT_DEV_MACHINE_JSON_FLAG=1
-  [[ "$_ERPNEXT_DEV_BOOTSTRAP_ARG" == api-version || "$_ERPNEXT_DEV_BOOTSTRAP_ARG" == capabilities ]] \
-    && _ERPNEXT_DEV_MACHINE_JSON_COMMAND=1
-done
-if [[ "$_ERPNEXT_DEV_MACHINE_JSON_FLAG" -eq 1 && "$_ERPNEXT_DEV_MACHINE_JSON_COMMAND" -eq 1 ]]; then
-  _ERPNEXT_DEV_MACHINE_JSON_BOOTSTRAP=1
-fi
-if [[ "$_ERPNEXT_DEV_MACHINE_JSON_BOOTSTRAP" -eq 0 ]]; then
-  prepare_log_file
-  exec > >(tee -a "$LOG_FILE") 2>&1
-fi
+prepare_log_file
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 install_toolkit_cli_entry() {
   local dest cli_dir
