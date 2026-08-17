@@ -65,7 +65,7 @@ rm -f "$swapped_dispatcher"
 trap - EXIT
 
 help_text="$(show_help 2>/dev/null || true)"
-while IFS='|' read -r name _ _ _ _ _ _ _ _ json; do
+while IFS='|' read -r name _ _ _ _ _ _ _ _ json _; do
   [[ "$json" == yes ]] || continue
   grep -Fq -- "$name" <<<"$help_text" || fail "help drift for $name"
 done <<<"$records"
@@ -76,11 +76,13 @@ expect_invalid() {
   command_registry_validate && fail "invalid fixture accepted"
   unset -f command_registry_records
 }
-expect_invalid $'dup||show_menu|user|read-only|none|interactive|safe|native,docker|no\ndup||show_menu|user|read-only|none|interactive|safe|native,docker|no'
-expect_invalid 'missing||no_such_handler|user|read-only|none|interactive|safe|native,docker|no'
-expect_invalid 'bad||show_menu|operator|read-only|none|interactive|safe|native,docker|no'
-expect_invalid 'bad||show_menu|user|mutating|none|interactive|safe|native,docker|no'
-expect_invalid 'bad||show_menu|user|read-only|none|interactive|safe|native,remote|yes'
-expect_invalid 'bad||show_menu|user|read-only|none|interactive|safe|native,docker|maybe'
-expect_invalid 'bad|alias,alias|show_menu|user|read-only|none|interactive|safe|native,docker|no'
+expect_invalid $'dup||show_menu|user|read-only|none|interactive|safe|native,docker|no|none\ndup||show_menu|user|read-only|none|interactive|safe|native,docker|no|none'
+expect_invalid 'missing||no_such_handler|user|read-only|none|interactive|safe|native,docker|no|none'
+expect_invalid 'bad||show_menu|operator|read-only|none|interactive|safe|native,docker|no|none'
+expect_invalid 'bad||show_menu|user|mutating|none|interactive|safe|native,docker|no|none'
+expect_invalid 'bad||show_menu|user|read-only|none|interactive|safe|native,remote|yes|none'
+expect_invalid 'bad||show_menu|user|read-only|none|interactive|safe|native,docker|maybe|none'
+expect_invalid 'bad|alias,alias|show_menu|user|read-only|none|interactive|safe|native,docker|no|none'
+expect_invalid 'bad||show_menu|user|read-only|none|interactive|safe|native,docker|yes|2.0'
+expect_invalid 'bad||show_menu|user|read-only|none|interactive|safe|native,docker|no|1.0'
 echo 'command registry tests: all checks passed'

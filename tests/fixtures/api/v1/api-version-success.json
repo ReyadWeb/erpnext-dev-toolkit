@@ -1,0 +1,1 @@
+{"api_version":"1.0","generated_at":"2026-01-02T03:04:05Z","command":"api-version","success":true,"data":{"current_api_version":"1.0","supported_api_versions":["1.0"],"toolkit_version":"1.20.4"},"error":null}

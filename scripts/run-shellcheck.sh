@@ -49,6 +49,7 @@ targets=(
   lib/menu.sh
   lib/security.sh
   lib/update.sh
+  lib/api.sh
   lib/commands.sh
   scripts/validate-release.sh
   scripts/repo-workflow.sh
@@ -112,6 +113,7 @@ targets=(
   scripts/test-update-channel.sh
   scripts/test-local-ip.sh
   scripts/test-healing.sh
+  scripts/test-json-api-contract.sh
   scripts/release-signing-policy.sh
   scripts/assert-github-release-assets.sh
 )

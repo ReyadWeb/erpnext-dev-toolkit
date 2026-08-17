@@ -183,6 +183,7 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 ASSUME_YES=0
 ACTION=""
 DOCTOR_FORMAT="human"
+MACHINE_JSON=0
 # Default SUDO to an empty command prefix. Some read-only/status functions
 # call helper routines before require_sudo() has initialized SUDO; with
 # set -u enabled, leaving it unset can make those checks falsely fail.
@@ -704,6 +705,8 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/update.sh" ]]; then
 fi
 # shellcheck source=lib/update.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
+# shellcheck source=lib/api.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/api.sh"
 source "${_ERPNEXT_DEV_ROOT}/lib/commands.sh"
 erpnext_dev_init_terminal_colors
 # Capture width/TTY before tee turns stdout into a pipe (otherwise the main menu
@@ -711,8 +714,21 @@ erpnext_dev_init_terminal_colors
 erpnext_dev_snapshot_terminal_cols
 ui_init
 
-prepare_log_file
-exec > >(tee -a "$LOG_FILE") 2>&1
+_ERPNEXT_DEV_MACHINE_JSON_BOOTSTRAP=0
+_ERPNEXT_DEV_MACHINE_JSON_FLAG=0
+_ERPNEXT_DEV_MACHINE_JSON_COMMAND=0
+for _ERPNEXT_DEV_BOOTSTRAP_ARG in "$@"; do
+  [[ "$_ERPNEXT_DEV_BOOTSTRAP_ARG" == --json ]] && _ERPNEXT_DEV_MACHINE_JSON_FLAG=1
+  [[ "$_ERPNEXT_DEV_BOOTSTRAP_ARG" == api-version || "$_ERPNEXT_DEV_BOOTSTRAP_ARG" == capabilities ]] \
+    && _ERPNEXT_DEV_MACHINE_JSON_COMMAND=1
+done
+if [[ "$_ERPNEXT_DEV_MACHINE_JSON_FLAG" -eq 1 && "$_ERPNEXT_DEV_MACHINE_JSON_COMMAND" -eq 1 ]]; then
+  _ERPNEXT_DEV_MACHINE_JSON_BOOTSTRAP=1
+fi
+if [[ "$_ERPNEXT_DEV_MACHINE_JSON_BOOTSTRAP" -eq 0 ]]; then
+  prepare_log_file
+  exec > >(tee -a "$LOG_FILE") 2>&1
+fi
 
 install_toolkit_cli_entry() {
   local dest cli_dir
@@ -1385,6 +1401,8 @@ Start here:
 
 Core:
   version             Print toolkit version
+  api-version [--json] Report stable machine API and toolkit versions
+  capabilities [--json] Report safe public command-registry metadata
   versions            Show the pinned compatibility matrix (Node/nvm/uv/Python/branches/bench)
   where-installed     Show active script, stable /opt path, CLI path, and config path
   verify-toolkit      Show installed script SHA256 and compare against SHA256SUMS when available
@@ -1679,6 +1697,11 @@ EOF_HELP
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
+    if [[ -z "${ACTION:-}" && ("$1" == api-version || "$1" == capabilities) ]]; then
+      ACTION="$1"
+      shift
+      continue
+    fi
     if [[ -z "${ACTION:-}" && ("$1" == "app" || "$1" == "site" || "$1" == "stack" || "$1" == "operation") ]]; then
       ACTION="$1"
       shift
@@ -1802,6 +1825,7 @@ parse_args() {
       --json)
         DOCTOR_FORMAT="json"
         DASHBOARD_FORMAT="json"
+        MACHINE_JSON=1
         shift
         ;;
       --no-color)
@@ -1828,6 +1852,11 @@ parse_args() {
         shift
         ;;
       *)
+        if [[ ("${ACTION:-}" == api-version || "${ACTION:-}" == capabilities) && -z "${ACTION_ARG:-}" ]]; then
+          ACTION_ARG="$1"
+          shift
+          continue
+        fi
         if [[ -n "${ACTION:-}" && "$1" != -* ]]; then
           ACTION_ARG="$1"
           shift
@@ -1896,6 +1925,8 @@ main() {
   case "${ACTION:-menu}" in
     "" | menu) show_menu ;;
     version | --version) echo "${APP_NAME} v${SCRIPT_VERSION}" ;;
+    api-version) run_api_version ;;
+    capabilities) run_capabilities ;;
     versions | version-matrix | toolchain) show_toolkit_versions ;;
     where-installed) show_where_installed ;;
     verify-toolkit | toolkit-verify | verify-install) verify_toolkit_integrity ;;
