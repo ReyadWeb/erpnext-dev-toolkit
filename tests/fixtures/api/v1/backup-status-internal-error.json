@@ -1,0 +1,1 @@
+{"api_version":"1.0","generated_at":"2026-08-20T12:00:00Z","command":"backup-status","success":false,"data":null,"error":{"id":"internal_error","message":"Backup response serialization failed.","details":{}}}

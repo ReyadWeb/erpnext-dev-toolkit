@@ -43,6 +43,7 @@ targets=(
   lib/ops.sh
   lib/dashboard.sh
   lib/operations_api.sh
+  lib/backup_api.sh
   lib/inventory.sh
   lib/planner.sh
   lib/removal.sh
@@ -118,6 +119,7 @@ targets=(
   scripts/test-json-api-contract.sh
   scripts/test-deployment-info-api.sh
   scripts/test-operations-api.sh
+  scripts/test-backup-restore-api.sh
   scripts/release-signing-policy.sh
   scripts/assert-github-release-assets.sh
 )

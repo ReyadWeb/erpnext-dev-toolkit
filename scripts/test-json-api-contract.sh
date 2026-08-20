@@ -161,9 +161,11 @@ def validate(value, schema, document=None):
         types = [types] if isinstance(types, str) else types
         checks = {"object": lambda x: isinstance(x, dict), "array": lambda x: isinstance(x, list),
                   "string": lambda x: isinstance(x, str), "boolean": lambda x: isinstance(x, bool),
+                  "integer": lambda x: isinstance(x, int) and not isinstance(x, bool),
+                  "number": lambda x: isinstance(x, (int, float)) and not isinstance(x, bool),
                   "null": lambda x: x is None}
         assert any(checks[t](value) for t in types)
-    if "pattern" in schema: assert re.fullmatch(schema["pattern"], value)
+    if "pattern" in schema and isinstance(value, str): assert re.fullmatch(schema["pattern"], value)
     if "minLength" in schema: assert len(value) >= schema["minLength"]
     if isinstance(value, dict):
         assert set(schema.get("required", ())) <= set(value)
@@ -234,6 +236,18 @@ fixtures = {
     "api-version-invalid-arguments.json": "api-version.schema.json",
     "capabilities-success.json": "capabilities.schema.json",
     "capabilities-invalid-arguments.json": "capabilities.schema.json",
+    "backup-status-native-healthy.json": "backup-status.schema.json",
+    "backup-status-docker-healthy.json": "backup-status.schema.json",
+    "backup-status-missing.json": "backup-status.schema.json",
+    "backup-status-partial-disabled.json": "backup-status.schema.json",
+    "restore-status-matching.json": "restore-status.schema.json",
+    "restore-status-no-rehearsal.json": "restore-status.schema.json",
+    "restore-status-failed-mismatch.json": "restore-status.schema.json",
+    "backup-status-invalid-arguments.json": "backup-status.schema.json",
+    "restore-status-invalid-arguments.json": "restore-status.schema.json",
+    "backup-status-permission-denied.json": "backup-status.schema.json",
+    "restore-status-unavailable.json": "restore-status.schema.json",
+    "backup-status-internal-error.json": "backup-status.schema.json",
 }
 for filename, schema_name in fixtures.items():
     value = json.loads((root / "tests/fixtures/api/v1" / filename).read_text())

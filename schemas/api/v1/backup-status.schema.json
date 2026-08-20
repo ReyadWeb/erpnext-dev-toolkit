@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ReyadWeb/erpnext-dev-toolkit/schemas/api/v1/backup-status.schema.json",
+  "$defs": {
+    "status": {"enum": ["HEALTHY", "DEGRADED", "CRITICAL", "UNKNOWN"]},
+    "timestamp": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "integer": {"type": ["integer", "null"], "minimum": 0},
+    "component": {"type": "object", "additionalProperties": false, "required": ["present", "size_bytes"], "properties": {"present": {"type": "boolean"}, "size_bytes": {"$ref": "#/$defs/integer"}}},
+    "remote": {"type": "object", "additionalProperties": false, "required": ["status", "configured", "last_result_status", "last_run_at"], "properties": {"status": {"$ref": "#/$defs/status"}, "configured": {"type": "boolean"}, "last_result_status": {"enum": ["success", "failed", "unknown"]}, "last_run_at": {"$ref": "#/$defs/timestamp"}}}
+  },
+  "allOf": [
+    {"$ref": "response-envelope.schema.json"},
+    {"properties": {"command": {"const": "backup-status"}}, "oneOf": [
+      {"properties": {"success": {"const": true}, "error": {"type": "null"}, "data": {
+        "type": "object", "additionalProperties": false,
+        "required": ["toolkit_version", "observed_at", "deployment", "overall_status", "local", "schedule", "retention", "off_vm", "object_storage", "issues"],
+        "properties": {
+          "toolkit_version": {"type": "string"}, "observed_at": {"$ref": "#/$defs/timestamp"}, "overall_status": {"$ref": "#/$defs/status"},
+          "deployment": {"type": "object", "additionalProperties": false, "required": ["engine", "site"], "properties": {"engine": {"enum": ["native", "docker", null]}, "site": {"type": ["string", "null"]}}},
+          "local": {"type": "object", "additionalProperties": false, "required": ["status", "storage_kind", "scan_truncated", "total_observed_set_count", "complete_set_count", "latest_set"], "properties": {
+            "status": {"$ref": "#/$defs/status"}, "storage_kind": {"enum": ["native-site-directory", "docker-host-artifact", null]}, "scan_truncated": {"type": "boolean"}, "total_observed_set_count": {"$ref": "#/$defs/integer"}, "complete_set_count": {"$ref": "#/$defs/integer"},
+            "latest_set": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["id", "created_at", "age_hours", "completeness", "total_size_bytes", "components"], "properties": {"id": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "created_at": {"$ref": "#/$defs/timestamp"}, "age_hours": {"$ref": "#/$defs/integer"}, "completeness": {"enum": ["complete", "partial", "missing", "unknown"]}, "total_size_bytes": {"$ref": "#/$defs/integer"}, "components": {"type": "object", "additionalProperties": false, "required": ["database", "public_files", "private_files", "site_configuration", "checksum_manifest"], "properties": {"database": {"$ref": "#/$defs/component"}, "public_files": {"$ref": "#/$defs/component"}, "private_files": {"$ref": "#/$defs/component"}, "site_configuration": {"$ref": "#/$defs/component"}, "checksum_manifest": {"$ref": "#/$defs/component"}}}}}]}
+          }},
+          "schedule": {"type": "object", "additionalProperties": false, "required": ["status", "supported", "configured", "enabled", "active", "next_run_at"], "properties": {"status": {"$ref": "#/$defs/status"}, "supported": {"type": "boolean"}, "configured": {"type": "boolean"}, "enabled": {"type": ["boolean", "null"]}, "active": {"type": ["boolean", "null"]}, "next_run_at": {"$ref": "#/$defs/timestamp"}}},
+          "retention": {"type": "object", "additionalProperties": false, "required": ["status", "configured_keep_count", "complete_set_count", "cleanup_candidate_count", "backup_filesystem_used_percent"], "properties": {"status": {"$ref": "#/$defs/status"}, "configured_keep_count": {"type": "integer", "minimum": 1}, "complete_set_count": {"$ref": "#/$defs/integer"}, "cleanup_candidate_count": {"$ref": "#/$defs/integer"}, "backup_filesystem_used_percent": {"$ref": "#/$defs/integer"}}},
+          "off_vm": {"$ref": "#/$defs/remote"}, "object_storage": {"$ref": "#/$defs/remote"},
+          "issues": {"type": "array", "uniqueItems": true, "items": {"enum": ["configuration_unavailable", "backup_directory_missing", "backup_directory_unsafe", "backup_directory_unreadable", "backup_scan_truncated", "backup_set_partial", "backup_set_missing", "backup_evidence_changed", "schedule_disabled", "schedule_inactive", "off_vm_not_configured", "off_vm_last_run_failed", "object_storage_not_configured", "object_storage_last_run_failed"]}}
+        }
+      }}},
+      {"properties": {"success": {"const": false}, "data": {"type": "null"}, "error": {"$ref": "response-envelope.schema.json#/$defs/error"}}}
+    ]}
+  ]
+}
