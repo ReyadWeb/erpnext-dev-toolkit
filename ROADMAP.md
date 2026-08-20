@@ -308,7 +308,7 @@ Exact names may be refined during contract review, but compatibility rules must 
 
 - [ ] `api-version --json` publishes the contract version.
 - [ ] `capabilities --json` reports supported engine and operation capabilities.
-- [ ] Deployment, health, incident, backup, and restore status are available as valid JSON.
+- [x] Deployment, health, incident, backup, and restore status are available as valid API v1 JSON contracts.
 - [ ] Schemas and examples are packaged with the release.
 - [ ] CI validates output against schemas.
 - [ ] Machine mode never emits terminal formatting.

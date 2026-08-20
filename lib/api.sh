@@ -23,7 +23,7 @@ stable_api_parse() {
 			--json) STABLE_API_JSON=1 ;;
 			--no-color) : ;;
 			-*) pending_invalid=1 ;;
-			api-version | capabilities | deployment-info | dashboard | health-snapshot | incidents)
+			api-version | capabilities | deployment-info | dashboard | health-snapshot | incidents | backup-status | restore-status)
 				STABLE_API_ACTION="$token"
 				STABLE_API_INVALID_ARGUMENTS="$pending_invalid"
 				;;
@@ -39,7 +39,7 @@ stable_api_parse() {
 	done
 	[[ -n "$STABLE_API_ACTION" ]] || return 1
 	case "$STABLE_API_ACTION" in
-		dashboard | health-snapshot | incidents) [[ "$STABLE_API_JSON" -eq 1 ]] ;;
+		dashboard | health-snapshot | incidents | backup-status | restore-status) [[ "$STABLE_API_JSON" -eq 1 ]] ;;
 		*) return 0 ;;
 	esac
 }
@@ -173,5 +173,6 @@ stable_api_dispatch() {
 	deployment-info) run_deployment_info ;;
 	dashboard | health-snapshot) run_operations_api_snapshot "$STABLE_API_ACTION" ;;
 	incidents) run_operations_api_incidents ;;
+	backup-status | restore-status) run_backup_restore_api "$STABLE_API_ACTION" ;;
 	esac
 }

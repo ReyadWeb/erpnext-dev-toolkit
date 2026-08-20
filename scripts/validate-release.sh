@@ -283,6 +283,9 @@ pass "deployment-info API contract tests passed"
 scripts/test-operations-api.sh
 pass "operations API contract and security tests passed"
 
+scripts/test-backup-restore-api.sh
+pass "backup and restore status API contract and security tests passed"
+
 scripts/test-docker-durability.sh
 pass "Docker durability tests passed"
 

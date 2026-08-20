@@ -1,6 +1,6 @@
 # Machine-readable API v1
 
-`api-version --json`, `capabilities --json`, `deployment-info --json`, `dashboard --json`, `health-snapshot --json`, and `incidents --json` are covered by the stable API contract. `dashboard --json` now always uses the v1 envelope. Other registry records may advertise `json_available` because they have legacy JSON output; they are not stable v1 commands unless `stable_api_contract` is `true` and `api_contract_version` is `"1.0"`.
+`api-version --json`, `capabilities --json`, `deployment-info --json`, `dashboard --json`, `health-snapshot --json`, `incidents --json`, `backup-status --json`, and `restore-status --json` are covered by the stable API contract. `dashboard --json` now always uses the v1 envelope. Other registry records may advertise `json_available` because they have legacy JSON output; they are not stable v1 commands unless `stable_api_contract` is `true` and `api_contract_version` is `"1.0"`.
 
 Every v1 response has `api_version`, a UTC RFC3339 `generated_at` ending in `Z`, the canonical `command`, `success`, `data`, and `error`. On success, `data` is an object and `error` is null. On failure, `data` is null and `error` is an object with a stable `id`, safe `message`, and object-valued `details`. JSON is written only to stdout; diagnostics are written only to stderr. Human output is not part of this contract.
 
@@ -59,3 +59,24 @@ Stable snapshot collection does not record incidents, update monitoring history 
 `incidents --json` reads existing Toolkit incident records only. Its data fields are `toolkit_version`, fixed `limit: 20`, returned `count`, `truncated`, newest-first `incidents`, and `issues`. Each incident exposes only `id`, `timestamp`, `previous_status`, `status`, `site`, `host_status`, `application_status`, `http_status`, `protection_status`, and `would_heal`; raw JSON and `http_detail` are never returned.
 
 Missing or empty history succeeds with an empty array. Records must be bounded regular files with safe permissions and stable metadata, must not be symlinks, and must contain unique JSON keys plus valid IDs, UTC timestamps, types, and status values. `latest.json` is ignored. Rejected records are omitted and reported using `incident_directory_unreadable`, `incident_name_invalid`, `incident_not_regular`, `incident_permissions_unsafe`, `incident_oversized`, `incident_changed_during_read`, or `incident_invalid`; contents and paths are never exposed. Pagination is intentionally not part of v1.21.
+
+## Backup and restore status
+
+`backup-status --json` and `restore-status --json` are root-required, non-interactive metadata observations with Native/Docker parity. Options may precede or follow the command; only `--json` and `--no-color` are accepted. Human `backup-status` and `restore-preflight` remain independent legacy interfaces and are never parsed to construct JSON.
+
+Both responses include `toolkit_version`, UTC `observed_at`, a deployment object containing only normalized `engine` and validated hostname `site`, `overall_status`, and sorted unique stable `issues`. Status is exactly `HEALTHY`, `DEGRADED`, `CRITICAL`, or `UNKNOWN`. Missing, partial, old, failed, or unproven backup evidence is a successful observation expressed in data; inability to read caller-protected evidence is `permission_denied` (77). All nullable fields are always present and use JSON null, never placeholder text.
+
+`backup-status` reports:
+
+- `local`: storage kind, bounded-scan/truncation state, observed and complete set counts, and the latest set. The latest set has an ephemeral SHA-256 ID, UTC creation time, integer age, completeness, aggregate metadata size, and presence/size metadata for database, public files, private files, site configuration, and checksum manifest. `present` does not mean readable, valid, or verified.
+- `schedule`: whether fixed-unit schedule observation is supported/configured, enabled and active booleans or null, and the next UTC run or null. It uses finite `systemctl` status queries and never reads the journal.
+- `retention`: configured complete-set keep count, complete/candidate counts or null, and backup-filesystem utilization or null. It never enumerates deletion targets or deletes anything.
+- `off_vm` and `object_storage`: configured state, `success`/`failed`/`unknown` last result, and UTC last-run time or null. Destinations and remote identities are never returned or contacted.
+
+`restore-status` reports the newest safely observed candidate, trusted rehearsal evidence, and readiness booleans. Candidate component fields are availability observations only. `deep_verification_performed`, `deep_integrity_verified`, and `live_restore_performed` are always false. A database candidate means database metadata exists; a full candidate satisfies the Toolkit's four-component definition. `matching_rehearsal_proven` requires successful trusted evidence matching both the current site and opaque candidate identity. A complete candidate is never described as integrity-verified.
+
+Stable issues include configuration/directory unavailability, unsafe or truncated scans, missing/partial sets, disabled/inactive schedules, unconfigured or failed off-VM/object runs, missing/failed/unsafe/mismatched rehearsal evidence, changed evidence, and `deep_verification_not_performed`. Issue IDs are allowlisted and never derived from file contents.
+
+Configuration, state, and rehearsal records are treated as bounded data: no `source` or `eval`, no final-component symlinks, regular files only, 64 KiB maximum, trusted ownership, non-writable group/world permissions, unique allowlisted keys, valid UTF-8, no controls, and stable metadata across the read. Backup artifacts are inspected by no-follow metadata only with a 256-entry scan bound. Archive content is never opened, decompressed, or hashed; the opaque set digest is derived in memory from safe internal identity and is not persisted.
+
+These commands do not run Bench/Frappe, container commands, database queries, Git discovery, SSH/rsync/rclone, remote reachability tests, backup verification, rehearsal recording, backup creation, or restore. They create no logs, locks, state, evidence, or other files and do not change services. Use human `backup-verify` for deep archive verification, `restore-preflight` for the interactive preflight workflow, and an explicitly authorized restore command for a live restore.

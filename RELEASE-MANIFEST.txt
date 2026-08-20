@@ -35,6 +35,8 @@ schemas/api/v1/operations-snapshot.schema.json
 schemas/api/v1/dashboard.schema.json
 schemas/api/v1/health-snapshot.schema.json
 schemas/api/v1/incidents.schema.json
+schemas/api/v1/backup-status.schema.json
+schemas/api/v1/restore-status.schema.json
 tests/fixtures/api/v1/api-version-success.json
 tests/fixtures/api/v1/api-version-invalid-arguments.json
 tests/fixtures/api/v1/capabilities-success.json
@@ -54,6 +56,18 @@ tests/fixtures/api/v1/health-snapshot-invalid-arguments.json
 tests/fixtures/api/v1/incidents-invalid-arguments.json
 tests/fixtures/api/v1/dashboard-permission-denied.json
 tests/fixtures/api/v1/incidents-unavailable.json
+tests/fixtures/api/v1/backup-status-native-healthy.json
+tests/fixtures/api/v1/backup-status-docker-healthy.json
+tests/fixtures/api/v1/backup-status-missing.json
+tests/fixtures/api/v1/backup-status-partial-disabled.json
+tests/fixtures/api/v1/restore-status-matching.json
+tests/fixtures/api/v1/restore-status-no-rehearsal.json
+tests/fixtures/api/v1/restore-status-failed-mismatch.json
+tests/fixtures/api/v1/backup-status-invalid-arguments.json
+tests/fixtures/api/v1/restore-status-invalid-arguments.json
+tests/fixtures/api/v1/backup-status-permission-denied.json
+tests/fixtures/api/v1/restore-status-unavailable.json
+tests/fixtures/api/v1/backup-status-internal-error.json
 docs/DOCKER-DURABILITY.md
 docs/SAFE-UPDATE-LIFECYCLE.md
 docs/APP-UNINSTALL-RECOVERY.md
@@ -118,6 +132,7 @@ lib/install.sh
 lib/ops.sh
 lib/dashboard.sh
 lib/operations_api.sh
+lib/backup_api.sh
 lib/inventory.sh
 lib/planner.sh
 lib/removal.sh
@@ -131,6 +146,7 @@ lib/deployment_info.sh
 scripts/test-json-api-contract.sh
 scripts/test-deployment-info-api.sh
 scripts/test-operations-api.sh
+scripts/test-backup-restore-api.sh
 scripts/test-legacy-modular-bootstrap.sh
 scripts/test-docker-access-routing.sh
 scripts/test-docker-reliability.sh

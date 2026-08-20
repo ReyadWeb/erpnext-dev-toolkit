@@ -7,7 +7,7 @@ _ERPNEXT_DEV_COMMANDS_LOADED=1
 command_registry_records() {
 	cat <<'EOF_COMMANDS'
 api-version||run_api_version|user|read-only|none|both|safe|native,docker|yes|1.0
-backup-status||show_backup_status|user|read-only|none|both|safe|native,docker|yes|none
+backup-status||run_backup_restore_api|root|read-only|none|non-interactive|safe|native,docker|yes|1.0
 capabilities||run_capabilities|user|read-only|none|both|safe|native,docker|yes|1.0
 dashboard||run_operations_api_snapshot|root|read-only|none|non-interactive|safe|native,docker|yes|1.0
 deployment-info||run_deployment_info|user|read-only|none|both|safe|native,docker|yes|1.0
@@ -19,6 +19,7 @@ incidents||run_operations_api_incidents|root|read-only|none|non-interactive|safe
 install|setup|run_install|root|mutating|required|both|destructive|native,docker|no|none
 menu||show_menu|user|read-only|none|interactive|safe|native,docker|no|none
 restore-preflight||show_restore_preflight|root|read-only|required|interactive|safe|native,docker|no|none
+restore-status||run_backup_restore_api|root|read-only|none|non-interactive|safe|native,docker|yes|1.0
 status||run_status|user|read-only|none|both|safe|native,docker|yes|none
 status-menu||show_status_menu|user|read-only|none|interactive|safe|native,docker|no|none
 toolkit-rollback|update-toolkit-rollback,rollback-toolkit|rollback_toolkit|root|mutating|required|both|administrative|native,docker|no|none

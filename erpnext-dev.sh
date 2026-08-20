@@ -294,7 +294,7 @@ _erpnext_dev_required_lib_files() {
   printf '%s\n' \
     common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
-    dashboard.sh inventory.sh planner.sh healing.sh menu.sh security.sh update.sh operations_api.sh
+    dashboard.sh inventory.sh planner.sh healing.sh menu.sh security.sh update.sh operations_api.sh backup_api.sh
 }
 
 _erpnext_dev_missing_lib_files() {
@@ -719,6 +719,8 @@ source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
 source "${_ERPNEXT_DEV_ROOT}/lib/deployment_info.sh"
 # shellcheck source=lib/operations_api.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/operations_api.sh"
+# shellcheck source=lib/backup_api.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/backup_api.sh"
 # shellcheck source=lib/api.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/api.sh"
 source "${_ERPNEXT_DEV_ROOT}/lib/commands.sh"
@@ -1409,6 +1411,8 @@ Core:
   api-version [--json] Report stable machine API and toolkit versions
   capabilities [--json] Report safe public command-registry metadata
   deployment-info [--json] Report trusted persisted deployment configuration intent
+  backup-status --json Metadata-only local, schedule, retention, and off-VM backup status
+  restore-status --json Metadata-only restore-candidate and rehearsal readiness status
   versions            Show the pinned compatibility matrix (Node/nvm/uv/Python/branches/bench)
   where-installed     Show active script, stable /opt path, CLI path, and config path
   verify-toolkit      Show installed script SHA256 and compare against SHA256SUMS when available
@@ -2062,7 +2066,7 @@ main() {
     repair-app-registry) repair_app_registry ;;
     backup) engine_backup false ;;
     backup-files) engine_backup true ;;
-    backup-status) show_backup_status ;;
+    backup-status) show_backup_status ;; # Stable JSON handler: run_backup_restore_api
     backup-verify | verify-backups) verify_latest_backup_set ;;
     off-vm-backup-guide) show_off_vm_backup_guide ;;
     restore-rehearsal-guide) show_restore_rehearsal_guide ;;
@@ -2126,6 +2130,7 @@ main() {
     health-monitoring-wizard | production-monitoring-wizard) health_monitoring_wizard ;;
     service-recovery-plan) show_service_recovery_plan ;;
     restore-preflight) show_restore_preflight ;;
+    restore-status) run_backup_restore_api restore-status ;;
     restore-rehearsal-wizard) restore_rehearsal_wizard ;;
     restore-key-setup) generate_restore_backup_key ;;
     pull-off-vm-backup) pull_off_vm_backup_to_restore_vm ;;
