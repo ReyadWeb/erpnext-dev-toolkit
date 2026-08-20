@@ -144,6 +144,8 @@ bash -n lib/install.sh
 bash -n lib/ops.sh
 [[ -f lib/dashboard.sh ]] || fail "lib/dashboard.sh is missing"
 bash -n lib/dashboard.sh
+[[ -f lib/operations_api.sh ]] || fail "lib/operations_api.sh is missing"
+bash -n lib/operations_api.sh
 [[ -f lib/healing.sh ]] || fail "lib/healing.sh is missing"
 bash -n lib/healing.sh
 [[ -f lib/security.sh ]] || fail "lib/security.sh is missing"
@@ -277,6 +279,9 @@ pass "stable JSON API contract tests passed"
 
 scripts/test-deployment-info-api.sh
 pass "deployment-info API contract tests passed"
+
+scripts/test-operations-api.sh
+pass "operations API contract and security tests passed"
 
 scripts/test-docker-durability.sh
 pass "Docker durability tests passed"

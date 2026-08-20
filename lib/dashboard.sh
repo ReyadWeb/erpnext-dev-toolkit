@@ -868,7 +868,7 @@ health_snapshot_collect() {
   local pair overall="HEALTHY" engine_label install_value runtime_value
 
   health_load_policy
-  if declare -F healing_load_policy >/dev/null 2>&1; then
+  if [[ "${HEALTH_SNAPSHOT_STABLE_API:-0}" != "1" ]] && declare -F healing_load_policy >/dev/null 2>&1; then
     healing_load_policy || true
   fi
   SNAPSHOT_SCHEMA_VERSION="2"
@@ -879,19 +879,34 @@ health_snapshot_collect() {
   SNAPSHOT_ENGINE_LABEL="$engine_label"
   SNAPSHOT_OS="$(. /etc/os-release 2>/dev/null; echo "${NAME:-Linux} ${VERSION_ID:-}")"
   SNAPSHOT_TOOLKIT_VERSION="${SCRIPT_VERSION:-unknown}"
-  install_value="$(install_state 2>/dev/null || echo Unknown)"
-  runtime_value="$(runtime_state 2>/dev/null || echo Unknown)"
+  if [[ "${HEALTH_SNAPSHOT_STABLE_API:-0}" == "1" ]]; then
+    install_value="Unknown"
+    runtime_value="Unknown"
+  else
+    install_value="$(install_state 2>/dev/null || echo Unknown)"
+    runtime_value="$(runtime_state 2>/dev/null || echo Unknown)"
+  fi
   SNAPSHOT_INSTALL="$install_value"
   SNAPSHOT_RUNTIME="$runtime_value"
 
-  installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
-  SNAPSHOT_PROFILE="${PROFILE_CONTEXT_PROFILE:-recommended}"
-  SNAPSHOT_RECONCILIATION="${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
-  SNAPSHOT_PROFILE_DESIRED="${PROFILE_CONTEXT_DESIRED_APPS:-}"
-  SNAPSHOT_PROFILE_OBSERVED="${PROFILE_CONTEXT_OBSERVED_APPS:-}"
-  SNAPSHOT_PROFILE_CAPABILITY="${PROFILE_CONTEXT_CAPABILITY:-unsupported}"
-  SNAPSHOT_PROFILE_DURABLE_IMAGE="${PROFILE_CONTEXT_DURABLE_IMAGE:-false}"
-  SNAPSHOT_PROFILE_DETAIL="${PROFILE_CONTEXT_DETAIL:-Inventory unavailable.}"
+  if [[ "${HEALTH_SNAPSHOT_STABLE_API:-0}" == "1" ]]; then
+    SNAPSHOT_PROFILE="${INSTALLATION_PROFILE:-recommended}"
+    SNAPSHOT_RECONCILIATION="unknown"
+    SNAPSHOT_PROFILE_DESIRED="${INSTALLATION_PROFILE_APPS:-}"
+    SNAPSHOT_PROFILE_OBSERVED=""
+    SNAPSHOT_PROFILE_CAPABILITY="unknown"
+    SNAPSHOT_PROFILE_DURABLE_IMAGE="false"
+    SNAPSHOT_PROFILE_DETAIL="Live inventory reconciliation is outside the stable observation boundary."
+  else
+    installation_profile_operational_context_collect "${CONFIG_FILE:-}" >/dev/null 2>&1 || true
+    SNAPSHOT_PROFILE="${PROFILE_CONTEXT_PROFILE:-recommended}"
+    SNAPSHOT_RECONCILIATION="${PROFILE_CONTEXT_RECONCILIATION:-incompatible}"
+    SNAPSHOT_PROFILE_DESIRED="${PROFILE_CONTEXT_DESIRED_APPS:-}"
+    SNAPSHOT_PROFILE_OBSERVED="${PROFILE_CONTEXT_OBSERVED_APPS:-}"
+    SNAPSHOT_PROFILE_CAPABILITY="${PROFILE_CONTEXT_CAPABILITY:-unsupported}"
+    SNAPSHOT_PROFILE_DURABLE_IMAGE="${PROFILE_CONTEXT_DURABLE_IMAGE:-false}"
+    SNAPSHOT_PROFILE_DETAIL="${PROFILE_CONTEXT_DETAIL:-Inventory unavailable.}"
+  fi
   case "$SNAPSHOT_RECONCILIATION" in
     consistent | drift-extra | unmanaged) SNAPSHOT_PROFILE_STATUS="HEALTHY" ;;
     drift-missing | ambiguous) SNAPSHOT_PROFILE_STATUS="DEGRADED" ;;
@@ -911,15 +926,31 @@ health_snapshot_collect() {
   pair="$(health_probe_http)"; SNAPSHOT_HTTP_STATUS="${pair%%|*}"; SNAPSHOT_HTTP_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_HTTP_CODE="$(echo "$pair" | cut -d'|' -f3)"; SNAPSHOT_HTTP_MS="$(echo "$pair" | cut -d'|' -f4)"
   pair="$(health_probe_port 8000 'Bench web')"; SNAPSHOT_WEB_PORT_STATUS="${pair%%|*}"; SNAPSHOT_WEB_PORT_DETAIL="${pair#*|}"
   pair="$(health_probe_port 9000 'Socket.IO')"; SNAPSHOT_SOCKET_STATUS="${pair%%|*}"; SNAPSHOT_SOCKET_DETAIL="${pair#*|}"
-  pair="$(health_probe_systemd_unit mariadb.service MariaDB)"; SNAPSHOT_DB_STATUS="${pair%%|*}"; SNAPSHOT_DB_DETAIL="${pair#*|}"
-  pair="$(health_probe_systemd_unit redis-server.service Redis)"; SNAPSHOT_REDIS_STATUS="${pair%%|*}"; SNAPSHOT_REDIS_DETAIL="${pair#*|}"
-  pair="$(health_probe_workers)"; SNAPSHOT_WORKERS_STATUS="${pair%%|*}"; SNAPSHOT_WORKERS_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_WORKERS_COUNT="$(echo "$pair" | cut -d'|' -f3)"
-  pair="$(health_probe_scheduler)"; SNAPSHOT_SCHEDULER_STATUS="${pair%%|*}"; SNAPSHOT_SCHEDULER_DETAIL="${pair#*|}"
-  pair="$(health_probe_queue)"; SNAPSHOT_QUEUE_STATUS="${pair%%|*}"; SNAPSHOT_QUEUE_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_QUEUE_DEPTH="$(echo "$pair" | cut -d'|' -f3)"
+  if [[ "${HEALTH_SNAPSHOT_STABLE_API:-0}" == "1" ]]; then
+    SNAPSHOT_DB_STATUS="UNKNOWN"; SNAPSHOT_DB_DETAIL="service evidence unavailable at stable boundary"
+    SNAPSHOT_REDIS_STATUS="UNKNOWN"; SNAPSHOT_REDIS_DETAIL="service evidence unavailable at stable boundary"
+  else
+    pair="$(health_probe_systemd_unit mariadb.service MariaDB)"; SNAPSHOT_DB_STATUS="${pair%%|*}"; SNAPSHOT_DB_DETAIL="${pair#*|}"
+    pair="$(health_probe_systemd_unit redis-server.service Redis)"; SNAPSHOT_REDIS_STATUS="${pair%%|*}"; SNAPSHOT_REDIS_DETAIL="${pair#*|}"
+  fi
+  if [[ "${HEALTH_SNAPSHOT_STABLE_API:-0}" == "1" ]]; then
+    SNAPSHOT_WORKERS_STATUS="UNKNOWN"; SNAPSHOT_WORKERS_DETAIL="not probed by stable API"; SNAPSHOT_WORKERS_COUNT=""
+    SNAPSHOT_SCHEDULER_STATUS="UNKNOWN"; SNAPSHOT_SCHEDULER_DETAIL="not probed by stable API"
+    SNAPSHOT_QUEUE_STATUS="UNKNOWN"; SNAPSHOT_QUEUE_DETAIL="database-backed queue probe excluded"; SNAPSHOT_QUEUE_DEPTH=""
+  else
+    pair="$(health_probe_workers)"; SNAPSHOT_WORKERS_STATUS="${pair%%|*}"; SNAPSHOT_WORKERS_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_WORKERS_COUNT="$(echo "$pair" | cut -d'|' -f3)"
+    pair="$(health_probe_scheduler)"; SNAPSHOT_SCHEDULER_STATUS="${pair%%|*}"; SNAPSHOT_SCHEDULER_DETAIL="${pair#*|}"
+    pair="$(health_probe_queue)"; SNAPSHOT_QUEUE_STATUS="${pair%%|*}"; SNAPSHOT_QUEUE_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_QUEUE_DEPTH="$(echo "$pair" | cut -d'|' -f3)"
+  fi
 
   SNAPSHOT_DOCKER_MAX_RESTARTS="0"
   SNAPSHOT_CERT_DAYS=""
-  if deployment_engine_is_docker 2>/dev/null; then
+  if [[ "${HEALTH_SNAPSHOT_STABLE_API:-0}" == "1" ]]; then
+    SNAPSHOT_RUNTIME_LAYER_STATUS="UNKNOWN"
+    SNAPSHOT_RUNTIME_LAYER_DETAIL="bounded runtime evidence unavailable"
+    SNAPSHOT_DOCKER_RUNNING=""
+    SNAPSHOT_DOCKER_TOTAL=""
+  elif deployment_engine_is_docker 2>/dev/null; then
     pair="$(health_probe_docker_runtime)"
     SNAPSHOT_RUNTIME_LAYER_STATUS="${pair%%|*}"
     SNAPSHOT_RUNTIME_LAYER_DETAIL="$(echo "$pair" | cut -d'|' -f2)"
@@ -945,7 +976,11 @@ health_snapshot_collect() {
 
   pair="$(health_probe_https)"; SNAPSHOT_HTTPS_STATUS="${pair%%|*}"; SNAPSHOT_HTTPS_DETAIL="${pair#*|}"
   pair="$(health_probe_firewall)"; SNAPSHOT_FIREWALL_STATUS="${pair%%|*}"; SNAPSHOT_FIREWALL_DETAIL="${pair#*|}"
-  pair="$(health_probe_fail2ban)"; SNAPSHOT_FAIL2BAN_STATUS="${pair%%|*}"; SNAPSHOT_FAIL2BAN_DETAIL="${pair#*|}"
+  if [[ "${HEALTH_SNAPSHOT_STABLE_API:-0}" == "1" ]]; then
+    SNAPSHOT_FAIL2BAN_STATUS="UNKNOWN"; SNAPSHOT_FAIL2BAN_DETAIL="privileged client probe excluded"
+  else
+    pair="$(health_probe_fail2ban)"; SNAPSHOT_FAIL2BAN_STATUS="${pair%%|*}"; SNAPSHOT_FAIL2BAN_DETAIL="${pair#*|}"
+  fi
   pair="$(health_probe_local_backup)"; SNAPSHOT_BACKUP_STATUS="${pair%%|*}"; SNAPSHOT_BACKUP_DETAIL="$(echo "$pair" | cut -d'|' -f2)"; SNAPSHOT_BACKUP_AGE="$(echo "$pair" | cut -d'|' -f3)"
   pair="$(health_probe_off_vm_backup)"; SNAPSHOT_OFFVM_STATUS="${pair%%|*}"; SNAPSHOT_OFFVM_DETAIL="${pair#*|}"
   pair="$(health_probe_object_backup)"; SNAPSHOT_OBJECT_STATUS="${pair%%|*}"; SNAPSHOT_OBJECT_DETAIL="${pair#*|}"

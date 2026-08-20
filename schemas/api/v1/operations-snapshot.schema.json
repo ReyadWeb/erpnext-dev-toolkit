@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ReyadWeb/erpnext-dev-toolkit/schemas/api/v1/operations-snapshot.schema.json",
+  "title": "Stable operations snapshot data",
+  "$defs": {
+    "status": {"enum": ["HEALTHY", "DEGRADED", "CRITICAL", "UNKNOWN"]},
+    "nullableInteger": {"type": ["integer", "null"]},
+    "check": {"type": "object", "additionalProperties": false, "required": ["status", "detail"], "properties": {"status": {"$ref": "#/$defs/status"}, "detail": {"type": ["string", "null"], "maxLength": 240}}}
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["toolkit_version", "observed_at", "deployment", "overall_status", "resources", "application", "runtime", "protection", "healing", "checks", "issues"],
+  "properties": {
+    "toolkit_version": {"type": "string"},
+    "observed_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "deployment": {"type": "object", "additionalProperties": false, "required": ["engine", "site", "installation_profile", "reconciliation"], "properties": {"engine": {"enum": ["native", "docker", null]}, "site": {"type": ["string", "null"]}, "installation_profile": {"type": ["string", "null"]}, "reconciliation": {"type": ["string", "null"]}}},
+    "overall_status": {"$ref": "#/$defs/status"},
+    "resources": {"type": "object", "additionalProperties": false, "required": ["status", "disk_used_percent", "inode_used_percent", "memory_available_percent", "memory_available_kb", "memory_total_kb", "swap_used_percent", "load_1m", "cpu_cores", "cpu_used_percent", "iowait_percent", "uptime_seconds", "reboot_required"], "properties": {"status": {"$ref": "#/$defs/status"}, "disk_used_percent": {"$ref": "#/$defs/nullableInteger"}, "inode_used_percent": {"$ref": "#/$defs/nullableInteger"}, "memory_available_percent": {"$ref": "#/$defs/nullableInteger"}, "memory_available_kb": {"$ref": "#/$defs/nullableInteger"}, "memory_total_kb": {"$ref": "#/$defs/nullableInteger"}, "swap_used_percent": {"$ref": "#/$defs/nullableInteger"}, "load_1m": {"type": ["number", "null"]}, "cpu_cores": {"$ref": "#/$defs/nullableInteger"}, "cpu_used_percent": {"$ref": "#/$defs/nullableInteger"}, "iowait_percent": {"$ref": "#/$defs/nullableInteger"}, "uptime_seconds": {"$ref": "#/$defs/nullableInteger"}, "reboot_required": {"type": ["boolean", "null"]}}},
+    "application": {"type": "object", "additionalProperties": false, "required": ["status", "http_status", "http_code", "http_latency_ms", "database_status", "redis_status", "workers_status", "worker_count", "scheduler_status", "queue_status", "queue_depth"], "properties": {"status": {"$ref": "#/$defs/status"}, "http_status": {"$ref": "#/$defs/status"}, "http_code": {"$ref": "#/$defs/nullableInteger"}, "http_latency_ms": {"$ref": "#/$defs/nullableInteger"}, "database_status": {"$ref": "#/$defs/status"}, "redis_status": {"$ref": "#/$defs/status"}, "workers_status": {"$ref": "#/$defs/status"}, "worker_count": {"$ref": "#/$defs/nullableInteger"}, "scheduler_status": {"$ref": "#/$defs/status"}, "queue_status": {"$ref": "#/$defs/status"}, "queue_depth": {"$ref": "#/$defs/nullableInteger"}}},
+    "runtime": {"type": "object", "additionalProperties": false, "required": ["status", "docker_running", "docker_total", "docker_max_restarts"], "properties": {"status": {"$ref": "#/$defs/status"}, "docker_running": {"$ref": "#/$defs/nullableInteger"}, "docker_total": {"$ref": "#/$defs/nullableInteger"}, "docker_max_restarts": {"$ref": "#/$defs/nullableInteger"}}},
+    "protection": {"type": "object", "additionalProperties": false, "required": ["status", "https_status", "certificate_days_remaining", "firewall_status", "fail2ban_status", "integrity_status", "backup"], "properties": {"status": {"$ref": "#/$defs/status"}, "https_status": {"$ref": "#/$defs/status"}, "certificate_days_remaining": {"$ref": "#/$defs/nullableInteger"}, "firewall_status": {"$ref": "#/$defs/status"}, "fail2ban_status": {"$ref": "#/$defs/status"}, "integrity_status": {"$ref": "#/$defs/status"}, "backup": {"type": "object", "additionalProperties": false, "required": ["local_status", "local_age_hours", "off_vm_status", "object_status", "restore_rehearsal_status"], "properties": {"local_status": {"$ref": "#/$defs/status"}, "local_age_hours": {"$ref": "#/$defs/nullableInteger"}, "off_vm_status": {"$ref": "#/$defs/status"}, "object_status": {"$ref": "#/$defs/status"}, "restore_rehearsal_status": {"$ref": "#/$defs/status"}}}}},
+    "healing": {"type": "object", "additionalProperties": false, "required": ["mode", "status", "would_heal"], "properties": {"mode": {"enum": ["monitor", "safe", "advanced"]}, "status": {"type": "string"}, "would_heal": {"type": "null"}}},
+    "checks": {"type": "object", "additionalProperties": {"$ref": "#/$defs/check"}},
+    "issues": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9_]+$"}, "uniqueItems": true}
+  }
+}

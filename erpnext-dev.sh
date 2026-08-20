@@ -294,7 +294,7 @@ _erpnext_dev_required_lib_files() {
   printf '%s\n' \
     common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
-    dashboard.sh inventory.sh planner.sh healing.sh menu.sh security.sh update.sh
+    dashboard.sh inventory.sh planner.sh healing.sh menu.sh security.sh update.sh operations_api.sh
 }
 
 _erpnext_dev_missing_lib_files() {
@@ -717,6 +717,8 @@ fi
 source "${_ERPNEXT_DEV_ROOT}/lib/update.sh"
 # shellcheck source=lib/deployment_info.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/deployment_info.sh"
+# shellcheck source=lib/operations_api.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/operations_api.sh"
 # shellcheck source=lib/api.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/api.sh"
 source "${_ERPNEXT_DEV_ROOT}/lib/commands.sh"
@@ -2104,12 +2106,14 @@ main() {
     health-check-status) show_health_check_status ;;
     health-check-journal) show_health_check_journal ;;
     disable-health-check-timer) disable_health_check_timer ;;
-    dashboard | ops-dashboard-v2) run_operations_dashboard ;;
+    dashboard) run_operations_dashboard ;; # Stable JSON handler: run_operations_api_snapshot
+    ops-dashboard-v2) run_operations_dashboard ;;
     health-snapshot)
+      # Stable JSON handler: run_operations_api_snapshot
       DASHBOARD_FORMAT=json
       run_operations_dashboard
       ;;
-    incidents) show_health_incidents ;;
+    incidents) show_health_incidents ;; # Stable JSON handler: run_operations_api_incidents
     incident-show) show_health_incident "${ACTION_ARG:-}" ;;
     health-history) show_health_history "${ACTION_ARG:-20}" ;;
     health-metrics | openmetrics) health_emit_openmetrics ;;
