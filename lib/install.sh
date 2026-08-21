@@ -1087,13 +1087,13 @@ run_install() {
   local reinstall_runtime_mode="" production_runtime_restored=0
   local enable_boot start_now
 
-  require_sudo
   if [[ "$(effective_installation_profile)" == advanced && "${INSTALLATION_PROFILE_OPTION_PROVIDED:-0}" -eq 1 ]]; then
     # The dedicated transaction invokes settle_stack_after_install during its
     # pre-promotion readiness checkpoint.
     native_advanced_install
     return $?
   fi
+  require_sudo
   prepare_direct_installation_selection || return 0
   validate_platform_profile_combination \
     || fail "Invalid platform/profile selection; installation stopped before mutation."

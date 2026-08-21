@@ -244,9 +244,12 @@ installation_profile_capability_evaluate() {
     PROFILE_PLAN_CAPABILITY="durable-image-required"
     PROFILE_PLAN_DURABLE_IMAGE="true"
     PROFILE_PLAN_CAPABILITY_DETAIL="A verified cumulative custom image is required; running containers must not be mutated."
+  elif [[ "$profile" == advanced && "$engine" == native ]]; then
+    PROFILE_PLAN_CAPABILITY="supported"
+    PROFILE_PLAN_CAPABILITY_DETAIL="The Native advanced fresh-install adapter is supported."
   elif [[ "$profile" == advanced ]]; then
     PROFILE_PLAN_CAPABILITY="preview-only"
-    PROFILE_PLAN_CAPABILITY_DETAIL="The shared plan is valid; the installation adapter is intentionally deferred."
+    PROFILE_PLAN_CAPABILITY_DETAIL="Docker advanced mutation is intentionally deferred."
   else
     PROFILE_PLAN_CAPABILITY="supported"
     PROFILE_PLAN_CAPABILITY_DETAIL="The existing profile adapter supports this engine and environment."

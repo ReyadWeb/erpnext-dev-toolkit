@@ -57,10 +57,22 @@ sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site dev.examp
 
 The explicit form requires `--apps` and an exact validated `--site`; interactive
 use confirms the complete final plan, while `--yes` is the existing canonical
-noninteractive confirmation. A
-preview reads validated configuration and inventory, prints schema version 1
-output, and prominently reports that no deployment mutation occurred. It does
-not acquire the mutation lock or create an operation journal.
+noninteractive confirmation. A site-less advanced preview such as `install
+--profile advanced --apps crm,helpdesk --preview` reads validated configuration
+and inventory, prints the shared schema-1 plan, and prominently reports that no
+deployment mutation occurred. An executable fresh-install preview adds an exact
+site:
+
+```bash
+erpnext-dev install --profile advanced --apps crm,helpdesk --site erp.test --preview
+```
+
+That form uses the Native advanced transaction planner, prints `Native Advanced
+Installation Plan`, and exits with the planner preview status 11. Both preview
+forms are read-only: neither acquires the mutation lock nor creates an operation
+record, configuration, user, Bench, or other platform state. Docker advanced
+mutation and executable preview remain unsupported; Docker production retains
+only its deferred durable-image planning semantics.
 
 The names are lowercase ASCII identifiers. Input normalization may retain the
 documented legacy aliases for `recommended` and `frappe-only`, but new automation

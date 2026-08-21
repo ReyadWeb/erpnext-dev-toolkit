@@ -367,6 +367,7 @@ native_advanced_install() {
   native_advanced_plan
   if [[ "${QUICK_INSTALL_PREVIEW:-0}" -eq 1 ]]; then planner_exit_code preview; return $?; fi
   native_advanced_confirm || { echo "Installation cancelled before mutation."; planner_exit_code cancelled; return $?; }
+  require_sudo
   [[ "$(native_advanced_absence_fingerprint)" == "$original_fingerprint" ]] || { err "Target or configuration changed after confirmation; refusing mutation."; planner_exit_code conflict; return $?; }
 
   NATIVE_ADVANCED_OPERATION_ID="native-advanced-${NATIVE_ADVANCED_OPERATION_ID_OVERRIDE:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
