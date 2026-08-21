@@ -1972,7 +1972,9 @@ main() {
     show-config) show_config_summary ;;
     guided-setup) run_guided_setup ;;
     setup | install)
-      if installation_profile_plan_preview_requested; then
+      if installation_profile_executable_preview_requested; then
+        native_advanced_install
+      elif installation_profile_plan_preview_requested; then
         run_installation_profile_preview
       else
         run_install

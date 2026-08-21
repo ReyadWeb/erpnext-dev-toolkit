@@ -20,6 +20,10 @@ assert_has() {
   grep -Fq -- "$3" <<<"$2" || fail "$1: missing [$3]"
   pass "$1"
 }
+assert_lacks() {
+  ! grep -Fq -- "$3" <<<"$2" || fail "$1: unexpectedly contained [$3]"
+  pass "$1"
+}
 
 source "$ROOT_DIR/lib/apps.sh"
 source "$ROOT_DIR/lib/profile.sh"
@@ -118,6 +122,106 @@ assert_eq 'ERPNext dependency inclusion' "$PROFILE_PLAN_DESIRED_CSV" frappe,erpn
 for bad in frappe unknown crm,crm ../crm 'crm;id' CRM ''; do
   if profile_plan_parse_requested_apps "$bad" >/dev/null 2>&1; then fail "unsafe app accepted: $bad"; fi
   pass "reject app selection ${bad:-empty}"
+done
+
+# Exercise the real entrypoint and dispatcher, with every writable/protected
+# path isolated. Platform executables are poisoned so a preview cannot pass by
+# silently invoking a real host command.
+ENTRY_WORK="$WORK/entrypoint"
+mkdir -p "$ENTRY_WORK/bin" "$ENTRY_WORK/log"
+PLATFORM_LOG="$ENTRY_WORK/platform.log"
+for platform_command in apt apt-get bench docker git mysql mariadb npm systemctl useradd; do
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$(basename "$0")" >>"$PLATFORM_LOG"\nexit 99\n' \
+    >"$ENTRY_WORK/bin/$platform_command"
+  chmod +x "$ENTRY_WORK/bin/$platform_command"
+done
+ENTRY_ENV=(
+  "PATH=$ENTRY_WORK/bin:$PATH"
+  "PLATFORM_LOG=$PLATFORM_LOG"
+  "LOG_DIR=$ENTRY_WORK/log"
+  "CONFIG_FILE=$ENTRY_WORK/config.env"
+  "LEGACY_CONFIG_FILE=$ENTRY_WORK/legacy.env"
+  "BENCH_PARENT=$ENTRY_WORK/bench-parent"
+  "NATIVE_ADVANCED_STATE_DIR=$ENTRY_WORK/operations"
+  "LOCK_DIR=$ENTRY_WORK/lock"
+  "NO_COLOR=1"
+)
+run_entrypoint() {
+  local output_file="$1"
+  shift
+  set +e
+  env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
+  ENTRY_RC=$?
+  set -e
+}
+
+run_entrypoint "$ENTRY_WORK/preview-1.out" install \
+  --profile advanced \
+  --apps crm,helpdesk \
+  --site erp.test \
+  --preview
+assert_eq 'entrypoint executable preview exit' "$ENTRY_RC" 11
+entry_preview="$(<"$ENTRY_WORK/preview-1.out")"
+assert_has 'entrypoint dedicated plan' "$entry_preview" 'Native Advanced Installation Plan'
+assert_has 'entrypoint exact site' "$entry_preview" 'Exact site: erp.test'
+assert_has 'entrypoint requested apps' "$entry_preview" 'Requested applications: crm,helpdesk'
+assert_has 'entrypoint resolved apps' "$entry_preview" 'Resolved dependency closure: frappe,crm,telephony,helpdesk'
+assert_has 'entrypoint dependency order' "$entry_preview" 'Application installation order: frappe,crm,telephony,helpdesk'
+assert_lacks 'entrypoint excludes ERPNext' "$entry_preview" 'erpnext'
+assert_lacks 'entrypoint excludes preview-only capability' "$entry_preview" 'Capability: preview-only'
+assert_lacks 'entrypoint excludes deferred adapter warning' "$entry_preview" 'installation adapter is intentionally deferred'
+assert_lacks 'entrypoint excludes ambiguous reconciliation' "$entry_preview" 'Reconciliation: ambiguous'
+[[ ! -e "$ENTRY_WORK/config.env" && ! -e "$ENTRY_WORK/legacy.env" &&
+  ! -e "$ENTRY_WORK/operations" && ! -e "$ENTRY_WORK/lock" &&
+  ! -e "$ENTRY_WORK/bench-parent" && ! -e "$PLATFORM_LOG" ]] \
+  || fail 'entrypoint preview mutated state or invoked a platform command'
+pass 'entrypoint executable preview is mutation-free'
+run_entrypoint "$ENTRY_WORK/preview-2.out" install --profile advanced --apps crm,helpdesk --site erp.test --preview
+assert_eq 'repeated entrypoint preview exit' "$ENTRY_RC" 11
+assert_eq 'repeated entrypoint preview deterministic' "$(<"$ENTRY_WORK/preview-1.out")" "$(<"$ENTRY_WORK/preview-2.out")"
+
+run_entrypoint "$ENTRY_WORK/site-less.out" install --profile advanced --apps crm,helpdesk --preview
+assert_eq 'site-less preview compatibility exit' "$ENTRY_RC" 0
+assert_has 'site-less preview schema 1' "$(<"$ENTRY_WORK/site-less.out")" 'Installation Profile Plan (schema 1)'
+run_entrypoint "$ENTRY_WORK/existing.out" install --profile existing --preview
+assert_eq 'existing preview compatibility exit' "$ENTRY_RC" 0
+assert_has 'existing remains preview-only' "$(<"$ENTRY_WORK/existing.out")" 'Capability: preview-only'
+for profile in recommended frappe-only; do
+  run_entrypoint "$ENTRY_WORK/$profile.out" install --profile "$profile" --preview
+  assert_eq "$profile preview compatibility exit" "$ENTRY_RC" 0
+  assert_has "$profile preview schema 1" "$(<"$ENTRY_WORK/$profile.out")" 'Installation Profile Plan (schema 1)'
+done
+
+set +e
+printf 'n\n' | env "${ENTRY_ENV[@]}" ERPNEXT_DEV_TEST_INTERACTIVE=1 \
+  "$ROOT_DIR/erpnext-dev.sh" install --profile advanced --apps crm,helpdesk --site erp.test \
+  >"$ENTRY_WORK/cancel.out" 2>&1
+ENTRY_RC=${PIPESTATUS[1]}
+set -e
+assert_eq 'interactive dispatcher cancellation exit' "$ENTRY_RC" 12
+assert_has 'interactive dispatcher reaches dedicated plan' "$(<"$ENTRY_WORK/cancel.out")" 'Native Advanced Installation Plan'
+assert_has 'interactive cancellation is explicit' "$(<"$ENTRY_WORK/cancel.out")" 'Installation cancelled before mutation.'
+[[ ! -e "$ENTRY_WORK/config.env" && ! -e "$ENTRY_WORK/operations" && ! -e "$PLATFORM_LOG" ]] \
+  || fail 'entrypoint cancellation mutated state or invoked a platform command'
+pass 'entrypoint cancellation is mutation-free'
+
+run_entrypoint "$ENTRY_WORK/noninteractive.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
+assert_eq 'noninteractive dispatcher reaches sudo transaction gate' "$ENTRY_RC" 1
+assert_has 'noninteractive dispatcher reaches dedicated plan' "$(<"$ENTRY_WORK/noninteractive.out")" 'Native Advanced Installation Plan'
+assert_has 'noninteractive transaction requires privilege' "$(<"$ENTRY_WORK/noninteractive.out")" 'must be run with sudo'
+
+for docker_mode in preview mutation; do
+  docker_args=(install --profile advanced --apps 'crm,helpdesk' --site erp.test)
+  [[ "$docker_mode" == mutation ]] || docker_args+=(--preview)
+  set +e
+  env "${ENTRY_ENV[@]}" DEPLOYMENT_ENGINE=docker "$ROOT_DIR/erpnext-dev.sh" "${docker_args[@]}" \
+    >"$ENTRY_WORK/docker-$docker_mode.out" 2>&1
+  ENTRY_RC=$?
+  set -e
+  assert_eq "Docker advanced $docker_mode unsupported exit" "$ENTRY_RC" 23
+  assert_has "Docker advanced $docker_mode message" "$(<"$ENTRY_WORK/docker-$docker_mode.out")" 'unsupported for Docker'
+  [[ ! -e "$PLATFORM_LOG" ]] || fail "Docker command executed during advanced $docker_mode"
+  pass "Docker advanced $docker_mode executes no platform command"
 done
 
 reset_case

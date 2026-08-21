@@ -40,6 +40,13 @@ installation_profile_plan_preview_requested() {
     && ("${ACTION:-}" == install || "${ACTION:-}" == setup) ]]
 }
 
+installation_profile_executable_preview_requested() {
+  installation_profile_plan_preview_requested \
+    && [[ "$(effective_installation_profile)" == advanced \
+      && "${INSTALLATION_PROFILE_APPS_OPTION_PROVIDED:-0}" -eq 1 \
+      && "${QUICK_INSTALL_SITE_OPTION_PROVIDED:-0}" -eq 1 ]]
+}
+
 validate_installation_profile_value() {
   normalize_installation_profile "$1" >/dev/null 2>&1
 }

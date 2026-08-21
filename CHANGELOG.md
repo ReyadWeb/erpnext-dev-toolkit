@@ -70,6 +70,10 @@
 
 ### Fixed
 
+- Corrected Phase 7.4 advanced preview dispatch so an explicit Native site uses
+  the executable installation plan and exit class without mutation, while
+  site-less schema-1 previews remain compatible and Native advanced status is
+  reported as supported.
 - Refreshed the main menu runtime badge from the live runtime state so it updates immediately after install/start instead of waiting for the dashboard to refresh cached health metrics.
 - Improved Safe Update when app repositories have local changes: it can now guide the operator through Git-stashing dirty app work, rerun preflight, and continue only when blockers are cleared.
 

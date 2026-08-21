@@ -152,7 +152,7 @@ TEST_CATALOG_FAULT=""
 profile_plan_parse_requested_apps crm
 profile_plan_resolve_apps advanced
 for matrix in \
-  native:native:preview-only:false \
+  native:native:supported:false \
   docker:development:preview-only:false \
   docker:production:durable-image-required:true; do
   IFS=: read -r engine environment expected durable <<<"$matrix"
@@ -368,6 +368,13 @@ for context_profile in recommended frappe-only; do
   assert_eq "operational context reconciliation ${context_profile}" consistent "$PROFILE_CONTEXT_RECONCILIATION"
   assert_eq "operational context is read only ${context_profile}" "$context_before" "$(sha256sum "$CONFIG_FILE")"
 done
+printf 'CONFIG_SCHEMA=2\nINSTALLATION_PROFILE=advanced\nINSTALLATION_PROFILE_APPS=erpnext\nDEPLOYMENT_ENGINE=native\nSITE_NAME=one.test\n' >"$CONFIG_FILE"
+context_before="$(sha256sum "$CONFIG_FILE")"
+installation_profile_operational_context_collect "$CONFIG_FILE" || fail_case 'operational context rejected Native advanced'
+assert_eq 'operational context profile advanced' advanced "$PROFILE_CONTEXT_PROFILE"
+assert_eq 'operational context Native advanced capability' supported "$PROFILE_CONTEXT_CAPABILITY"
+assert_eq 'operational context Native advanced reconciliation' consistent "$PROFILE_CONTEXT_RECONCILIATION"
+assert_eq 'operational context Native advanced is read only' "$context_before" "$(sha256sum "$CONFIG_FILE")"
 unset -f inventory_collect
 eval "$(declare -f inventory_collect_original | sed '1s/inventory_collect_original/inventory_collect/')"
 unset -f inventory_collect_original
