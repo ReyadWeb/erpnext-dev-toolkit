@@ -1,8 +1,8 @@
 # Installation profiles architecture
 
-This document is the Phase 7 implementation plan for installing and managing a
-Frappe stack without making ERPNext mandatory. It records the contract to be
-implemented; where it describes behaviour not yet present, it uses **planned**.
+This document describes the Phase 7 profile contract. The complete Native
+advanced-installation slice is available in v1.21 development; Existing
+adoption and Docker advanced mutation remain deferred.
 
 ## Baseline and architectural decision
 
@@ -38,8 +38,7 @@ extend it instead of adding a negative boolean such as `--no-erpnext`:
 --profile existing
 ```
 
-PR 7.1 exposes this contract through the existing setup command family as a
-strictly read-only preview:
+The setup command family supports read-only previews:
 
 ```bash
 erpnext-dev install --profile recommended --preview
@@ -48,9 +47,17 @@ erpnext-dev install --profile advanced --apps crm,helpdesk --preview
 erpnext-dev install --profile existing --preview
 ```
 
-`setup` is an alias-equivalent placement for these previews. `advanced` and
-`existing` are preview-only until their later adapters ship. The PR 7.1 CLI
-requires `--apps` for advanced because setup-wizard selection is deferred. A
+`setup` is an alias-equivalent placement for these previews. `existing` remains
+preview-only. An advanced Native fresh install uses the same documented options:
+
+```bash
+sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site dev.example.test
+sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site dev.example.test --yes
+```
+
+The explicit form requires `--apps` and an exact validated `--site`; interactive
+use confirms the complete final plan, while `--yes` is the existing canonical
+noninteractive confirmation. A
 preview reads validated configuration and inventory, prints schema version 1
 output, and prominently reports that no deployment mutation occurred. It does
 not acquire the mutation lock or create an operation journal.
@@ -173,6 +180,63 @@ post-operation inventory.
 - Arbitrary Git URLs and custom apps are excluded from the first Phase 7
   implementation. They remain in the existing advanced custom-app tooling and
   cannot be treated as verified profile members.
+
+Native advanced mutation is fresh-install only. It refuses an existing bench,
+site, deployment configuration, unsafe operation state, or changed preflight
+fingerprint before platform mutation. Docker advanced mutation is unsupported
+until Phase 7.5 and invokes no Docker command.
+
+The displayed final plan names the profile, engine, exact site, requested and
+resolved applications, deterministic dependency order, trusted catalog source
+identity/ref, checkpoints, created artifacts/services, baseline backup boundary,
+promotion point, verification, and failure recovery. Preview and cancellation
+do not write state or configuration and execute no platform command.
+
+The protected operation record lives under the Toolkit operation-state area.
+Its directory is mode 0700 and regular state files are mode 0600; unsafe types,
+links, ownership, or permissions fail closed. It records identifiers and verified
+artifacts only—never credentials or private repository URLs. After site creation,
+failure records `recovery-required`, preserves the site and backup evidence, and
+directs the operator to inspect the record and repair the recorded checkpoint;
+there is no broad automatic cleanup or unsafe resume.
+
+Immediately after site creation, the installer creates and safely checks a
+baseline backup. Failure blocks all curated-app acquisition. Advanced schema-2
+intent is staged privately, but active primary and compatibility configuration
+remain unchanged until readiness and exact inventory/source/ref verification
+pass. Promotion is atomic and refuses concurrent configuration changes. A second
+configuration/inventory reconciliation is required before `completed`.
+
+This status differs from `backup-status`, which observes metadata;
+`backup-verify`, which performs deeper archive validation; restore preflight,
+which assesses a chosen restore; and restore itself. The install transaction
+creates only its required baseline backup and does not adopt or inspect an
+existing deployment.
+
+#### Disposable-VM acceptance (explicit opt-in)
+
+Live acceptance is permitted only on a newly provisioned, disposable Native VM.
+The operator must first create the root-owned marker
+`/etc/erpnext-dev-disposable-vm` containing the VM change-ticket identifier and
+must confirm that no Toolkit configuration, Bench directory, site, or database
+exists. Never create this marker on a workstation or reusable host.
+
+On that marked VM, record a snapshot, then run these acceptance cases manually:
+
+1. Install an ERPNext-free catalog set with the canonical advanced command;
+   verify readiness, exact site inventory, the protected operation record, and
+   baseline backup, then reboot and repeat readiness/inventory checks.
+2. Revert the VM snapshot and install a multi-application catalog set whose
+   closure includes dependencies; verify exact acquisition and installation
+   order, sources/refs, readiness, inventory, backup, and reboot durability.
+3. Revert again, set the test-only fault injection at a post-site checkpoint,
+   run the same install, and verify a non-success exit, unchanged active config,
+   preserved site/baseline evidence, and `recovery-required` guidance.
+4. Destroy the VM after exporting only sanitized assertion results. Do not reuse
+   it and do not connect the procedure to any existing deployment.
+
+The marker is authorization to follow this procedure, not a bypass in the
+installer. Hermetic CI never creates it and never runs these live cases.
 
 ### Existing installation management (existing)
 

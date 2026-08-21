@@ -46,6 +46,7 @@ targets=(
   lib/backup_api.sh
   lib/inventory.sh
   lib/planner.sh
+  lib/native_advanced.sh
   lib/removal.sh
   lib/healing.sh
   lib/menu.sh
@@ -93,6 +94,7 @@ targets=(
   scripts/test-inventory-compatibility.sh
   scripts/test-operation-planner.sh
   scripts/test-installation-profile-contract.sh
+  scripts/test-native-advanced-installation.sh
   scripts/test-docker-durability.sh
   scripts/test-safe-update-lifecycle.sh
   scripts/test-app-uninstall-recovery.sh
