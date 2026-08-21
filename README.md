@@ -436,6 +436,19 @@ sudo erpnext-dev install --profile advanced --apps crm,helpdesk --preview
 sudo erpnext-dev install --profile existing --preview --json
 ```
 
+On a fresh Native host, the complete curated advanced transaction additionally
+requires an exact site and confirms its final plan before mutation:
+
+```bash
+sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site dev.example.test
+sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site dev.example.test --yes
+```
+
+It refuses existing deployments, creates and checks a baseline backup after site
+creation, verifies runtime and exact application inventory, and promotes schema-2
+intent only after verification. Existing-installation remains preview-only and
+Docker advanced mutation remains deferred.
+
 The preview validates canonical catalog IDs, resolves dependencies, fingerprints
 read-only inventory, and reports reconciliation and Native/Docker capability.
 Advanced and existing profiles are planning-only until their later adapters ship.

@@ -115,6 +115,7 @@ INSTALLATION_PROFILE="${INSTALLATION_PROFILE:-}"
 INSTALLATION_PROFILE_OPTION_PROVIDED=0
 INSTALLATION_PROFILE_APPS_OPTION_PROVIDED=0
 INSTALLATION_PROFILE_APPS_RAW=""
+QUICK_INSTALL_SITE_OPTION_PROVIDED=0
 # Docker engine settings (used only when DEPLOYMENT_ENGINE=docker). See lib/docker.sh.
 DOCKER_WORKDIR="${DOCKER_WORKDIR:-/opt/erpnext-dev/docker}"
 FRAPPE_DOCKER_REPO="${FRAPPE_DOCKER_REPO:-https://github.com/frappe/frappe_docker.git}"
@@ -294,7 +295,7 @@ _erpnext_dev_required_lib_files() {
   printf '%s\n' \
     common.sh ui.sh profile.sh config.sh access.sh local_ip.sh frappe.sh support.sh backup.sh ssl.sh firewall.sh \
     apps.sh health.sh storage.sh service.sh status.sh docker.sh engine.sh install.sh ops.sh \
-    dashboard.sh inventory.sh planner.sh healing.sh menu.sh security.sh update.sh operations_api.sh backup_api.sh
+    dashboard.sh inventory.sh planner.sh native_advanced.sh healing.sh menu.sh security.sh update.sh operations_api.sh backup_api.sh
 }
 
 _erpnext_dev_missing_lib_files() {
@@ -685,6 +686,8 @@ if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/planner.sh" ]]; then
 fi
 # shellcheck source=lib/planner.sh disable=SC1091
 source "${_ERPNEXT_DEV_ROOT}/lib/planner.sh"
+# shellcheck source=lib/native_advanced.sh disable=SC1091
+source "${_ERPNEXT_DEV_ROOT}/lib/native_advanced.sh"
 if [[ ! -f "${_ERPNEXT_DEV_ROOT}/lib/removal.sh" ]]; then
   echo "ERROR: Missing toolkit library: ${_ERPNEXT_DEV_ROOT}/lib/removal.sh" >&2
   exit 1
@@ -1407,6 +1410,8 @@ Start here:
   setup-lifecycle-plan Show recommended local/production setup order
 
 Core:
+  install --profile advanced --apps APP[,APP...] --site SITE [--yes]
+                      Fresh Native curated-app install with plan, transaction record, backup, and verification
   version             Print toolkit version
   api-version [--json] Report stable machine API and toolkit versions
   capabilities [--json] Report safe public command-registry metadata
@@ -1795,12 +1800,16 @@ parse_args() {
       --site)
         shift
         [[ $# -gt 0 ]] || fail "--site requires an exact site name."
+        [[ "$QUICK_INSTALL_SITE_OPTION_PROVIDED" -eq 0 ]] || fail "--site may be supplied only once."
         QUICK_INSTALL_SITE="$1"
+        QUICK_INSTALL_SITE_OPTION_PROVIDED=1
         shift
         ;;
       --site=*)
+        [[ "$QUICK_INSTALL_SITE_OPTION_PROVIDED" -eq 0 ]] || fail "--site may be supplied only once."
         QUICK_INSTALL_SITE="${1#*=}"
         [[ -n "$QUICK_INSTALL_SITE" ]] || fail "--site requires an exact site name."
+        QUICK_INSTALL_SITE_OPTION_PROVIDED=1
         shift
         ;;
       --mode)
@@ -1903,10 +1912,14 @@ main() {
       fail "Invalid installation profile. Supported: recommended, frappe-only, advanced, existing."
     fi
   fi
-  if [[ ("$INSTALLATION_PROFILE" == advanced || "$INSTALLATION_PROFILE" == existing) \
+  if [[ "$INSTALLATION_PROFILE" == existing \
     && ("${ACTION:-}" == install || "${ACTION:-}" == setup) \
     && ! ("$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 && "$QUICK_INSTALL_PREVIEW" -eq 1) ]]; then
-    fail "The ${INSTALLATION_PROFILE} profile is preview-only in PR 7.1; add --preview."
+    fail "The existing profile is preview-only; add --preview."
+  fi
+  if [[ "$INSTALLATION_PROFILE" == advanced && ("${ACTION:-}" == install || "${ACTION:-}" == setup) && "$QUICK_INSTALL_PREVIEW" -ne 1 ]]; then
+    [[ "$INSTALLATION_PROFILE_OPTION_PROVIDED" -eq 1 && "$INSTALLATION_PROFILE_APPS_OPTION_PROVIDED" -eq 1 && "$QUICK_INSTALL_SITE_OPTION_PROVIDED" -eq 1 ]] \
+      || fail "Native advanced installation requires explicit --profile advanced, --apps, and --site."
   fi
   validate_platform_profile_combination \
     || fail "Invalid platform/profile selection; no system changes were made."
