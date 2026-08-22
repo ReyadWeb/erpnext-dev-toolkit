@@ -222,6 +222,9 @@ export BENCH_STUB_MODE
 # shellcheck disable=SC2218
 native_advanced_bench_create
 assert_has 'successful Bench accepted' "$NATIVE_ADVANCED_LEDGER" bench
+bench_body="$(sed -n '/^native_advanced_bench_create()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
+assert_has 'Bench acceptance adds only a missing official Frappe origin' "$bench_body" 'git -C apps/frappe remote add origin "${frappe_repo}"'
+assert_has 'Bench acceptance rejects conflicting Frappe origin' "$bench_body" 'remote get-url origin)" == "${frappe_repo}"'
 BENCH_STUB_MODE='site-fail'
 export BENCH_STUB_MODE
 set +e

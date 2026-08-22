@@ -590,7 +590,7 @@ EOF_NATIVE_ADVANCED_TOOLCHAIN_VERIFY
 }
 
 native_advanced_bench_create() {
-  local rc=0
+  local rc=0 frappe_repo
   if native_advanced_frappe_bash "$FRAPPE_HOME" <<EOF_NATIVE_ADVANCED_BENCH
 mkdir -p "${BENCH_PARENT}"
 cd "${BENCH_PARENT}"
@@ -627,6 +627,15 @@ git -C apps/frappe rev-parse HEAD
 EOF_NATIVE_ADVANCED_FRAPPE_HEAD
   )" == "$LIB_APP_COMMIT" ]] || { native_advanced_ledger_add partial-bench; return 1; }
   native_advanced_remote_pin_matches frappe || { native_advanced_ledger_add partial-bench; return 1; }
+  frappe_repo="${LIB_APP_REPO%/}"
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_FRAPPE_ORIGIN || { native_advanced_ledger_add partial-bench; return 1; }
+if git -C apps/frappe remote get-url origin >/dev/null 2>&1; then
+  [[ "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}" || "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}.git" ]]
+else
+  git -C apps/frappe remote add origin "${frappe_repo}"
+fi
+[[ "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}" || "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}.git" ]]
+EOF_NATIVE_ADVANCED_FRAPPE_ORIGIN
   native_advanced_ledger_add bench
   native_advanced_ledger_add "source:frappe@$LIB_APP_COMMIT"
 }
