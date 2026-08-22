@@ -18,6 +18,79 @@ permissions:
 # with "The operation was canceled" on the shellcheck step).
 
 jobs:
+  native-advanced-ubuntu-2604:
+    name: Native advanced Ubuntu 26.04 (real install)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 150
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert exact checkout and Ubuntu 26.04
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          . /etc/os-release
+          test "$VERSION_ID" = "26.04"
+          sha256sum -c SHA256SUMS
+
+      - name: Reclaim ephemeral-runner disk
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Run the production Native advanced installation
+        timeout-minutes: 130
+        run: |
+          set -euo pipefail
+          sudo ./erpnext-dev.sh install \
+            --profile advanced \
+            --apps crm,helpdesk \
+            --site erp.test \
+            --yes
+
+      - name: Verify promoted installation and exact inventory
+        run: |
+          set -euo pipefail
+          sudo test -f /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'INSTALLATION_PROFILE=advanced' /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'SITE_NAME=erp.test' /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'INSTALLATION_PROFILE_APPS=crm,helpdesk' /etc/erpnext-dev/config.env
+          sudo /opt/erpnext-dev/erpnext-dev.sh wait-ready
+          sudo /opt/erpnext-dev/erpnext-dev.sh verify-frontend-assets
+          code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'Host: erp.test' http://127.0.0.1:8000/api/method/ping)"
+          case "$code" in 200|401|403) ;; *) exit 1 ;; esac
+
+      - name: Emit sanitized checkpoint summary
+        if: always()
+        run: |
+          set +e
+          echo "head=$(git rev-parse HEAD)"
+          echo "runner=ubuntu-26.04"
+          state_dir=/var/lib/erpnext-dev/operations
+          if sudo test -d "$state_dir"; then
+            while IFS= read -r state; do
+              sudo awk -F= '
+                $1 ~ /^(operation_type|site|requested_apps|resolved_apps|status|checkpoint|result|artifact_ledger|baseline_backup|verification|recovery)$/ {
+                  if ($2 ~ /^[A-Za-z0-9.,:@_+-]*$/) print
+                }
+              ' "$state"
+            done < <(sudo find "$state_dir" -maxdepth 1 -type f -name 'native-advanced-*.state' -print | sort)
+          else
+            echo "state=absent"
+          fi
+          sudo systemctl is-active mariadb redis-server erpnext-dev.service 2>/dev/null || true
+          df -h /
+
   validate-release:
     runs-on: ubuntu-latest
     timeout-minutes: 45

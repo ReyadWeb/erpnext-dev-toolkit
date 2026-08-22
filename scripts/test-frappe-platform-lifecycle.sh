@@ -23,8 +23,9 @@ systemctl() {
   esac
 }
 timedatectl() {
-  case "$1" in
-    show) printf '%s\n' "${TEST_SYNCED:-yes}" ;;
+  case "$*" in
+    "show -p RTCTimeUSec --value") date -u '+%Y-%m-%d %H:%M:%S UTC' ;;
+    show*) printf '%s\n' "${TEST_SYNCED:-yes}" ;;
     set-ntp) TEST_SYNCED=yes ;;
   esac
 }
@@ -58,6 +59,7 @@ rc=$?
 set -e
 [[ "$rc" -ne 0 ]] || fail "future repository metadata was accepted"
 grep -q "not valid yet" "$preflight_out" || fail "clock-skew diagnostic missing"
+grep -q "first-run" "$preflight_out" || fail "recommended/Frappe-only prerequisite recovery changed"
 pass "future repository metadata rejected"
 
 install_body="$(sed -n '/^run_install()/,/^}/p' lib/install.sh)"

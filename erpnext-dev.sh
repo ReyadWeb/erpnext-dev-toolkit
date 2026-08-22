@@ -165,14 +165,21 @@ CLOUDFLARE_ORIGIN_KEY_FILE="${CLOUDFLARE_ORIGIN_KEY_FILE:-}"
 
 FRAPPE_BRANCH="${FRAPPE_BRANCH:-version-16}"
 ERPNEXT_BRANCH="${ERPNEXT_BRANCH:-version-16}"
+FRAPPE_COMMIT="${FRAPPE_COMMIT:-6a329d068416768ec47ccd3326b9cc95a8d7bf99}"
+CRM_COMMIT="${CRM_COMMIT:-49d98d61e7d42c3bfc97ea65725c68d632c6b849}"
+TELEPHONY_COMMIT="${TELEPHONY_COMMIT:-039cf39f245d6818ead03cf94eea6ce7f9c1e1f7}"
+HELPDESK_COMMIT="${HELPDESK_COMMIT:-480486287b2b7179dd42a09c2a62fca9cc89c26d}"
 
 NODE_VERSION="${NODE_VERSION:-24}"
+YARN_VERSION="${YARN_VERSION:-1.22.22}"
 PYTHON_VERSION="${PYTHON_VERSION:-3.14}"
 # Pin bootstrap tool versions for reproducible installs. nvm is already pinned
 # in lib/install.sh; UV_VERSION pins the uv installer instead of always pulling
 # "latest" from the unversioned install URL.
 NVM_VERSION="${NVM_VERSION:-0.40.3}"
+NVM_COMMIT="${NVM_COMMIT:-977563e97ddc66facf3a8e31c6cff01d236f09bd}"
 UV_VERSION="${UV_VERSION:-0.11.28}"
+PYTHON_PATCH_VERSION="${PYTHON_PATCH_VERSION:-3.14.6}"
 # Pin the frappe-bench CLI installed via uv so installs are reproducible. Set
 # BENCH_VERSION= (empty) to intentionally install the latest published bench.
 BENCH_VERSION="${BENCH_VERSION-5.31.0}"

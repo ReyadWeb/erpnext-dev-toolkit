@@ -73,6 +73,24 @@
 
 ### Fixed
 
+- Stabilized the complete Phase 7.4 Native advanced path with supported UV
+  no-config isolation, exact NVM/runtime/application commits, separate-shell
+  tool verification, MariaDB/Redis runtime acceptance, fresh complete baseline
+  backups, exact source/commit inventory, clock-source consistency checks, and a
+  required real Ubuntu 26.04 CRM/Telephony/Helpdesk installation gate.
+- Corrected Native advanced clock/APT prerequisite recovery so it prints the
+  exact validated advanced request instead of `first-run`, keeps readiness ahead
+  of Toolkit/package mutation, and permits only protected, matching,
+  artifact-free prerequisite failures to create a separate retry attempt.
+- Closed the full Native advanced checkpoint audit: every mutation boundary now
+  propagates status explicitly and records partial/attempted artifacts, runtime
+  coordinates and catalog refs fail closed, exact inventory includes Frappe and
+  rejects extras, and readiness is re-proven after configuration promotion.
+- Isolated every Phase 7.4 Native advanced Frappe command from the invoking
+  user's HOME, working directory, XDG, npm, Yarn, Python, uv, and Git settings;
+  new shells now activate pinned NVM Node before using Yarn or Bench. Bench and
+  site checkpoints now require exact command success and complete verified
+  postconditions, while partial artifacts remain recorded for recovery.
 - Corrected Phase 7.4 advanced preview dispatch so an explicit Native site uses
   the executable installation plan and exit class without mutation, while
   site-less schema-1 previews remain compatible and Native advanced status is

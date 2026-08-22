@@ -176,6 +176,22 @@ system_clock_synchronized() {
   [[ "$value" == "yes" ]]
 }
 
+system_clock_sources_consistent() {
+  local provider="$1" now rtc_text rtc_epoch ref_text ref_epoch delta
+  now="$(date -u +%s)" || return 1
+  rtc_text="$(timedatectl show -p RTCTimeUSec --value 2>/dev/null)" || return 1
+  rtc_epoch="$(date -u -d "$rtc_text" +%s 2>/dev/null)" || return 1
+  delta=$((now - rtc_epoch)); ((delta < 0)) && delta=$((-delta))
+  ((delta <= 300)) || return 1
+  if [[ "$provider" == chrony ]]; then
+    ref_text="$(chronyc tracking 2>/dev/null | awk -F': ' '/^Ref time \(UTC\)/ { print $2; exit }')"
+    [[ -n "$ref_text" ]] || return 1
+    ref_epoch="$(date -u -d "$ref_text" +%s 2>/dev/null)" || return 1
+    delta=$((now - ref_epoch)); ((delta < 0)) && delta=$((-delta))
+    ((delta <= 3600)) || return 1
+  fi
+}
+
 attempt_bounded_clock_sync() {
   local provider="$1"
   case "$provider" in
@@ -195,6 +211,26 @@ attempt_bounded_clock_sync() {
   return 1
 }
 
+install_readiness_print_clock_verification() {
+  local provider="$1"
+  echo "Verify system time with:" >&2
+  echo "  date -u" >&2
+  echo "  timedatectl status" >&2
+  case "$provider" in
+    chrony) echo "  chronyc tracking" >&2 ;;
+    systemd-timesyncd | timedatectl) echo "  timedatectl timesync-status" >&2 ;;
+  esac
+}
+
+install_readiness_print_recovery() {
+  if [[ "${INSTALL_READINESS_CONTEXT:-}" == native-advanced ]] \
+    && declare -F native_advanced_print_prerequisite_retry >/dev/null 2>&1; then
+    native_advanced_print_prerequisite_retry
+  else
+    echo "After correcting time/network/repository access, resume with: $(toolkit_cmd first-run)" >&2
+  fi
+}
+
 verify_clock_and_repository_readiness() {
   local provider apt_log
   provider="$(detect_time_sync_provider)"
@@ -202,14 +238,18 @@ verify_clock_and_repository_readiness() {
     log "System clock is not synchronized; attempting bounded synchronization with ${provider}"
     if ! attempt_bounded_clock_sync "$provider"; then
       err "System clock is not synchronized (detected provider: ${provider})."
-      echo "Correct the VM clock, then resume with: $(toolkit_cmd first-run)" >&2
-      case "$provider" in
-        chrony) echo "Check: sudo chronyc tracking; sudo chronyc -a makestep" >&2 ;;
-        systemd-timesyncd | timedatectl) echo "Check: timedatectl status; sudo timedatectl set-ntp true" >&2 ;;
-        *) echo "Install or enable a supported time provider such as chrony, then verify with timedatectl." >&2 ;;
-      esac
+      echo "The installer could not prove reliable synchronization and will not make an unbounded clock change." >&2
+      install_readiness_print_clock_verification "$provider"
+      install_readiness_print_recovery
       return 1
     fi
+  fi
+  if ! system_clock_sources_consistent "$provider"; then
+    err "System time, RTC, and the detected synchronization provider are materially inconsistent."
+    echo "Detected time provider: ${provider}" >&2
+    install_readiness_print_clock_verification "$provider"
+    install_readiness_print_recovery
+    return 1
   fi
 
   apt_log="$(mktemp /tmp/erpnext-dev-apt-readiness.XXXXXX)"
@@ -217,12 +257,15 @@ verify_clock_and_repository_readiness() {
     if grep -Eqi 'not valid yet|valid.*future|release file.*future' "$apt_log"; then
       err "APT repository metadata is not valid yet; the system clock is incorrect or not fully synchronized."
       echo "Detected time provider: ${provider}" >&2
+      install_readiness_print_clock_verification "$provider"
     else
       err "APT repository readiness check failed before storage or installation mutation."
     fi
-    sed -n '1,12p' "$apt_log" >&2
+    if [[ "${INSTALL_READINESS_CONTEXT:-}" != native-advanced ]]; then
+      sed -n '1,12p' "$apt_log" >&2
+    fi
     rm -f "$apt_log"
-    echo "After correcting time/network/repository access, resume with: $(toolkit_cmd first-run)" >&2
+    install_readiness_print_recovery
     return 1
   fi
   rm -f "$apt_log"
@@ -307,7 +350,7 @@ install_system_packages() {
     redis-server mariadb-server mariadb-client libmariadb-dev
     python3 python3-dev python3-pip python3-venv
     libffi-dev libssl-dev libjpeg-dev zlib1g-dev
-    xvfb
+    xvfb fontconfig
     cron netcat-openbsd
   )
 
@@ -334,16 +377,6 @@ install_system_packages() {
   # Refresh apt metadata before availability probes so Debian/Ubuntu package
   # names resolve against a current index.
   $SUDO apt-get update
-
-  # fontconfig runtime: Debian ships libfontconfig1; some Ubuntu releases also
-  # expose a libfontconfig transitional name. Prefer the portable package.
-  if apt_package_available "libfontconfig1"; then
-    packages+=(libfontconfig1)
-  elif apt_package_available "libfontconfig"; then
-    packages+=(libfontconfig)
-  else
-    packages+=(fontconfig)
-  fi
 
   install_required_packages "${packages[@]}"
 
@@ -765,10 +798,47 @@ create_start_helper() {
 
   $SUDO tee "$FRAPPE_HOME/start-erpnext-dev.sh" >/dev/null <<EOF_HELPER
 #!/usr/bin/env bash
-set -e
-export PATH="\$HOME/.local/bin:\$PATH"
+set -Eeuo pipefail
+export HOME="${FRAPPE_HOME}"
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+unset NODE_PATH NODE_OPTIONS COREPACK_HOME
+unset NPM_CONFIG_USERCONFIG NPM_CONFIG_CACHE npm_config_userconfig npm_config_cache npm_config_prefix
+unset YARN_RC_FILENAME YARN_CACHE_FOLDER YARN_GLOBAL_FOLDER YARN_CONFIG_DIR
+unset PYTHONHOME PYTHONPATH PYTHONUSERBASE PIP_CONFIG_FILE PIP_CACHE_DIR
+unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR UV_PYTHON_BIN_DIR UV_INSTALL_DIR UV_UNMANAGED_INSTALL
+unset GIT_CONFIG_SYSTEM GIT_CONFIG_GLOBAL GIT_CONFIG_COUNT
+while IFS='=' read -r inherited_name _; do
+  case "\$inherited_name" in
+    NPM_CONFIG_*|npm_config_*|YARN_*|PYTHON*|PIP_*|UV_*|GIT_CONFIG_*) unset "\$inherited_name" 2>/dev/null || true ;;
+  esac
+done < <(env)
+export USER="${FRAPPE_USER}" LOGNAME="${FRAPPE_USER}"
+export PATH="\$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export XDG_CONFIG_HOME="\$HOME/.config" XDG_DATA_HOME="\$HOME/.local/share" XDG_STATE_HOME="\$HOME/.local/state" XDG_CACHE_HOME="\$HOME/.cache"
+export NPM_CONFIG_USERCONFIG="\$XDG_CONFIG_HOME/npm/npmrc" NPM_CONFIG_CACHE="\$XDG_CACHE_HOME/npm"
+export YARN_RC_FILENAME="\$XDG_CONFIG_HOME/yarn/yarnrc" YARN_CACHE_FOLDER="\$XDG_CACHE_HOME/yarn" YARN_GLOBAL_FOLDER="\$XDG_DATA_HOME/yarn" YARN_CONFIG_DIR="\$XDG_CONFIG_HOME/yarn"
+export PYTHONUSERBASE="\$XDG_DATA_HOME/python" PIP_CONFIG_FILE="\$XDG_CONFIG_HOME/pip/pip.conf" PIP_CACHE_DIR="\$XDG_CACHE_HOME/pip"
+export UV_NO_CONFIG=1 UV_NO_SYSTEM_CONFIG=1 UV_NO_ENV_FILE=1 UV_NO_MODIFY_PATH=1 UV_INSTALL_DIR="\$HOME/.local/bin"
+export UV_CACHE_DIR="\$XDG_CACHE_HOME/uv" UV_TOOL_DIR="\$XDG_DATA_HOME/uv/tools" UV_PYTHON_INSTALL_DIR="\$XDG_DATA_HOME/uv/python"
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null
+export NVM_DIR="\$HOME/.nvm"
+umask 077
+mkdir -p "\$HOME/.local/bin" "\$XDG_CONFIG_HOME" "\$XDG_DATA_HOME" "\$XDG_STATE_HOME" "\$XDG_CACHE_HOME" \
+  "\$XDG_CONFIG_HOME/npm" "\$XDG_CONFIG_HOME/yarn" "\$XDG_CONFIG_HOME/pip" "\$XDG_CONFIG_HOME/uv" \
+  "\$NPM_CONFIG_CACHE" "\$YARN_CACHE_FOLDER" "\$YARN_GLOBAL_FOLDER" "\$PIP_CACHE_DIR" "\$UV_CACHE_DIR" \
+  "\$UV_TOOL_DIR" "\$UV_PYTHON_INSTALL_DIR" "\$PYTHONUSERBASE"
+for private_dir in "\$HOME/.local/bin" "\$XDG_CONFIG_HOME" "\$XDG_DATA_HOME" "\$XDG_STATE_HOME" "\$XDG_CACHE_HOME" \
+  "\$XDG_CONFIG_HOME/npm" "\$XDG_CONFIG_HOME/yarn" "\$XDG_CONFIG_HOME/pip" "\$XDG_CONFIG_HOME/uv" \
+  "\$NPM_CONFIG_CACHE" "\$YARN_CACHE_FOLDER" "\$YARN_GLOBAL_FOLDER" "\$PIP_CACHE_DIR" "\$UV_CACHE_DIR" \
+  "\$UV_TOOL_DIR" "\$UV_PYTHON_INSTALL_DIR" "\$PYTHONUSERBASE"; do
+  [[ -d "\$private_dir" && ! -L "\$private_dir" && -O "\$private_dir" ]]
+  chmod 0700 "\$private_dir"
+done
+[[ -s "\$NVM_DIR/nvm.sh" ]]
+source "\$NVM_DIR/nvm.sh"
+nvm use --silent "${NODE_VERSION}" >/dev/null
 cd "${bench_dir}"
-bench start
+bench start "\$@"
 EOF_HELPER
 
   $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$FRAPPE_HOME/start-erpnext-dev.sh"
