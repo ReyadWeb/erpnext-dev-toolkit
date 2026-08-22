@@ -212,6 +212,22 @@ failure records `recovery-required`, preserves the site and backup evidence, and
 directs the operator to inspect the record and repair the recorded checkpoint;
 there is no broad automatic cleanup or unsafe resume.
 
+Every Native advanced toolchain, Bench, site, backup, application, migration,
+asset, inventory, and managed-start command runs from a controlled Frappe-owned
+directory with `HOME` fixed to the configured Frappe home. The command runtime
+resets inherited XDG, npm, Yarn, Python, uv, and Git configuration, uses private
+Frappe-owned cache/config paths, sources the verified `nvm.sh`, and selects the
+pinned Node version. Toolchain completion is verified in a new noninteractive
+Frappe shell before Bench creation starts.
+
+`bench init` must return zero and produce a safe Bench directory, Frappe app,
+Python environment, `sites/apps.txt`, common site configuration, Procfile, and
+working Bench commands. A failed or incomplete initialization remains at the
+`bench-created` checkpoint, records `partial-bench`, exits with mutation failure
+(31), and does not proceed to site, backup, app acquisition, or configuration
+promotion. The partial Bench is preserved; another attempt requires reverting
+the disposable VM to its clean snapshot or a separately authorized recovery.
+
 Immediately after site creation, the installer creates and safely checks a
 baseline backup. Failure blocks all curated-app acquisition. Advanced schema-2
 intent is staged privately, but active primary and compatibility configuration

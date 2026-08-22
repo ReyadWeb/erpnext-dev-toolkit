@@ -56,6 +56,166 @@ effective_deployment_engine() { printf '%s\n' "${TEST_ENGINE:-native}"; }
 validate_site_name_value() { [[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ && "$1" != *..* ]]; }
 require_sudo() { :; }
 
+# Live Phase 7.4 regression: real implementation, separate Frappe shells, an
+# NVM-only toolchain, hostile inherited configuration, and a partial bench.
+RUNTIME_WORK="$WORK/runtime-regression"
+RUNTIME_HOME="$RUNTIME_WORK/home/frappe"
+RUNTIME_NODE_BIN="$RUNTIME_HOME/.nvm/versions/node/v24.19.0/bin"
+RUNTIME_LOG="$RUNTIME_WORK/commands.log"
+mkdir -p "$RUNTIME_NODE_BIN" "$RUNTIME_HOME/.local/bin" "$RUNTIME_WORK/invoker" "$RUNTIME_WORK/state"
+chmod 0111 "$RUNTIME_WORK/invoker"
+printf '%s\n' \
+  'nvm() {' \
+  '  case "$1" in install) [[ "${NVM_STUB_FAIL_INSTALL:-0}" == 0 ]] || return 46; export PATH="$NVM_DIR/versions/node/v24.19.0/bin:$HOME/.local/bin:/usr/bin:/bin" ;; use) export PATH="$NVM_DIR/versions/node/v24.19.0/bin:$HOME/.local/bin:/usr/bin:/bin" ;; alias) : ;; *) return 1 ;; esac' \
+  '}' >"$RUNTIME_HOME/.nvm/nvm.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "v24.19.0\n"' >"$RUNTIME_NODE_BIN/node"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'printf "npm|HOME=%s|PWD=%s|config=%s|cache=%s\n" "$HOME" "$PWD" "$NPM_CONFIG_USERCONFIG" "$NPM_CONFIG_CACHE" >>"$RUNTIME_LOG"' \
+  '[[ "$HOME" != /home/test && "$NPM_CONFIG_USERCONFIG" == "$HOME/.config/npm/npmrc" && "$NPM_CONFIG_CACHE" == "$HOME/.cache/npm" ]]' \
+  '[[ "${1:-}" == --version ]] && printf "11.5.1\n" || :' >"$RUNTIME_NODE_BIN/npm"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'printf "yarn|HOME=%s|PWD=%s|XDG=%s|npm=%s|yarn=%s\n" "$HOME" "$PWD" "$XDG_CONFIG_HOME" "$NPM_CONFIG_USERCONFIG" "$YARN_RC_FILENAME" >>"$RUNTIME_LOG"' \
+  '[[ "$HOME" != /home/test && "$PWD" != /home/test* && "$XDG_CONFIG_HOME" == "$HOME/.config" && "$NPM_CONFIG_USERCONFIG" == "$HOME/.config/npm/npmrc" && "$YARN_RC_FILENAME" == "$HOME/.config/yarn/yarnrc" ]]' \
+  'printf "1.22.22\n"' >"$RUNTIME_NODE_BIN/yarn"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'printf "uv|HOME=%s|PWD=%s\n" "$HOME" "$PWD" >>"$RUNTIME_LOG"' \
+  '[[ "${1:-}" == --version ]] && printf "uv 0.11.28\n" || :' >"$RUNTIME_HOME/.local/bin/uv"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "Python 3.14.0\n"' >"$RUNTIME_HOME/.local/bin/python3"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'printf "bench|%s|HOME=%s|PWD=%s|XDG=%s\n" "$*" "$HOME" "$PWD" "$XDG_CONFIG_HOME" >>"$RUNTIME_LOG"' \
+  'case "${1:-}" in' \
+  '  --version) printf "5.31.0\n" ;;' \
+  '  version) printf "frappe 16.0.0\n" ;;' \
+  '  init)' \
+  '    target="$2"; mkdir -p "$target/apps/frappe"' \
+  '    [[ "${BENCH_STUB_MODE:-}" != fail ]] || exit 47' \
+  '    mkdir -p "$target/env/bin" "$target/sites"; printf "#!/usr/bin/env bash\nprintf \\\"Python 3.14.0\\\\n\\\"\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"' \
+  '    [[ "${BENCH_STUB_MODE:-}" != missing-apps ]] || rm -f "$target/sites/apps.txt" ;;' \
+  '  new-site) mkdir -p "sites/$2"; [[ "${BENCH_STUB_MODE:-}" != site-fail ]] || exit 48; printf "{}\n" >"sites/$2/site_config.json" ;;' \
+  '  get-app) app="${@: -2:1}"; mkdir -p "apps/$app" ;;' \
+  '  --site)' \
+  '    case "${3:-}" in list-apps) printf "frappe\ncrm\n" ;; show-config|install-app|migrate|clear-cache|clear-website-cache|backup) : ;; esac ;;' \
+  '  build|use|set-config) : ;;' \
+  'esac' >"$RUNTIME_HOME/.local/bin/bench"
+chmod +x "$RUNTIME_NODE_BIN/node" "$RUNTIME_NODE_BIN/npm" "$RUNTIME_NODE_BIN/yarn" \
+  "$RUNTIME_HOME/.local/bin/uv" "$RUNTIME_HOME/.local/bin/python3" "$RUNTIME_HOME/.local/bin/bench"
+
+FRAPPE_HOME="$RUNTIME_HOME" FRAPPE_USER=frappe BENCH_PARENT="$RUNTIME_HOME/frappe" BENCH_NAME=frappe-bench
+BENCH_DIR="$BENCH_PARENT/$BENCH_NAME" SITE_NAME=erp.test NODE_VERSION=24 PYTHON_VERSION=3.14
+NVM_VERSION=0.40.3 UV_VERSION=0.11.28 BENCH_VERSION=5.31.0 FRAPPE_BRANCH=version-16
+ADMIN_PASSWORD=fixture-admin DB_ADMIN_USER=fixture-db-admin DB_ADMIN_PASSWORD=fixture-db-password
+export RUNTIME_LOG
+FRAPPE_SHELL_COUNT=0
+frappe_login_bash() {
+  FRAPPE_SHELL_COUNT=$((FRAPPE_SHELL_COUNT + 1))
+  printf 'shell=%s\n' "$FRAPPE_SHELL_COUNT" >>"$RUNTIME_LOG"
+  bash --noprofile --norc
+}
+export HOME=/home/test XDG_CONFIG_HOME=/home/test/.config XDG_DATA_HOME=/root/.local/share XDG_STATE_HOME=/home/test/.state XDG_CACHE_HOME=/root/.cache
+export NPM_CONFIG_USERCONFIG=/home/test/.npmrc NPM_CONFIG_CACHE=/home/test/.npm YARN_RC_FILENAME=/home/test/.yarnrc YARN_CACHE_FOLDER=/root/.yarn
+export PYTHONHOME=/home/test/python PYTHONPATH=/root/python UV_CONFIG_FILE=/home/test/uv.toml GIT_CONFIG_GLOBAL=/home/test/.gitconfig GIT_CONFIG_SYSTEM=/root/gitconfig
+cd "$RUNTIME_WORK/invoker"
+# Real functions are sourced above; fixture overrides follow later.
+NVM_STUB_FAIL_INSTALL=1
+export NVM_STUB_FAIL_INSTALL
+set +e
+# shellcheck disable=SC2218
+native_advanced_toolchain_setup
+rc=$?
+set -e
+assert_eq 'toolchain setup exact failure propagates' "$rc" 46
+unset NVM_STUB_FAIL_INSTALL
+# shellcheck disable=SC2218
+native_advanced_toolchain_setup
+cd "$WORK"
+[[ "$(grep -c '^shell=' "$RUNTIME_LOG")" -ge 2 ]] || fail 'toolchain verification reused bootstrap shell'
+pass 'toolchain setup exits and separate verification shell succeeds'
+assert_has 'NVM activation exposes Yarn' "$(<"$RUNTIME_LOG")" 'yarn|HOME='
+assert_lacks 'hostile user path excluded from tool execution' "$(<"$RUNTIME_LOG")" '/home/test'
+assert_lacks 'root path excluded from tool execution' "$(<"$RUNTIME_LOG")" '/root'
+assert_has 'controlled Frappe working directory used' "$(<"$RUNTIME_LOG")" "PWD=$RUNTIME_HOME"
+
+BENCH_STUB_MODE=fail
+export BENCH_STUB_MODE
+set +e
+# shellcheck disable=SC2218
+native_advanced_bench_create
+rc=$?
+set -e
+assert_eq 'bench init exact failure propagates' "$rc" 47
+[[ -d "$BENCH_DIR/apps/frappe" ]] || fail 'bench failure fixture did not leave partial apps/frappe'
+assert_has 'partial Bench ledger recorded' "$NATIVE_ADVANCED_LEDGER" partial-bench
+rm -rf "$BENCH_PARENT"
+NATIVE_ADVANCED_LEDGER="" NATIVE_ADVANCED_BACKUP=none NATIVE_ADVANCED_SITE_CREATED=0
+NATIVE_ADVANCED_STATE_DIR="$RUNTIME_WORK/state"
+NATIVE_ADVANCED_OPERATION_ID=runtime-failure NATIVE_ADVANCED_OPERATION_FILE="$RUNTIME_WORK/state/runtime-failure.state"
+NATIVE_ADVANCED_REQUESTED=crm,helpdesk NATIVE_ADVANCED_RESOLVED=frappe,crm,telephony,helpdesk NATIVE_ADVANCED_PREFLIGHT=fixture
+set +e
+native_advanced_phase bench-created native_advanced_bench_create
+rc=$?
+set -e
+assert_eq 'failed partial Bench transaction exit' "$rc" 31
+runtime_record="$(<"$NATIVE_ADVANCED_OPERATION_FILE")"
+assert_has 'failed Bench record status' "$runtime_record" 'status=failed'
+assert_has 'failed Bench record checkpoint' "$runtime_record" 'checkpoint=bench-created'
+assert_has 'failed Bench record result' "$runtime_record" 'result=failed'
+assert_has 'failed Bench has no baseline' "$runtime_record" 'baseline_backup=none'
+assert_has 'failed Bench record ledger' "$runtime_record" 'artifact_ledger=partial-bench'
+assert_has 'failed Bench recovery names checkpoint' "$runtime_record" 'correct-bench-created'
+assert_lacks 'failed Bench never invokes site creation' "$(<"$RUNTIME_LOG")" 'new-site'
+assert_lacks 'failed Bench never invokes backup' "$(<"$RUNTIME_LOG")" ' backup'
+[[ ! -e "$CONFIG_FILE" ]] || fail 'failed Bench promoted configuration'
+pass 'failed Bench blocks site backup apps and promotion'
+
+rm -rf "$BENCH_PARENT"
+NATIVE_ADVANCED_LEDGER="" BENCH_STUB_MODE='missing-apps'
+export BENCH_STUB_MODE
+# shellcheck disable=SC2218
+if native_advanced_bench_create; then fail 'Bench without sites/apps.txt accepted'; fi
+assert_has 'missing apps.txt remains partial' "$NATIVE_ADVANCED_LEDGER" partial-bench
+rm -rf "$BENCH_PARENT"
+NATIVE_ADVANCED_LEDGER="" BENCH_STUB_MODE=success
+export BENCH_STUB_MODE
+# shellcheck disable=SC2218
+native_advanced_bench_create
+assert_has 'successful Bench accepted' "$NATIVE_ADVANCED_LEDGER" bench
+BENCH_STUB_MODE='site-fail'
+export BENCH_STUB_MODE
+set +e
+# shellcheck disable=SC2218
+native_advanced_site_create
+rc=$?
+set -e
+assert_eq 'bench new-site exact failure propagates' "$rc" 48
+assert_has 'partial site ledger recorded' "$NATIVE_ADVANCED_LEDGER" partial-site
+rm -rf "$BENCH_DIR/sites/$SITE_NAME"
+NATIVE_ADVANCED_LEDGER=bench BENCH_STUB_MODE=success
+export BENCH_STUB_MODE
+# shellcheck disable=SC2218
+native_advanced_site_create
+assert_has 'verified exact site accepted' "$NATIVE_ADVANCED_LEDGER" site
+# shellcheck disable=SC2218
+native_advanced_get_app crm
+# shellcheck disable=SC2218
+native_advanced_install_app crm
+# shellcheck disable=SC2218
+native_advanced_migrate
+# shellcheck disable=SC2218
+native_advanced_assets
+assert_lacks 'later Bench shells exclude hostile HOME' "$(<"$RUNTIME_LOG")" '/home/test'
+pass 'get-app install migrate and build retain isolated runtime'
+chmod 700 "$RUNTIME_WORK/invoker"
+
+# Restore the ordinary transaction fixture paths used below.
+FRAPPE_HOME="$WORK/home/frappe"
+BENCH_PARENT="$FRAPPE_HOME/frappe"
+BENCH_NAME=frappe-bench
+BENCH_DIR="$BENCH_PARENT/$BENCH_NAME"
+CONFIG_FILE="$WORK/etc/config.env"
+LEGACY_CONFIG_FILE="$WORK/home/frappe/legacy.env"
+NATIVE_ADVANCED_STATE_DIR="$WORK/state"
+unset BENCH_STUB_MODE
+
 MUTATION_LOG="$WORK/mutations"
 phase_log() { printf '%s\n' "$1" >>"$MUTATION_LOG"; }
 native_advanced_prerequisites() { phase_log prerequisites; }

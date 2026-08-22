@@ -18,6 +18,89 @@ NATIVE_ADVANCED_CONFIG_BASE=""
 NATIVE_ADVANCED_SITE_CREATED=0
 NATIVE_ADVANCED_STAGED_CONFIG=""
 
+# Run every Phase 7.4 Frappe command in one bounded environment. The caller
+# supplies only a trusted working directory and a script on stdin. "bootstrap"
+# is used only while nvm itself is being installed; all later calls require and
+# activate the configured Node version before the caller's script runs.
+native_advanced_frappe_bash() {
+  local workdir="${1:-}" mode="${2:-runtime}"
+  [[ "$workdir" == "$FRAPPE_HOME" || "$workdir" == "$FRAPPE_HOME/"* ]] || return 1
+  [[ "$workdir" != *$'\n'* && "$workdir" != *$'\r'* ]] || return 1
+  [[ "$mode" == runtime || "$mode" == bootstrap ]] || return 1
+
+  {
+    printf '%s\n' 'set -Eeuo pipefail'
+    printf 'export HOME=%q\n' "$FRAPPE_HOME"
+    cat <<'EOF_NATIVE_ADVANCED_ENV'
+unset CDPATH ENV BASH_ENV
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+unset NPM_CONFIG_USERCONFIG NPM_CONFIG_CACHE npm_config_userconfig npm_config_cache npm_config_prefix
+unset YARN_RC_FILENAME YARN_CACHE_FOLDER YARN_GLOBAL_FOLDER YARN_CONFIG_DIR
+unset PYTHONHOME PYTHONPATH PYTHONUSERBASE PIP_CONFIG_FILE PIP_CACHE_DIR
+unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR
+unset GIT_CONFIG_SYSTEM GIT_CONFIG_GLOBAL GIT_CONFIG_COUNT
+export PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+export XDG_CACHE_HOME="$HOME/.cache"
+export NPM_CONFIG_USERCONFIG="$XDG_CONFIG_HOME/npm/npmrc"
+export NPM_CONFIG_CACHE="$XDG_CACHE_HOME/npm"
+export YARN_RC_FILENAME="$XDG_CONFIG_HOME/yarn/yarnrc"
+export YARN_CACHE_FOLDER="$XDG_CACHE_HOME/yarn"
+export YARN_GLOBAL_FOLDER="$XDG_DATA_HOME/yarn"
+export YARN_CONFIG_DIR="$XDG_CONFIG_HOME/yarn"
+export PYTHONUSERBASE="$XDG_DATA_HOME/python"
+export PIP_CONFIG_FILE="$XDG_CONFIG_HOME/pip/pip.conf"
+export PIP_CACHE_DIR="$XDG_CACHE_HOME/pip"
+export UV_CONFIG_FILE="$XDG_CONFIG_HOME/uv/uv.toml"
+export UV_CACHE_DIR="$XDG_CACHE_HOME/uv"
+export UV_TOOL_DIR="$XDG_DATA_HOME/uv/tools"
+export UV_PYTHON_INSTALL_DIR="$XDG_DATA_HOME/uv/python"
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_SYSTEM=/dev/null
+export GIT_CONFIG_GLOBAL=/dev/null
+export NVM_DIR="$HOME/.nvm"
+mkdir -p "$XDG_CONFIG_HOME/npm" "$XDG_CONFIG_HOME/yarn" "$XDG_CONFIG_HOME/pip" "$XDG_CONFIG_HOME/uv" \
+  "$NPM_CONFIG_CACHE" "$YARN_CACHE_FOLDER" "$YARN_GLOBAL_FOLDER" "$PIP_CACHE_DIR" "$UV_CACHE_DIR" \
+  "$UV_TOOL_DIR" "$UV_PYTHON_INSTALL_DIR" "$PYTHONUSERBASE"
+EOF_NATIVE_ADVANCED_ENV
+    printf 'cd %q\n' "$workdir"
+    if [[ "$mode" == runtime ]]; then
+      cat <<EOF_NATIVE_ADVANCED_NVM
+[[ -s "\$NVM_DIR/nvm.sh" ]] || { echo 'ERROR: verified nvm.sh is unavailable.' >&2; exit 1; }
+# shellcheck disable=SC1090
+source "\$NVM_DIR/nvm.sh"
+nvm use --silent "${NODE_VERSION}" >/dev/null
+command -v node >/dev/null
+command -v npm >/dev/null
+command -v yarn >/dev/null
+EOF_NATIVE_ADVANCED_NVM
+    fi
+    cat
+  } | frappe_login_bash
+}
+
+native_advanced_safe_directory() {
+  local path="$1" owner expected_owner
+  [[ -d "$path" && ! -L "$path" ]] || return 1
+  [[ "$path" == "$FRAPPE_HOME" || "$path" == "$FRAPPE_HOME/"* ]] || return 1
+  [[ "${ERPNEXT_DEV_NATIVE_ADVANCED_TEST:-0}" == 1 ]] && return 0
+  owner="$(${SUDO:-} stat -c '%u' "$path" 2>/dev/null)" || return 1
+  expected_owner="$(id -u "$FRAPPE_USER" 2>/dev/null)" || return 1
+  [[ "$owner" == "$expected_owner" ]]
+}
+
+native_advanced_safe_regular_file() {
+  local path="$1" owner expected_owner
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  [[ "$path" == "$FRAPPE_HOME/"* ]] || return 1
+  [[ "${ERPNEXT_DEV_NATIVE_ADVANCED_TEST:-0}" == 1 ]] && return 0
+  owner="$(${SUDO:-} stat -c '%u' "$path" 2>/dev/null)" || return 1
+  expected_owner="$(id -u "$FRAPPE_USER" 2>/dev/null)" || return 1
+  [[ "$owner" == "$expected_owner" ]]
+}
+
 native_advanced_safe_field() {
   [[ "${1:-}" =~ ^[\ A-Za-z0-9._,:@/+-]*$ && "${1:-}" != *$'\n'* && "${1:-}" != *$'\r'* ]]
 }
@@ -157,7 +240,6 @@ native_advanced_phase() {
   native_advanced_checkpoint "$phase_status" "$checkpoint" pending || return 31
   if [[ "${NATIVE_ADVANCED_FAIL_AT:-}" == "$checkpoint" ]]; then rc=1; else "$function" "$@" || rc=$?; fi
   if [[ "${rc:-0}" -ne 0 ]]; then
-    [[ ! -d "$BENCH_DIR/sites/$SITE_NAME" ]] || NATIVE_ADVANCED_SITE_CREATED=1
     NATIVE_ADVANCED_RESULT=failed
     if [[ "$NATIVE_ADVANCED_SITE_CREATED" -eq 1 ]]; then
       NATIVE_ADVANCED_STATUS=recovery-required
@@ -184,15 +266,12 @@ native_advanced_user_setup() {
 }
 
 native_advanced_toolchain_setup() {
-  frappe_login_bash <<EOF_NATIVE_ADVANCED_TOOLCHAIN
-set -Eeuo pipefail
-export HOME="${FRAPPE_HOME}" PATH="${FRAPPE_HOME}/.local/bin:\$PATH"
-export XDG_CONFIG_HOME="\$HOME/.config" XDG_DATA_HOME="\$HOME/.local/share" XDG_STATE_HOME="\$HOME/.local/state" XDG_CACHE_HOME="\$HOME/.cache"
-mkdir -p "\$XDG_CONFIG_HOME" "\$XDG_DATA_HOME" "\$XDG_STATE_HOME" "\$XDG_CACHE_HOME"
-export NVM_DIR="\$HOME/.nvm" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+  local rc=0
+  if native_advanced_frappe_bash "$FRAPPE_HOME" bootstrap <<EOF_NATIVE_ADVANCED_TOOLCHAIN
 if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
   git clone --depth 1 --branch "v${NVM_VERSION}" https://github.com/nvm-sh/nvm.git "\$NVM_DIR"
 fi
+[[ -s "\$NVM_DIR/nvm.sh" ]]
 source "\$NVM_DIR/nvm.sh"
 nvm install "${NODE_VERSION}"
 nvm use "${NODE_VERSION}"
@@ -205,44 +284,115 @@ export PATH="\$HOME/.local/bin:\$PATH"
 uv python install "${PYTHON_VERSION}" --default
 if [[ -n "${BENCH_VERSION}" ]]; then uv tool install "frappe-bench==${BENCH_VERSION}" --force; else uv tool install frappe-bench --force; fi
 EOF_NATIVE_ADVANCED_TOOLCHAIN
+  then
+    :
+  else
+    rc=$?
+    return "$rc"
+  fi
+  # Prove availability in a new noninteractive Frappe process. This cannot
+  # inherit the bootstrap shell's PATH or sourced nvm functions.
+  native_advanced_frappe_bash "$FRAPPE_HOME" <<EOF_NATIVE_ADVANCED_TOOLCHAIN_VERIFY
+node_version="\$(node --version)"
+[[ "\${node_version#v}" == "${NODE_VERSION}".* || "\${node_version#v}" == "${NODE_VERSION}" ]]
+npm --version
+yarn --version
+uv --version
+python_version="\$(python3 --version)"
+[[ "\${python_version#Python }" == "${PYTHON_VERSION}".* || "\${python_version#Python }" == "${PYTHON_VERSION}" ]]
+bench_version="\$(bench --version)"
+[[ -n "\$bench_version" ]]
+EOF_NATIVE_ADVANCED_TOOLCHAIN_VERIFY
 }
 
 native_advanced_bench_create() {
-  frappe_login_bash <<EOF_NATIVE_ADVANCED_BENCH
-set -Eeuo pipefail
-export HOME="${FRAPPE_HOME}" PATH="${FRAPPE_HOME}/.local/bin:\$PATH" NVM_DIR="${FRAPPE_HOME}/.nvm"
+  local rc=0
+  if native_advanced_frappe_bash "$FRAPPE_HOME" <<EOF_NATIVE_ADVANCED_BENCH
 mkdir -p "${BENCH_PARENT}"
 cd "${BENCH_PARENT}"
 bench init "${BENCH_NAME}" --frappe-branch "${FRAPPE_BRANCH}"
 EOF_NATIVE_ADVANCED_BENCH
-  [[ -d "$BENCH_DIR/apps/frappe" ]] || return 1
+  then
+    :
+  else
+    rc=$?
+    [[ ! -e "$BENCH_DIR" && ! -L "$BENCH_DIR" ]] || native_advanced_ledger_add partial-bench
+    return "$rc"
+  fi
+  native_advanced_safe_directory "$BENCH_DIR" || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_safe_directory "$BENCH_DIR/apps/frappe" || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_safe_directory "$BENCH_DIR/env" || { native_advanced_ledger_add partial-bench; return 1; }
+  [[ -f "$BENCH_DIR/env/bin/python" && -x "$BENCH_DIR/env/bin/python" ]] || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_safe_directory "$BENCH_DIR/sites" || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_safe_regular_file "$BENCH_DIR/sites/apps.txt" || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_safe_regular_file "$BENCH_DIR/sites/common_site_config.json" || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_safe_regular_file "$BENCH_DIR/Procfile" || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_frappe_bash "$BENCH_DIR" <<'EOF_NATIVE_ADVANCED_BENCH_VERIFY' || { native_advanced_ledger_add partial-bench; return 1; }
+bench --version
+bench version
+./env/bin/python --version
+EOF_NATIVE_ADVANCED_BENCH_VERIFY
   native_advanced_ledger_add bench
 }
 
 native_advanced_site_create() {
-  local old_xtrace=0
+  local old_xtrace=0 rc=0
   [[ $- == *x* ]] && old_xtrace=1 && set +x
-  frappe_login_bash <<EOF_NATIVE_ADVANCED_SITE
-set -Eeuo pipefail
-export HOME="${FRAPPE_HOME}" PATH="${FRAPPE_HOME}/.local/bin:\$PATH"
-cd "${BENCH_DIR}"
+  if native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_SITE_CREATE
 bench new-site "${SITE_NAME}" --admin-password "${ADMIN_PASSWORD}" --db-root-username "${DB_ADMIN_USER}" --db-root-password "${DB_ADMIN_PASSWORD}"
+EOF_NATIVE_ADVANCED_SITE_CREATE
+  then
+    :
+  else
+    rc=$?
+    [[ ! -e "$BENCH_DIR/sites/$SITE_NAME" && ! -L "$BENCH_DIR/sites/$SITE_NAME" ]] || native_advanced_ledger_add partial-site
+    ((old_xtrace == 0)) || set -x
+    return "$rc"
+  fi
+  native_advanced_safe_directory "$BENCH_DIR/sites/$SITE_NAME" || { native_advanced_ledger_add partial-site; ((old_xtrace == 0)) || set -x; return 1; }
+  native_advanced_safe_regular_file "$BENCH_DIR/sites/$SITE_NAME/site_config.json" || { native_advanced_ledger_add partial-site; ((old_xtrace == 0)) || set -x; return 1; }
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_SITE_VERIFY || { native_advanced_ledger_add partial-site; ((old_xtrace == 0)) || set -x; return 1; }
+bench --site "${SITE_NAME}" show-config >/dev/null
+EOF_NATIVE_ADVANCED_SITE_VERIFY
+  NATIVE_ADVANCED_SITE_CREATED=1
+  native_advanced_ledger_add site
+  if native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_SITE_CONFIG
 bench use "${SITE_NAME}"
 bench set-config -g default_site "${SITE_NAME}"
 bench set-config -g serve_default_site true
-EOF_NATIVE_ADVANCED_SITE
+EOF_NATIVE_ADVANCED_SITE_CONFIG
+  then
+    :
+  else
+    rc=$?
+    ((old_xtrace == 0)) || set -x
+    return "$rc"
+  fi
   ((old_xtrace == 0)) || set -x
-  [[ -d "$BENCH_DIR/sites/$SITE_NAME" ]] || return 1
-  NATIVE_ADVANCED_SITE_CREATED=1
-  native_advanced_ledger_add site
 }
 
 native_advanced_baseline_backup() {
-  create_site_backup true || return 1
-  verify_latest_backup_set || return 1
-  local evidence
-  evidence="$(backup_latest_set_paths 2>/dev/null | sed -n '1p')"
-  [[ -n "$evidence" ]] || return 1
+  local latest prefix db_file public_file private_file config_file completeness
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_BACKUP || return 1
+bench --site "${SITE_NAME}" backup --with-files
+EOF_NATIVE_ADVANCED_BACKUP
+  latest="$(backup_latest_set_paths 2>/dev/null)" || return 1
+  prefix="$(sed -n '1p' <<<"$latest")"
+  db_file="$(sed -n '2p' <<<"$latest")"
+  public_file="$(sed -n '3p' <<<"$latest")"
+  private_file="$(sed -n '4p' <<<"$latest")"
+  config_file="$(sed -n '5p' <<<"$latest")"
+  completeness="$(sed -n '6p' <<<"$latest")"
+  [[ -n "$prefix" && "$completeness" == complete ]] || return 1
+  {
+    printf 'db_file=%q\npublic_file=%q\nprivate_file=%q\nconfig_file=%q\n' "$db_file" "$public_file" "$private_file" "$config_file"
+    cat <<'EOF_NATIVE_ADVANCED_BACKUP_VERIFY'
+gzip -t "$db_file"
+tar -tf "$public_file" >/dev/null
+tar -tf "$private_file" >/dev/null
+python3 -m json.tool "$config_file" >/dev/null
+EOF_NATIVE_ADVANCED_BACKUP_VERIFY
+  } | native_advanced_frappe_bash "$BENCH_DIR" || return 1
   NATIVE_ADVANCED_BACKUP="verified-baseline"
   native_advanced_ledger_add baseline-backup
 }
@@ -253,39 +403,47 @@ native_advanced_get_app() {
   [[ "$LIB_APP_ID" == "$app" && "$app" != frappe ]] || return 1
   repo="$LIB_APP_REPO"; branch="$LIB_APP_BRANCH"
   if [[ -n "$branch" ]]; then
-    frappe_login_bash <<EOF_NATIVE_ADVANCED_GET
-set -Eeuo pipefail
-export HOME="${FRAPPE_HOME}" PATH="${FRAPPE_HOME}/.local/bin:\$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
-cd "${BENCH_DIR}"
+    native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET
 bench get-app --branch "${branch}" "${app}" "${repo}"
 EOF_NATIVE_ADVANCED_GET
   else
-    frappe_login_bash <<EOF_NATIVE_ADVANCED_GET_DEFAULT
-set -Eeuo pipefail
-export HOME="${FRAPPE_HOME}" PATH="${FRAPPE_HOME}/.local/bin:\$PATH" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
-cd "${BENCH_DIR}"
+    native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET_DEFAULT
 bench get-app "${app}" "${repo}"
 EOF_NATIVE_ADVANCED_GET_DEFAULT
   fi
-  [[ -d "$BENCH_DIR/apps/$app" ]] || return 1
+  native_advanced_safe_directory "$BENCH_DIR/apps/$app" || return 1
   native_advanced_ledger_add "code:$app"
 }
 
 native_advanced_install_app() {
-  local app="$1"
+  local app="$1" installed
   [[ "$app" != frappe ]] || return 0
-  frappe_login_bash <<EOF_NATIVE_ADVANCED_INSTALL
-set -Eeuo pipefail
-export HOME="${FRAPPE_HOME}" PATH="${FRAPPE_HOME}/.local/bin:\$PATH"
-cd "${BENCH_DIR}"
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_INSTALL
 bench --site "${SITE_NAME}" install-app "${app}"
 EOF_NATIVE_ADVANCED_INSTALL
+  installed="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_INSTALL_VERIFY
+bench --site "${SITE_NAME}" list-apps
+EOF_NATIVE_ADVANCED_INSTALL_VERIFY
+  )" || return 1
+  awk '{print $1}' <<<"$installed" | grep -Fxq "$app" || return 1
   native_advanced_ledger_add "site-app:$app"
 }
 
-native_advanced_migrate() { run_as_frappe "cd '$BENCH_DIR' && bench --site '$SITE_NAME' migrate"; }
-native_advanced_assets() { run_as_frappe "cd '$BENCH_DIR' && bench build && bench --site '$SITE_NAME' clear-cache && bench --site '$SITE_NAME' clear-website-cache"; }
-native_advanced_services() { create_start_helper && create_erpnext_service && enable_autostart_service && start_erpnext_service; }
+native_advanced_migrate() {
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_MIGRATE
+bench --site "${SITE_NAME}" migrate
+EOF_NATIVE_ADVANCED_MIGRATE
+}
+native_advanced_assets() {
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_ASSETS
+bench build
+bench --site "${SITE_NAME}" clear-cache
+bench --site "${SITE_NAME}" clear-website-cache
+EOF_NATIVE_ADVANCED_ASSETS
+}
+native_advanced_services() {
+  create_start_helper && create_erpnext_service && enable_autostart_service && start_erpnext_service
+}
 native_advanced_readiness() {
   wait_for_erpnext_ready && settle_stack_after_install
 }
@@ -293,17 +451,27 @@ native_advanced_readiness() {
 native_advanced_verify() {
   local app repo branch actual_repo actual_branch installed
   [[ -d "$BENCH_DIR/sites/$SITE_NAME" && -d "$BENCH_DIR/apps/frappe" ]] || return 1
-  installed="$(run_as_frappe "cd '$BENCH_DIR' && bench --site '$SITE_NAME' list-apps" 2>/dev/null | awk '{print $1}')" || return 1
+  installed="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_INVENTORY
+bench --site "${SITE_NAME}" list-apps
+EOF_NATIVE_ADVANCED_INVENTORY
+  )" || return 1
+  installed="$(awk '{print $1}' <<<"$installed")"
   for app in "${PROFILE_PLAN_DESIRED_APPS[@]}"; do
     grep -Fxq "$app" <<<"$installed" || return 1
     [[ -d "$BENCH_DIR/apps/$app" ]] || return 1
     [[ "$app" == frappe ]] && continue
     load_validated_app_catalog_record "$app" || return 1
     repo="${LIB_APP_REPO%/}"; branch="$LIB_APP_BRANCH"
-    actual_repo="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -C "$BENCH_DIR/apps/$app" remote get-url origin 2>/dev/null)" || return 1
+    actual_repo="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GIT_REMOTE
+git -C "apps/${app}" remote get-url origin
+EOF_NATIVE_ADVANCED_GIT_REMOTE
+    )" || return 1
     [[ "${actual_repo%.git}" == "${repo%.git}" ]] || return 1
     if [[ -n "$branch" ]]; then
-      actual_branch="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -C "$BENCH_DIR/apps/$app" symbolic-ref --short HEAD 2>/dev/null)" || return 1
+      actual_branch="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GIT_BRANCH
+git -C "apps/${app}" symbolic-ref --short HEAD
+EOF_NATIVE_ADVANCED_GIT_BRANCH
+      )" || return 1
       [[ "$actual_branch" == "$branch" ]] || return 1
     fi
   done

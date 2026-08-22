@@ -765,10 +765,30 @@ create_start_helper() {
 
   $SUDO tee "$FRAPPE_HOME/start-erpnext-dev.sh" >/dev/null <<EOF_HELPER
 #!/usr/bin/env bash
-set -e
-export PATH="\$HOME/.local/bin:\$PATH"
+set -Eeuo pipefail
+export HOME="${FRAPPE_HOME}"
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+unset NPM_CONFIG_USERCONFIG NPM_CONFIG_CACHE npm_config_userconfig npm_config_cache npm_config_prefix
+unset YARN_RC_FILENAME YARN_CACHE_FOLDER YARN_GLOBAL_FOLDER YARN_CONFIG_DIR
+unset PYTHONHOME PYTHONPATH PYTHONUSERBASE PIP_CONFIG_FILE PIP_CACHE_DIR
+unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR
+unset GIT_CONFIG_SYSTEM GIT_CONFIG_GLOBAL GIT_CONFIG_COUNT
+export PATH="\$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export XDG_CONFIG_HOME="\$HOME/.config" XDG_DATA_HOME="\$HOME/.local/share" XDG_STATE_HOME="\$HOME/.local/state" XDG_CACHE_HOME="\$HOME/.cache"
+export NPM_CONFIG_USERCONFIG="\$XDG_CONFIG_HOME/npm/npmrc" NPM_CONFIG_CACHE="\$XDG_CACHE_HOME/npm"
+export YARN_RC_FILENAME="\$XDG_CONFIG_HOME/yarn/yarnrc" YARN_CACHE_FOLDER="\$XDG_CACHE_HOME/yarn" YARN_GLOBAL_FOLDER="\$XDG_DATA_HOME/yarn" YARN_CONFIG_DIR="\$XDG_CONFIG_HOME/yarn"
+export PYTHONUSERBASE="\$XDG_DATA_HOME/python" PIP_CONFIG_FILE="\$XDG_CONFIG_HOME/pip/pip.conf" PIP_CACHE_DIR="\$XDG_CACHE_HOME/pip"
+export UV_CONFIG_FILE="\$XDG_CONFIG_HOME/uv/uv.toml" UV_CACHE_DIR="\$XDG_CACHE_HOME/uv" UV_TOOL_DIR="\$XDG_DATA_HOME/uv/tools" UV_PYTHON_INSTALL_DIR="\$XDG_DATA_HOME/uv/python"
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null
+export NVM_DIR="\$HOME/.nvm"
+mkdir -p "\$XDG_CONFIG_HOME/npm" "\$XDG_CONFIG_HOME/yarn" "\$XDG_CONFIG_HOME/pip" "\$XDG_CONFIG_HOME/uv" \
+  "\$NPM_CONFIG_CACHE" "\$YARN_CACHE_FOLDER" "\$YARN_GLOBAL_FOLDER" "\$PIP_CACHE_DIR" "\$UV_CACHE_DIR" \
+  "\$UV_TOOL_DIR" "\$UV_PYTHON_INSTALL_DIR" "\$PYTHONUSERBASE"
+[[ -s "\$NVM_DIR/nvm.sh" ]]
+source "\$NVM_DIR/nvm.sh"
+nvm use --silent "${NODE_VERSION}" >/dev/null
 cd "${bench_dir}"
-bench start
+bench start "\$@"
 EOF_HELPER
 
   $SUDO chown "$FRAPPE_USER:$FRAPPE_USER" "$FRAPPE_HOME/start-erpnext-dev.sh"

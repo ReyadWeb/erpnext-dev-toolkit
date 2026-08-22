@@ -73,6 +73,11 @@
 
 ### Fixed
 
+- Isolated every Phase 7.4 Native advanced Frappe command from the invoking
+  user's HOME, working directory, XDG, npm, Yarn, Python, uv, and Git settings;
+  new shells now activate pinned NVM Node before using Yarn or Bench. Bench and
+  site checkpoints now require exact command success and complete verified
+  postconditions, while partial artifacts remain recorded for recovery.
 - Corrected Phase 7.4 advanced preview dispatch so an explicit Native site uses
   the executable installation plan and exit class without mutation, while
   site-less schema-1 previews remain compatible and Native advanced status is
