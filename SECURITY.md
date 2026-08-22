@@ -302,6 +302,25 @@ tar -xzf "$latest_bundle" -C /tmp/erpnext-support-review
 
 Do not share a bundle that contains customer data or credentials.
 
+## One-command installer trust boundary
+
+The public stable and beta commands fetch only the small root-level `install.sh`
+from the protected `main` branch. Run that command as an ordinary user, never as
+root or prefixed with `sudo`. The bootstrap resolves an exact published tag and
+pins signing-key fingerprint
+`BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`. It verifies the signed external
+asset inventory and the recorded digest of `bootstrap-verify.sh`; that verified
+release bootstrap then validates the archive, safe paths, internal checksums,
+and immutable build identity without root. Only afterward may the existing
+atomic updater and CLI repair run through sudo.
+
+Stable accepts only GitHub's latest published `vX.Y.Z`. Beta accepts only the
+highest published, non-draft `vX.Y.Z-beta.N`, requires an explicit warning
+acknowledgement, and never falls back to stable or a mutable branch. Missing,
+unsigned, malformed, redirected, oversized, or unverifiable inputs stop before
+any privileged Toolkit action. Automatic GitHub source archives and mutable
+development/beta branches are outside this trust path.
+
 ## Known limitations
 
 - Bash and operating-system tools remain part of the trusted computing base.

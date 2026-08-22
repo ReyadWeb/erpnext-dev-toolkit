@@ -14,6 +14,7 @@ if ! command -v shfmt >/dev/null 2>&1; then
 fi
 
 mapfile -t targets < <(compgen -G 'scripts/test-*.sh' || true)
+targets+=(install.sh)
 if [[ "${#targets[@]}" -eq 0 ]]; then
   echo "FAIL: no scripts/test-*.sh files found" >&2
   exit 1

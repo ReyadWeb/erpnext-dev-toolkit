@@ -42,10 +42,12 @@ fi
 
 grep -Fq "Install and open the setup wizard with one command" README.md \
   || test_fail "README is missing the one-command setup heading"
-grep -Fq "sudo env TOOLKIT_UPDATE_VERSION=\"\$VERSION\" ./erpnext-dev.sh update-toolkit" README.md \
-  || test_fail "README one-command setup does not install the verified toolkit"
-grep -Fq "sudo erpnext-dev first-run" README.md \
-  || test_fail "README one-command setup does not open the setup wizard"
+grep -Fq 'bash <(curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/main/install.sh)' README.md \
+  || test_fail "README is missing the stable one-command installer"
+grep -Fq 'main/install.sh) --beta' README.md \
+  || test_fail "README is missing the signed beta one-command installer"
+grep -Fq 'Do not' README.md && grep -Fq 'prefix the public command with `sudo`' README.md \
+  || test_fail "README must forbid running the public bootstrap through sudo"
 grep -Fq "https://github.com/nvm-sh/nvm.git" lib/install.sh \
   || test_fail "native installer must fetch nvm from the pinned GitHub repository"
 grep -Fq "git clone --depth 1 --branch \"v\${NVM_VERSION}\"" lib/install.sh \

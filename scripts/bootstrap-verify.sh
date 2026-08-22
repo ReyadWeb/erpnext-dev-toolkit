@@ -26,11 +26,33 @@ work="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
 gpg_home="$(mktemp -d /tmp/erpnext-dev-bootstrap-gpg.XXXXXX)"
 cleanup() { rm -rf "$work" "$gpg_home"; }
 trap cleanup EXIT
-chmod 700 "$gpg_home"
+trap 'exit 130' INT
+trap 'exit 143' TERM
+chmod 700 "$work" "$gpg_home"
+umask 077
+
+approved_release_url() {
+  [[ "$1" =~ ^https://(github\.com|release-assets\.githubusercontent\.com|objects\.githubusercontent\.com)/[^[:space:][:cntrl:]]+$ ]]
+}
+
+download_release_asset() {
+  local name="$1" maximum="$2" url output effective
+  url="${base}/${name}"
+  output="${work}/${name}"
+  [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || fail "unsafe release asset name"
+  approved_release_url "$url" || fail "unapproved release asset URL"
+  [[ ! -e "$output" && ! -L "$output" ]] || fail "unsafe release asset destination"
+  effective="$(curl --fail --silent --show-error --location --max-redirs 3 \
+    --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 300 \
+    --max-filesize "$maximum" --output "$output" --write-out '%{url_effective}' "$url")" \
+    || fail "failed to download release asset: ${name}"
+  approved_release_url "$effective" || fail "release asset redirected to an unapproved host"
+  [[ -f "$output" && ! -L "$output" ]] || fail "release asset is not a regular file: ${name}"
+  chmod 0600 "$output"
+}
 
 for name in "$inventory" "$signature" "$key"; do
-  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-    --output "${work}/${name}" "${base}/${name}"
+  download_release_asset "$name" 2097152
 done
 
 actual_fpr="$(gpg --batch --with-colons --show-keys "${work}/${key}" 2>/dev/null | awk -F: '$1 == "fpr" {print $10; exit}')"
@@ -40,8 +62,7 @@ GNUPGHOME="$gpg_home" gpg --batch --verify "${work}/${signature}" "${work}/${inv
 
 grep -Eq "^[0-9a-f]{64}  ${archive//./\\.}$" "${work}/${inventory}" \
   || fail "archive is absent from signed release-asset inventory"
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-  --output "${work}/${archive}" "${base}/${archive}"
+download_release_asset "$archive" 1073741824
 (
   cd "$work"
   grep -E "^[0-9a-f]{64}  ${archive//./\\.}$" "$inventory" | sha256sum -c -
