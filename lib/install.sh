@@ -788,11 +788,18 @@ create_start_helper() {
 set -Eeuo pipefail
 export HOME="${FRAPPE_HOME}"
 unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+unset NODE_PATH NODE_OPTIONS COREPACK_HOME
 unset NPM_CONFIG_USERCONFIG NPM_CONFIG_CACHE npm_config_userconfig npm_config_cache npm_config_prefix
 unset YARN_RC_FILENAME YARN_CACHE_FOLDER YARN_GLOBAL_FOLDER YARN_CONFIG_DIR
 unset PYTHONHOME PYTHONPATH PYTHONUSERBASE PIP_CONFIG_FILE PIP_CACHE_DIR
 unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR
 unset GIT_CONFIG_SYSTEM GIT_CONFIG_GLOBAL GIT_CONFIG_COUNT
+while IFS='=' read -r inherited_name _; do
+  case "\$inherited_name" in
+    NPM_CONFIG_*|npm_config_*|YARN_*|PYTHON*|PIP_*|UV_*|GIT_CONFIG_*) unset "\$inherited_name" 2>/dev/null || true ;;
+  esac
+done < <(env)
+export USER="${FRAPPE_USER}" LOGNAME="${FRAPPE_USER}"
 export PATH="\$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export XDG_CONFIG_HOME="\$HOME/.config" XDG_DATA_HOME="\$HOME/.local/share" XDG_STATE_HOME="\$HOME/.local/state" XDG_CACHE_HOME="\$HOME/.cache"
 export NPM_CONFIG_USERCONFIG="\$XDG_CONFIG_HOME/npm/npmrc" NPM_CONFIG_CACHE="\$XDG_CACHE_HOME/npm"

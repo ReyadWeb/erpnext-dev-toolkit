@@ -217,8 +217,11 @@ asset, inventory, and managed-start command runs from a controlled Frappe-owned
 directory with `HOME` fixed to the configured Frappe home. The command runtime
 resets inherited XDG, npm, Yarn, Python, uv, and Git configuration, uses private
 Frappe-owned cache/config paths, sources the verified `nvm.sh`, and selects the
-pinned Node version. Toolchain completion is verified in a new noninteractive
-Frappe shell before Bench creation starts.
+pinned Node version. `USER` and `LOGNAME` are reset to the configured Frappe
+identity; inherited Node options and every npm/Yarn/Python/uv/Git configuration
+variable are removed before the controlled values are established. Toolchain
+completion is verified in a new noninteractive Frappe shell before Bench
+creation starts.
 
 `bench init` must return zero and produce a safe Bench directory, Frappe app,
 Python environment, `sites/apps.txt`, common site configuration, Procfile, and
@@ -232,8 +235,45 @@ Immediately after site creation, the installer creates and safely checks a
 baseline backup. Failure blocks all curated-app acquisition. Advanced schema-2
 intent is staged privately, but active primary and compatibility configuration
 remain unchanged until readiness and exact inventory/source/ref verification
-pass. Promotion is atomic and refuses concurrent configuration changes. A second
-configuration/inventory reconciliation is required before `completed`.
+pass. Promotion uses protected temp-file replacement for each configuration
+output, records the attempt before changing either output, and refuses concurrent
+configuration changes. A second configuration, exact-inventory, source/ref, and
+readiness reconciliation is required before `completed`.
+
+#### Native advanced checkpoint matrix
+
+All Frappe-side rows below use `native_advanced_frappe_bash`: configured
+`HOME`, `USER`, and `LOGNAME`; a Frappe-owned working directory; a fixed system
+plus `$HOME/.local/bin` `PATH`; private XDG/npm/Yarn/Python/uv paths; disabled
+system/global Git configuration; verified `$HOME/.nvm/nvm.sh`; and the pinned
+Node selection. Each isolated script uses `set -Eeuo pipefail`, while the
+transaction functions also propagate command status explicitly so a partial
+postcondition cannot replace a failed command result.
+
+| Boundary | Exact execution and required success proof | Ledger on mutation | Failure record and retry |
+| --- | --- | --- | --- |
+| Plan/preflight | Pure catalog resolution; Native engine; validated site; supported Frappe major and catalog refs; exact absence fingerprints for config, Bench, and protected records | None | No attempt record; planner input/unsupported/conflict exit. No later command. Retry only after resolving the reported preflight condition. |
+| Time/APT/resources | Host read-only OS, network, synchronized-time/APT, and resource probes | None | Exit 31, `failed/prerequisites/failed`, backup `none`. Exact retry is allowed only by the protected artifact-free prerequisite rule below. |
+| Toolkit/packages/sysctl | Host commands, only after every read-only readiness gate returns zero | `toolkit-reuse`, `system-packages`, `redis-sysctl` before each mutation | Exit 31 at `prerequisites`; nonempty ledger prohibits automatic retry and blocks user/Bench/site work. |
+| Frappe user/database identity | Host `useradd`/ownership and MariaDB administrative setup with explicit status checks | `frappe-user`, then `mariadb-admin`, before mutation | Exit 31 at `frappe-user`; retry prohibited. Toolchain and all later rows are skipped. |
+| Isolated toolchain | Frappe home bootstrap; NVM/Node/Yarn, uv/Python/Bench install; a separate new isolated shell runs all six version commands and checks pinned Node/Python versions | `frappe-toolchain` before bootstrap | Exit 31 at `frappe-environment`; retry prohibited. Bench is not invoked. |
+| Bench creation | Frappe home/Bench parent; exact `bench init` status, then safe Bench/Frappe/env/sites/config/Procfile and working Bench/Python commands | `bench` only after proof; `partial-bench` on failed/incomplete output | Exit 31 at `bench-created`; retry prohibited. Site, backup, apps, and config are skipped. |
+| Site creation | Verified Bench directory; exact `bench new-site` status; safe exact site/config and successful `show-config`, then default-site commands | `site` after exact proof; `partial-site` for failed/incomplete output | Exit 31 before a verified site, otherwise 33 `recovery-required`, at `site-created`. All later rows are skipped. |
+| Baseline backup | Bench directory; exact `bench backup --with-files`; newest complete set; gzip, both tar archives, and JSON parse | `baseline-backup` only after full proof | Exit 33 at `baseline-backup`, backup remains `none` unless verified. No staging or app acquisition. Retry prohibited. |
+| Private config staging | Protected operation directory; unchanged config snapshot; new mode-0600 staged schema-2 file | `staged-config` after proof; `partial-staged-config` on incomplete output | Exit 33 at `configuration-staging`; active config unchanged. Retry prohibited. |
+| Dependency-ordered acquisition | One isolated `bench get-app --branch REF APP REPO` per resolved non-Frappe catalog app | `code:APP` after proof; `partial-code:APP` if failed output exists | Exit 33 at `get-app:APP`; no later acquisition/install/migration. Retry prohibited. |
+| Dependency-ordered installation | One isolated exact-site `bench install-app APP`; separate exact-site `list-apps` confirms membership | `site-app:APP` after proof; `partial-site-app:APP` on command failure | Exit 33 at `install-app:APP`; no later install/migration. Retry prohibited. |
+| Migration/assets | Exact-site `bench migrate`; then isolated `bench build` plus exact-site cache clears | `migration-attempt`, `assets-attempt` before mutation | Exit 33 at `migration` or `assets`; services and promotion are skipped. Retry prohibited. |
+| Service/readiness | Isolated start helper, managed unit/autostart/start, then HTTP and stable asset readiness | `services-attempt` before mutation | Exit 33 at `services` or `readiness`; inventory and promotion are skipped. Retry prohibited. |
+| Exact inventory | Exact installed set equality (no missing, duplicate, or extra app), safe app directories, and catalog source/ref equality for Frappe and every resolved app | No new artifact | Exit 33 at `inventory`; configuration is not promoted. Retry prohibited. |
+| Promotion/reconciliation | Unchanged config snapshot; protected per-file replacement; then schema/profile/request equality, exact inventory/source/ref, and readiness again | `configuration-promotion-attempt` before replacement; `active-config` only after both outputs | Exit 33 at `configuration-promotion` or `post-promotion-reconciliation`; evidence is retained for manual recovery. |
+| Reboot/readiness acceptance | Outside the installer transaction: reboot the disposable VM, then repeat service, HTTP/assets, exact inventory, source/ref, backup, and record checks | None | A failure is a VM acceptance blocker. Revert the snapshot; never reinterpret the completed record as reboot proof. |
+
+Every phase call returns immediately on failure. Hermetic fault injection asserts
+that the next boundary is absent from its command log and that active
+configuration is absent before promotion. Only the first, exact, protected,
+empty-ledger `failed/prerequisites` case is retryable; every later or uncertain
+state is fail-closed.
 
 This status differs from `backup-status`, which observes metadata;
 `backup-verify`, which performs deeper archive validation; restore preflight,

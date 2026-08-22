@@ -77,6 +77,10 @@
   exact validated advanced request instead of `first-run`, keeps readiness ahead
   of Toolkit/package mutation, and permits only protected, matching,
   artifact-free prerequisite failures to create a separate retry attempt.
+- Closed the full Native advanced checkpoint audit: every mutation boundary now
+  propagates status explicitly and records partial/attempted artifacts, runtime
+  coordinates and catalog refs fail closed, exact inventory includes Frappe and
+  rejects extras, and readiness is re-proven after configuration promotion.
 - Isolated every Phase 7.4 Native advanced Frappe command from the invoking
   user's HOME, working directory, XDG, npm, Yarn, Python, uv, and Git settings;
   new shells now activate pinned NVM Node before using Yarn or Bench. Bench and

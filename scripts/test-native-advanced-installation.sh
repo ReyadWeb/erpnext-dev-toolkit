@@ -71,8 +71,8 @@ printf '%s\n' \
   '}' >"$RUNTIME_HOME/.nvm/nvm.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "v24.19.0\n"' >"$RUNTIME_NODE_BIN/node"
 printf '%s\n' '#!/usr/bin/env bash' \
-  'printf "npm|HOME=%s|PWD=%s|config=%s|cache=%s\n" "$HOME" "$PWD" "$NPM_CONFIG_USERCONFIG" "$NPM_CONFIG_CACHE" >>"$RUNTIME_LOG"' \
-  '[[ "$HOME" != /home/test && "$NPM_CONFIG_USERCONFIG" == "$HOME/.config/npm/npmrc" && "$NPM_CONFIG_CACHE" == "$HOME/.cache/npm" ]]' \
+  'printf "npm|HOME=%s|USER=%s|PWD=%s|config=%s|cache=%s\n" "$HOME" "$USER" "$PWD" "$NPM_CONFIG_USERCONFIG" "$NPM_CONFIG_CACHE" >>"$RUNTIME_LOG"' \
+  '[[ "$HOME" != /home/test && "$USER" == frappe && "$NPM_CONFIG_USERCONFIG" == "$HOME/.config/npm/npmrc" && "$NPM_CONFIG_CACHE" == "$HOME/.cache/npm" ]]' \
   '[[ "${1:-}" == --version ]] && printf "11.5.1\n" || :' >"$RUNTIME_NODE_BIN/npm"
 printf '%s\n' '#!/usr/bin/env bash' \
   'printf "yarn|HOME=%s|PWD=%s|XDG=%s|npm=%s|yarn=%s\n" "$HOME" "$PWD" "$XDG_CONFIG_HOME" "$NPM_CONFIG_USERCONFIG" "$YARN_RC_FILENAME" >>"$RUNTIME_LOG"' \
@@ -93,13 +93,24 @@ printf '%s\n' '#!/usr/bin/env bash' \
   '    mkdir -p "$target/env/bin" "$target/sites"; printf "#!/usr/bin/env bash\nprintf \\\"Python 3.14.0\\\\n\\\"\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"' \
   '    [[ "${BENCH_STUB_MODE:-}" != missing-apps ]] || rm -f "$target/sites/apps.txt" ;;' \
   '  new-site) mkdir -p "sites/$2"; [[ "${BENCH_STUB_MODE:-}" != site-fail ]] || exit 48; printf "{}\n" >"sites/$2/site_config.json" ;;' \
-  '  get-app) app="${@: -2:1}"; mkdir -p "apps/$app" ;;' \
+  '  get-app) app="${@: -2:1}"; mkdir -p "apps/$app"; [[ "${BENCH_STUB_MODE:-}" != get-fail ]] || exit 49 ;;' \
   '  --site)' \
-  '    case "${3:-}" in list-apps) printf "frappe\ncrm\n" ;; show-config|install-app|migrate|clear-cache|clear-website-cache|backup) : ;; esac ;;' \
-  '  build|use|set-config) : ;;' \
+  '    case "${3:-}" in' \
+  '      list-apps) case "${BENCH_STUB_MODE:-}" in inventory-extra) printf "frappe\ncrm\nrogue\n" ;; inventory-missing) printf "frappe\n" ;; *) printf "frappe\ncrm\n" ;; esac ;;' \
+  '      install-app) [[ "${BENCH_STUB_MODE:-}" != install-fail ]] || exit 50 ;;' \
+  '      migrate) [[ "${BENCH_STUB_MODE:-}" != migrate-fail ]] || exit 51 ;;' \
+  '      backup) [[ "${BENCH_STUB_MODE:-}" != backup-fail ]] || exit 53 ;;' \
+  '      show-config|clear-cache|clear-website-cache) : ;; esac ;;' \
+  '  build) [[ "${BENCH_STUB_MODE:-}" != build-fail ]] || exit 52 ;;' \
+  '  use|set-config) : ;;' \
   'esac' >"$RUNTIME_HOME/.local/bin/bench"
+printf '%s\n' '#!/usr/bin/env bash' \
+  'printf "git|HOME=%s|USER=%s|PWD=%s|global=%s|system=%s|%s\n" "$HOME" "$USER" "$PWD" "$GIT_CONFIG_GLOBAL" "$GIT_CONFIG_SYSTEM" "$*" >>"$RUNTIME_LOG"' \
+  '[[ "$HOME" != /home/test && "$USER" == frappe && "$GIT_CONFIG_GLOBAL" == /dev/null && "$GIT_CONFIG_SYSTEM" == /dev/null ]]' \
+  'app="${2#apps/}"' \
+  'case "${3:-}" in remote) [[ "$app" == frappe ]] && printf "https://github.com/frappe/frappe\n" || printf "https://github.com/frappe/crm\n" ;; symbolic-ref) [[ "${GIT_STUB_BAD_FRAPPE_REF:-0}" == 1 && "$app" == frappe ]] && printf "wrong\n" || { [[ "$app" == frappe ]] && printf "version-16\n" || printf "main\n"; } ;; esac' >"$RUNTIME_HOME/.local/bin/git"
 chmod +x "$RUNTIME_NODE_BIN/node" "$RUNTIME_NODE_BIN/npm" "$RUNTIME_NODE_BIN/yarn" \
-  "$RUNTIME_HOME/.local/bin/uv" "$RUNTIME_HOME/.local/bin/python3" "$RUNTIME_HOME/.local/bin/bench"
+  "$RUNTIME_HOME/.local/bin/uv" "$RUNTIME_HOME/.local/bin/python3" "$RUNTIME_HOME/.local/bin/bench" "$RUNTIME_HOME/.local/bin/git"
 
 FRAPPE_HOME="$RUNTIME_HOME" FRAPPE_USER=frappe BENCH_PARENT="$RUNTIME_HOME/frappe" BENCH_NAME=frappe-bench
 BENCH_DIR="$BENCH_PARENT/$BENCH_NAME" SITE_NAME=erp.test NODE_VERSION=24 PYTHON_VERSION=3.14
@@ -115,6 +126,7 @@ frappe_login_bash() {
 export HOME=/home/test XDG_CONFIG_HOME=/home/test/.config XDG_DATA_HOME=/root/.local/share XDG_STATE_HOME=/home/test/.state XDG_CACHE_HOME=/root/.cache
 export NPM_CONFIG_USERCONFIG=/home/test/.npmrc NPM_CONFIG_CACHE=/home/test/.npm YARN_RC_FILENAME=/home/test/.yarnrc YARN_CACHE_FOLDER=/root/.yarn
 export PYTHONHOME=/home/test/python PYTHONPATH=/root/python UV_CONFIG_FILE=/home/test/uv.toml GIT_CONFIG_GLOBAL=/home/test/.gitconfig GIT_CONFIG_SYSTEM=/root/gitconfig
+export USER=test LOGNAME=test npm_config_registry=file:///home/test/registry YARN_NPM_AUTH_TOKEN=host-secret PYTHONSTARTUP=/home/test/pythonrc GIT_CONFIG_COUNT=1
 cd "$RUNTIME_WORK/invoker"
 # Real functions are sourced above; fixture overrides follow later.
 NVM_STUB_FAIL_INSTALL=1
@@ -205,6 +217,56 @@ native_advanced_migrate
 native_advanced_assets
 assert_lacks 'later Bench shells exclude hostile HOME' "$(<"$RUNTIME_LOG")" '/home/test'
 pass 'get-app install migrate and build retain isolated runtime'
+
+rm -rf "$BENCH_DIR/apps/crm"
+NATIVE_ADVANCED_LEDGER=bench,site BENCH_STUB_MODE=get-fail
+export BENCH_STUB_MODE
+set +e
+# shellcheck disable=SC2218
+native_advanced_get_app crm
+rc=$?
+set -e
+assert_eq 'get-app exact failure propagates despite partial directory' "$rc" 49
+assert_has 'failed get-app records partial code' "$NATIVE_ADVANCED_LEDGER" 'partial-code:crm'
+BENCH_STUB_MODE=install-fail
+export BENCH_STUB_MODE
+set +e
+# shellcheck disable=SC2218
+native_advanced_install_app crm
+rc=$?
+set -e
+assert_eq 'install-app exact failure propagates' "$rc" 50
+assert_has 'failed install-app records uncertain site mutation' "$NATIVE_ADVANCED_LEDGER" 'partial-site-app:crm'
+for boundary in migrate-fail build-fail; do
+  BENCH_STUB_MODE="$boundary"
+  export BENCH_STUB_MODE
+  set +e
+  if [[ "$boundary" == migrate-fail ]]; then native_advanced_migrate; else native_advanced_assets; fi
+  rc=$?
+  set -e
+  [[ "$boundary" == migrate-fail ]] && assert_eq 'migration exact failure propagates' "$rc" 51 || assert_eq 'asset build exact failure propagates' "$rc" 52
+done
+
+BENCH_STUB_MODE=success
+export BENCH_STUB_MODE
+mkdir -p "$BENCH_DIR/apps/frappe" "$BENCH_DIR/apps/crm" "$BENCH_DIR/sites/$SITE_NAME"
+profile_plan_parse_requested_apps crm
+profile_plan_resolve_apps advanced
+# shellcheck disable=SC2218
+native_advanced_verify
+BENCH_STUB_MODE=inventory-extra
+export BENCH_STUB_MODE
+if native_advanced_verify; then fail 'extra installed app accepted by exact inventory'; fi
+pass 'exact inventory rejects extra installed app'
+BENCH_STUB_MODE=inventory-missing
+export BENCH_STUB_MODE
+if native_advanced_verify; then fail 'missing installed app accepted by exact inventory'; fi
+pass 'exact inventory rejects missing installed app'
+BENCH_STUB_MODE=success GIT_STUB_BAD_FRAPPE_REF=1
+export BENCH_STUB_MODE GIT_STUB_BAD_FRAPPE_REF
+if native_advanced_verify; then fail 'incorrect Frappe ref accepted'; fi
+pass 'inventory verifies Frappe source and ref'
+unset GIT_STUB_BAD_FRAPPE_REF
 chmod 700 "$RUNTIME_WORK/invoker"
 
 # Real prerequisite failure handling: Chrony cannot prove a large correction,
@@ -217,8 +279,14 @@ install_self_for_reuse() {
   printf 'install-self\n' >>"$PREREQ_MUTATIONS"
   return "${PREREQ_INSTALL_SELF_FAIL:-0}"
 }
-install_system_packages() { printf 'packages\n' >>"$PREREQ_MUTATIONS"; }
-configure_sysctl_for_redis() { printf 'sysctl\n' >>"$PREREQ_MUTATIONS"; }
+install_system_packages() {
+  printf 'packages\n' >>"$PREREQ_MUTATIONS"
+  return "${PREREQ_PACKAGES_FAIL:-0}"
+}
+configure_sysctl_for_redis() {
+  printf 'sysctl\n' >>"$PREREQ_MUTATIONS"
+  return "${PREREQ_SYSCTL_FAIL:-0}"
+}
 systemctl() { [[ "$*" == 'is-active --quiet chrony' ]]; }
 timedatectl() {
   [[ "$1" == show ]] && printf '%s\n' "${PREREQ_SYNCED:-no}"
@@ -285,6 +353,16 @@ assert_lacks 'package installation blocked after Toolkit failure' "$(<"$PREREQ_M
 pass 'prerequisite mutation begins only after readiness and is recorded'
 unset PREREQ_INSTALL_SELF_FAIL
 
+for failed_boundary in packages sysctl; do
+  rm -f "$PREREQ_MUTATIONS"
+  PREREQ_PACKAGES_FAIL=0 PREREQ_SYSCTL_FAIL=0
+  [[ "$failed_boundary" == packages ]] && PREREQ_PACKAGES_FAIL=54 || PREREQ_SYSCTL_FAIL=55
+  run_real_prerequisite_failure "$failed_boundary-failure"
+  assert_eq "$failed_boundary failure remains mutation-failed" "$PREREQ_RC" 31
+  [[ "$failed_boundary" != packages ]] || assert_lacks 'package failure blocks sysctl' "$(<"$PREREQ_MUTATIONS")" 'sysctl'
+done
+unset PREREQ_PACKAGES_FAIL PREREQ_SYSCTL_FAIL
+
 unset -f check_os check_internet check_resources install_self_for_reuse install_system_packages configure_sysctl_for_redis
 unset -f systemctl timedatectl chronyc apt-get sleep
 
@@ -335,7 +413,7 @@ native_advanced_readiness() { phase_log readiness; }
 native_advanced_verify() { phase_log inventory; }
 native_advanced_post_reconcile() {
   phase_log post-promotion-reconciliation
-  grep -Fq 'INSTALLATION_PROFILE=advanced' "$CONFIG_FILE"
+  grep -Fq 'INSTALLATION_PROFILE=advanced' "$CONFIG_FILE" && native_advanced_verify && native_advanced_readiness
 }
 
 reset_case() {
@@ -383,7 +461,7 @@ ENTRY_ENV=(
   "LOG_DIR=$ENTRY_WORK/log"
   "CONFIG_FILE=$ENTRY_WORK/config.env"
   "LEGACY_CONFIG_FILE=$ENTRY_WORK/legacy.env"
-  "BENCH_PARENT=$ENTRY_WORK/bench-parent"
+  "BENCH_PARENT=/home/frappe/frappe-entrypoint-hermetic"
   "NATIVE_ADVANCED_STATE_DIR=$ENTRY_WORK/operations"
   "LOCK_DIR=$ENTRY_WORK/lock"
   "NO_COLOR=1"
@@ -477,6 +555,17 @@ assert_has 'catalog repository exact' "$plan1" 'telephony repository=https://git
 assert_has 'catalog branch exact' "$plan1" 'helpdesk repository=https://github.com/frappe/helpdesk ref=main'
 assert_has 'backup boundary in plan' "$plan1" 'after site creation and before any application acquisition'
 assert_has 'recovery model in plan' "$plan1" 'post-site failures are recovery-required'
+
+reset_case
+FRAPPE_BRANCH=main
+set +e
+native_advanced_install >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq 'unsupported Frappe branch fails before mutation' "$rc" 22
+[[ ! -e "$MUTATION_LOG" && ! -e "$NATIVE_ADVANCED_STATE_DIR" ]] || fail 'unsupported branch mutated state'
+FRAPPE_BRANCH=version-16
+pass 'unsupported runtime plan is mutation-free'
 
 for site in '' localhost 'bad site' '../erp.test' 'http://erp.test' 'erp.test:8000' '-bad.test' 'bad..test' 'bad/test'; do
   if validate_site_name_value "$site" >/dev/null 2>&1; then fail "hostile site accepted: $site"; fi
@@ -648,6 +737,7 @@ assert_eq 'operation file mode' "$(stat -c %a "$state")" 600
 order="$(<"$MUTATION_LOG")"
 assert_has 'dependency acquired first' "$order" $'get-app:telephony\nget-app:helpdesk'
 assert_has 'dependency installed first' "$order" $'install-app:telephony\ninstall-app:helpdesk'
+assert_eq 'readiness is proven before and after promotion' "$(grep -c '^readiness$' "$MUTATION_LOG")" 2
 
 # Fault injection: every meaningful checkpoint, config unchanged until promotion,
 # and post-site failures preserve recovery evidence.
@@ -661,6 +751,7 @@ for checkpoint in "${checkpoints[@]}"; do
   set -e
   [[ "$rc" == 31 || "$rc" == 33 ]] || fail "$checkpoint returned $rc"
   record="$(<"$NATIVE_ADVANCED_OPERATION_FILE")"
+  mutations="$(test ! -f "$MUTATION_LOG" || cat "$MUTATION_LOG")"
   assert_has "fault checkpoint $checkpoint" "$record" "checkpoint=$checkpoint"
   if [[ "$checkpoint" == prerequisites || "$checkpoint" == frappe-user || "$checkpoint" == frappe-environment || "$checkpoint" == bench-created || "$checkpoint" == site-created ]]; then
     [[ "$record" == *'status=failed'* || "$record" == *'status=recovery-required'* ]] || fail "$checkpoint state"
@@ -675,6 +766,17 @@ for checkpoint in "${checkpoints[@]}"; do
     ! grep -q '^get-app:' "$MUTATION_LOG" || fail 'app acquisition followed backup failure'
     pass 'backup failure blocks app acquisition'
   fi
+  case "$checkpoint" in
+    prerequisites | frappe-user | frappe-environment | bench-created) assert_lacks "failure at $checkpoint blocks site" "$mutations" 'site-created' ;;
+    site-created) assert_lacks 'site failure blocks baseline backup' "$mutations" 'baseline-backup' ;;
+    baseline-backup | configuration-staging | get-app:crm) assert_lacks "failure at $checkpoint blocks app installation" "$mutations" 'install-app:' ;;
+    install-app:crm) assert_lacks 'app installation failure blocks migration' "$mutations" 'migration' ;;
+    migration) assert_lacks 'migration failure blocks assets' "$mutations" 'assets' ;;
+    assets) assert_lacks 'asset failure blocks services' "$mutations" 'services' ;;
+    services) assert_lacks 'service failure blocks readiness' "$mutations" 'readiness' ;;
+    readiness) assert_lacks 'readiness failure blocks inventory' "$mutations" 'inventory' ;;
+    inventory | configuration-promotion) assert_lacks "failure at $checkpoint blocks post-promotion reconciliation" "$mutations" 'post-promotion-reconciliation' ;;
+  esac
 done
 
 # Concurrent configuration creation before promotion fails closed.
