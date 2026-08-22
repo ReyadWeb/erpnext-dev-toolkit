@@ -98,7 +98,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
   '  init)' \
   '    target="$2"; mkdir -p "$target/apps/frappe"' \
   '    [[ "${BENCH_STUB_MODE:-}" != fail ]] || exit 47' \
-  '    mkdir -p "$target/env/bin" "$target/sites"; printf "#!/usr/bin/env bash\nif [[ \\\"\$1 \$2\\\" == \\\"-m pip\\\" ]]; then printf \\\"pip 25.3 from fixture\\\\n\\\"; else printf \\\"Python 3.14.6\\\\n\\\"; fi\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"' \
+  '    mkdir -p "$target/env/bin" "$target/sites"; printf "#!/usr/bin/env bash\nif [[ \\\"\$1 \$2\\\" == \\\"-m pip\\\" ]]; then printf \\\"pip 26.0.1 from fixture\\\\n\\\"; else printf \\\"Python 3.14.6\\\\n\\\"; fi\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"' \
   '    [[ "${BENCH_STUB_MODE:-}" != missing-apps ]] || rm -f "$target/sites/apps.txt" ;;' \
   '  new-site) mkdir -p "sites/$2"; [[ "${BENCH_STUB_MODE:-}" != site-fail ]] || exit 48; printf "{}\n" >"sites/$2/site_config.json" ;;' \
   '  get-app) app="${@: -2:1}"; mkdir -p "apps/$app"; [[ "${BENCH_STUB_MODE:-}" != get-fail ]] || exit 49 ;;' \

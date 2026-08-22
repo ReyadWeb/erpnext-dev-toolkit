@@ -616,7 +616,10 @@ bench --version
 bench version
 [[ "\$(./env/bin/python --version)" == "Python ${PYTHON_PATCH_VERSION}" ]]
 pip_version="\$(./env/bin/python -m pip --version)"
-[[ "\$pip_version" == 'pip 25.3 '* || "\$pip_version" == 'pip 25.3.'* ]]
+[[ "\$pip_version" =~ ^pip\\ ([0-9]+)\\.([0-9]+)(\\.[0-9]+)?\\  ]]
+pip_major="\${BASH_REMATCH[1]}"
+pip_minor="\${BASH_REMATCH[2]}"
+((pip_major > 25 || (pip_major == 25 && pip_minor >= 3)))
 EOF_NATIVE_ADVANCED_BENCH_VERIFY
   load_validated_app_catalog_record frappe || { native_advanced_ledger_add partial-bench; return 1; }
   [[ "$(native_advanced_frappe_bash "$BENCH_DIR" <<'EOF_NATIVE_ADVANCED_FRAPPE_HEAD'
