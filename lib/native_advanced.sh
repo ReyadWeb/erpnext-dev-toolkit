@@ -17,6 +17,7 @@ NATIVE_ADVANCED_BACKUP="none"
 NATIVE_ADVANCED_CONFIG_BASE=""
 NATIVE_ADVANCED_SITE_CREATED=0
 NATIVE_ADVANCED_STAGED_CONFIG=""
+NATIVE_ADVANCED_RECORDS_BASE=""
 
 # Run every Phase 7.4 Frappe command in one bounded environment. The caller
 # supplies only a trusted working directory and a script on stdin. "bootstrap"
@@ -105,6 +106,105 @@ native_advanced_safe_field() {
   [[ "${1:-}" =~ ^[\ A-Za-z0-9._,:@/+-]*$ && "${1:-}" != *$'\n'* && "${1:-}" != *$'\r'* ]]
 }
 
+native_advanced_record_field() {
+  local file="$1" key="$2"
+  ${SUDO:-} awk -F= -v key="$key" '$1 == key { count++; value=$0; sub(/^[^=]*=/, "", value) } END { if (count == 1) print value; else exit 1 }' "$file" 2>/dev/null
+}
+
+native_advanced_record_is_safe_prerequisite_failure() {
+  local file="$1" mode owner expected_owner key value operation_id fingerprint verification recovery updated_at
+  [[ "$file" == "$NATIVE_ADVANCED_STATE_DIR/"native-advanced-*.state ]] || return 1
+  [[ -f "$file" && ! -L "$file" ]] || return 1
+  mode="$(${SUDO:-} stat -c '%a' "$file" 2>/dev/null)" || return 1
+  owner="$(${SUDO:-} stat -c '%u' "$file" 2>/dev/null)" || return 1
+  expected_owner=0
+  [[ "${ERPNEXT_DEV_NATIVE_ADVANCED_TEST:-0}" != 1 ]] || expected_owner="$(id -u)"
+  [[ "$mode" == 600 && "$owner" == "$expected_owner" ]] || return 1
+
+  ${SUDO:-} awk -F= '
+    BEGIN {
+      allowed["schema"]; allowed["operation_id"]; allowed["operation_type"]; allowed["site"]
+      allowed["requested_apps"]; allowed["resolved_apps"]; allowed["status"]; allowed["checkpoint"]
+      allowed["result"]; allowed["preflight_absence_fingerprint"]; allowed["artifact_ledger"]
+      allowed["baseline_backup"]; allowed["verification"]; allowed["recovery"]; allowed["updated_at"]
+    }
+    NF < 2 || !($1 in allowed) || seen[$1]++ { exit 1 }
+    END { if (NR != 15) exit 1; for (key in allowed) if (seen[key] != 1) exit 1 }
+  ' "$file" || return 1
+
+  while IFS='=' read -r key value; do
+    [[ -n "$key" ]] || return 1
+    native_advanced_safe_field "$value" || return 1
+  done < <(${SUDO:-} cat "$file")
+
+  [[ "$(native_advanced_record_field "$file" schema)" == 1 ]] || return 1
+  [[ "$(native_advanced_record_field "$file" operation_type)" == native-advanced-installation ]] || return 1
+  operation_id="$(native_advanced_record_field "$file" operation_id)" || return 1
+  [[ "$(basename "$file")" == "${operation_id}.state" ]] || return 1
+  [[ "$(native_advanced_record_field "$file" status)" == failed ]] || return 1
+  [[ "$(native_advanced_record_field "$file" checkpoint)" == prerequisites ]] || return 1
+  [[ "$(native_advanced_record_field "$file" result)" == failed ]] || return 1
+  [[ -z "$(native_advanced_record_field "$file" artifact_ledger)" ]] || return 1
+  [[ "$(native_advanced_record_field "$file" baseline_backup)" == none ]] || return 1
+  [[ "$(native_advanced_record_field "$file" site)" == "$SITE_NAME" ]] || return 1
+  [[ "$(native_advanced_record_field "$file" requested_apps)" == "$NATIVE_ADVANCED_REQUESTED" ]] || return 1
+  [[ "$(native_advanced_record_field "$file" resolved_apps)" == "$NATIVE_ADVANCED_RESOLVED" ]] || return 1
+  fingerprint="$(native_advanced_record_field "$file" preflight_absence_fingerprint)" || return 1
+  verification="$(native_advanced_record_field "$file" verification)" || return 1
+  recovery="$(native_advanced_record_field "$file" recovery)" || return 1
+  updated_at="$(native_advanced_record_field "$file" updated_at)" || return 1
+  [[ "$fingerprint" =~ ^[a-f0-9]{64}$ ]] || return 1
+  [[ "$verification" == exact-site-app-source-branch-runtime-inventory ]] || return 1
+  [[ "$recovery" == inspect-record,correct-prerequisites,restart-fresh-only-if-target-absent ]] || return 1
+  [[ "$updated_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || return 1
+}
+
+native_advanced_state_directory_safe_readonly() {
+  local mode owner expected_owner
+  [[ -d "$NATIVE_ADVANCED_STATE_DIR" && ! -L "$NATIVE_ADVANCED_STATE_DIR" ]] || return 1
+  mode="$(${SUDO:-} stat -c '%a' "$NATIVE_ADVANCED_STATE_DIR" 2>/dev/null)" || return 1
+  owner="$(${SUDO:-} stat -c '%u' "$NATIVE_ADVANCED_STATE_DIR" 2>/dev/null)" || return 1
+  expected_owner=0
+  [[ "${ERPNEXT_DEV_NATIVE_ADVANCED_TEST:-0}" != 1 ]] || expected_owner="$(id -u)"
+  [[ "$mode" == 700 && "$owner" == "$expected_owner" ]]
+}
+
+native_advanced_retry_records_validate() {
+  local path found=0
+  [[ -e "$NATIVE_ADVANCED_STATE_DIR" || -L "$NATIVE_ADVANCED_STATE_DIR" ]] || return 0
+  native_advanced_state_directory_safe_readonly || return 1
+  shopt -s nullglob
+  for path in "$NATIVE_ADVANCED_STATE_DIR"/native-advanced-*; do
+    found=1
+    [[ "$(basename "$path")" =~ ^native-advanced-[A-Za-z0-9._+-]+\.state$ ]] || { shopt -u nullglob; return 1; }
+    native_advanced_record_is_safe_prerequisite_failure "$path" || { shopt -u nullglob; return 1; }
+  done
+  shopt -u nullglob
+  [[ "$found" -eq 1 ]] || return 0
+  [[ ! -e "$CONFIG_FILE" && ! -L "$CONFIG_FILE" && ! -e "$LEGACY_CONFIG_FILE" && ! -L "$LEGACY_CONFIG_FILE" ]] || return 1
+  [[ ! -e "$BENCH_PARENT" && ! -L "$BENCH_PARENT" && ! -e "$BENCH_DIR" && ! -L "$BENCH_DIR" ]] || return 1
+}
+
+native_advanced_records_snapshot() {
+  local path found=0
+  [[ -d "$NATIVE_ADVANCED_STATE_DIR" && ! -L "$NATIVE_ADVANCED_STATE_DIR" ]] || { printf 'absent\n'; return 0; }
+  shopt -s nullglob
+  for path in "$NATIVE_ADVANCED_STATE_DIR"/native-advanced-*.state; do
+    found=1
+    printf '%s ' "$(basename "$path")"
+    ${SUDO:-} sha256sum "$path" | awk '{print $1}'
+  done
+  shopt -u nullglob
+  [[ "$found" -eq 1 ]] || printf 'empty\n'
+}
+
+native_advanced_print_prerequisite_retry() {
+  validate_site_name_value "$SITE_NAME" || return 1
+  [[ "$NATIVE_ADVANCED_REQUESTED" =~ ^[a-z][a-z0-9_]*(,[a-z][a-z0-9_]*)*$ ]] || return 1
+  echo "Correct system time, network, and APT repository readiness, then rerun this exact Native advanced request:" >&2
+  printf '  sudo erpnext-dev install --profile advanced --apps %s --site %s\n' "$NATIVE_ADVANCED_REQUESTED" "$SITE_NAME" >&2
+}
+
 native_advanced_state_prepare() {
   if [[ -L "$NATIVE_ADVANCED_STATE_DIR" || (-e "$NATIVE_ADVANCED_STATE_DIR" && ! -d "$NATIVE_ADVANCED_STATE_DIR") ]]; then
     err "Unsafe advanced-install operation-state directory."
@@ -185,13 +285,10 @@ native_advanced_preflight() {
   [[ "$(effective_deployment_engine)" == native ]] || return 23
   validate_site_name_value "$SITE_NAME" || return 20
   [[ "$SITE_NAME" == "$QUICK_INSTALL_SITE" ]] || return 20
+  native_advanced_retry_records_validate || return 34
   [[ ! -e "$BENCH_PARENT" && ! -L "$BENCH_PARENT" ]] || return 21
   [[ ! -e "$CONFIG_FILE" && ! -L "$CONFIG_FILE" && ! -e "$LEGACY_CONFIG_FILE" && ! -L "$LEGACY_CONFIG_FILE" ]] || return 21
-  if [[ -d "$NATIVE_ADVANCED_STATE_DIR" ]]; then
-    local existing
-    existing="$(${SUDO:-} find "$NATIVE_ADVANCED_STATE_DIR" -maxdepth 1 -type f -name 'native-advanced-*.state' -print -quit 2>/dev/null || true)"
-    [[ -z "$existing" ]] || return 34
-  fi
+  NATIVE_ADVANCED_RECORDS_BASE="$(native_advanced_records_snapshot)" || return 34
   NATIVE_ADVANCED_PREFLIGHT="$(native_advanced_absence_fingerprint)" || return 21
   NATIVE_ADVANCED_CONFIG_BASE="$(native_advanced_config_snapshot)" || return 21
 }
@@ -242,7 +339,7 @@ native_advanced_phase() {
   if [[ "${rc:-0}" -ne 0 ]]; then
     NATIVE_ADVANCED_RESULT=failed
     if [[ "$NATIVE_ADVANCED_SITE_CREATED" -eq 1 ]]; then
-      NATIVE_ADVANCED_STATUS=recovery-required
+      NATIVE_ADVANCED_STATUS="recovery-required"
       NATIVE_ADVANCED_RECOVERY="inspect-record,verify-backup,repair-from-${checkpoint}"
       native_advanced_record_write || true
       return 33
@@ -256,8 +353,20 @@ native_advanced_phase() {
 }
 
 native_advanced_prerequisites() {
-  install_self_for_reuse && check_os && check_internet && verify_clock_and_repository_readiness \
-    && check_resources && install_system_packages && configure_sysctl_for_redis
+  (check_os) || { native_advanced_print_prerequisite_retry; return 1; }
+  if ! (check_internet) >/dev/null 2>&1; then
+    err "Network readiness could not be verified."
+    native_advanced_print_prerequisite_retry
+    return 1
+  fi
+  INSTALL_READINESS_CONTEXT=native-advanced verify_clock_and_repository_readiness || return 1
+  (check_resources) || { native_advanced_print_prerequisite_retry; return 1; }
+  native_advanced_ledger_add toolkit-reuse
+  install_self_for_reuse || return 1
+  native_advanced_ledger_add system-packages
+  install_system_packages || return 1
+  native_advanced_ledger_add redis-sysctl
+  configure_sysctl_for_redis
 }
 
 native_advanced_user_setup() {
@@ -530,13 +639,24 @@ native_advanced_install() {
     err "Native advanced installation is unsupported for Docker; Phase 7.5 is deferred."
     planner_exit_code unsupported; return $?
   fi
-  native_advanced_preflight || { rc=$?; planner_exit_code "$([[ $rc == 34 ]] && echo conflict || [[ $rc == 23 ]] && echo unsupported || echo ambiguous-target)"; return $?; }
+  if native_advanced_preflight; then
+    :
+  else
+    rc=$?
+    case "$rc" in
+      34) return 34 ;;
+      23) return 23 ;;
+      *) return 21 ;;
+    esac
+  fi
   original_fingerprint="$NATIVE_ADVANCED_PREFLIGHT"
   native_advanced_plan
   if [[ "${QUICK_INSTALL_PREVIEW:-0}" -eq 1 ]]; then planner_exit_code preview; return $?; fi
   native_advanced_confirm || { echo "Installation cancelled before mutation."; planner_exit_code cancelled; return $?; }
   require_sudo
-  [[ "$(native_advanced_absence_fingerprint)" == "$original_fingerprint" ]] || { err "Target or configuration changed after confirmation; refusing mutation."; planner_exit_code conflict; return $?; }
+  [[ "$(native_advanced_absence_fingerprint)" == "$original_fingerprint" \
+    && "$(native_advanced_records_snapshot)" == "$NATIVE_ADVANCED_RECORDS_BASE" ]] \
+    || { err "Target, configuration, or operation records changed after confirmation; refusing mutation."; planner_exit_code conflict; return $?; }
 
   NATIVE_ADVANCED_OPERATION_ID="native-advanced-${NATIVE_ADVANCED_OPERATION_ID_OVERRIDE:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
   NATIVE_ADVANCED_OPERATION_FILE="$NATIVE_ADVANCED_STATE_DIR/${NATIVE_ADVANCED_OPERATION_ID}.state"
@@ -579,7 +699,7 @@ native_advanced_signal() {
   local signal="$1"
   NATIVE_ADVANCED_RESULT="interrupted-$signal"
   if [[ "$NATIVE_ADVANCED_SITE_CREATED" -eq 1 ]]; then
-    NATIVE_ADVANCED_STATUS=recovery-required
+    NATIVE_ADVANCED_STATUS="recovery-required"
     NATIVE_ADVANCED_RECOVERY="inspect-record,verify-baseline-backup,resume-manually-from-${NATIVE_ADVANCED_CHECKPOINT}"
   else
     NATIVE_ADVANCED_STATUS=failed

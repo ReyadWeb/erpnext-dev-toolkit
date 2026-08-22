@@ -27,6 +27,7 @@ assert_lacks() {
 
 source "$ROOT_DIR/lib/apps.sh"
 source "$ROOT_DIR/lib/profile.sh"
+source "$ROOT_DIR/lib/install.sh"
 source "$ROOT_DIR/lib/native_advanced.sh"
 
 SUDO=""
@@ -206,6 +207,87 @@ assert_lacks 'later Bench shells exclude hostile HOME' "$(<"$RUNTIME_LOG")" '/ho
 pass 'get-app install migrate and build retain isolated runtime'
 chmod 700 "$RUNTIME_WORK/invoker"
 
+# Real prerequisite failure handling: Chrony cannot prove a large correction,
+# then APT reports future-dated Release metadata. No mutation helper may run.
+PREREQ_MUTATIONS="$RUNTIME_WORK/prerequisite-mutations"
+check_os() { printf 'check-os\n' >>"$RUNTIME_LOG"; }
+check_internet() { printf 'check-internet\n' >>"$RUNTIME_LOG"; }
+check_resources() { printf 'check-resources\n' >>"$RUNTIME_LOG"; }
+install_self_for_reuse() {
+  printf 'install-self\n' >>"$PREREQ_MUTATIONS"
+  return "${PREREQ_INSTALL_SELF_FAIL:-0}"
+}
+install_system_packages() { printf 'packages\n' >>"$PREREQ_MUTATIONS"; }
+configure_sysctl_for_redis() { printf 'sysctl\n' >>"$PREREQ_MUTATIONS"; }
+systemctl() { [[ "$*" == 'is-active --quiet chrony' ]]; }
+timedatectl() {
+  [[ "$1" == show ]] && printf '%s\n' "${PREREQ_SYNCED:-no}"
+}
+chronyc() { return 1; }
+apt-get() {
+  [[ "${PREREQ_APT_FAIL:-1}" == 1 ]] || return 0
+  printf 'E: Release file for repository is not valid yet (invalid for another 23d)\n' >&2
+  return 100
+}
+sleep() { :; }
+
+run_real_prerequisite_failure() {
+  local label="$1"
+  NATIVE_ADVANCED_STATE_DIR="$RUNTIME_WORK/${label}-state"
+  NATIVE_ADVANCED_OPERATION_ID="native-advanced-${label}"
+  NATIVE_ADVANCED_OPERATION_FILE="$NATIVE_ADVANCED_STATE_DIR/${NATIVE_ADVANCED_OPERATION_ID}.state"
+  NATIVE_ADVANCED_REQUESTED=crm,helpdesk NATIVE_ADVANCED_RESOLVED=frappe,crm,telephony,helpdesk
+  NATIVE_ADVANCED_PREFLIGHT=fixture NATIVE_ADVANCED_LEDGER="" NATIVE_ADVANCED_BACKUP=none NATIVE_ADVANCED_SITE_CREATED=0
+  SITE_NAME=erp.test
+  set +e
+  native_advanced_phase prerequisites native_advanced_prerequisites >"$RUNTIME_WORK/${label}.out" 2>&1
+  PREREQ_RC=$?
+  set -e
+}
+
+PREREQ_SYNCED=no
+PREREQ_APT_FAIL=1
+run_real_prerequisite_failure clock-behind
+assert_eq 'far-behind clock exit class' "$PREREQ_RC" 31
+clock_output="$(<"$RUNTIME_WORK/clock-behind.out")"
+assert_has 'clock failure identifies Chrony' "$clock_output" 'detected provider: chrony'
+assert_has 'clock failure provides UTC verification' "$clock_output" 'date -u'
+assert_has 'clock failure provides timedatectl verification' "$clock_output" 'timedatectl status'
+assert_has 'clock failure provides provider verification' "$clock_output" 'chronyc tracking'
+assert_has 'clock recovery prints exact advanced request' "$clock_output" 'sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site erp.test'
+assert_lacks 'clock recovery never recommends first-run' "$clock_output" 'first-run'
+[[ ! -e "$PREREQ_MUTATIONS" ]] || fail 'clock failure executed a mutation helper'
+clock_record="$(<"$NATIVE_ADVANCED_OPERATION_FILE")"
+assert_has 'clock record remains prerequisites' "$clock_record" 'checkpoint=prerequisites'
+assert_has 'clock record terminal failed' "$clock_record" 'status=failed'
+assert_has 'clock record result failed' "$clock_record" 'result=failed'
+assert_has 'clock record ledger empty' "$clock_record" 'artifact_ledger='
+assert_has 'clock record baseline absent' "$clock_record" 'baseline_backup=none'
+
+PREREQ_SYNCED=yes
+run_real_prerequisite_failure apt-future
+assert_eq 'future APT metadata exit class' "$PREREQ_RC" 31
+apt_output="$(<"$RUNTIME_WORK/apt-future.out")"
+assert_has 'APT future metadata diagnosed' "$apt_output" 'APT repository metadata is not valid yet'
+assert_has 'APT recovery prints exact advanced request' "$apt_output" 'sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site erp.test'
+assert_lacks 'APT recovery never recommends first-run' "$apt_output" 'first-run'
+assert_lacks 'APT recovery suppresses repository details' "$apt_output" 'repository is not valid'
+[[ ! -e "$PREREQ_MUTATIONS" ]] || fail 'APT failure executed a mutation helper'
+pass 'clock and APT failures execute no package or deployment mutation'
+
+rm -f "$PREREQ_MUTATIONS"
+PREREQ_APT_FAIL=0 PREREQ_INSTALL_SELF_FAIL=1
+run_real_prerequisite_failure toolkit-failure
+assert_eq 'post-readiness Toolkit failure exit class' "$PREREQ_RC" 31
+toolkit_record="$(<"$NATIVE_ADVANCED_OPERATION_FILE")"
+assert_has 'Toolkit mutation boundary is ledgered' "$toolkit_record" 'artifact_ledger=toolkit-reuse'
+assert_lacks 'package installation blocked after Toolkit failure' "$(<"$PREREQ_MUTATIONS")" 'packages'
+pass 'prerequisite mutation begins only after readiness and is recorded'
+unset PREREQ_INSTALL_SELF_FAIL
+
+unset -f check_os check_internet check_resources install_self_for_reuse install_system_packages configure_sysctl_for_redis
+unset -f systemctl timedatectl chronyc apt-get sleep
+
 # Restore the ordinary transaction fixture paths used below.
 FRAPPE_HOME="$WORK/home/frappe"
 BENCH_PARENT="$FRAPPE_HOME/frappe"
@@ -261,7 +343,7 @@ reset_case() {
   mkdir -p "$WORK"
   NATIVE_ADVANCED_OPERATION_FILE="" NATIVE_ADVANCED_OPERATION_ID="" NATIVE_ADVANCED_STATUS="" NATIVE_ADVANCED_CHECKPOINT=""
   NATIVE_ADVANCED_RESULT="" NATIVE_ADVANCED_RECOVERY="" NATIVE_ADVANCED_PREFLIGHT="" NATIVE_ADVANCED_LEDGER=""
-  NATIVE_ADVANCED_BACKUP=none NATIVE_ADVANCED_CONFIG_BASE="" NATIVE_ADVANCED_SITE_CREATED=0
+  NATIVE_ADVANCED_BACKUP=none NATIVE_ADVANCED_CONFIG_BASE="" NATIVE_ADVANCED_RECORDS_BASE="" NATIVE_ADVANCED_SITE_CREATED=0
   NATIVE_ADVANCED_FAIL_AT="" TEST_ENGINE=native ASSUME_YES=1 QUICK_INSTALL_PREVIEW=0
   SITE_NAME=erp.test QUICK_INSTALL_SITE=erp.test INSTALLATION_PROFILE_APPS_RAW=crm
   NATIVE_ADVANCED_OPERATION_ID_OVERRIDE="test"
@@ -451,6 +533,102 @@ native_advanced_install >/dev/null 2>&1
 rc=$?
 set -e
 assert_eq 'existing config refusal' "$rc" 21
+
+# A protected, exact, artifact-free prerequisite failure may be retried without
+# deleting or rewriting its evidence. Every deviation remains a conflict.
+create_safe_prerequisite_record() {
+  reset_case
+  profile_plan_parse_requested_apps crm
+  profile_plan_resolve_apps advanced
+  NATIVE_ADVANCED_REQUESTED="$PROFILE_PLAN_REQUESTED_CSV"
+  NATIVE_ADVANCED_RESOLVED="$PROFILE_PLAN_DESIRED_CSV"
+  SITE_NAME=erp.test
+  NATIVE_ADVANCED_OPERATION_ID=native-advanced-prior
+  NATIVE_ADVANCED_OPERATION_FILE="$NATIVE_ADVANCED_STATE_DIR/native-advanced-prior.state"
+  NATIVE_ADVANCED_STATUS=failed NATIVE_ADVANCED_CHECKPOINT=prerequisites NATIVE_ADVANCED_RESULT=failed
+  NATIVE_ADVANCED_PREFLIGHT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa NATIVE_ADVANCED_LEDGER="" NATIVE_ADVANCED_BACKUP=none
+  NATIVE_ADVANCED_RECOVERY=inspect-record,correct-prerequisites,restart-fresh-only-if-target-absent
+  native_advanced_record_write
+  PRIOR_RECORD="$NATIVE_ADVANCED_OPERATION_FILE"
+}
+
+replace_record_field() {
+  local field="$1" value="$2"
+  sed -i "s/^${field}=.*/${field}=${value}/" "$PRIOR_RECORD"
+}
+
+expect_retry_conflict() {
+  local retry_rc
+  if native_advanced_install >"$WORK/retry-conflict.out" 2>&1; then
+    retry_rc=0
+  else
+    retry_rc=$?
+  fi
+  [[ "$retry_rc" == 34 ]] || sed -n '1,120p' "$WORK/retry-conflict.out" >&2
+  assert_eq "$1" "$retry_rc" 34
+}
+
+create_safe_prerequisite_record
+prior_digest="$(sha256sum "$PRIOR_RECORD" | awk '{print $1}')"
+NATIVE_ADVANCED_OPERATION_ID_OVERRIDE=retry
+native_advanced_install >/dev/null 2>&1
+assert_eq 'safe retry preserves prior record bytes' "$(sha256sum "$PRIOR_RECORD" | awk '{print $1}')" "$prior_digest"
+[[ -f "$NATIVE_ADVANCED_STATE_DIR/native-advanced-retry.state" ]] || fail 'safe retry did not create a new attempt record'
+pass 'safe exact prerequisite retry creates a separate attempt'
+
+create_safe_prerequisite_record
+INSTALLATION_PROFILE_APPS_RAW=helpdesk
+expect_retry_conflict 'retry with different applications conflicts'
+create_safe_prerequisite_record
+QUICK_INSTALL_SITE=other.test
+expect_retry_conflict 'retry with different site conflicts'
+
+for mutation in active later-checkpoint ledger recovery malformed unsafe-mode; do
+  create_safe_prerequisite_record
+  case "$mutation" in
+    active) replace_record_field status mutation-in-progress ;;
+    later-checkpoint) replace_record_field checkpoint bench-created ;;
+    ledger) replace_record_field artifact_ledger bench ;;
+    recovery) replace_record_field status recovery-required ;;
+    malformed) printf 'status=failed\n' >>"$PRIOR_RECORD" ;;
+    unsafe-mode) chmod 0666 "$PRIOR_RECORD" ;;
+  esac
+  expect_retry_conflict "retry rejects $mutation record"
+done
+
+for artifact in bench site config application staged-config; do
+  create_safe_prerequisite_record
+  case "$artifact" in
+    bench) mkdir -p "$BENCH_DIR" ;;
+    site) mkdir -p "$BENCH_DIR/sites/$SITE_NAME" ;;
+    config)
+      mkdir -p "$(dirname "$CONFIG_FILE")"
+      printf 'CONFIG_SCHEMA=2\n' >"$CONFIG_FILE"
+      ;;
+    application) mkdir -p "$BENCH_DIR/apps/crm" ;;
+    staged-config) printf 'staged\n' >"$NATIVE_ADVANCED_STATE_DIR/native-advanced-stale.config" ;;
+  esac
+  expect_retry_conflict "retry rejects existing $artifact artifact"
+done
+
+create_safe_prerequisite_record
+safe_record_copy="$WORK/safe-record-copy"
+cp "$PRIOR_RECORD" "$safe_record_copy"
+rm -f "$PRIOR_RECORD"
+ln -s "$safe_record_copy" "$PRIOR_RECORD"
+expect_retry_conflict 'retry rejects symlinked record'
+
+SITE_NAME=erp.test NATIVE_ADVANCED_REQUESTED='crm;host-secret'
+if native_advanced_print_prerequisite_retry >"$WORK/unsafe-retry.out" 2>&1; then fail 'unsafe recovery identifiers rendered'; fi
+[[ ! -s "$WORK/unsafe-retry.out" ]] || fail 'unsafe recovery output was emitted'
+pass 'advanced recovery renders only validated identifiers'
+
+prerequisite_body="$(sed -n '/^native_advanced_prerequisites()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
+readiness_line="$(grep -n 'verify_clock_and_repository_readiness' <<<"$prerequisite_body" | cut -d: -f1)"
+toolkit_line="$(grep -n 'install_self_for_reuse' <<<"$prerequisite_body" | cut -d: -f1)"
+packages_line="$(grep -n 'install_system_packages' <<<"$prerequisite_body" | cut -d: -f1)"
+[[ "$readiness_line" -lt "$toolkit_line" && "$readiness_line" -lt "$packages_line" ]] || fail 'advanced mutation precedes readiness gate'
+pass 'advanced readiness gate precedes Toolkit and package mutation'
 
 # Complete transaction and exact promotion.
 reset_case

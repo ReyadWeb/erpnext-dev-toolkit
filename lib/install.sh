@@ -195,6 +195,26 @@ attempt_bounded_clock_sync() {
   return 1
 }
 
+install_readiness_print_clock_verification() {
+  local provider="$1"
+  echo "Verify system time with:" >&2
+  echo "  date -u" >&2
+  echo "  timedatectl status" >&2
+  case "$provider" in
+    chrony) echo "  chronyc tracking" >&2 ;;
+    systemd-timesyncd | timedatectl) echo "  timedatectl timesync-status" >&2 ;;
+  esac
+}
+
+install_readiness_print_recovery() {
+  if [[ "${INSTALL_READINESS_CONTEXT:-}" == native-advanced ]] \
+    && declare -F native_advanced_print_prerequisite_retry >/dev/null 2>&1; then
+    native_advanced_print_prerequisite_retry
+  else
+    echo "After correcting time/network/repository access, resume with: $(toolkit_cmd first-run)" >&2
+  fi
+}
+
 verify_clock_and_repository_readiness() {
   local provider apt_log
   provider="$(detect_time_sync_provider)"
@@ -202,12 +222,9 @@ verify_clock_and_repository_readiness() {
     log "System clock is not synchronized; attempting bounded synchronization with ${provider}"
     if ! attempt_bounded_clock_sync "$provider"; then
       err "System clock is not synchronized (detected provider: ${provider})."
-      echo "Correct the VM clock, then resume with: $(toolkit_cmd first-run)" >&2
-      case "$provider" in
-        chrony) echo "Check: sudo chronyc tracking; sudo chronyc -a makestep" >&2 ;;
-        systemd-timesyncd | timedatectl) echo "Check: timedatectl status; sudo timedatectl set-ntp true" >&2 ;;
-        *) echo "Install or enable a supported time provider such as chrony, then verify with timedatectl." >&2 ;;
-      esac
+      echo "The installer could not prove reliable synchronization and will not make an unbounded clock change." >&2
+      install_readiness_print_clock_verification "$provider"
+      install_readiness_print_recovery
       return 1
     fi
   fi
@@ -217,12 +234,15 @@ verify_clock_and_repository_readiness() {
     if grep -Eqi 'not valid yet|valid.*future|release file.*future' "$apt_log"; then
       err "APT repository metadata is not valid yet; the system clock is incorrect or not fully synchronized."
       echo "Detected time provider: ${provider}" >&2
+      install_readiness_print_clock_verification "$provider"
     else
       err "APT repository readiness check failed before storage or installation mutation."
     fi
-    sed -n '1,12p' "$apt_log" >&2
+    if [[ "${INSTALL_READINESS_CONTEXT:-}" != native-advanced ]]; then
+      sed -n '1,12p' "$apt_log" >&2
+    fi
     rm -f "$apt_log"
-    echo "After correcting time/network/repository access, resume with: $(toolkit_cmd first-run)" >&2
+    install_readiness_print_recovery
     return 1
   fi
   rm -f "$apt_log"

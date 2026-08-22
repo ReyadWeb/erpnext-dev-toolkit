@@ -73,6 +73,10 @@
 
 ### Fixed
 
+- Corrected Native advanced clock/APT prerequisite recovery so it prints the
+  exact validated advanced request instead of `first-run`, keeps readiness ahead
+  of Toolkit/package mutation, and permits only protected, matching,
+  artifact-free prerequisite failures to create a separate retry attempt.
 - Isolated every Phase 7.4 Native advanced Frappe command from the invoking
   user's HOME, working directory, XDG, npm, Yarn, Python, uv, and Git settings;
   new shells now activate pinned NVM Node before using Yarn or Bench. Bench and

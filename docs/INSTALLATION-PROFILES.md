@@ -249,6 +249,23 @@ The operator must first create the root-owned marker
 must confirm that no Toolkit configuration, Bench directory, site, or database
 exists. Never create this marker on a workstation or reusable host.
 
+Before each attempt, verify UTC and the active synchronization provider with
+`date -u`, `timedatectl status`, and (when Chrony is active) `chronyc tracking`.
+If synchronization cannot be proven or APT reports that Release metadata is
+“not valid yet,” the advanced transaction must stop at `prerequisites` with exit
+31, an empty artifact ledger, and no baseline backup. Correct the VM clock or
+repository access and rerun the exact same `install --profile advanced` request.
+Never use `first-run` to recover an advanced transaction.
+
+That exact retry is safe only when every preserved Native advanced record is a
+protected, terminal `failed/prerequisites` record for the identical site,
+requested applications, and resolved closure; its ledger is empty and backup is
+`none`; and no configuration, Bench, site, acquired application, staged intent,
+active transaction, or recovery-required state exists. Previous records remain
+immutable evidence and the retry creates a new attempt record. If any condition
+cannot be proven, revert the disposable VM to its clean snapshot instead of
+editing records, deleting partial state, or forcing a retry.
+
 On that marked VM, record a snapshot, then run these acceptance cases manually:
 
 1. Install an ERPNext-free catalog set with the canonical advanced command;
