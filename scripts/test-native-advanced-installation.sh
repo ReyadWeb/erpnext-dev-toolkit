@@ -98,7 +98,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
   '  init)' \
   '    target="$2"; mkdir -p "$target/apps/frappe"' \
   '    [[ "${BENCH_STUB_MODE:-}" != fail ]] || exit 47' \
-  '    mkdir -p "$target/env/bin" "$target/sites"; printf "#!/usr/bin/env bash\nif [[ \\\"\$1 \$2\\\" == \\\"-m pip\\\" ]]; then printf \\\"pip 26.0.1 from fixture\\\\n\\\"; else printf \\\"Python 3.14.6\\\\n\\\"; fi\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"' \
+  '    mkdir -p "$target/env/bin" "$target/sites" "$target/config"; printf "#!/usr/bin/env bash\nif [[ \\\"\$1 \$2\\\" == \\\"-m pip\\\" ]]; then printf \\\"pip 26.0.1 from fixture\\\\n\\\"; else printf \\\"Python 3.14.6\\\\n\\\"; fi\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"; printf "port 13000\n" >"$target/config/redis_cache.conf"; printf "port 11000\n" >"$target/config/redis_queue.conf"' \
   '    [[ "${BENCH_STUB_MODE:-}" != missing-apps ]] || rm -f "$target/sites/apps.txt" ;;' \
   '  new-site) mkdir -p "sites/$2"; [[ "${BENCH_STUB_MODE:-}" != site-fail ]] || exit 48; printf "{}\n" >"sites/$2/site_config.json" ;;' \
   '  get-app) app="${@: -2:1}"; mkdir -p "apps/$app"; [[ "${BENCH_STUB_MODE:-}" != get-fail ]] || exit 49 ;;' \
@@ -119,6 +119,9 @@ printf '%s\n' '#!/usr/bin/env bash' \
   'case "${3:-}" in remote) [[ "$app" == frappe ]] && printf "https://github.com/frappe/frappe\n" || printf "https://github.com/frappe/crm\n" ;; symbolic-ref) [[ "${GIT_STUB_BAD_FRAPPE_REF:-0}" == 1 && "$app" == frappe ]] && printf "wrong\n" || { [[ "$app" == frappe ]] && printf "version-16\n" || printf "main\n"; } ;; rev-parse) if [[ "$2" == */.nvm ]]; then printf "%s\n" "$NVM_COMMIT"; elif [[ "$app" == frappe ]]; then printf "%s\n" "$FRAPPE_COMMIT"; else printf "%s\n" "$CRM_COMMIT"; fi ;; esac' >"$RUNTIME_HOME/.local/bin/git"
 chmod +x "$RUNTIME_NODE_BIN/node" "$RUNTIME_NODE_BIN/npm" "$RUNTIME_NODE_BIN/yarn" \
   "$RUNTIME_HOME/.local/bin/uv" "$RUNTIME_HOME/.local/bin/python3" "$RUNTIME_HOME/.local/bin/bench" "$RUNTIME_HOME/.local/bin/git"
+printf '%s\n' '#!/usr/bin/env bash' 'port="$(awk '\''$1 == "port" { print $2 }'\'' "$1")"' 'touch "$HOME/.redis-$port"' >"$RUNTIME_HOME/.local/bin/redis-server"
+printf '%s\n' '#!/usr/bin/env bash' 'while [[ $# -gt 0 ]]; do case "$1" in -h) shift 2 ;; -p) port="$2"; shift 2 ;; ping|shutdown) command="$1"; break ;; *) shift ;; esac; done' 'if [[ "$command" == ping && -f "$HOME/.redis-$port" ]]; then echo PONG; elif [[ "$command" == shutdown ]]; then rm -f "$HOME/.redis-$port"; else exit 1; fi' >"$RUNTIME_HOME/.local/bin/redis-cli"
+chmod +x "$RUNTIME_HOME/.local/bin/redis-server" "$RUNTIME_HOME/.local/bin/redis-cli"
 
 FRAPPE_HOME="$RUNTIME_HOME" FRAPPE_USER=frappe BENCH_PARENT="$RUNTIME_HOME/frappe" BENCH_NAME=frappe-bench
 BENCH_DIR="$BENCH_PARENT/$BENCH_NAME" SITE_NAME=erp.test NODE_VERSION=24 PYTHON_VERSION=3.14
@@ -240,6 +243,9 @@ native_advanced_get_app crm
 native_advanced_install_app crm
 # shellcheck disable=SC2218
 native_advanced_migrate
+assert_has 'successful migration verifies temporary Redis cleanup' "$NATIVE_ADVANCED_LEDGER" migration-redis-cleanup-verified
+[[ ! -e "$RUNTIME_HOME/.redis-13000" && ! -e "$RUNTIME_HOME/.redis-11000" ]] || fail 'temporary migration Redis survived success'
+pass 'temporary migration Redis stops after success'
 # shellcheck disable=SC2218
 native_advanced_assets
 assert_lacks 'later Bench shells exclude hostile HOME' "$(<"$RUNTIME_LOG")" '/home/test'
@@ -272,6 +278,11 @@ for boundary in migrate-fail build-fail; do
   rc=$?
   set -e
   [[ "$boundary" == migrate-fail ]] && assert_eq 'migration exact failure propagates' "$rc" 51 || assert_eq 'asset build exact failure propagates' "$rc" 52
+  if [[ "$boundary" == migrate-fail ]]; then
+    assert_has 'failed migration records Redis cleanup attempt' "$NATIVE_ADVANCED_LEDGER" migration-redis-cleanup-attempted
+    [[ ! -e "$RUNTIME_HOME/.redis-13000" && ! -e "$RUNTIME_HOME/.redis-11000" ]] || fail 'temporary migration Redis survived failure'
+    pass 'temporary migration Redis stops after failure'
+  fi
 done
 
 BENCH_STUB_MODE=success

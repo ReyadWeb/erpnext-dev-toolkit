@@ -750,10 +750,50 @@ EOF_NATIVE_ADVANCED_INSTALL_VERIFY
 }
 
 native_advanced_migrate() {
+  local rc=0
   native_advanced_ledger_add migration-attempt
   native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_MIGRATE
-bench --site "${SITE_NAME}" migrate
+cache_port="\$(awk '\$1 == "port" { print \$2 }' config/redis_cache.conf)"
+queue_port="\$(awk '\$1 == "port" { print \$2 }' config/redis_queue.conf)"
+[[ "\$cache_port" =~ ^[0-9]{4,5}\$ && "\$queue_port" =~ ^[0-9]{4,5}\$ && "\$cache_port" != "\$queue_port" ]]
+for port in "\$cache_port" "\$queue_port"; do
+  ! redis-cli -h 127.0.0.1 -p "\$port" ping >/dev/null 2>&1
+done
+cleanup_migration_redis() {
+  redis-cli -h 127.0.0.1 -p "\$cache_port" shutdown nosave >/dev/null 2>&1 || true
+  redis-cli -h 127.0.0.1 -p "\$queue_port" shutdown nosave >/dev/null 2>&1 || true
+}
+trap cleanup_migration_redis EXIT
+redis-server config/redis_cache.conf --daemonize yes
+redis-server config/redis_queue.conf --daemonize yes
+for port in "\$cache_port" "\$queue_port"; do
+  ready=0
+  for _ in {1..20}; do
+    if [[ "\$(redis-cli -h 127.0.0.1 -p "\$port" ping 2>/dev/null)" == PONG ]]; then ready=1; break; fi
+    sleep 0.25
+  done
+  [[ "\$ready" == 1 ]]
+done
+if bench --site "${SITE_NAME}" migrate; then rc=0; else rc=\$?; fi
+cleanup_migration_redis
+for port in "\$cache_port" "\$queue_port"; do
+  stopped=0
+  for _ in {1..20}; do
+    if ! redis-cli -h 127.0.0.1 -p "\$port" ping >/dev/null 2>&1; then stopped=1; break; fi
+    sleep 0.25
+  done
+  [[ "\$stopped" == 1 ]]
+done
+trap - EXIT
+exit "\$rc"
 EOF_NATIVE_ADVANCED_MIGRATE
+  rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    native_advanced_ledger_add migration-redis-cleanup-verified
+  else
+    native_advanced_ledger_add migration-redis-cleanup-attempted
+  fi
+  return "$rc"
 }
 native_advanced_assets() {
   native_advanced_ledger_add assets-attempt
