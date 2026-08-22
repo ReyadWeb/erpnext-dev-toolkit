@@ -169,6 +169,11 @@ assert_has 'production Frappe transport clears inherited environment' "$transpor
 assert_has 'identity switch precedes environment clearing' "$transport_body" 'sudo -H -u "$FRAPPE_USER" /usr/bin/env -i'
 assert_has 'production Frappe transport skips startup files' "$transport_body" '/bin/bash --noprofile --norc'
 assert_lacks 'production Frappe transport avoids login shell' "$transport_body" 'su - '
+user_body="$(sed -n '/^native_advanced_create_frappe_user()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
+assert_has 'Native advanced user uses an isolated empty skeleton' "$user_body" 'useradd --create-home --skel "$empty_skel"'
+assert_has 'empty skeleton ownership and mode are verified' "$user_body" "stat -c '%u:%g:%a'"
+assert_has 'empty skeleton contents are verified' "$user_body" 'find "$empty_skel" -mindepth 1 -maxdepth 1'
+assert_lacks 'Native advanced user never imports the host skeleton' "$user_body" '/etc/skel'
 
 BENCH_STUB_MODE=fail
 export BENCH_STUB_MODE

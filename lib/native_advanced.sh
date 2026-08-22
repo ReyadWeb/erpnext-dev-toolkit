@@ -501,10 +501,30 @@ native_advanced_user_setup() {
   [[ "$DB_ADMIN_USER" =~ ^[A-Za-z0-9_]+$ ]] || return 1
   [[ "$DB_ADMIN_PASSWORD" =~ ^[A-Za-z0-9]{1,128}$ && "$ADMIN_PASSWORD" =~ ^[A-Za-z0-9]{1,128}$ ]] || return 1
   native_advanced_ledger_add frappe-user
-  create_frappe_user || return 1
+  native_advanced_create_frappe_user || return 1
   native_advanced_ledger_add mariadb-admin
   create_mariadb_admin_user || return 1
   fix_frappe_ownership || return 1
+}
+
+# Hosted images can populate /etc/skel with language-manager dotfiles. Native
+# advanced must create its deployment identity without inheriting any host-user
+# NVM, npm, Yarn, uv, Python, or Git state.
+native_advanced_create_frappe_user() {
+  local empty_skel="${NATIVE_ADVANCED_STATE_DIR}/empty-skel"
+  log "Preparing isolated Linux user: ${FRAPPE_USER}"
+  if id "$FRAPPE_USER" >/dev/null 2>&1; then
+    ok "User ${FRAPPE_USER} already exists"
+    return 0
+  fi
+  [[ ! -L "$NATIVE_ADVANCED_STATE_DIR" && -d "$NATIVE_ADVANCED_STATE_DIR" ]] || return 1
+  ${SUDO:-} install -d -o root -g root -m 0755 "$empty_skel" || return 1
+  [[ -d "$empty_skel" && ! -L "$empty_skel" ]] || return 1
+  [[ "$(${SUDO:-} stat -c '%u:%g:%a' "$empty_skel")" == 0:0:755 ]] || return 1
+  [[ -z "$(${SUDO:-} find "$empty_skel" -mindepth 1 -maxdepth 1 -print -quit)" ]] || return 1
+  ${SUDO:-} useradd --create-home --skel "$empty_skel" --shell /bin/bash --comment "" "$FRAPPE_USER" || return 1
+  ${SUDO:-} passwd -l "$FRAPPE_USER" >/dev/null 2>&1 || true
+  ok "User ${FRAPPE_USER} created without host skeleton files"
 }
 
 native_advanced_toolchain_setup() {
