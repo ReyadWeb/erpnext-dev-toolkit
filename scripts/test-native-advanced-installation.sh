@@ -165,7 +165,8 @@ toolchain_body="$(sed -n '/^native_advanced_toolchain_setup()/,/^}/p' "$ROOT_DIR
 assert_has 'safe empty NVM directory is accepted' "$toolchain_body" '-z "\$(find "\$NVM_DIR" -mindepth 1 -maxdepth 1 -print -quit)"'
 assert_has 'nonempty or unsafe NVM directory remains rejected' "$toolchain_body" '-O "\$NVM_DIR"'
 transport_body="$(sed -n '/^native_advanced_frappe_login_bash()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
-assert_has 'production Frappe transport clears inherited environment' "$transport_body" 'env -i HOME='
+assert_has 'production Frappe transport clears inherited environment' "$transport_body" '/usr/bin/env -i HOME='
+assert_has 'identity switch precedes environment clearing' "$transport_body" 'runuser --user "$FRAPPE_USER" -- /usr/bin/env -i'
 assert_has 'production Frappe transport skips startup files' "$transport_body" '/bin/bash --noprofile --norc'
 assert_lacks 'production Frappe transport avoids login shell' "$transport_body" 'su - '
 
