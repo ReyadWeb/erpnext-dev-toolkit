@@ -28,8 +28,8 @@ NATIVE_ADVANCED_STARTED_EPOCH=0
 native_advanced_frappe_login_bash() {
   local clean_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   if [[ "${EUID}" -eq 0 ]]; then
-    command -v runuser >/dev/null || return 1
-    runuser --user "$FRAPPE_USER" -- /usr/bin/env -i HOME="$FRAPPE_HOME" USER="$FRAPPE_USER" \
+    command -v sudo >/dev/null || return 1
+    sudo -H -u "$FRAPPE_USER" /usr/bin/env -i HOME="$FRAPPE_HOME" USER="$FRAPPE_USER" \
       LOGNAME="$FRAPPE_USER" SHELL=/bin/bash PATH="$clean_path" /bin/bash --noprofile --norc
   else
     sudo -H -u "$FRAPPE_USER" env -i HOME="$FRAPPE_HOME" USER="$FRAPPE_USER" LOGNAME="$FRAPPE_USER" \
