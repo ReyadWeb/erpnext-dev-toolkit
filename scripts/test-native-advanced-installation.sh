@@ -88,7 +88,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
 printf '%s\n' '#!/usr/bin/env bash' \
   'printf "uv|HOME=%s|PWD=%s|no_config=%s|config=%s\n" "$HOME" "$PWD" "${UV_NO_CONFIG:-}" "${UV_CONFIG_FILE:-unset}" >>"$RUNTIME_LOG"' \
   '[[ "${UV_NO_CONFIG:-}" == 1 && -z "${UV_CONFIG_FILE:-}" ]]' \
-  '[[ "${1:-}" == --version ]] && printf "uv 0.11.28\n" || :' >"$RUNTIME_HOME/.local/bin/uv"
+  '[[ "${1:-}" == --version ]] && printf "uv 0.11.28 (x86_64-unknown-linux-gnu)\n" || :' >"$RUNTIME_HOME/.local/bin/uv"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "Python 3.14.6\n"' >"$RUNTIME_HOME/.local/bin/python3"
 printf '%s\n' '#!/usr/bin/env bash' \
   'printf "bench|%s|HOME=%s|PWD=%s|XDG=%s\n" "$*" "$HOME" "$PWD" "$XDG_CONFIG_HOME" >>"$RUNTIME_LOG"' \

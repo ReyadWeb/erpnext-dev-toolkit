@@ -557,7 +557,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 export PATH="\$HOME/.local/bin:\$PATH"
 [[ "\$(command -v uv)" == "\$HOME/.local/bin/uv" && -x "\$HOME/.local/bin/uv" ]]
-[[ "\$(uv --version)" == "uv ${UV_VERSION}" ]]
+[[ "\$(uv --version)" =~ ^uv\\ ${UV_VERSION//./\\.}(\\ |\$) ]]
 echo 'INFO: verified uv executable'
 uv python install "${PYTHON_PATCH_VERSION}" --default
 if [[ -n "${BENCH_VERSION}" ]]; then uv tool install "frappe-bench==${BENCH_VERSION}" --force; else uv tool install frappe-bench --force; fi
@@ -580,7 +580,7 @@ npm --version
 yarn --version
 [[ "\$(yarn --version)" == "${YARN_VERSION}" ]]
 uv_version="\$(uv --version)"
-[[ "\${uv_version#uv }" == "${UV_VERSION}" ]]
+[[ "\$uv_version" =~ ^uv\\ ${UV_VERSION//./\\.}(\\ |\$) ]]
 [[ "\$(command -v uv)" == "\$HOME/.local/bin/uv" && -x "\$HOME/.local/bin/uv" && -O "\$HOME/.local/bin/uv" ]]
 python_version="\$(python3 --version)"
 [[ "\${python_version#Python }" == "${PYTHON_PATCH_VERSION}" ]]
