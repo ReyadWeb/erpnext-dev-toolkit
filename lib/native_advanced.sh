@@ -45,6 +45,7 @@ native_advanced_frappe_bash() {
 
   {
     printf '%s\n' 'set -Eeuo pipefail'
+    printf '%s\n' "trap 'rc=\$?; printf \"ERROR: isolated Frappe command failed at line %s (exit %s).\\n\" \"\$LINENO\" \"\$rc\" >&2; exit \"\$rc\"' ERR"
     printf 'export HOME=%q\n' "$FRAPPE_HOME"
     printf 'export USER=%q LOGNAME=%q\n' "$FRAPPE_USER" "$FRAPPE_USER"
     printf '%s\n' 'export SHELL=/bin/bash'
@@ -509,6 +510,7 @@ native_advanced_user_setup() {
 native_advanced_toolchain_setup() {
   local rc=0
   native_advanced_ledger_add frappe-toolchain
+  echo 'INFO: entering isolated Frappe toolchain bootstrap'
   if native_advanced_frappe_bash "$FRAPPE_HOME" bootstrap <<EOF_NATIVE_ADVANCED_TOOLCHAIN
 if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
   if [[ -e "\$NVM_DIR" || -L "\$NVM_DIR" ]]; then
