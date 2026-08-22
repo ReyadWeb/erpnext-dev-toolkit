@@ -25,6 +25,18 @@ NATIVE_ADVANCED_STARTED_EPOCH=0
 # supplies only a trusted working directory and a script on stdin. "bootstrap"
 # is used only while nvm itself is being installed; all later calls require and
 # activate the configured Node version before the caller's script runs.
+native_advanced_frappe_login_bash() {
+  local clean_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  if [[ "${EUID}" -eq 0 ]]; then
+    command -v runuser >/dev/null || return 1
+    env -i HOME="$FRAPPE_HOME" USER="$FRAPPE_USER" LOGNAME="$FRAPPE_USER" SHELL=/bin/bash PATH="$clean_path" \
+      runuser --user "$FRAPPE_USER" -- /bin/bash --noprofile --norc
+  else
+    sudo -H -u "$FRAPPE_USER" env -i HOME="$FRAPPE_HOME" USER="$FRAPPE_USER" LOGNAME="$FRAPPE_USER" \
+      SHELL=/bin/bash PATH="$clean_path" /bin/bash --noprofile --norc
+  fi
+}
+
 native_advanced_frappe_bash() {
   local workdir="${1:-}" mode="${2:-runtime}"
   [[ "$workdir" == "$FRAPPE_HOME" || "$workdir" == "$FRAPPE_HOME/"* ]] || return 1
@@ -35,6 +47,7 @@ native_advanced_frappe_bash() {
     printf '%s\n' 'set -Eeuo pipefail'
     printf 'export HOME=%q\n' "$FRAPPE_HOME"
     printf 'export USER=%q LOGNAME=%q\n' "$FRAPPE_USER" "$FRAPPE_USER"
+    printf '%s\n' 'export SHELL=/bin/bash'
     cat <<'EOF_NATIVE_ADVANCED_ENV'
 unset CDPATH ENV BASH_ENV
 unset NODE_PATH NODE_OPTIONS COREPACK_HOME
@@ -101,7 +114,7 @@ command -v yarn >/dev/null
 EOF_NATIVE_ADVANCED_NVM
     fi
     cat
-  } | frappe_login_bash
+  } | native_advanced_frappe_login_bash
 }
 
 native_advanced_safe_directory() {

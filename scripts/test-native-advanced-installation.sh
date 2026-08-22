@@ -127,7 +127,7 @@ YARN_VERSION=1.22.22 UV_VERSION=0.11.28 PYTHON_PATCH_VERSION=3.14.6 BENCH_VERSIO
 ADMIN_PASSWORD=fixture-admin DB_ADMIN_USER=fixture-db-admin DB_ADMIN_PASSWORD=fixture-db-password
 export RUNTIME_LOG
 FRAPPE_SHELL_COUNT=0
-frappe_login_bash() {
+native_advanced_frappe_login_bash() {
   FRAPPE_SHELL_COUNT=$((FRAPPE_SHELL_COUNT + 1))
   printf 'shell=%s\n' "$FRAPPE_SHELL_COUNT" >>"$RUNTIME_LOG"
   bash --noprofile --norc
@@ -164,6 +164,10 @@ assert_has 'controlled Frappe working directory used' "$(<"$RUNTIME_LOG")" "PWD=
 toolchain_body="$(sed -n '/^native_advanced_toolchain_setup()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
 assert_has 'safe empty NVM directory is accepted' "$toolchain_body" '-z "\$(find "\$NVM_DIR" -mindepth 1 -maxdepth 1 -print -quit)"'
 assert_has 'nonempty or unsafe NVM directory remains rejected' "$toolchain_body" '-O "\$NVM_DIR"'
+transport_body="$(sed -n '/^native_advanced_frappe_login_bash()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
+assert_has 'production Frappe transport clears inherited environment' "$transport_body" 'env -i HOME='
+assert_has 'production Frappe transport skips startup files' "$transport_body" '/bin/bash --noprofile --norc'
+assert_lacks 'production Frappe transport avoids login shell' "$transport_body" 'su - '
 
 BENCH_STUB_MODE=fail
 export BENCH_STUB_MODE
