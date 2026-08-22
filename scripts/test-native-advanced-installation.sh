@@ -242,6 +242,9 @@ native_advanced_site_create
 assert_has 'verified exact site accepted' "$NATIVE_ADVANCED_LEDGER" site
 # shellcheck disable=SC2218
 native_advanced_get_app crm
+get_app_body="$(sed -n '/^native_advanced_get_app()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
+assert_has 'app acquisition adds only a missing official origin' "$get_app_body" 'remote add origin "${repo}"'
+assert_has 'app acquisition rejects a conflicting origin' "$get_app_body" 'remote get-url origin)" == "${repo}"'
 # shellcheck disable=SC2218
 native_advanced_install_app crm
 # shellcheck disable=SC2218

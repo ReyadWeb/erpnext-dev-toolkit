@@ -736,6 +736,15 @@ EOF_NATIVE_ADVANCED_GET_HEAD
   )" || { native_advanced_ledger_add "partial-code:$app"; return 1; }
   [[ "$actual_commit" == "$commit" ]] || { native_advanced_ledger_add "partial-code:$app"; return 1; }
   native_advanced_remote_pin_matches "$app" || { native_advanced_ledger_add "partial-code:$app"; return 1; }
+  repo="${repo%/}"
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET_ORIGIN || { native_advanced_ledger_add "partial-code:$app"; return 1; }
+if git -C "apps/${app}" remote get-url origin >/dev/null 2>&1; then
+  [[ "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}" || "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}.git" ]]
+else
+  git -C "apps/${app}" remote add origin "${repo}"
+fi
+[[ "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}" || "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}.git" ]]
+EOF_NATIVE_ADVANCED_GET_ORIGIN
   native_advanced_ledger_add "code:$app"
   native_advanced_ledger_add "source:$app@$commit"
 }
