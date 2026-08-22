@@ -451,17 +451,19 @@ native_advanced_verify_os_runtime() {
     return 1
   }
   redis_version="$(redis-server --version 2>/dev/null)" || return 1
-  [[ "$redis_version" =~ v=([0-9]+)\. ]] || return 1
-  ((BASH_REMATCH[1] >= 6)) || return 1
-  systemctl is-enabled --quiet mariadb || return 1
-  systemctl is-active --quiet mariadb || return 1
-  systemctl is-enabled --quiet redis-server || return 1
-  systemctl is-active --quiet redis-server || return 1
-  mariadb-admin ping --silent >/dev/null 2>&1 || return 1
-  [[ "$(redis-cli ping 2>/dev/null)" == PONG ]] || return 1
-  command -v cc >/dev/null && command -v pkg-config >/dev/null && command -v fc-list >/dev/null || return 1
-  pkg-config --exists libmariadb || return 1
-  systemctl is-enabled --quiet cron || return 1
+  [[ "$redis_version" =~ v=([0-9]+)\. ]] || { err "Redis runtime version could not be verified."; return 1; }
+  ((BASH_REMATCH[1] >= 6)) || { err "Frappe v16 requires Redis or Valkey 6 or newer."; return 1; }
+  systemctl is-enabled --quiet mariadb || { err "MariaDB is not enabled."; return 1; }
+  systemctl is-active --quiet mariadb || { err "MariaDB is not active."; return 1; }
+  systemctl is-enabled --quiet redis-server || { err "Redis is not enabled."; return 1; }
+  systemctl is-active --quiet redis-server || { err "Redis is not active."; return 1; }
+  mariadb-admin ping --silent >/dev/null 2>&1 || { err "MariaDB did not answer its local readiness probe."; return 1; }
+  [[ "$(redis-cli ping 2>/dev/null)" == PONG ]] || { err "Redis did not answer its local readiness probe."; return 1; }
+  command -v cc >/dev/null || { err "The required C compiler is unavailable."; return 1; }
+  command -v pkg-config >/dev/null || { err "pkg-config is unavailable."; return 1; }
+  command -v fc-list >/dev/null || { err "The fontconfig fc-list runtime is unavailable."; return 1; }
+  pkg-config --exists libmariadb || { err "MariaDB development metadata is unavailable to pkg-config."; return 1; }
+  systemctl is-enabled --quiet cron || { err "Cron is not enabled."; return 1; }
 }
 
 native_advanced_pdf_capability_check() {

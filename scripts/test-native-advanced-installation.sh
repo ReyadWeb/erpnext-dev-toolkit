@@ -295,6 +295,9 @@ chmod 700 "$RUNTIME_WORK/invoker"
   native_advanced_verify_os_runtime
 ) || fail 'Ubuntu 26.04 MariaDB/Redis runtime format rejected'
 pass 'Ubuntu 26.04 MariaDB 11.8 runtime accepted'
+grep -Eq '^[[:space:]]+xvfb fontconfig$' "$ROOT_DIR/lib/install.sh" \
+  || fail 'fontconfig executable provider is not a required system package'
+pass 'fontconfig executable provider is required'
 
 # Real prerequisite failure handling: Chrony cannot prove a large correction,
 # then APT reports future-dated Release metadata. No mutation helper may run.

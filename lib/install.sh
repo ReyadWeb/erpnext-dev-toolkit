@@ -350,7 +350,7 @@ install_system_packages() {
     redis-server mariadb-server mariadb-client libmariadb-dev
     python3 python3-dev python3-pip python3-venv
     libffi-dev libssl-dev libjpeg-dev zlib1g-dev
-    xvfb
+    xvfb fontconfig
     cron netcat-openbsd
   )
 
@@ -377,16 +377,6 @@ install_system_packages() {
   # Refresh apt metadata before availability probes so Debian/Ubuntu package
   # names resolve against a current index.
   $SUDO apt-get update
-
-  # fontconfig runtime: Debian ships libfontconfig1; some Ubuntu releases also
-  # expose a libfontconfig transitional name. Prefer the portable package.
-  if apt_package_available "libfontconfig1"; then
-    packages+=(libfontconfig1)
-  elif apt_package_available "libfontconfig"; then
-    packages+=(libfontconfig)
-  else
-    packages+=(fontconfig)
-  fi
 
   install_required_packages "${packages[@]}"
 
