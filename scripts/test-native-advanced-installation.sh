@@ -161,6 +161,10 @@ assert_lacks 'hostile user path excluded from tool execution' "$(<"$RUNTIME_LOG"
 assert_lacks 'root path excluded from tool execution' "$(<"$RUNTIME_LOG")" '/root'
 assert_has 'controlled Frappe working directory used' "$(<"$RUNTIME_LOG")" "PWD=$RUNTIME_HOME"
 
+toolchain_body="$(sed -n '/^native_advanced_toolchain_setup()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
+assert_has 'safe empty NVM directory is accepted' "$toolchain_body" '-z "\$(find "\$NVM_DIR" -mindepth 1 -maxdepth 1 -print -quit)"'
+assert_has 'nonempty or unsafe NVM directory remains rejected' "$toolchain_body" '-O "\$NVM_DIR"'
+
 BENCH_STUB_MODE=fail
 export BENCH_STUB_MODE
 set +e

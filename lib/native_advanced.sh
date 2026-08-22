@@ -498,7 +498,11 @@ native_advanced_toolchain_setup() {
   native_advanced_ledger_add frappe-toolchain
   if native_advanced_frappe_bash "$FRAPPE_HOME" bootstrap <<EOF_NATIVE_ADVANCED_TOOLCHAIN
 if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
-  [[ ! -e "\$NVM_DIR" ]]
+  if [[ -e "\$NVM_DIR" || -L "\$NVM_DIR" ]]; then
+    [[ -d "\$NVM_DIR" && ! -L "\$NVM_DIR" && -O "\$NVM_DIR" ]]
+    [[ -z "\$(find "\$NVM_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]
+  fi
+  echo 'INFO: installing reviewed NVM source'
   git init "\$NVM_DIR"
   git -C "\$NVM_DIR" remote add origin https://github.com/nvm-sh/nvm.git
   git -C "\$NVM_DIR" fetch --depth 1 origin "refs/tags/v${NVM_VERSION}"
@@ -506,10 +510,12 @@ if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
 fi
 [[ -s "\$NVM_DIR/nvm.sh" ]]
 [[ "\$(git -C "\$NVM_DIR" rev-parse HEAD)" == "${NVM_COMMIT}" ]]
+echo 'INFO: verified reviewed NVM commit'
 source "\$NVM_DIR/nvm.sh"
 nvm install "${NODE_VERSION}"
 nvm use "${NODE_VERSION}"
 nvm alias default "${NODE_VERSION}"
+echo 'INFO: verified Node activation'
 npm install -g --ignore-scripts "yarn@${YARN_VERSION}"
 if ! command -v uv >/dev/null 2>&1; then
   curl --proto '=https' --tlsv1.2 -LsSf "https://releases.astral.sh/github/uv/releases/download/${UV_VERSION}/uv-installer.sh" | sh
@@ -517,8 +523,10 @@ fi
 export PATH="\$HOME/.local/bin:\$PATH"
 [[ "\$(command -v uv)" == "\$HOME/.local/bin/uv" && -x "\$HOME/.local/bin/uv" ]]
 [[ "\$(uv --version)" == "uv ${UV_VERSION}" ]]
+echo 'INFO: verified uv executable'
 uv python install "${PYTHON_PATCH_VERSION}" --default
 if [[ -n "${BENCH_VERSION}" ]]; then uv tool install "frappe-bench==${BENCH_VERSION}" --force; else uv tool install frappe-bench --force; fi
+echo 'INFO: installed pinned Python and Bench toolchain'
 EOF_NATIVE_ADVANCED_TOOLCHAIN
   then
     :
