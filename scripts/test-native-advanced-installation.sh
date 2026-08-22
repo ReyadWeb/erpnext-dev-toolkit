@@ -240,6 +240,10 @@ export BENCH_STUB_MODE
 # shellcheck disable=SC2218
 native_advanced_site_create
 assert_has 'verified exact site accepted' "$NATIVE_ADVANCED_LEDGER" site
+site_body="$(sed -n '/^native_advanced_site_create()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
+assert_has 'site secrets use the pinned noninteractive prompt order' "$site_body" 'printf '\''%s\n'\'' "${DB_ADMIN_PASSWORD}" "${ADMIN_PASSWORD}" | bench new-site'
+assert_lacks 'database password is absent from site command argv' "$site_body" '--db-root-password'
+assert_lacks 'administrator password is absent from site command argv' "$site_body" '--admin-password'
 # shellcheck disable=SC2218
 native_advanced_get_app crm
 get_app_body="$(sed -n '/^native_advanced_get_app()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"

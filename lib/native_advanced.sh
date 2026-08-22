@@ -644,7 +644,7 @@ native_advanced_site_create() {
   local old_xtrace=0 rc=0
   [[ $- == *x* ]] && old_xtrace=1 && set +x
   if native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_SITE_CREATE
-bench new-site "${SITE_NAME}" --admin-password "${ADMIN_PASSWORD}" --db-root-username "${DB_ADMIN_USER}" --db-root-password "${DB_ADMIN_PASSWORD}"
+printf '%s\n' "${DB_ADMIN_PASSWORD}" "${ADMIN_PASSWORD}" | bench new-site "${SITE_NAME}" --db-root-username "${DB_ADMIN_USER}"
 EOF_NATIVE_ADVANCED_SITE_CREATE
   then
     :
