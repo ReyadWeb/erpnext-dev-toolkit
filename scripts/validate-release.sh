@@ -14,6 +14,7 @@ pass() {
 }
 
 [[ -f erpnext-dev.sh ]] || fail "erpnext-dev.sh is missing"
+[[ -x install.sh ]] || fail "install.sh is missing or not executable"
 [[ -f VERSION ]] || fail "VERSION is missing"
 [[ -x scripts/release-version.sh ]] \
   || fail "scripts/release-version.sh is missing or not executable"
@@ -45,6 +46,8 @@ pass() {
   || fail "scripts/test-installation-profile-contract.sh is missing or not executable"
 [[ -x scripts/test-native-advanced-installation.sh ]] \
   || fail "scripts/test-native-advanced-installation.sh is missing or not executable"
+[[ -x scripts/test-one-command-installer.sh ]] \
+  || fail "scripts/test-one-command-installer.sh is missing or not executable"
 
 [[ -x scripts/release-update-metadata.sh ]] \
   || fail "scripts/release-update-metadata.sh is missing or not executable"
@@ -209,6 +212,7 @@ pass "release artifact consistency tests passed"
 chmod +x erpnext-dev.sh scripts/validate-release.sh scripts/generate-release-checksums.sh scripts/run-shellcheck.sh scripts/check-module-consistency.sh scripts/check-pinned-actions.sh scripts/check-shfmt.sh scripts/check-release-doc-alignment.sh scripts/resolve-latest-release-tag.sh scripts/test-atomic-update.sh scripts/test-staged-signature.sh scripts/test-host-os-output.sh scripts/test-install-self-path.sh scripts/test-engine-select.sh scripts/test-platform-profiles.sh scripts/test-inventory-compatibility.sh scripts/test-docker-access-routing.sh scripts/test-docker-reliability.sh scripts/test-health-snapshot.sh scripts/test-ui-render.sh scripts/test-dashboard-render.sh scripts/test-static-asset-probe.sh scripts/test-reinstall-isolation.sh scripts/test-asset-build-isolation.sh scripts/frappe-frontend-asset-checklist.sh scripts/test-health-env-parser.sh scripts/test-offvm-host-key.sh scripts/test-risky-shell-patterns.sh scripts/test-adversarial-inputs.sh scripts/test-restore-input.sh scripts/test-update-channel.sh scripts/test-resolve-latest-release-tag.sh scripts/test-local-ip.sh scripts/test-healing.sh scripts/release-signing-policy.sh scripts/assert-github-release-assets.sh scripts/release-update-metadata.sh scripts/test-release-metadata.sh scripts/release-prepare-beta.sh scripts/test-release-prepare-beta.sh scripts/release-promote-stable.sh scripts/release-pretag-check.sh scripts/test-release-promote-stable.sh scripts/test-release-pretag-check.sh scripts/check-release-state-invariants.sh scripts/test-release-state-invariants.sh scripts/build-info.sh scripts/test-build-info.sh scripts/release-test-env.sh scripts/test-release-test-env.sh scripts/test-release-context-isolation.sh
 chmod +x scripts/test-installation-profile-contract.sh
 chmod +x scripts/test-native-advanced-installation.sh
+chmod +x install.sh scripts/test-one-command-installer.sh
 
 chmod +x \
   scripts/release-manifest-files.sh \
@@ -267,6 +271,9 @@ pass "installation-profile contract and read-only planning tests passed"
 
 scripts/test-native-advanced-installation.sh
 pass "Native advanced-installation transaction tests passed"
+
+scripts/test-one-command-installer.sh
+pass "signed one-command installer tests passed"
 
 scripts/test-interactive-installation-profiles.sh
 pass "interactive installation-profile tests passed"

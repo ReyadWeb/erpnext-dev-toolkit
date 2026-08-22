@@ -173,6 +173,7 @@ jobs:
             RELEASE-ASSETS.sha256
             docs/erpnext-dev-signing-key.asc
             scripts/bootstrap-verify.sh
+            install.sh
           )
           [[ -f SHA256SUMS.asc ]] && assets+=(SHA256SUMS.asc)
           [[ -f RELEASE-ASSETS.sha256.asc ]] && assets+=(RELEASE-ASSETS.sha256.asc)
@@ -182,20 +183,23 @@ jobs:
             prerelease_flag="--prerelease"
           fi
 
+          if [[ "$tag" =~ -beta\. ]]; then
+            install_example="bash <(curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/install.sh) --beta"
+          else
+            install_example="bash <(curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/install.sh)"
+          fi
+
           notes="Automated release for ${GITHUB_REF_NAME}.
 
-          Install (self-contained bundle — includes all lib/ modules):
+          One-command signed install:
           \`\`\`
-          curl -fsSLO https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/bootstrap-verify.sh
-          chmod +x bootstrap-verify.sh
-          ./bootstrap-verify.sh ${GITHUB_REF_NAME}
-          cd erpnext-dev-${GITHUB_REF_NAME}
-          sudo ./erpnext-dev.sh local-dev-quickstart   # or public-vm-guided-setup
+          ${install_example}
           \`\`\`
 
-          The bootstrap runs without sudo and verifies the pinned signing-key fingerprint,
-          signed external asset inventory, archive digest, safe paths, internal checksums, and
-          immutable build identity before printing any privileged command. See SECURITY.md."
+          The small bootstrap from protected main runs without sudo, resolves an exact release,
+          and verifies the pinned signing-key fingerprint, signed external asset inventory,
+          release bootstrap digest, archive digest, safe paths, internal checksums, and immutable
+          build identity before any privileged Toolkit action. See SECURITY.md."
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" --clobber

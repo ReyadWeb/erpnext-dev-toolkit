@@ -92,40 +92,42 @@ of the selected path or engine.
 
 ### 1. Install and open the setup wizard with one command
 
-This command downloads the latest published stable bundle, verifies the bundled
-checksums and maintainer signature with the pinned key fingerprint, installs the
-toolkit into `/opt/erpnext-dev`, creates the `erpnext-dev` command, and opens the
-setup wizard.
+Run the small bootstrap from protected `main` as your ordinary login user. It
+resolves the latest published signed stable release, verifies the pinned signing
+key and the complete release trust chain, installs the Toolkit atomically,
+repairs the `erpnext-dev` command, and opens the setup wizard.
 
 ```bash
-bash -c 'set -Eeuo pipefail
-sudo apt-get update
-sudo apt-get install -y curl ca-certificates gnupg tar
-REPO="ReyadWeb/erpnext-dev-toolkit"
-VERSION="$(curl -fsSL -o /dev/null -w "%{url_effective}" "https://github.com/${REPO}/releases/latest" | sed -n "s|.*/tag/\\([^/]*\\)$|\\1|p")"
-[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not resolve the latest stable release." >&2; exit 1; }
-workdir="$(mktemp -d /tmp/erpnext-dev-bootstrap.XXXXXX)"
-gnupg_home=""
-cleanup() { rm -rf "$workdir"; [[ -z "${gnupg_home:-}" ]] || rm -rf "$gnupg_home"; }
-trap cleanup EXIT
-cd "$workdir"
-base="https://github.com/${REPO}/releases/download/${VERSION}"
-archive="erpnext-dev-${VERSION}.tar.gz"
-curl -fsSLO "${base}/${archive}"
-if tar -tzf "$archive" | grep -Eq "(^/|(^|/)\\.\\.(/|$))"; then echo "Unsafe path detected in release archive." >&2; exit 1; fi
-tar --no-same-owner --no-same-permissions -xzf "$archive"
-cd "erpnext-dev-${VERSION}"
-expected_fpr="BFC10C79427CF73496EA6F5A30BFD17DD559C8B6"
-actual_fpr="$(gpg --batch --with-colons --show-keys docs/erpnext-dev-signing-key.asc 2>/dev/null | awk -F: '"'"'$1 == "fpr" { print $10; exit }'"'"')"
-test "$actual_fpr" = "$expected_fpr"
-gnupg_home="$(mktemp -d /tmp/erpnext-dev-gpg.XXXXXX)"
-chmod 700 "$gnupg_home"
-GNUPGHOME="$gnupg_home" gpg --batch --quiet --import docs/erpnext-dev-signing-key.asc
-GNUPGHOME="$gnupg_home" gpg --batch --verify SHA256SUMS.asc SHA256SUMS
-sha256sum -c SHA256SUMS
-sudo env TOOLKIT_UPDATE_VERSION="$VERSION" ./erpnext-dev.sh update-toolkit
-sudo erpnext-dev first-run'
+bash <(curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/main/install.sh)
 ```
+
+For the newest published signed beta, on a disposable test machine only:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ReyadWeb/erpnext-dev-toolkit/main/install.sh) --beta
+```
+
+Stable never accepts prereleases or mutable branches. Beta selects only the
+highest semantic `vX.Y.Z-beta.N`, never falls back to stable, warns prominently,
+and requires `BETA` confirmation (or explicit `--yes`). If no signed beta exists,
+the beta command fails closed. Use `--tag TAG` for an exact stable/beta tag and
+`--no-start` to install without opening first-run.
+
+The fetched `install.sh` is only a small resolver and verifier protected by the
+repository's `main` branch controls; it is not itself the release trust anchor.
+It pins fingerprint `BFC10C79427CF73496EA6F5A30BFD17DD559C8B6`, verifies the
+signed external asset inventory and the listed `bootstrap-verify.sh` digest,
+then lets that verified bootstrap check the archive, safe paths, internal
+checksums, and immutable build identity before any privileged Toolkit action.
+Downloads are HTTPS-only and bounded. Failures before that boundary cannot
+install the Toolkit, alter its CLI, or start the wizard.
+
+The host needs Bash, curl, CA certificates, GnuPG, awk, grep, sha256sum, tar,
+mktemp, Python 3, and sudo. A supported apt-based Debian/Ubuntu host may install
+missing verification prerequisites from a fixed allowlist after notice. Do not
+prefix the public command with `sudo`: verification deliberately runs without
+root, and sudo is requested only for fixed prerequisites and already-verified
+Toolkit actions. A real terminal is required unless `--no-start` is used.
 
 ### 2. Manual verified download
 
@@ -169,7 +171,11 @@ cd "erpnext-dev-${VERSION}" || exit 1
 sha256sum -c SHA256SUMS
 ```
 
-Why this block resolves `/releases/latest` through `url_effective`:
+The manual procedure below remains the advanced fallback. Do not use GitHub's
+automatic source archives or mutable `beta`/development branches: they are not
+the signed immutable release bundle accepted by the one-command installer.
+
+Why stable resolution uses GitHub `/releases/latest`:
 
 - It selects the latest **published stable** release.
 - It avoids a hardcoded version becoming stale.

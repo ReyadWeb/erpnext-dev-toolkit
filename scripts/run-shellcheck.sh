@@ -21,6 +21,7 @@ fi
 # (~2+ minutes on erpnext-dev.sh alone). Modules/scripts below cover the
 # real logic; module consistency + bash -n cover the entrypoint wiring.
 targets=(
+  install.sh
   lib/common.sh
   lib/ui.sh
   lib/profile.sh
@@ -95,6 +96,7 @@ targets=(
   scripts/test-operation-planner.sh
   scripts/test-installation-profile-contract.sh
   scripts/test-native-advanced-installation.sh
+  scripts/test-one-command-installer.sh
   scripts/test-docker-durability.sh
   scripts/test-safe-update-lifecycle.sh
   scripts/test-app-uninstall-recovery.sh

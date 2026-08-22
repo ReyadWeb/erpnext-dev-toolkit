@@ -3,6 +3,7 @@
 # validate-release.sh verifies every listed path exists before a tag is published.
 
 erpnext-dev.sh
+install.sh
 SHA256SUMS
 RELEASE-MANIFEST.txt
 LICENSE
@@ -86,6 +87,7 @@ scripts/test-health-snapshot.sh
 scripts/test-platform-profiles.sh
 scripts/test-installation-profile-contract.sh
 scripts/test-native-advanced-installation.sh
+scripts/test-one-command-installer.sh
 scripts/test-inventory-compatibility.sh
 scripts/test-operation-planner.sh
 scripts/test-docker-durability.sh

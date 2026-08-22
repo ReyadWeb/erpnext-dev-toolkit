@@ -51,6 +51,7 @@ case "$mode" in
       "RELEASE-MANIFEST.txt"
       "erpnext-dev-signing-key.asc"
       "bootstrap-verify.sh"
+      "install.sh"
     )
     : >"$output"
     for name in "${assets[@]}"; do
@@ -59,6 +60,7 @@ case "$mode" in
         "$archive"|"$sidecar") path="${root}/dist/${name}" ;;
         erpnext-dev-signing-key.asc) path="${root}/docs/erpnext-dev-signing-key.asc" ;;
         bootstrap-verify.sh) path="${root}/scripts/bootstrap-verify.sh" ;;
+        install.sh) path="${root}/install.sh" ;;
         *) path="${root}/${name}" ;;
       esac
       [[ -f "$path" ]] || fail "required release asset is missing: ${path}"
