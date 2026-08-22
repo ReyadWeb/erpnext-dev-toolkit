@@ -282,6 +282,20 @@ pass 'inventory verifies Frappe source and ref'
 unset GIT_STUB_BAD_FRAPPE_REF
 chmod 700 "$RUNTIME_WORK/invoker"
 
+# Ubuntu 26.04 reports MariaDB as "mariadb from 11.8.x-MariaDB" rather than
+# using the older "Distrib" token. Verify the installed runtime contract against
+# that real format before prerequisite tests replace host probes with fixtures.
+(
+  mariadb() { printf 'mariadb from 11.8.6-MariaDB, client 15.2 for debian-linux-gnu\n'; }
+  redis-server() { printf 'Redis server v=8.0.5 sha=00000000:1 malloc=jemalloc bits=64\n'; }
+  systemctl() { return 0; }
+  mariadb-admin() { return 0; }
+  redis-cli() { printf 'PONG\n'; }
+  pkg-config() { return 0; }
+  native_advanced_verify_os_runtime
+) || fail 'Ubuntu 26.04 MariaDB/Redis runtime format rejected'
+pass 'Ubuntu 26.04 MariaDB 11.8 runtime accepted'
+
 # Real prerequisite failure handling: Chrony cannot prove a large correction,
 # then APT reports future-dated Release metadata. No mutation helper may run.
 PREREQ_MUTATIONS="$RUNTIME_WORK/prerequisite-mutations"

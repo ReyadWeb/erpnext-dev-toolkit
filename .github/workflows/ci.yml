@@ -29,11 +29,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Assert exact checkout and Ubuntu 26.04
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           . /etc/os-release
           test "$VERSION_ID" = "26.04"
           sha256sum -c SHA256SUMS
@@ -73,7 +74,7 @@ jobs:
         if: always()
         run: |
           set +e
-          echo "head=${GITHUB_SHA}"
+          echo "head=$(git rev-parse HEAD)"
           echo "runner=ubuntu-26.04"
           state_dir=/var/lib/erpnext-dev/operations
           if sudo test -d "$state_dir"; then

@@ -446,7 +446,7 @@ native_advanced_prerequisites() {
 native_advanced_verify_os_runtime() {
   local mariadb_version redis_version
   mariadb_version="$(mariadb --version 2>/dev/null)" || return 1
-  [[ "$mariadb_version" =~ Distrib[[:space:]]11\.8([.,-]|[[:space:]]) ]] || {
+  [[ "$mariadb_version" =~ (^|[^0-9])11\.8\.[0-9]+([^0-9]|$) ]] || {
     err "Frappe v16 requires MariaDB 11.8; the installed server does not match."
     return 1
   }
