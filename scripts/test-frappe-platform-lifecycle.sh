@@ -23,8 +23,9 @@ systemctl() {
   esac
 }
 timedatectl() {
-  case "$1" in
-    show) printf '%s\n' "${TEST_SYNCED:-yes}" ;;
+  case "$*" in
+    "show -p RTCTimeUSec --value") date -u '+%Y-%m-%d %H:%M:%S UTC' ;;
+    show*) printf '%s\n' "${TEST_SYNCED:-yes}" ;;
     set-ntp) TEST_SYNCED=yes ;;
   esac
 }

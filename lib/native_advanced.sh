@@ -18,6 +18,8 @@ NATIVE_ADVANCED_CONFIG_BASE=""
 NATIVE_ADVANCED_SITE_CREATED=0
 NATIVE_ADVANCED_STAGED_CONFIG=""
 NATIVE_ADVANCED_RECORDS_BASE=""
+NATIVE_ADVANCED_PDF_CAPABILITY="unknown"
+NATIVE_ADVANCED_STARTED_EPOCH=0
 
 # Run every Phase 7.4 Frappe command in one bounded environment. The caller
 # supplies only a trusted working directory and a script on stdin. "bootstrap"
@@ -40,7 +42,7 @@ unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
 unset NPM_CONFIG_USERCONFIG NPM_CONFIG_CACHE npm_config_userconfig npm_config_cache npm_config_prefix
 unset YARN_RC_FILENAME YARN_CACHE_FOLDER YARN_GLOBAL_FOLDER YARN_CONFIG_DIR
 unset PYTHONHOME PYTHONPATH PYTHONUSERBASE PIP_CONFIG_FILE PIP_CACHE_DIR
-unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR
+unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR UV_PYTHON_BIN_DIR UV_INSTALL_DIR UV_UNMANAGED_INSTALL
 unset GIT_CONFIG_SYSTEM GIT_CONFIG_GLOBAL GIT_CONFIG_COUNT
 while IFS='=' read -r inherited_name _; do
   case "$inherited_name" in
@@ -61,7 +63,11 @@ export YARN_CONFIG_DIR="$XDG_CONFIG_HOME/yarn"
 export PYTHONUSERBASE="$XDG_DATA_HOME/python"
 export PIP_CONFIG_FILE="$XDG_CONFIG_HOME/pip/pip.conf"
 export PIP_CACHE_DIR="$XDG_CACHE_HOME/pip"
-export UV_CONFIG_FILE="$XDG_CONFIG_HOME/uv/uv.toml"
+export UV_NO_CONFIG=1
+export UV_NO_SYSTEM_CONFIG=1
+export UV_NO_ENV_FILE=1
+export UV_NO_MODIFY_PATH=1
+export UV_INSTALL_DIR="$HOME/.local/bin"
 export UV_CACHE_DIR="$XDG_CACHE_HOME/uv"
 export UV_TOOL_DIR="$XDG_DATA_HOME/uv/tools"
 export UV_PYTHON_INSTALL_DIR="$XDG_DATA_HOME/uv/python"
@@ -69,9 +75,18 @@ export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_SYSTEM=/dev/null
 export GIT_CONFIG_GLOBAL=/dev/null
 export NVM_DIR="$HOME/.nvm"
-mkdir -p "$XDG_CONFIG_HOME/npm" "$XDG_CONFIG_HOME/yarn" "$XDG_CONFIG_HOME/pip" "$XDG_CONFIG_HOME/uv" \
+umask 077
+mkdir -p "$HOME/.local/bin" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME" \
+  "$XDG_CONFIG_HOME/npm" "$XDG_CONFIG_HOME/yarn" "$XDG_CONFIG_HOME/pip" "$XDG_CONFIG_HOME/uv" \
   "$NPM_CONFIG_CACHE" "$YARN_CACHE_FOLDER" "$YARN_GLOBAL_FOLDER" "$PIP_CACHE_DIR" "$UV_CACHE_DIR" \
   "$UV_TOOL_DIR" "$UV_PYTHON_INSTALL_DIR" "$PYTHONUSERBASE"
+for private_dir in "$HOME/.local/bin" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME" \
+  "$XDG_CONFIG_HOME/npm" "$XDG_CONFIG_HOME/yarn" "$XDG_CONFIG_HOME/pip" "$XDG_CONFIG_HOME/uv" \
+  "$NPM_CONFIG_CACHE" "$YARN_CACHE_FOLDER" "$YARN_GLOBAL_FOLDER" "$PIP_CACHE_DIR" "$UV_CACHE_DIR" \
+  "$UV_TOOL_DIR" "$UV_PYTHON_INSTALL_DIR" "$PYTHONUSERBASE"; do
+  [[ -d "$private_dir" && ! -L "$private_dir" && -O "$private_dir" ]]
+  chmod 0700 "$private_dir"
+done
 EOF_NATIVE_ADVANCED_ENV
     printf 'cd %q\n' "$workdir"
     if [[ "$mode" == runtime ]]; then
@@ -305,7 +320,7 @@ native_advanced_catalog_rows() {
   for app in "${PROFILE_PLAN_DESIRED_APPS[@]}"; do
     [[ "$app" == frappe ]] && continue
     load_validated_app_catalog_record "$app" || return 1
-    printf '%s|%s|%s\n' "$LIB_APP_ID" "$LIB_APP_REPO" "${LIB_APP_BRANCH:-default}"
+    printf '%s|%s|%s|%s\n' "$LIB_APP_ID" "$LIB_APP_REPO" "${LIB_APP_BRANCH:-default}" "$LIB_APP_COMMIT"
   done
 }
 
@@ -317,8 +332,25 @@ native_advanced_catalog_validate_runtime() {
     load_validated_app_catalog_record "$app" || return 1
     [[ "$LIB_APP_NATIVE_SUPPORT" == supported ]] || return 1
     [[ -n "$LIB_APP_REPO" && -n "$LIB_APP_BRANCH" ]] || return 1
+    [[ "$LIB_APP_COMMIT" =~ ^[a-f0-9]{40}$ ]] || return 1
     [[ ",${LIB_APP_SUPPORTED_FRAPPE}," == *",${frappe_major},"* ]] || return 1
     [[ "$app" == frappe || "$LIB_APP_QUICK_INSTALL" == supported ]] || return 1
+  done
+}
+
+native_advanced_remote_pin_matches() {
+  local app="$1" remote
+  load_validated_app_catalog_record "$app" || return 1
+  remote="$(env -i HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent PATH=/usr/local/bin:/usr/bin:/bin \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null \
+    git ls-remote "$LIB_APP_REPO" "refs/heads/$LIB_APP_BRANCH" 2>/dev/null | awk 'NR == 1 { print $1 }')" || return 1
+  [[ "$remote" == "$LIB_APP_COMMIT" ]]
+}
+
+native_advanced_verify_upstream_pins() {
+  local app
+  for app in "${PROFILE_PLAN_DESIRED_APPS[@]}"; do
+    native_advanced_remote_pin_matches "$app" || return 1
   done
 }
 
@@ -332,20 +364,23 @@ native_advanced_runtime_coordinates_validate() {
   [[ "$BENCH_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
   [[ "$BENCH_PARENT" == "$FRAPPE_HOME/"* && "$BENCH_DIR" == "$BENCH_PARENT/$BENCH_NAME" ]] || return 1
   [[ "$NODE_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || return 1
+  [[ "$YARN_VERSION" =~ ^1\.22\.[0-9]+$ ]] || return 1
   [[ "$PYTHON_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || return 1
   [[ "$NVM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  [[ "$NVM_COMMIT" =~ ^[a-f0-9]{40}$ ]] || return 1
   [[ "$UV_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  [[ "$PYTHON_PATCH_VERSION" =~ ^3\.14\.[0-9]+$ ]] || return 1
   [[ -z "$BENCH_VERSION" || "$BENCH_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
 }
 
 native_advanced_plan() {
-  local app
+  local app commit
   printf 'Native Advanced Installation Plan\n'
   printf 'Profile: advanced\nEngine: native\nExact site: %s\n' "$SITE_NAME"
   printf 'Requested applications: %s\nResolved dependency closure: %s\n' "$NATIVE_ADVANCED_REQUESTED" "$NATIVE_ADVANCED_RESOLVED"
   printf 'Application installation order: %s\n' "$NATIVE_ADVANCED_RESOLVED"
   printf 'Catalog acquisition records:\n'
-  while IFS='|' read -r app repo branch; do printf '  %s repository=%s ref=%s\n' "$app" "$repo" "$branch"; done < <(native_advanced_catalog_rows)
+  while IFS='|' read -r app repo branch commit; do printf '  %s repository=%s ref=%s commit=%s\n' "$app" "$repo" "$branch" "$commit"; done < <(native_advanced_catalog_rows)
   printf 'Checkpoints: preflight,prerequisites,frappe-user,bench-created,site-created,baseline-backup,app-acquisition,app-installation,migration,assets,services,readiness,inventory,configuration-promotion,post-promotion-reconciliation\n'
   printf 'Creates: Frappe user/home, Bench, exact site, curated app code, Native service, private operation record, promoted configuration\n'
   printf 'Baseline backup: after site creation and before any application acquisition; creation and verification are mandatory\n'
@@ -397,12 +432,52 @@ native_advanced_prerequisites() {
   fi
   INSTALL_READINESS_CONTEXT=native-advanced verify_clock_and_repository_readiness || return 1
   (check_resources) || { native_advanced_print_prerequisite_retry; return 1; }
+  native_advanced_verify_upstream_pins || { err "A reviewed upstream application ref moved or is unavailable."; return 1; }
   native_advanced_ledger_add toolkit-reuse
   install_self_for_reuse || return 1
   native_advanced_ledger_add system-packages
   install_system_packages || return 1
+  native_advanced_verify_os_runtime || return 1
+  native_advanced_pdf_capability_check
   native_advanced_ledger_add redis-sysctl
   configure_sysctl_for_redis || return 1
+}
+
+native_advanced_verify_os_runtime() {
+  local mariadb_version redis_version
+  mariadb_version="$(mariadb --version 2>/dev/null)" || return 1
+  [[ "$mariadb_version" =~ Distrib[[:space:]]11\.8([.,-]|[[:space:]]) ]] || {
+    err "Frappe v16 requires MariaDB 11.8; the installed server does not match."
+    return 1
+  }
+  redis_version="$(redis-server --version 2>/dev/null)" || return 1
+  [[ "$redis_version" =~ v=([0-9]+)\. ]] || return 1
+  ((BASH_REMATCH[1] >= 6)) || return 1
+  systemctl is-enabled --quiet mariadb || return 1
+  systemctl is-active --quiet mariadb || return 1
+  systemctl is-enabled --quiet redis-server || return 1
+  systemctl is-active --quiet redis-server || return 1
+  mariadb-admin ping --silent >/dev/null 2>&1 || return 1
+  [[ "$(redis-cli ping 2>/dev/null)" == PONG ]] || return 1
+  command -v cc >/dev/null && command -v pkg-config >/dev/null && command -v fc-list >/dev/null || return 1
+  pkg-config --exists libmariadb || return 1
+  systemctl is-enabled --quiet cron || return 1
+}
+
+native_advanced_pdf_capability_check() {
+  local version=""
+  if command -v wkhtmltopdf >/dev/null 2>&1; then
+    version="$(wkhtmltopdf --version 2>/dev/null || true)"
+  fi
+  if [[ "$version" == *'0.12.6'* && "$version" == *'patched qt'* ]]; then
+    NATIVE_ADVANCED_PDF_CAPABILITY=available
+    native_advanced_ledger_add pdf-capability:available
+    return 0
+  fi
+  NATIVE_ADVANCED_PDF_CAPABILITY=unavailable
+  native_advanced_ledger_add pdf-capability:unavailable
+  warn "PDF generation unavailable: wkhtmltopdf 0.12.6 with patched Qt was not verified."
+  warn "Installation will continue without claiming PDF capability; see the Phase 7.4 remediation documentation."
 }
 
 native_advanced_user_setup() {
@@ -421,19 +496,26 @@ native_advanced_toolchain_setup() {
   native_advanced_ledger_add frappe-toolchain
   if native_advanced_frappe_bash "$FRAPPE_HOME" bootstrap <<EOF_NATIVE_ADVANCED_TOOLCHAIN
 if [[ ! -s "\$NVM_DIR/nvm.sh" ]]; then
-  git clone --depth 1 --branch "v${NVM_VERSION}" https://github.com/nvm-sh/nvm.git "\$NVM_DIR"
+  [[ ! -e "\$NVM_DIR" ]]
+  git init "\$NVM_DIR"
+  git -C "\$NVM_DIR" remote add origin https://github.com/nvm-sh/nvm.git
+  git -C "\$NVM_DIR" fetch --depth 1 origin "refs/tags/v${NVM_VERSION}"
+  git -C "\$NVM_DIR" checkout --detach FETCH_HEAD
 fi
 [[ -s "\$NVM_DIR/nvm.sh" ]]
+[[ "\$(git -C "\$NVM_DIR" rev-parse HEAD)" == "${NVM_COMMIT}" ]]
 source "\$NVM_DIR/nvm.sh"
 nvm install "${NODE_VERSION}"
 nvm use "${NODE_VERSION}"
 nvm alias default "${NODE_VERSION}"
-npm install -g yarn
+npm install -g --ignore-scripts "yarn@${YARN_VERSION}"
 if ! command -v uv >/dev/null 2>&1; then
-  curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+  curl --proto '=https' --tlsv1.2 -LsSf "https://releases.astral.sh/github/uv/releases/download/${UV_VERSION}/uv-installer.sh" | sh
 fi
 export PATH="\$HOME/.local/bin:\$PATH"
-uv python install "${PYTHON_VERSION}" --default
+[[ "\$(command -v uv)" == "\$HOME/.local/bin/uv" && -x "\$HOME/.local/bin/uv" ]]
+[[ "\$(uv --version)" == "uv ${UV_VERSION}" ]]
+uv python install "${PYTHON_PATCH_VERSION}" --default
 if [[ -n "${BENCH_VERSION}" ]]; then uv tool install "frappe-bench==${BENCH_VERSION}" --force; else uv tool install frappe-bench --force; fi
 EOF_NATIVE_ADVANCED_TOOLCHAIN
   then
@@ -447,12 +529,16 @@ EOF_NATIVE_ADVANCED_TOOLCHAIN
   native_advanced_frappe_bash "$FRAPPE_HOME" <<EOF_NATIVE_ADVANCED_TOOLCHAIN_VERIFY
 node_version="\$(node --version)"
 [[ "\${node_version#v}" == "${NODE_VERSION}".* || "\${node_version#v}" == "${NODE_VERSION}" ]]
+[[ "\$(command -v node)" == "\$NVM_DIR/versions/node/"*/bin/node ]]
 npm --version
+[[ "\$(npm prefix -g)" == "\$NVM_DIR/versions/node/"* ]]
 yarn --version
+[[ "\$(yarn --version)" == "${YARN_VERSION}" ]]
 uv_version="\$(uv --version)"
 [[ "\${uv_version#uv }" == "${UV_VERSION}" ]]
+[[ "\$(command -v uv)" == "\$HOME/.local/bin/uv" && -x "\$HOME/.local/bin/uv" && -O "\$HOME/.local/bin/uv" ]]
 python_version="\$(python3 --version)"
-[[ "\${python_version#Python }" == "${PYTHON_VERSION}".* || "\${python_version#Python }" == "${PYTHON_VERSION}" ]]
+[[ "\${python_version#Python }" == "${PYTHON_PATCH_VERSION}" ]]
 bench_version="\$(bench --version)"
 if [[ -n "${BENCH_VERSION}" ]]; then [[ "\$bench_version" == "${BENCH_VERSION}" ]]; else [[ -n "\$bench_version" ]]; fi
 EOF_NATIVE_ADVANCED_TOOLCHAIN_VERIFY
@@ -480,12 +566,21 @@ EOF_NATIVE_ADVANCED_BENCH
   native_advanced_safe_regular_file "$BENCH_DIR/sites/apps.txt" || { native_advanced_ledger_add partial-bench; return 1; }
   native_advanced_safe_regular_file "$BENCH_DIR/sites/common_site_config.json" || { native_advanced_ledger_add partial-bench; return 1; }
   native_advanced_safe_regular_file "$BENCH_DIR/Procfile" || { native_advanced_ledger_add partial-bench; return 1; }
-  native_advanced_frappe_bash "$BENCH_DIR" <<'EOF_NATIVE_ADVANCED_BENCH_VERIFY' || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_BENCH_VERIFY || { native_advanced_ledger_add partial-bench; return 1; }
 bench --version
 bench version
-./env/bin/python --version
+[[ "\$(./env/bin/python --version)" == "Python ${PYTHON_PATCH_VERSION}" ]]
+pip_version="\$(./env/bin/python -m pip --version)"
+[[ "\$pip_version" == 'pip 25.3 '* || "\$pip_version" == 'pip 25.3.'* ]]
 EOF_NATIVE_ADVANCED_BENCH_VERIFY
+  load_validated_app_catalog_record frappe || { native_advanced_ledger_add partial-bench; return 1; }
+  [[ "$(native_advanced_frappe_bash "$BENCH_DIR" <<'EOF_NATIVE_ADVANCED_FRAPPE_HEAD'
+git -C apps/frappe rev-parse HEAD
+EOF_NATIVE_ADVANCED_FRAPPE_HEAD
+  )" == "$LIB_APP_COMMIT" ]] || { native_advanced_ledger_add partial-bench; return 1; }
+  native_advanced_remote_pin_matches frappe || { native_advanced_ledger_add partial-bench; return 1; }
   native_advanced_ledger_add bench
+  native_advanced_ledger_add "source:frappe@$LIB_APP_COMMIT"
 }
 
 native_advanced_site_create() {
@@ -540,6 +635,11 @@ EOF_NATIVE_ADVANCED_BACKUP
   completeness="$(sed -n '6p' <<<"$latest")"
   [[ -n "$prefix" && "$completeness" == complete ]] || return 1
   ! grep -Fxq "$db_file" <<<"$before_db_files" || return 1
+  [[ -s "$db_file" && -s "$public_file" && -s "$private_file" && -s "$config_file" ]] || return 1
+  [[ "$(stat -c %Y "$db_file")" -ge "$NATIVE_ADVANCED_STARTED_EPOCH" \
+    && "$(stat -c %Y "$public_file")" -ge "$NATIVE_ADVANCED_STARTED_EPOCH" \
+    && "$(stat -c %Y "$private_file")" -ge "$NATIVE_ADVANCED_STARTED_EPOCH" \
+    && "$(stat -c %Y "$config_file")" -ge "$NATIVE_ADVANCED_STARTED_EPOCH" ]] || return 1
   {
     printf 'db_file=%q\npublic_file=%q\nprivate_file=%q\nconfig_file=%q\n' "$db_file" "$public_file" "$private_file" "$config_file"
     cat <<'EOF_NATIVE_ADVANCED_BACKUP_VERIFY'
@@ -554,10 +654,11 @@ EOF_NATIVE_ADVANCED_BACKUP_VERIFY
 }
 
 native_advanced_get_app() {
-  local app="$1" repo branch rc=0
+  local app="$1" repo branch commit rc=0 actual_commit
   load_validated_app_catalog_record "$app" || return 1
   [[ "$LIB_APP_ID" == "$app" && "$app" != frappe ]] || return 1
-  repo="$LIB_APP_REPO"; branch="$LIB_APP_BRANCH"
+  repo="$LIB_APP_REPO"; branch="$LIB_APP_BRANCH"; commit="$LIB_APP_COMMIT"
+  native_advanced_remote_pin_matches "$app" || return 1
   if [[ -n "$branch" ]]; then
     native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET || rc=$?
 bench get-app --branch "${branch}" "${app}" "${repo}"
@@ -572,7 +673,14 @@ EOF_NATIVE_ADVANCED_GET_DEFAULT
     return "$rc"
   fi
   native_advanced_safe_directory "$BENCH_DIR/apps/$app" || { native_advanced_ledger_add "partial-code:$app"; return 1; }
+  actual_commit="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET_HEAD
+git -C "apps/${app}" rev-parse HEAD
+EOF_NATIVE_ADVANCED_GET_HEAD
+  )" || { native_advanced_ledger_add "partial-code:$app"; return 1; }
+  [[ "$actual_commit" == "$commit" ]] || { native_advanced_ledger_add "partial-code:$app"; return 1; }
+  native_advanced_remote_pin_matches "$app" || { native_advanced_ledger_add "partial-code:$app"; return 1; }
   native_advanced_ledger_add "code:$app"
+  native_advanced_ledger_add "source:$app@$commit"
 }
 
 native_advanced_install_app() {
@@ -616,7 +724,7 @@ native_advanced_readiness() {
 }
 
 native_advanced_verify() {
-  local app repo branch actual_repo actual_branch installed expected
+  local app repo branch commit actual_repo actual_branch actual_commit installed expected
   [[ -d "$BENCH_DIR/sites/$SITE_NAME" && -d "$BENCH_DIR/apps/frappe" ]] || return 1
   installed="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_INVENTORY
 bench --site "${SITE_NAME}" list-apps
@@ -630,7 +738,7 @@ EOF_NATIVE_ADVANCED_INVENTORY
     grep -Fxq "$app" <<<"$installed" || return 1
     [[ -d "$BENCH_DIR/apps/$app" ]] || return 1
     load_validated_app_catalog_record "$app" || return 1
-    repo="${LIB_APP_REPO%/}"; branch="$LIB_APP_BRANCH"
+    repo="${LIB_APP_REPO%/}"; branch="$LIB_APP_BRANCH"; commit="$LIB_APP_COMMIT"
     actual_repo="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GIT_REMOTE
 git -C "apps/${app}" remote get-url origin
 EOF_NATIVE_ADVANCED_GIT_REMOTE
@@ -643,6 +751,11 @@ EOF_NATIVE_ADVANCED_GIT_BRANCH
       )" || return 1
       [[ "$actual_branch" == "$branch" ]] || return 1
     fi
+    actual_commit="$(native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GIT_COMMIT
+git -C "apps/${app}" rev-parse HEAD
+EOF_NATIVE_ADVANCED_GIT_COMMIT
+    )" || return 1
+    [[ "$actual_commit" == "$commit" ]] || return 1
   done
 }
 
@@ -655,6 +768,7 @@ native_advanced_stage_config() {
     printf '# ERPNext Developer Toolkit schema-2 configuration\nCONFIG_SCHEMA=2\n'
     printf 'SITE_NAME=%s\nDEPLOYMENT_MODE=%s\nDEPLOYMENT_ENGINE=native\n' "$SITE_NAME" "${DEPLOYMENT_MODE:-development}"
     printf 'INSTALLATION_PROFILE=advanced\nINSTALLATION_PROFILE_APPS=%s\n' "$NATIVE_ADVANCED_REQUESTED"
+    printf 'PDF_CAPABILITY=%s\n' "$NATIVE_ADVANCED_PDF_CAPABILITY"
     printf 'FRAPPE_USER=%s\nBENCH_PARENT=%s\nBENCH_NAME=%s\nBENCH_DIR=%s\n' "$FRAPPE_USER" "$BENCH_PARENT" "$BENCH_NAME" "$BENCH_DIR"
   } >"$NATIVE_ADVANCED_STAGED_CONFIG"; then
     native_advanced_ledger_add partial-staged-config
@@ -725,6 +839,7 @@ native_advanced_install() {
     || { err "Target, configuration, or operation records changed after confirmation; refusing mutation."; planner_exit_code conflict; return $?; }
 
   NATIVE_ADVANCED_OPERATION_ID="native-advanced-${NATIVE_ADVANCED_OPERATION_ID_OVERRIDE:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+  NATIVE_ADVANCED_STARTED_EPOCH="$(date -u +%s)"
   NATIVE_ADVANCED_OPERATION_FILE="$NATIVE_ADVANCED_STATE_DIR/${NATIVE_ADVANCED_OPERATION_ID}.state"
   NATIVE_ADVANCED_STATUS=started; NATIVE_ADVANCED_CHECKPOINT=preflight; NATIVE_ADVANCED_RESULT=pending
   NATIVE_ADVANCED_RECOVERY="inspect-record,retry-only-if-target-absent"

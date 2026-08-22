@@ -44,7 +44,14 @@ INSTALLATION_PROFILE=advanced
 INSTALLATION_PROFILE_OPTION_PROVIDED=1
 QUICK_INSTALL_PREVIEW=0
 ASSUME_YES=1
-NVM_VERSION=0.40.3 NODE_VERSION=24 UV_VERSION=0.11.28 PYTHON_VERSION=3.14 BENCH_VERSION=5.31.0 FRAPPE_BRANCH=version-16
+NVM_VERSION=0.40.3 NVM_COMMIT=977563e97ddc66facf3a8e31c6cff01d236f09bd
+NODE_VERSION=24 YARN_VERSION=1.22.22 UV_VERSION=0.11.28
+PYTHON_VERSION=3.14 PYTHON_PATCH_VERSION=3.14.6 BENCH_VERSION=5.31.0
+FRAPPE_BRANCH=version-16 FRAPPE_COMMIT=6a329d068416768ec47ccd3326b9cc95a8d7bf99
+CRM_COMMIT=49d98d61e7d42c3bfc97ea65725c68d632c6b849
+TELEPHONY_COMMIT=039cf39f245d6818ead03cf94eea6ce7f9c1e1f7
+HELPDESK_COMMIT=480486287b2b7179dd42a09c2a62fca9cc89c26d
+export NVM_COMMIT FRAPPE_COMMIT CRM_COMMIT TELEPHONY_COMMIT HELPDESK_COMMIT
 ERPNEXT_DEV_NATIVE_ADVANCED_TEST=1
 export ERPNEXT_DEV_NATIVE_ADVANCED_TEST
 err() { printf 'ERROR: %s\n' "$*" >&2; }
@@ -73,15 +80,16 @@ printf '%s\n' '#!/usr/bin/env bash' 'printf "v24.19.0\n"' >"$RUNTIME_NODE_BIN/no
 printf '%s\n' '#!/usr/bin/env bash' \
   'printf "npm|HOME=%s|USER=%s|PWD=%s|config=%s|cache=%s\n" "$HOME" "$USER" "$PWD" "$NPM_CONFIG_USERCONFIG" "$NPM_CONFIG_CACHE" >>"$RUNTIME_LOG"' \
   '[[ "$HOME" != /home/test && "$USER" == frappe && "$NPM_CONFIG_USERCONFIG" == "$HOME/.config/npm/npmrc" && "$NPM_CONFIG_CACHE" == "$HOME/.cache/npm" ]]' \
-  '[[ "${1:-}" == --version ]] && printf "11.5.1\n" || :' >"$RUNTIME_NODE_BIN/npm"
+  'if [[ "${1:-}" == --version ]]; then printf "11.5.1\n"; elif [[ "${1:-} ${2:-}" == "prefix -g" ]]; then dirname "$(dirname "$0")"; fi' >"$RUNTIME_NODE_BIN/npm"
 printf '%s\n' '#!/usr/bin/env bash' \
   'printf "yarn|HOME=%s|PWD=%s|XDG=%s|npm=%s|yarn=%s\n" "$HOME" "$PWD" "$XDG_CONFIG_HOME" "$NPM_CONFIG_USERCONFIG" "$YARN_RC_FILENAME" >>"$RUNTIME_LOG"' \
   '[[ "$HOME" != /home/test && "$PWD" != /home/test* && "$XDG_CONFIG_HOME" == "$HOME/.config" && "$NPM_CONFIG_USERCONFIG" == "$HOME/.config/npm/npmrc" && "$YARN_RC_FILENAME" == "$HOME/.config/yarn/yarnrc" ]]' \
   'printf "1.22.22\n"' >"$RUNTIME_NODE_BIN/yarn"
 printf '%s\n' '#!/usr/bin/env bash' \
-  'printf "uv|HOME=%s|PWD=%s\n" "$HOME" "$PWD" >>"$RUNTIME_LOG"' \
+  'printf "uv|HOME=%s|PWD=%s|no_config=%s|config=%s\n" "$HOME" "$PWD" "${UV_NO_CONFIG:-}" "${UV_CONFIG_FILE:-unset}" >>"$RUNTIME_LOG"' \
+  '[[ "${UV_NO_CONFIG:-}" == 1 && -z "${UV_CONFIG_FILE:-}" ]]' \
   '[[ "${1:-}" == --version ]] && printf "uv 0.11.28\n" || :' >"$RUNTIME_HOME/.local/bin/uv"
-printf '%s\n' '#!/usr/bin/env bash' 'printf "Python 3.14.0\n"' >"$RUNTIME_HOME/.local/bin/python3"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "Python 3.14.6\n"' >"$RUNTIME_HOME/.local/bin/python3"
 printf '%s\n' '#!/usr/bin/env bash' \
   'printf "bench|%s|HOME=%s|PWD=%s|XDG=%s\n" "$*" "$HOME" "$PWD" "$XDG_CONFIG_HOME" >>"$RUNTIME_LOG"' \
   'case "${1:-}" in' \
@@ -90,7 +98,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
   '  init)' \
   '    target="$2"; mkdir -p "$target/apps/frappe"' \
   '    [[ "${BENCH_STUB_MODE:-}" != fail ]] || exit 47' \
-  '    mkdir -p "$target/env/bin" "$target/sites"; printf "#!/usr/bin/env bash\nprintf \\\"Python 3.14.0\\\\n\\\"\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"' \
+  '    mkdir -p "$target/env/bin" "$target/sites"; printf "#!/usr/bin/env bash\nif [[ \\\"\$1 \$2\\\" == \\\"-m pip\\\" ]]; then printf \\\"pip 25.3 from fixture\\\\n\\\"; else printf \\\"Python 3.14.6\\\\n\\\"; fi\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"' \
   '    [[ "${BENCH_STUB_MODE:-}" != missing-apps ]] || rm -f "$target/sites/apps.txt" ;;' \
   '  new-site) mkdir -p "sites/$2"; [[ "${BENCH_STUB_MODE:-}" != site-fail ]] || exit 48; printf "{}\n" >"sites/$2/site_config.json" ;;' \
   '  get-app) app="${@: -2:1}"; mkdir -p "apps/$app"; [[ "${BENCH_STUB_MODE:-}" != get-fail ]] || exit 49 ;;' \
@@ -108,13 +116,14 @@ printf '%s\n' '#!/usr/bin/env bash' \
   'printf "git|HOME=%s|USER=%s|PWD=%s|global=%s|system=%s|%s\n" "$HOME" "$USER" "$PWD" "$GIT_CONFIG_GLOBAL" "$GIT_CONFIG_SYSTEM" "$*" >>"$RUNTIME_LOG"' \
   '[[ "$HOME" != /home/test && "$USER" == frappe && "$GIT_CONFIG_GLOBAL" == /dev/null && "$GIT_CONFIG_SYSTEM" == /dev/null ]]' \
   'app="${2#apps/}"' \
-  'case "${3:-}" in remote) [[ "$app" == frappe ]] && printf "https://github.com/frappe/frappe\n" || printf "https://github.com/frappe/crm\n" ;; symbolic-ref) [[ "${GIT_STUB_BAD_FRAPPE_REF:-0}" == 1 && "$app" == frappe ]] && printf "wrong\n" || { [[ "$app" == frappe ]] && printf "version-16\n" || printf "main\n"; } ;; esac' >"$RUNTIME_HOME/.local/bin/git"
+  'case "${3:-}" in remote) [[ "$app" == frappe ]] && printf "https://github.com/frappe/frappe\n" || printf "https://github.com/frappe/crm\n" ;; symbolic-ref) [[ "${GIT_STUB_BAD_FRAPPE_REF:-0}" == 1 && "$app" == frappe ]] && printf "wrong\n" || { [[ "$app" == frappe ]] && printf "version-16\n" || printf "main\n"; } ;; rev-parse) if [[ "$2" == */.nvm ]]; then printf "%s\n" "$NVM_COMMIT"; elif [[ "$app" == frappe ]]; then printf "%s\n" "$FRAPPE_COMMIT"; else printf "%s\n" "$CRM_COMMIT"; fi ;; esac' >"$RUNTIME_HOME/.local/bin/git"
 chmod +x "$RUNTIME_NODE_BIN/node" "$RUNTIME_NODE_BIN/npm" "$RUNTIME_NODE_BIN/yarn" \
   "$RUNTIME_HOME/.local/bin/uv" "$RUNTIME_HOME/.local/bin/python3" "$RUNTIME_HOME/.local/bin/bench" "$RUNTIME_HOME/.local/bin/git"
 
 FRAPPE_HOME="$RUNTIME_HOME" FRAPPE_USER=frappe BENCH_PARENT="$RUNTIME_HOME/frappe" BENCH_NAME=frappe-bench
 BENCH_DIR="$BENCH_PARENT/$BENCH_NAME" SITE_NAME=erp.test NODE_VERSION=24 PYTHON_VERSION=3.14
-NVM_VERSION=0.40.3 UV_VERSION=0.11.28 BENCH_VERSION=5.31.0 FRAPPE_BRANCH=version-16
+NVM_VERSION=0.40.3 NVM_COMMIT=977563e97ddc66facf3a8e31c6cff01d236f09bd
+YARN_VERSION=1.22.22 UV_VERSION=0.11.28 PYTHON_PATCH_VERSION=3.14.6 BENCH_VERSION=5.31.0 FRAPPE_BRANCH=version-16
 ADMIN_PASSWORD=fixture-admin DB_ADMIN_USER=fixture-db-admin DB_ADMIN_PASSWORD=fixture-db-password
 export RUNTIME_LOG
 FRAPPE_SHELL_COUNT=0
@@ -123,6 +132,9 @@ frappe_login_bash() {
   printf 'shell=%s\n' "$FRAPPE_SHELL_COUNT" >>"$RUNTIME_LOG"
   bash --noprofile --norc
 }
+# Keep this boundary hermetic; dedicated pin tests below exercise mismatch
+# handling without contacting upstream repositories.
+native_advanced_remote_pin_matches() { [[ "${REMOTE_PIN_STUB_FAIL:-}" != "$1" ]]; }
 export HOME=/home/test XDG_CONFIG_HOME=/home/test/.config XDG_DATA_HOME=/root/.local/share XDG_STATE_HOME=/home/test/.state XDG_CACHE_HOME=/root/.cache
 export NPM_CONFIG_USERCONFIG=/home/test/.npmrc NPM_CONFIG_CACHE=/home/test/.npm YARN_RC_FILENAME=/home/test/.yarnrc YARN_CACHE_FOLDER=/root/.yarn
 export PYTHONHOME=/home/test/python PYTHONPATH=/root/python UV_CONFIG_FILE=/home/test/uv.toml GIT_CONFIG_GLOBAL=/home/test/.gitconfig GIT_CONFIG_SYSTEM=/root/gitconfig
@@ -144,6 +156,7 @@ cd "$WORK"
 [[ "$(grep -c '^shell=' "$RUNTIME_LOG")" -ge 2 ]] || fail 'toolchain verification reused bootstrap shell'
 pass 'toolchain setup exits and separate verification shell succeeds'
 assert_has 'NVM activation exposes Yarn' "$(<"$RUNTIME_LOG")" 'yarn|HOME='
+assert_has 'UV uses supported no-config isolation' "$(<"$RUNTIME_LOG")" 'no_config=1|config=unset'
 assert_lacks 'hostile user path excluded from tool execution' "$(<"$RUNTIME_LOG")" '/home/test'
 assert_lacks 'root path excluded from tool execution' "$(<"$RUNTIME_LOG")" '/root'
 assert_has 'controlled Frappe working directory used' "$(<"$RUNTIME_LOG")" "PWD=$RUNTIME_HOME"
@@ -292,6 +305,9 @@ timedatectl() {
   [[ "$1" == show ]] && printf '%s\n' "${PREREQ_SYNCED:-no}"
 }
 chronyc() { return 1; }
+system_clock_sources_consistent() { [[ "${PREREQ_SYNCED:-no}" == yes ]]; }
+native_advanced_verify_os_runtime() { printf 'runtime-verified\n' >>"$PREREQ_MUTATIONS"; }
+native_advanced_verify_pdf_capability() { NATIVE_ADVANCED_PDF_CAPABILITY=unavailable; }
 apt-get() {
   [[ "${PREREQ_APT_FAIL:-1}" == 1 ]] || return 0
   printf 'E: Release file for repository is not valid yet (invalid for another 23d)\n' >&2
@@ -564,7 +580,7 @@ rc=$?
 set -e
 assert_eq 'unsupported Frappe branch fails before mutation' "$rc" 22
 [[ ! -e "$MUTATION_LOG" && ! -e "$NATIVE_ADVANCED_STATE_DIR" ]] || fail 'unsupported branch mutated state'
-FRAPPE_BRANCH=version-16
+FRAPPE_BRANCH='version-16'
 pass 'unsupported runtime plan is mutation-free'
 
 for site in '' localhost 'bad site' '../erp.test' 'http://erp.test' 'erp.test:8000' '-bad.test' 'bad..test' 'bad/test'; do

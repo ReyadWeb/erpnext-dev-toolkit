@@ -176,6 +176,22 @@ system_clock_synchronized() {
   [[ "$value" == "yes" ]]
 }
 
+system_clock_sources_consistent() {
+  local provider="$1" now rtc_text rtc_epoch ref_text ref_epoch delta
+  now="$(date -u +%s)" || return 1
+  rtc_text="$(timedatectl show -p RTCTimeUSec --value 2>/dev/null)" || return 1
+  rtc_epoch="$(date -u -d "$rtc_text" +%s 2>/dev/null)" || return 1
+  delta=$((now - rtc_epoch)); ((delta < 0)) && delta=$((-delta))
+  ((delta <= 300)) || return 1
+  if [[ "$provider" == chrony ]]; then
+    ref_text="$(chronyc tracking 2>/dev/null | awk -F': ' '/^Ref time \(UTC\)/ { print $2; exit }')"
+    [[ -n "$ref_text" ]] || return 1
+    ref_epoch="$(date -u -d "$ref_text" +%s 2>/dev/null)" || return 1
+    delta=$((now - ref_epoch)); ((delta < 0)) && delta=$((-delta))
+    ((delta <= 3600)) || return 1
+  fi
+}
+
 attempt_bounded_clock_sync() {
   local provider="$1"
   case "$provider" in
@@ -227,6 +243,13 @@ verify_clock_and_repository_readiness() {
       install_readiness_print_recovery
       return 1
     fi
+  fi
+  if ! system_clock_sources_consistent "$provider"; then
+    err "System time, RTC, and the detected synchronization provider are materially inconsistent."
+    echo "Detected time provider: ${provider}" >&2
+    install_readiness_print_clock_verification "$provider"
+    install_readiness_print_recovery
+    return 1
   fi
 
   apt_log="$(mktemp /tmp/erpnext-dev-apt-readiness.XXXXXX)"
@@ -792,7 +815,7 @@ unset NODE_PATH NODE_OPTIONS COREPACK_HOME
 unset NPM_CONFIG_USERCONFIG NPM_CONFIG_CACHE npm_config_userconfig npm_config_cache npm_config_prefix
 unset YARN_RC_FILENAME YARN_CACHE_FOLDER YARN_GLOBAL_FOLDER YARN_CONFIG_DIR
 unset PYTHONHOME PYTHONPATH PYTHONUSERBASE PIP_CONFIG_FILE PIP_CACHE_DIR
-unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR
+unset UV_CONFIG_FILE UV_CACHE_DIR UV_TOOL_DIR UV_PYTHON_INSTALL_DIR UV_PYTHON_BIN_DIR UV_INSTALL_DIR UV_UNMANAGED_INSTALL
 unset GIT_CONFIG_SYSTEM GIT_CONFIG_GLOBAL GIT_CONFIG_COUNT
 while IFS='=' read -r inherited_name _; do
   case "\$inherited_name" in
@@ -805,12 +828,22 @@ export XDG_CONFIG_HOME="\$HOME/.config" XDG_DATA_HOME="\$HOME/.local/share" XDG_
 export NPM_CONFIG_USERCONFIG="\$XDG_CONFIG_HOME/npm/npmrc" NPM_CONFIG_CACHE="\$XDG_CACHE_HOME/npm"
 export YARN_RC_FILENAME="\$XDG_CONFIG_HOME/yarn/yarnrc" YARN_CACHE_FOLDER="\$XDG_CACHE_HOME/yarn" YARN_GLOBAL_FOLDER="\$XDG_DATA_HOME/yarn" YARN_CONFIG_DIR="\$XDG_CONFIG_HOME/yarn"
 export PYTHONUSERBASE="\$XDG_DATA_HOME/python" PIP_CONFIG_FILE="\$XDG_CONFIG_HOME/pip/pip.conf" PIP_CACHE_DIR="\$XDG_CACHE_HOME/pip"
-export UV_CONFIG_FILE="\$XDG_CONFIG_HOME/uv/uv.toml" UV_CACHE_DIR="\$XDG_CACHE_HOME/uv" UV_TOOL_DIR="\$XDG_DATA_HOME/uv/tools" UV_PYTHON_INSTALL_DIR="\$XDG_DATA_HOME/uv/python"
+export UV_NO_CONFIG=1 UV_NO_SYSTEM_CONFIG=1 UV_NO_ENV_FILE=1 UV_NO_MODIFY_PATH=1 UV_INSTALL_DIR="\$HOME/.local/bin"
+export UV_CACHE_DIR="\$XDG_CACHE_HOME/uv" UV_TOOL_DIR="\$XDG_DATA_HOME/uv/tools" UV_PYTHON_INSTALL_DIR="\$XDG_DATA_HOME/uv/python"
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null
 export NVM_DIR="\$HOME/.nvm"
-mkdir -p "\$XDG_CONFIG_HOME/npm" "\$XDG_CONFIG_HOME/yarn" "\$XDG_CONFIG_HOME/pip" "\$XDG_CONFIG_HOME/uv" \
+umask 077
+mkdir -p "\$HOME/.local/bin" "\$XDG_CONFIG_HOME" "\$XDG_DATA_HOME" "\$XDG_STATE_HOME" "\$XDG_CACHE_HOME" \
+  "\$XDG_CONFIG_HOME/npm" "\$XDG_CONFIG_HOME/yarn" "\$XDG_CONFIG_HOME/pip" "\$XDG_CONFIG_HOME/uv" \
   "\$NPM_CONFIG_CACHE" "\$YARN_CACHE_FOLDER" "\$YARN_GLOBAL_FOLDER" "\$PIP_CACHE_DIR" "\$UV_CACHE_DIR" \
   "\$UV_TOOL_DIR" "\$UV_PYTHON_INSTALL_DIR" "\$PYTHONUSERBASE"
+for private_dir in "\$HOME/.local/bin" "\$XDG_CONFIG_HOME" "\$XDG_DATA_HOME" "\$XDG_STATE_HOME" "\$XDG_CACHE_HOME" \
+  "\$XDG_CONFIG_HOME/npm" "\$XDG_CONFIG_HOME/yarn" "\$XDG_CONFIG_HOME/pip" "\$XDG_CONFIG_HOME/uv" \
+  "\$NPM_CONFIG_CACHE" "\$YARN_CACHE_FOLDER" "\$YARN_GLOBAL_FOLDER" "\$PIP_CACHE_DIR" "\$UV_CACHE_DIR" \
+  "\$UV_TOOL_DIR" "\$UV_PYTHON_INSTALL_DIR" "\$PYTHONUSERBASE"; do
+  [[ -d "\$private_dir" && ! -L "\$private_dir" && -O "\$private_dir" ]]
+  chmod 0700 "\$private_dir"
+done
 [[ -s "\$NVM_DIR/nvm.sh" ]]
 source "\$NVM_DIR/nvm.sh"
 nvm use --silent "${NODE_VERSION}" >/dev/null

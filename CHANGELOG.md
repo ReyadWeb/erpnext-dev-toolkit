@@ -73,6 +73,11 @@
 
 ### Fixed
 
+- Stabilized the complete Phase 7.4 Native advanced path with supported UV
+  no-config isolation, exact NVM/runtime/application commits, separate-shell
+  tool verification, MariaDB/Redis runtime acceptance, fresh complete baseline
+  backups, exact source/commit inventory, clock-source consistency checks, and a
+  required real Ubuntu 26.04 CRM/Telephony/Helpdesk installation gate.
 - Corrected Native advanced clock/APT prerequisite recovery so it prints the
   exact validated advanced request instead of `first-run`, keeps readiness ahead
   of Toolkit/package mutation, and permits only protected, matching,

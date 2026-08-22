@@ -60,6 +60,7 @@ app_profile_defaults() {
   LIB_APP_NAME=""
   LIB_APP_REPO=""
   LIB_APP_BRANCH=""
+  LIB_APP_COMMIT=""
   LIB_APP_NOTES=""
   # frappe = github.com/frappe/* maintained by Frappe Technologies
   # community = popular third-party / partner apps (still open source)
@@ -83,6 +84,7 @@ app_profile_defaults() {
       LIB_APP_NAME="frappe"
       LIB_APP_REPO="https://github.com/frappe/frappe"
       LIB_APP_BRANCH="${FRAPPE_BRANCH:-version-16}"
+      LIB_APP_COMMIT="${FRAPPE_COMMIT:-}"
       LIB_APP_SUPPORTED_ERPNEXT=""
       LIB_APP_UNINSTALL_CAPABILITY="never"
       LIB_APP_RISK="core"
@@ -105,6 +107,7 @@ app_profile_defaults() {
       LIB_APP_NAME="crm"
       LIB_APP_REPO="https://github.com/frappe/crm"
       LIB_APP_BRANCH="${CRM_BRANCH:-main}"
+      LIB_APP_COMMIT="${CRM_COMMIT:-}"
       LIB_APP_NOTES="Standalone modern CRM app. ERPNext already includes classic CRM features; install this if you want the separate Frappe CRM experience."
       ;;
     hrms | hr)
@@ -127,6 +130,7 @@ app_profile_defaults() {
       LIB_APP_NAME="telephony"
       LIB_APP_REPO="https://github.com/frappe/telephony"
       LIB_APP_BRANCH="${TELEPHONY_BRANCH:-develop}"
+      LIB_APP_COMMIT="${TELEPHONY_COMMIT:-}"
       LIB_APP_NOTES="Dependency app used by Frappe Helpdesk for telephony integrations. Installed automatically before Helpdesk when required."
       ;;
     helpdesk)
@@ -134,6 +138,7 @@ app_profile_defaults() {
       LIB_APP_NAME="helpdesk"
       LIB_APP_REPO="https://github.com/frappe/helpdesk"
       LIB_APP_BRANCH="${HELPDESK_BRANCH:-main}"
+      LIB_APP_COMMIT="${HELPDESK_COMMIT:-}"
       LIB_APP_NOTES="Ticketing and customer support app. Requires the Frappe Telephony app; the toolkit handles that dependency automatically."
       LIB_APP_REQUIRES="telephony"
       ;;
@@ -243,6 +248,7 @@ validate_app_catalog_record() {
   [[ -n "${LIB_APP_DISPLAY:-}" ]] || return 1
   [[ "${LIB_APP_REPO:-}" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$ ]] || return 1
   validate_branch_name "${LIB_APP_BRANCH:-}" || return 1
+  [[ -z "${LIB_APP_COMMIT:-}" || "${LIB_APP_COMMIT}" =~ ^[a-f0-9]{40}$ ]] || return 1
   [[ "${LIB_APP_SUPPORTED_FRAPPE:-}" =~ ^([0-9]+)(,[0-9]+)*$ ]] || return 1
   [[ -z "${LIB_APP_SUPPORTED_ERPNEXT:-}" || "${LIB_APP_SUPPORTED_ERPNEXT}" =~ ^([0-9]+)(,[0-9]+)*$ ]] || return 1
   [[ "${LIB_APP_NATIVE_SUPPORT:-}" == "supported" || "${LIB_APP_NATIVE_SUPPORT:-}" == "unsupported" ]] || return 1
