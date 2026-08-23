@@ -476,6 +476,7 @@ native_advanced_verify_os_runtime() {
   command -v cc >/dev/null || { err "The required C compiler is unavailable."; return 1; }
   command -v pkg-config >/dev/null || { err "pkg-config is unavailable."; return 1; }
   command -v fc-list >/dev/null || { err "The fontconfig fc-list runtime is unavailable."; return 1; }
+  command -v setsid >/dev/null || { err "The util-linux setsid runtime is unavailable."; return 1; }
   pkg-config --exists libmariadb || { err "MariaDB development metadata is unavailable to pkg-config."; return 1; }
   systemctl is-enabled --quiet cron || { err "Cron is not enabled."; return 1; }
 }
@@ -644,7 +645,29 @@ native_advanced_site_create() {
   local old_xtrace=0 rc=0
   [[ $- == *x* ]] && old_xtrace=1 && set +x
   if native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_SITE_CREATE
-printf '%s\n' "${DB_ADMIN_PASSWORD}" "${ADMIN_PASSWORD}" | bench new-site "${SITE_NAME}" --db-root-username "${DB_ADMIN_USER}"
+site_child=0
+cleanup_site_child() {
+  local signal="\${1:-TERM}"
+  if ((site_child > 0)) && kill -0 "\$site_child" 2>/dev/null; then
+    kill -"\$signal" -- "-\$site_child" 2>/dev/null || kill -"\$signal" "\$site_child" 2>/dev/null || true
+    for _ in {1..20}; do kill -0 "\$site_child" 2>/dev/null || break; sleep 0.1; done
+    kill -KILL -- "-\$site_child" 2>/dev/null || kill -KILL "\$site_child" 2>/dev/null || true
+  fi
+  wait "\$site_child" 2>/dev/null || true
+}
+trap 'cleanup_site_child INT; exit 130' INT
+trap 'cleanup_site_child TERM; exit 143' TERM
+exec {credential_fd}< <(printf '%s\n' "${DB_ADMIN_PASSWORD}" "${ADMIN_PASSWORD}")
+# Python getpass opens /dev/tty before consulting stdin. A new session without
+# a controlling terminal makes that open fail and forces the audited stdin
+# fallback while keeping both generated secrets out of argv and environment.
+setsid --wait bench new-site "${SITE_NAME}" --db-root-username "${DB_ADMIN_USER}" <&"\$credential_fd" &
+site_child=\$!
+exec {credential_fd}<&-
+if wait "\$site_child"; then rc=0; else rc=\$?; fi
+site_child=0
+trap - INT TERM
+exit "\$rc"
 EOF_NATIVE_ADVANCED_SITE_CREATE
   then
     :

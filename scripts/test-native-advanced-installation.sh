@@ -100,7 +100,15 @@ printf '%s\n' '#!/usr/bin/env bash' \
   '    [[ "${BENCH_STUB_MODE:-}" != fail ]] || exit 47' \
   '    mkdir -p "$target/env/bin" "$target/sites" "$target/config"; printf "#!/usr/bin/env bash\nif [[ \\\"\$1 \$2\\\" == \\\"-m pip\\\" ]]; then printf \\\"pip 26.0.1 from fixture\\\\n\\\"; else printf \\\"Python 3.14.6\\\\n\\\"; fi\n" >"$target/env/bin/python"; chmod +x "$target/env/bin/python"; printf frappe >"$target/sites/apps.txt"; printf "{}\n" >"$target/sites/common_site_config.json"; printf "web: bench serve\n" >"$target/Procfile"; printf "port 13000\n" >"$target/config/redis_cache.conf"; printf "port 11000\n" >"$target/config/redis_queue.conf"' \
   '    [[ "${BENCH_STUB_MODE:-}" != missing-apps ]] || rm -f "$target/sites/apps.txt" ;;' \
-  '  new-site) mkdir -p "sites/$2"; [[ "${BENCH_STUB_MODE:-}" != site-fail ]] || exit 48; printf "{}\n" >"sites/$2/site_config.json" ;;' \
+  '  new-site)' \
+  '    mkdir -p "sites/$2"' \
+  '    [[ "${BENCH_STUB_MODE:-}" != site-fail ]] || exit 48' \
+  '    if [[ "${BENCH_STUB_MODE:-}" == tty-attempt ]]; then if { exec 8</dev/tty; } 2>/dev/null; then exit 62; fi; fi' \
+  '    if [[ "${BENCH_STUB_MODE:-}" == credential-check || "${BENCH_STUB_MODE:-}" == tty-attempt ]]; then' \
+  '      IFS= read -r db_secret || exit 60; IFS= read -r admin_secret || exit 61' \
+  '      [[ "$db_secret" == fixture-db-password && "$admin_secret" == fixture-admin ]] || exit 63' \
+  '    fi' \
+  '    printf "{}\n" >"sites/$2/site_config.json" ;;' \
   '  get-app) app="${@: -2:1}"; mkdir -p "apps/$app"; [[ "${BENCH_STUB_MODE:-}" != get-fail ]] || exit 49 ;;' \
   '  --site)' \
   '    case "${3:-}" in' \
@@ -240,10 +248,44 @@ export BENCH_STUB_MODE
 # shellcheck disable=SC2218
 native_advanced_site_create
 assert_has 'verified exact site accepted' "$NATIVE_ADVANCED_LEDGER" site
-site_body="$(sed -n '/^native_advanced_site_create()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
-assert_has 'site secrets use the pinned noninteractive prompt order' "$site_body" 'printf '\''%s\n'\'' "${DB_ADMIN_PASSWORD}" "${ADMIN_PASSWORD}" | bench new-site'
+site_body="$(sed -n '/^native_advanced_site_create()/,/^native_advanced_baseline_backup()/p' "$ROOT_DIR/lib/native_advanced.sh")"
+assert_has 'site secrets use the pinned noninteractive prompt order' "$site_body" 'printf '\''%s\n'\'' "${DB_ADMIN_PASSWORD}" "${ADMIN_PASSWORD}"'
+assert_has 'site command runs in a session without a controlling terminal' "$site_body" 'setsid --wait bench new-site'
+assert_has 'site child signals target the detached process group' "$site_body" 'kill -"\$signal" -- "-\$site_child"'
+assert_has 'site command preserves its exact exit status' "$site_body" 'if wait "\$site_child"; then rc=0; else rc=\$?; fi'
 assert_lacks 'database password is absent from site command argv' "$site_body" '--db-root-password'
 assert_lacks 'administrator password is absent from site command argv' "$site_body" '--admin-password'
+rm -rf "$BENCH_DIR/sites/$SITE_NAME"
+BENCH_STUB_MODE=tty-attempt
+export BENCH_STUB_MODE
+# shellcheck disable=SC2218
+native_advanced_site_create
+pass 'Bench cannot open caller controlling terminal and consumes protected input'
+rm -rf "$BENCH_DIR/sites/$SITE_NAME"
+BENCH_STUB_MODE=credential-check
+export BENCH_STUB_MODE
+# shellcheck disable=SC2218
+native_advanced_site_create
+pass 'database and Administrator credentials use pinned order'
+rm -rf "$BENCH_DIR/sites/$SITE_NAME"
+saved_db_input="$DB_ADMIN_PASSWORD" saved_admin_input="$ADMIN_PASSWORD"
+DB_ADMIN_PASSWORD="$saved_admin_input" ADMIN_PASSWORD="$saved_db_input"
+set +e
+# shellcheck disable=SC2218
+native_advanced_site_create
+rc=$?
+set -e
+assert_eq 'reversed site credentials fail exactly' "$rc" 63
+rm -rf "$BENCH_DIR/sites/$SITE_NAME"
+DB_ADMIN_PASSWORD="$saved_db_input" ADMIN_PASSWORD=""
+set +e
+# shellcheck disable=SC2218
+native_advanced_site_create
+rc=$?
+set -e
+assert_eq 'short site credential input fails exactly' "$rc" 63
+DB_ADMIN_PASSWORD="$saved_db_input" ADMIN_PASSWORD="$saved_admin_input" BENCH_STUB_MODE=success
+export DB_ADMIN_PASSWORD ADMIN_PASSWORD BENCH_STUB_MODE
 # shellcheck disable=SC2218
 native_advanced_get_app crm
 get_app_body="$(sed -n '/^native_advanced_get_app()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"

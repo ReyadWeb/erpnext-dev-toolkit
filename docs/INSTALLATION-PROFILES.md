@@ -330,7 +330,25 @@ On that marked VM, record a snapshot, then run these acceptance cases manually:
    run the same install, and verify a non-success exit, unchanged active config,
    preserved site/baseline evidence, and `recovery-required` guidance.
 4. Destroy the VM after exporting only sanitized assertion results. Do not reuse
-   it and do not connect the procedure to any existing deployment.
+it and do not connect the procedure to any existing deployment.
+
+Site creation uses the exact pinned Frappe prompt order: MariaDB administration
+password first, then the site Administrator password. Python's `getpass` opens
+`/dev/tty` before falling back to standard input, so an ordinary anonymous pipe
+is insufficient when the installer itself has a controlling terminal. Phase
+7.4 therefore runs the exact `bench new-site` command in a bounded new session
+with no controlling terminal and supplies both generated credentials over a
+private anonymous descriptor. Neither credential is placed in argv or the
+exported environment. The supervising shell forwards termination to the whole
+detached process group, waits for it, and returns Bench's exact exit status.
+This behavior is pinned-source evidence, not a prompt-order assumption:
+`frappe/database/mariadb/setup_db.py::get_root_connection` calls `getpass` for
+the missing database password before connecting, while
+`frappe/utils/install.py::get_admin_password` calls it later during database
+bootstrap. Both files are verified at the reviewed Frappe commit recorded in
+the operation plan. Python's standard-library `getpass` implementation attempts
+the controlling terminal independently of redirected stdin; removing the child
+session's controlling terminal is therefore the required isolation boundary.
 
 The marker is authorization to follow this procedure, not a bypass in the
 installer. Hermetic CI never creates it. The required pull-request integration

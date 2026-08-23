@@ -53,6 +53,12 @@
 
 ## Unreleased
 
+- Corrected Native advanced interactive site creation: pinned Frappe uses
+  Python `getpass`, which prefers `/dev/tty` and could bypass a credential stdin
+  pipe. Site creation now runs without a controlling terminal, keeps generated
+  credentials out of argv/environment, and supervises the detached process
+  group with exact status and signal propagation.
+
 - Corrected shared lifecycle semantics so Frappe owns site readiness, service,
   access, HTTPS, and Administrator workflows while ERPNext remains an optional
   profile-managed application; added early clock/APT readiness and LVM lock-fd
