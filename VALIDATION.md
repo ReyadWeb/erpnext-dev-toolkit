@@ -39,6 +39,27 @@ Select every path affected by the change:
 For release-wide reliability claims, validate all four paths. For a bounded
 change, document why unaffected paths were not rerun.
 
+### v1.21 profile-aware readiness and recovery matrix
+
+| Profile/path | Installation | Readiness evidence | Backup/recovery | Restart/reboot evidence | Qualification |
+|---|---|---|---|---|---|
+| Local Native Recommended | Supported | Frappe, ERPNext, site, services, HTTP and login assets | Native backup/restore suites | Native service and Phase 7.4 VM evidence | tested |
+| Local Native Frappe-only | Supported | Frappe required; ERPNext absence valid; exact inventory | Native backup/restore suites | Native service tests | tested |
+| Local Native Advanced | Supported | Promoted Phase 7.4 intent, exact resolved apps, source, backup, services, HTTP/assets | Phase 7.4 transaction/recovery suite | Native PTY/non-TTY and reboot evidence | qualified |
+| Public Native Recommended | Supported | Native production services, site, HTTP/assets and inventory | Native backup/recovery contract | Public reboot remains field validation | not-qualified |
+| Public Native Frappe-only | Supported where selected | Frappe-only inventory and runtime evidence | Native backup/recovery contract | Public reboot remains field validation | not-qualified |
+| Local Docker Recommended | Supported | Compose runtime, site, image/manifest, volumes, HTTP/assets | Docker durability/restore suites | Docker restart tests | tested |
+| Local Docker Frappe-only | Supported | Compose runtime, Frappe inventory, image/manifest and assets | Docker durability/restore suites | Docker restart tests | tested |
+| Public Docker Recommended | Supported | Production Compose, routing, image and site evidence | Docker production backup contract | Public reboot remains field validation | not-qualified |
+| Public Docker Frappe-only | Supported where selected | Production Compose and Frappe-only inventory | Docker production backup contract | Public reboot remains field validation | not-qualified |
+| Existing installation | Read-only/deferred | No managed-readiness claim; reconciliation is informational | No automatic recovery authority | No managed restart claim | deferred |
+| Docker Advanced | Unsupported/deferred | Exit 23; no Docker mutation | No recovery path entered | Not applicable | unsupported |
+
+The Phase 7.7 readiness closure is read-only: it consumes validated
+reconciliation evidence and never repairs, rebuilds assets, promotes
+configuration, or guesses from profile metadata alone. Missing, extra,
+conflicting, ambiguous, stale, or unsupported evidence fails closed.
+
 ## Safety prerequisites
 
 Before changing a real machine:

@@ -14,6 +14,24 @@ procedure is maintained separately in [`VALIDATION.md`](VALIDATION.md).
 
 ## v1.20.3 Debian and setup bootstrap regression
 
+## v1.21 profile-aware recovery/readiness closure
+
+Focused hermetic coverage:
+
+```bash
+scripts/test-profile-recovery-readiness.sh
+scripts/test-platform-profiles.sh
+scripts/test-installation-profile-contract.sh
+```
+
+The readiness contract uses reconciliation evidence: Recommended requires
+ERPNext, Frappe-only permits its absence, Native Advanced requires its exact
+resolved application set, Existing remains informational, and Docker Advanced
+remains unsupported. Existing Native Advanced, backup/restore, inventory,
+service, asset, and Docker durability suites remain the recovery evidence; rows
+without direct public-environment evidence are marked `not-qualified` in
+`VALIDATION.md`.
+
 v1.20.3 keeps the patch narrow: the README exposes one command that verifies the
 stable bundle, installs the toolkit command, and opens the setup wizard, while
 the native Debian path no longer depends on the nvm installer hosted on

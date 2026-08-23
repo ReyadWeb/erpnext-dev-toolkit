@@ -212,6 +212,14 @@ failure records `recovery-required`, preserves the site and backup evidence, and
 directs the operator to inspect the record and repair the recorded checkpoint;
 there is no broad automatic cleanup or unsafe resume.
 
+Readiness and recovery consume the validated profile reconciliation snapshot,
+not profile metadata alone. Recommended requires Frappe and ERPNext; Frappe-only
+permits ERPNext absence; Native Advanced requires its exact resolved application
+set; Existing installation remains informational and unmanaged; Docker Advanced
+remains unsupported with exit 23. Incomplete, conflicting, ambiguous, stale, or
+unsupported evidence fails closed and does not trigger repair or configuration
+promotion.
+
 Every Native advanced toolchain, Bench, site, backup, application, migration,
 asset, inventory, and managed-start command runs from a controlled Frappe-owned
 directory with `HOME` fixed to the configured Frappe home. The command runtime
