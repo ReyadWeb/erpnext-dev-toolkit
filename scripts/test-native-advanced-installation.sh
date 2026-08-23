@@ -24,6 +24,14 @@ assert_lacks() {
   ! grep -Fq -- "$3" <<<"$2" || fail "$1: unexpectedly contained [$3]"
   pass "$1"
 }
+wait_for_file_text() {
+  local file="$1" expected="$2" attempt
+  for ((attempt = 0; attempt < 100; attempt++)); do
+    grep -Fq -- "$expected" "$file" 2>/dev/null && return 0
+    sleep 0.02
+  done
+  return 1
+}
 
 source "$ROOT_DIR/lib/apps.sh"
 source "$ROOT_DIR/lib/profile.sh"
@@ -715,7 +723,7 @@ assert_has 'interactive cancellation is explicit' "$(<"$ENTRY_WORK/cancel.out")"
 pass 'entrypoint cancellation is mutation-free'
 
 run_entrypoint_without_privilege "$ENTRY_WORK/noninteractive.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
-if [[ "$ENTRY_RC" -ne 1 ]]; then
+if [[ "$ENTRY_RC" -ne 1 ]] || ! wait_for_file_text "$ENTRY_WORK/noninteractive.out" 'must be run with sudo'; then
   sed -n '1,12p' "$ENTRY_WORK/noninteractive.out" >&2
 fi
 assert_eq 'noninteractive dispatcher reaches sudo transaction gate' "$ENTRY_RC" 1
