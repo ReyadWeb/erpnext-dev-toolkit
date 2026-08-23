@@ -615,7 +615,6 @@ done
 # silently invoking a real host command.
 ENTRY_WORK="$WORK/entrypoint"
 mkdir -p "$ENTRY_WORK/bin" "$ENTRY_WORK/log"
-PLATFORM_LOG="$ENTRY_WORK/platform.log"
 for platform_command in apt apt-get bench docker git mysql mariadb npm systemctl useradd; do
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$(basename "$0")" >>"$PLATFORM_LOG"\nexit 99\n' \
     >"$ENTRY_WORK/bin/$platform_command"
@@ -623,7 +622,6 @@ for platform_command in apt apt-get bench docker git mysql mariadb npm systemctl
 done
 ENTRY_ENV=(
   "PATH=$ENTRY_WORK/bin:$PATH"
-  "PLATFORM_LOG=$PLATFORM_LOG"
   "LOG_DIR=$ENTRY_WORK/log"
   "CONFIG_FILE=$ENTRY_WORK/config.env"
   "LEGACY_CONFIG_FILE=$ENTRY_WORK/legacy.env"
@@ -633,17 +631,19 @@ ENTRY_ENV=(
   "NO_COLOR=1"
 )
 run_entrypoint() {
-  local output_file="$1"
-  shift
+  local output_file="$1" platform_log="$2"
+  shift 2
+  [[ ! -e "$platform_log" ]] || fail "scenario platform log was not initially absent: $platform_log"
   set +e
-  env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
+  env "${ENTRY_ENV[@]}" "PLATFORM_LOG=$platform_log" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
   ENTRY_RC=$?
   set -e
 }
 run_entrypoint_without_privilege() {
-  local output_file="$1" env_bin bash_bin entrypoint_root="$ROOT_DIR" unprivileged_lock=""
+  local output_file="$1" platform_log="$2" env_bin bash_bin entrypoint_root="$ROOT_DIR" unprivileged_lock=""
   local unprivileged_uid="${SUDO_UID:-65534}" unprivileged_gid="${SUDO_GID:-65534}"
-  shift
+  shift 2
+  [[ ! -e "$platform_log" ]] || fail "dropped-user platform log was not initially absent: $platform_log"
   set +e
   if [[ "$EUID" -eq 0 ]]; then
     command -v setpriv >/dev/null || fail 'root test execution requires setpriv for the non-root privilege case'
@@ -667,16 +667,17 @@ run_entrypoint_without_privilege() {
         unprivileged_gid=65534
       }
     setpriv --reuid="$unprivileged_uid" --regid="$unprivileged_gid" --clear-groups \
-      "$env_bin" "${ENTRY_ENV[@]}" "LOCK_DIR=$unprivileged_lock" \
+      "$env_bin" "${ENTRY_ENV[@]}" "LOCK_DIR=$unprivileged_lock" "PLATFORM_LOG=$platform_log" \
       "$bash_bin" "$entrypoint_root/erpnext-dev.sh" "$@" >"$output_file" 2>&1
   else
-    env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
+    env "${ENTRY_ENV[@]}" "PLATFORM_LOG=$platform_log" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
   fi
   ENTRY_RC=$?
   set -e
 }
 
-run_entrypoint "$ENTRY_WORK/preview-1.out" install \
+preview_1_platform_log="$ENTRY_WORK/platform-preview-1.log"
+run_entrypoint "$ENTRY_WORK/preview-1.out" "$preview_1_platform_log" install \
   --profile advanced \
   --apps crm,helpdesk \
   --site erp.test \
@@ -694,27 +695,36 @@ assert_lacks 'entrypoint excludes deferred adapter warning' "$entry_preview" 'in
 assert_lacks 'entrypoint excludes ambiguous reconciliation' "$entry_preview" 'Reconciliation: ambiguous'
 [[ ! -e "$ENTRY_WORK/config.env" && ! -e "$ENTRY_WORK/legacy.env" &&
   ! -e "$ENTRY_WORK/operations" && ! -e "$ENTRY_WORK/lock" &&
-  ! -e "$ENTRY_WORK/bench-parent" && ! -e "$PLATFORM_LOG" ]] \
+  ! -e "$ENTRY_WORK/bench-parent" && ! -e "$preview_1_platform_log" ]] \
   || fail 'entrypoint preview mutated state or invoked a platform command'
 pass 'entrypoint executable preview is mutation-free'
-run_entrypoint "$ENTRY_WORK/preview-2.out" install --profile advanced --apps crm,helpdesk --site erp.test --preview
+preview_2_platform_log="$ENTRY_WORK/platform-preview-2.log"
+run_entrypoint "$ENTRY_WORK/preview-2.out" "$preview_2_platform_log" install --profile advanced --apps crm,helpdesk --site erp.test --preview
 assert_eq 'repeated entrypoint preview exit' "$ENTRY_RC" 11
 assert_eq 'repeated entrypoint preview deterministic' "$(<"$ENTRY_WORK/preview-1.out")" "$(<"$ENTRY_WORK/preview-2.out")"
+[[ ! -e "$preview_2_platform_log" ]] || fail 'repeated preview invoked a platform command'
 
-run_entrypoint "$ENTRY_WORK/site-less.out" install --profile advanced --apps crm,helpdesk --preview
+site_less_platform_log="$ENTRY_WORK/platform-site-less.log"
+run_entrypoint "$ENTRY_WORK/site-less.out" "$site_less_platform_log" install --profile advanced --apps crm,helpdesk --preview
 assert_eq 'site-less preview compatibility exit' "$ENTRY_RC" 0
 assert_has 'site-less preview schema 1' "$(<"$ENTRY_WORK/site-less.out")" 'Installation Profile Plan (schema 1)'
-run_entrypoint "$ENTRY_WORK/existing.out" install --profile existing --preview
+[[ ! -e "$site_less_platform_log" ]] || fail 'site-less preview invoked a platform command'
+existing_platform_log="$ENTRY_WORK/platform-existing.log"
+run_entrypoint "$ENTRY_WORK/existing.out" "$existing_platform_log" install --profile existing --preview
 assert_eq 'existing preview compatibility exit' "$ENTRY_RC" 0
 assert_has 'existing remains preview-only' "$(<"$ENTRY_WORK/existing.out")" 'Capability: preview-only'
+[[ ! -e "$existing_platform_log" ]] || fail 'existing preview invoked a platform command'
 for profile in recommended frappe-only; do
-  run_entrypoint "$ENTRY_WORK/$profile.out" install --profile "$profile" --preview
+  profile_platform_log="$ENTRY_WORK/platform-$profile.log"
+  run_entrypoint "$ENTRY_WORK/$profile.out" "$profile_platform_log" install --profile "$profile" --preview
   assert_eq "$profile preview compatibility exit" "$ENTRY_RC" 0
   assert_has "$profile preview schema 1" "$(<"$ENTRY_WORK/$profile.out")" 'Installation Profile Plan (schema 1)'
+  [[ ! -e "$profile_platform_log" ]] || fail "$profile preview invoked a platform command"
 done
 
+cancel_platform_log="$ENTRY_WORK/platform-cancel.log"
 set +e
-printf 'n\n' | env "${ENTRY_ENV[@]}" ERPNEXT_DEV_TEST_INTERACTIVE=1 \
+printf 'n\n' | env "${ENTRY_ENV[@]}" "PLATFORM_LOG=$cancel_platform_log" ERPNEXT_DEV_TEST_INTERACTIVE=1 \
   "$ROOT_DIR/erpnext-dev.sh" install --profile advanced --apps crm,helpdesk --site erp.test \
   >"$ENTRY_WORK/cancel.out" 2>&1
 ENTRY_RC=${PIPESTATUS[1]}
@@ -722,36 +732,51 @@ set -e
 assert_eq 'interactive dispatcher cancellation exit' "$ENTRY_RC" 12
 assert_has 'interactive dispatcher reaches dedicated plan' "$(<"$ENTRY_WORK/cancel.out")" 'Native Advanced Installation Plan'
 assert_has 'interactive cancellation is explicit' "$(<"$ENTRY_WORK/cancel.out")" 'Installation cancelled before mutation.'
-[[ ! -e "$ENTRY_WORK/config.env" && ! -e "$ENTRY_WORK/operations" && ! -e "$PLATFORM_LOG" ]] \
+[[ ! -e "$ENTRY_WORK/config.env" && ! -e "$ENTRY_WORK/operations" && ! -e "$cancel_platform_log" ]] \
   || fail 'entrypoint cancellation mutated state or invoked a platform command'
 pass 'entrypoint cancellation is mutation-free'
 
-run_entrypoint_without_privilege "$ENTRY_WORK/noninteractive.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
+nonroot_platform_log="$ENTRY_WORK/platform-nonroot.log"
+run_entrypoint_without_privilege "$ENTRY_WORK/noninteractive.out" "$nonroot_platform_log" install --profile advanced --apps crm,helpdesk --site erp.test --yes
 if [[ "$ENTRY_RC" -ne 1 ]] || ! wait_for_file_text "$ENTRY_WORK/noninteractive.out" 'must be run with sudo'; then
   sed -n '1,12p' "$ENTRY_WORK/noninteractive.out" >&2
 fi
 assert_eq 'noninteractive dispatcher reaches sudo transaction gate' "$ENTRY_RC" 1
 assert_has 'noninteractive dispatcher reaches dedicated plan' "$(<"$ENTRY_WORK/noninteractive.out")" 'Native Advanced Installation Plan'
 assert_has 'noninteractive transaction requires privilege' "$(<"$ENTRY_WORK/noninteractive.out")" 'must be run with sudo'
+[[ ! -e "$nonroot_platform_log" ]] || fail 'non-root transaction invoked a platform command'
 if [[ "$EUID" -eq 0 ]]; then
-  run_entrypoint "$ENTRY_WORK/root-transaction.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
+  root_platform_log="$ENTRY_WORK/platform-root-transaction.log"
+  run_entrypoint "$ENTRY_WORK/root-transaction.out" "$root_platform_log" install --profile advanced --apps crm,helpdesk --site erp.test --yes
   assert_eq 'root dispatcher passes privilege gate and reaches bounded transaction failure' "$ENTRY_RC" 31
   assert_lacks 'root dispatcher does not report a missing privilege' "$(<"$ENTRY_WORK/root-transaction.out")" 'must be run with sudo'
+  [[ -s "$root_platform_log" ]] || fail 'root transaction did not preserve poisoned-command evidence'
+  grep -Eq '^(apt|apt-get|bench|docker|git|mysql|mariadb|npm|systemctl|useradd)$' "$root_platform_log" \
+    || fail 'root transaction platform evidence was unexpected'
+  pass 'root transaction preserves expected poisoned-command evidence'
+  root_platform_digest="$(sha256sum "$root_platform_log" | awk '{print $1}')"
 fi
 
 for docker_mode in preview mutation; do
+  docker_platform_log="$ENTRY_WORK/platform-docker-$docker_mode.log"
   docker_args=(install --profile advanced --apps 'crm,helpdesk' --site erp.test)
   [[ "$docker_mode" == mutation ]] || docker_args+=(--preview)
   set +e
-  env "${ENTRY_ENV[@]}" DEPLOYMENT_ENGINE=docker "$ROOT_DIR/erpnext-dev.sh" "${docker_args[@]}" \
+  [[ ! -e "$docker_platform_log" ]] || fail "Docker $docker_mode platform log was not initially absent"
+  env "${ENTRY_ENV[@]}" "PLATFORM_LOG=$docker_platform_log" DEPLOYMENT_ENGINE=docker "$ROOT_DIR/erpnext-dev.sh" "${docker_args[@]}" \
     >"$ENTRY_WORK/docker-$docker_mode.out" 2>&1
   ENTRY_RC=$?
   set -e
   assert_eq "Docker advanced $docker_mode unsupported exit" "$ENTRY_RC" 23
   assert_has "Docker advanced $docker_mode message" "$(<"$ENTRY_WORK/docker-$docker_mode.out")" 'unsupported for Docker'
-  [[ ! -e "$PLATFORM_LOG" ]] || fail "Docker command executed during advanced $docker_mode"
+  [[ ! -e "$docker_platform_log" ]] || fail "Docker command executed during advanced $docker_mode"
   pass "Docker advanced $docker_mode executes no platform command"
 done
+if [[ "$EUID" -eq 0 ]]; then
+  [[ -s "$root_platform_log" && "$(sha256sum "$root_platform_log" | awk '{print $1}')" == "$root_platform_digest" ]] \
+    || fail 'Docker cases altered preserved root transaction evidence'
+  pass 'stale root evidence cannot contaminate isolated Docker scenarios'
+fi
 
 reset_case
 profile_plan_parse_requested_apps helpdesk
