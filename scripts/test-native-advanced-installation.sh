@@ -633,15 +633,30 @@ run_entrypoint() {
   set -e
 }
 run_entrypoint_without_privilege() {
-  local output_file="$1"
+  local output_file="$1" env_bin bash_bin entrypoint_root="$ROOT_DIR"
+  local unprivileged_uid="${SUDO_UID:-65534}" unprivileged_gid="${SUDO_GID:-65534}"
   shift
   set +e
   if [[ "$EUID" -eq 0 ]]; then
     command -v setpriv >/dev/null || fail 'root test execution requires setpriv for the non-root privilege case'
     chmod 0755 "$WORK" "$ENTRY_WORK"
     chmod 0777 "$ENTRY_WORK/log"
-    setpriv --reuid=65534 --regid=65534 --clear-groups \
-      env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
+    # A root-owned checkout can sit below a non-traversable home directory.
+    # Exercise the exact entrypoint/module bytes from a bounded readable fixture
+    # instead of making assumptions about the caller's repository parents.
+    entrypoint_root="$WORK/unprivileged-toolkit"
+    mkdir -p "$entrypoint_root"
+    cp -a "$ROOT_DIR/erpnext-dev.sh" "$ROOT_DIR/VERSION" "$ROOT_DIR/lib" "$entrypoint_root/"
+    chmod -R a+rX "$entrypoint_root"
+    env_bin="$(command -v env)"
+    bash_bin="$(command -v bash)"
+    [[ "$unprivileged_uid" =~ ^[0-9]+$ && "$unprivileged_gid" =~ ^[0-9]+$ && "$unprivileged_uid" -ne 0 ]] \
+      || {
+        unprivileged_uid=65534
+        unprivileged_gid=65534
+      }
+    setpriv --reuid="$unprivileged_uid" --regid="$unprivileged_gid" --clear-groups \
+      "$env_bin" "${ENTRY_ENV[@]}" "$bash_bin" "$entrypoint_root/erpnext-dev.sh" "$@" >"$output_file" 2>&1
   else
     env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
   fi
@@ -700,6 +715,9 @@ assert_has 'interactive cancellation is explicit' "$(<"$ENTRY_WORK/cancel.out")"
 pass 'entrypoint cancellation is mutation-free'
 
 run_entrypoint_without_privilege "$ENTRY_WORK/noninteractive.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
+if [[ "$ENTRY_RC" -ne 1 ]]; then
+  sed -n '1,12p' "$ENTRY_WORK/noninteractive.out" >&2
+fi
 assert_eq 'noninteractive dispatcher reaches sudo transaction gate' "$ENTRY_RC" 1
 assert_has 'noninteractive dispatcher reaches dedicated plan' "$(<"$ENTRY_WORK/noninteractive.out")" 'Native Advanced Installation Plan'
 assert_has 'noninteractive transaction requires privilege' "$(<"$ENTRY_WORK/noninteractive.out")" 'must be run with sudo'
