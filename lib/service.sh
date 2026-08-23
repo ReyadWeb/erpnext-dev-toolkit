@@ -780,6 +780,7 @@ create_erpnext_service() {
   if ! bench_dir="$(require_bench_dir)"; then
     return 1
   fi
+  create_start_helper || return 1
 
   log "Creating managed Frappe stack systemd service"
   ensure_toolkit_runtime_procfile "$bench_dir" || return 1
@@ -788,7 +789,7 @@ create_erpnext_service() {
 [Unit]
 Description=Managed Frappe Stack Service (${SITE_NAME})
 After=network-online.target mariadb.service redis-server.service
-Wants=network-online.target
+Wants=network-online.target mariadb.service redis-server.service
 
 [Service]
 Type=simple
@@ -796,7 +797,7 @@ User=${FRAPPE_USER}
 Group=${FRAPPE_USER}
 WorkingDirectory=${bench_dir}
 Environment=HOME=${FRAPPE_HOME}
-ExecStart=/bin/bash -lc 'export NVM_DIR="\$HOME/.nvm"; [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null 2>&1 || true; export PATH="\$HOME/.local/bin:\$PATH"; cd "${bench_dir}" && bench start --procfile Procfile.toolkit'
+ExecStart=${FRAPPE_HOME}/start-erpnext-dev.sh --procfile Procfile.toolkit
 Restart=on-failure
 RestartSec=10
 KillMode=control-group

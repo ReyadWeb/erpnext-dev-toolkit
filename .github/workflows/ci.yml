@@ -18,6 +18,275 @@ permissions:
 # with "The operation was canceled" on the shellcheck step).
 
 jobs:
+  native-advanced-ubuntu-2604:
+    name: Native advanced Ubuntu 26.04 (real install)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 150
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.EXPECTED_SHA }}
+
+      - name: Assert exact checkout and Ubuntu 26.04
+        run: |
+          set -euo pipefail
+          test -n "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          . /etc/os-release
+          test "$VERSION_ID" = "26.04"
+          sha256sum -c SHA256SUMS
+
+      - name: Reclaim ephemeral-runner disk
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Run the production Native advanced installation
+        timeout-minutes: 130
+        run: |
+          set -euo pipefail
+          transcript="$(mktemp)"
+          chmod 0600 "$transcript"
+          trap 'rm -f "$transcript"' EXIT INT TERM
+          sudo ./erpnext-dev.sh install \
+            --profile advanced \
+            --apps crm,helpdesk \
+            --site erp.test \
+            --yes >"$transcript" 2>&1
+          sudo python3 - /home/frappe/erpnext-dev-credentials.txt "$transcript" <<'PY'
+          import sys
+          credential_lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          secrets = [line.split(": ", 1)[1].encode() for line in credential_lines if line.startswith("  Password: ")]
+          transcript = open(sys.argv[2], "rb").read()
+          assert len(secrets) == 2 and all(secret not in transcript for secret in secrets)
+          PY
+
+      - name: Verify promoted installation and exact inventory
+        run: |
+          set -euo pipefail
+          sudo test -f /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'INSTALLATION_PROFILE=advanced' /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'SITE_NAME=erp.test' /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'INSTALLATION_PROFILE_APPS=crm,helpdesk' /etc/erpnext-dev/config.env
+          sudo /opt/erpnext-dev/erpnext-dev.sh wait-ready
+          sudo /opt/erpnext-dev/erpnext-dev.sh verify-frontend-assets
+          code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'Host: erp.test' http://127.0.0.1:8000/api/method/ping)"
+          case "$code" in 200|401|403) ;; *) exit 1 ;; esac
+          credentials=/home/frappe/erpnext-dev-credentials.txt
+          sudo test -f "$credentials"
+          sudo test ! -L "$credentials"
+          test "$(sudo stat -c '%U:%G:%a' "$credentials")" = root:root:600
+          sudo /opt/erpnext-dev/erpnext-dev.sh credentials-info >/dev/null
+          private_output="$(mktemp)"
+          chmod 0600 "$private_output"
+          sudo script --quiet --return --command '/opt/erpnext-dev/erpnext-dev.sh credentials-show --yes' "$private_output" >/dev/null
+          sudo python3 - "$credentials" "$private_output" <<'PY'
+          import sys
+          stored = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          shown = open(sys.argv[2], encoding="utf-8", errors="strict").read()
+          admin = next(stored[i + 2].split(": ", 1)[1] for i, line in enumerate(stored) if line == "Login:")
+          database = next(stored[i + 2].split(": ", 1)[1] for i, line in enumerate(stored) if line == "MariaDB Bench Admin:")
+          assert f"ERPNext Password: {admin}" in shown
+          assert f"MariaDB Password: {database}" in shown
+          PY
+          rm -f "$private_output"
+          sudo python3 - "$credentials" <<'PY'
+          import sys, urllib.parse, urllib.request
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          password = next(lines[i + 2].split(": ", 1)[1] for i, line in enumerate(lines) if line == "Login:")
+          body = urllib.parse.urlencode({"usr": "Administrator", "pwd": password}).encode()
+          request = urllib.request.Request("http://127.0.0.1:8000/api/method/login", data=body, headers={"Host": "erp.test"})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              assert response.status == 200
+          PY
+          sudo systemctl stop erpnext-dev.service
+          ! pgrep -u frappe -f '/home/frappe/frappe/frappe-bench|bench (start|serve|worker|schedule)' >/dev/null
+          sudo systemctl start erpnext-dev.service
+          sudo /opt/erpnext-dev/erpnext-dev.sh wait-ready
+          sudo /opt/erpnext-dev/erpnext-dev.sh verify-frontend-assets
+          sudo /opt/erpnext-dev/erpnext-dev.sh credentials-info >/dev/null
+          sudo /opt/erpnext-dev/erpnext-dev.sh backup-verify >/dev/null
+          sudo -H -u frappe env -i HOME=/home/frappe USER=frappe LOGNAME=frappe \
+            PATH=/usr/local/bin:/usr/bin:/bin GIT_CONFIG_NOSYSTEM=1 \
+            GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null bash --noprofile --norc -c '
+              export NVM_DIR="$HOME/.nvm"
+              source "$NVM_DIR/nvm.sh"
+              nvm use --silent 24 >/dev/null
+              cd /home/frappe/frappe/frappe-bench
+              test "$(bench --site erp.test list-apps | sed -E "s/[[:space:]].*$//; /^$/d" | sort)" = "$(printf "%s\\n" crm frappe helpdesk telephony | sort)"
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/frappe rev-parse HEAD)" = 6a329d068416768ec47ccd3326b9cc95a8d7bf99
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/crm rev-parse HEAD)" = 49d98d61e7d42c3bfc97ea65725c68d632c6b849
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/telephony rev-parse HEAD)" = 039cf39f245d6818ead03cf94eea6ce7f9c1e1f7
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/helpdesk rev-parse HEAD)" = 480486287b2b7179dd42a09c2a62fca9cc89c26d
+            '
+          sudo python3 - "$credentials" <<'PY'
+          import sys, urllib.parse, urllib.request
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          password = next(lines[i + 2].split(": ", 1)[1] for i, line in enumerate(lines) if line == "Login:")
+          body = urllib.parse.urlencode({"usr": "Administrator", "pwd": password}).encode()
+          request = urllib.request.Request("http://127.0.0.1:8000/api/method/login", data=body, headers={"Host": "erp.test"})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              assert response.status == 200
+          PY
+          sudo systemctl is-enabled --quiet mariadb redis-server erpnext-dev.service
+          sudo systemctl is-active --quiet mariadb redis-server erpnext-dev.service
+
+      - name: Emit sanitized checkpoint summary
+        if: always()
+        run: |
+          set +e
+          echo "head=$(git rev-parse HEAD)"
+          echo "runner=ubuntu-26.04"
+          state_dir=/var/lib/erpnext-dev/operations
+          if sudo test -d "$state_dir"; then
+            while IFS= read -r state; do
+              sudo awk -F= '
+                $1 ~ /^(operation_type|site|requested_apps|resolved_apps|status|checkpoint|result|artifact_ledger|baseline_backup|verification|recovery)$/ {
+                  if ($2 ~ /^[A-Za-z0-9.,:@_+-]*$/) print
+                }
+              ' "$state"
+            done < <(sudo find "$state_dir" -maxdepth 1 -type f -name 'native-advanced-*.state' -print | sort)
+          else
+            echo "state=absent"
+          fi
+          sudo systemctl is-active mariadb redis-server erpnext-dev.service 2>/dev/null || true
+          df -h /
+
+  native-advanced-ubuntu-2604-pty:
+    name: Native advanced Ubuntu 26.04 (real PTY install)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 150
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.EXPECTED_SHA }}
+
+      - name: Assert exact checkout and Ubuntu 26.04
+        run: |
+          set -euo pipefail
+          test -n "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          . /etc/os-release
+          test "$VERSION_ID" = "26.04"
+          sha256sum -c SHA256SUMS
+
+      - name: Reclaim ephemeral-runner disk
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Run production installation under a real PTY
+        timeout-minutes: 130
+        run: |
+          set -euo pipefail
+          transcript="$(mktemp)"
+          process_audit="$(mktemp)"
+          environment_audit="$(mktemp)"
+          sentinel="$(mktemp)"
+          chmod 0600 "$transcript" "$process_audit" "$environment_audit" "$sentinel"
+          cleanup() {
+            rm -f "$sentinel"
+            [[ -z "${monitor_pid:-}" ]] || wait "$monitor_pid" 2>/dev/null || true
+            rm -f "$transcript" "$process_audit" "$environment_audit"
+          }
+          trap cleanup EXIT INT TERM
+          (
+            while [[ -e "$sentinel" ]]; do
+              ps -eo user=,pid=,stat=,args= | awk '$1 == "frappe" || $4 ~ /(bench|frappe|erpnext-dev)/ { print }' >>"$process_audit"
+              while IFS= read -r pid; do
+                sudo cat "/proc/$pid/environ" 2>/dev/null | tr '\0' '\n' \
+                  | grep -E '^(ADMIN_PASSWORD|DB_ADMIN_PASSWORD|MYSQL_PWD|MARIADB_PWD)=' >>"$environment_audit" || true
+              done < <(pgrep -u frappe 2>/dev/null || true)
+              sleep 0.2
+            done
+          ) &
+          monitor_pid=$!
+          script --quiet --return --command \
+            'sudo ./erpnext-dev.sh install --profile advanced --apps crm,helpdesk --site erp.test --yes' \
+            "$transcript"
+          rm -f "$sentinel"
+          wait "$monitor_pid"
+          monitor_pid=""
+          ! grep -Eqi 'MySQL root password:|Set Administrator password:|Administrator password:' "$transcript"
+          ! awk '$3 ~ /^T/' "$process_audit" | grep -Eq '(python|bench|frappe|erpnext-dev)'
+          ! grep -Eq -- '--(admin|db-root|mariadb-root)-password|ADMIN_PASSWORD=|DB_ADMIN_PASSWORD=' "$process_audit"
+          test ! -s "$environment_audit"
+          ! pgrep -u frappe -f 'bench new-site|frappe.*new-site' >/dev/null
+          sudo python3 - /home/frappe/erpnext-dev-credentials.txt "$transcript" "$process_audit" "$environment_audit" <<'PY'
+          import sys
+          credential_lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          secrets = [line.split(": ", 1)[1].encode() for line in credential_lines if line.startswith("  Password: ")]
+          assert len(secrets) == 2 and all(secrets)
+          for audit_path in sys.argv[2:]:
+              audit = open(audit_path, "rb").read()
+              assert all(secret not in audit for secret in secrets)
+          PY
+
+      - name: Verify promoted installation and exact inventory
+        run: |
+          set -euo pipefail
+          sudo test -f /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'INSTALLATION_PROFILE=advanced' /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'SITE_NAME=erp.test' /etc/erpnext-dev/config.env
+          sudo grep -Fxq 'INSTALLATION_PROFILE_APPS=crm,helpdesk' /etc/erpnext-dev/config.env
+          sudo /opt/erpnext-dev/erpnext-dev.sh wait-ready
+          sudo /opt/erpnext-dev/erpnext-dev.sh verify-frontend-assets
+          code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'Host: erp.test' http://127.0.0.1:8000/api/method/ping)"
+          case "$code" in 200|401|403) ;; *) exit 1 ;; esac
+          credentials=/home/frappe/erpnext-dev-credentials.txt
+          sudo test -f "$credentials"
+          sudo test ! -L "$credentials"
+          test "$(sudo stat -c '%U:%G:%a' "$credentials")" = root:root:600
+          sudo /opt/erpnext-dev/erpnext-dev.sh credentials-info >/dev/null
+          sudo python3 - "$credentials" <<'PY'
+          import sys, urllib.parse, urllib.request
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          password = next(lines[i + 2].split(": ", 1)[1] for i, line in enumerate(lines) if line == "Login:")
+          body = urllib.parse.urlencode({"usr": "Administrator", "pwd": password}).encode()
+          request = urllib.request.Request("http://127.0.0.1:8000/api/method/login", data=body, headers={"Host": "erp.test"})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              assert response.status == 200
+          PY
+
+      - name: Emit sanitized checkpoint summary
+        if: always()
+        run: |
+          set +e
+          echo "head=$(git rev-parse HEAD)"
+          echo "runner=ubuntu-26.04-pty"
+          state_dir=/var/lib/erpnext-dev/operations
+          if sudo test -d "$state_dir"; then
+            while IFS= read -r state; do
+              sudo awk -F= '
+                $1 ~ /^(operation_type|site|requested_apps|resolved_apps|status|checkpoint|result|artifact_ledger|baseline_backup|verification|recovery)$/ {
+                  if ($2 ~ /^[A-Za-z0-9.,:@_+-]*$/) print
+                }
+              ' "$state"
+            done < <(sudo find "$state_dir" -maxdepth 1 -type f -name 'native-advanced-*.state' -print | sort)
+          else
+            echo "state=absent"
+          fi
+          sudo systemctl is-active mariadb redis-server erpnext-dev.service 2>/dev/null || true
+          df -h /
+
   validate-release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -37,6 +306,9 @@ jobs:
 
       - name: Run shellcheck
         run: scripts/run-shellcheck.sh
+
+      - name: Run Native advanced privilege regression as root
+        run: sudo --preserve-env=PATH scripts/test-native-advanced-installation.sh
 
       - name: Validate release tree
         # shellcheck already ran above; validate-release would otherwise re-run it.

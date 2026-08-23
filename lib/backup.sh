@@ -290,8 +290,8 @@ restore_terminal_read() {
 
 read_restore_database_password_from_credentials() {
   local cred_file="${FRAPPE_HOME}/erpnext-dev-credentials.txt"
-  [[ -f "$cred_file" ]] || return 1
-  awk '
+  declare -F credentials_file_contract >/dev/null 2>&1 || return 1
+  credentials_file_contract "$cred_file" read | awk '
     /^MariaDB Bench Admin:/ { in_db=1; next }
     in_db && /^[^[:space:]]/ { in_db=0 }
     in_db && /^[[:space:]]*Password:/ {
@@ -299,7 +299,7 @@ read_restore_database_password_from_credentials() {
       print
       exit
     }
-  ' "$cred_file" 2>/dev/null | tail -n 1
+  ' 2>/dev/null | tail -n 1
 }
 
 read_restore_database_admin_credentials() {

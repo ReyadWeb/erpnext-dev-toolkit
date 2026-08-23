@@ -642,7 +642,7 @@ run_full_status() {
     status_line "Start helper" "WARN" "missing or not executable at ${FRAPPE_HOME}/start-erpnext-dev.sh"
   fi
 
-  if path_is_file "${FRAPPE_HOME}/erpnext-dev-credentials.txt"; then
+  if credentials_file_contract "${FRAPPE_HOME}/erpnext-dev-credentials.txt" validate; then
     status_line "Credentials file" "OK" "${FRAPPE_HOME}/erpnext-dev-credentials.txt"
   else
     status_line "Credentials file" "WARN" "missing at ${FRAPPE_HOME}/erpnext-dev-credentials.txt"

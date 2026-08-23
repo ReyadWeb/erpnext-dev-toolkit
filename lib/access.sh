@@ -2061,6 +2061,54 @@ credentials_file_path() {
   fi
 }
 
+# Open credential records without following the final path component and verify
+# the opened inode before reading, reporting, or deleting it. This prevents a
+# Frappe-home symlink replacement from turning a privileged credential command
+# into a read/chown/chmod primitive against another file.
+credentials_file_contract() {
+  local cred_file="${1:-$(credentials_file_path)}" action="${2:-validate}"
+  [[ "$action" == validate || "$action" == read || "$action" == stat || "$action" == delete ]] || return 1
+  ${SUDO:-} python3 - "$cred_file" "$action" <<'PY_CREDENTIAL_CONTRACT'
+import os
+import stat
+import sys
+
+path, action = sys.argv[1:]
+parent, name = os.path.split(path)
+if not parent or not name or name in (".", ".."):
+    raise SystemExit(1)
+parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    try:
+        opened = os.fstat(fd)
+        linked = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if not stat.S_ISREG(opened.st_mode):
+            raise SystemExit(1)
+        if opened.st_uid != 0 or stat.S_IMODE(opened.st_mode) != 0o600:
+            raise SystemExit(1)
+        if (opened.st_dev, opened.st_ino) != (linked.st_dev, linked.st_ino):
+            raise SystemExit(1)
+        if action == "read":
+            while True:
+                chunk = os.read(fd, 65536)
+                if not chunk:
+                    break
+                sys.stdout.buffer.write(chunk)
+        elif action == "stat":
+            print(f"root\troot\t600\t{opened.st_size}\t{int(opened.st_mtime)}")
+        elif action == "delete":
+            current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
+                raise SystemExit(1)
+            os.unlink(name, dir_fd=parent_fd)
+    finally:
+        os.close(fd)
+finally:
+    os.close(parent_fd)
+PY_CREDENTIAL_CONTRACT
+}
+
 credentials_display_site() {
   if credentials_engine_is_docker; then
     if declare -F docker_is_production >/dev/null 2>&1 && docker_is_production && [[ -n "${PRODUCTION_DOMAIN:-}" ]]; then
@@ -2127,17 +2175,18 @@ show_credentials_menu() {
 show_credentials_info() {
   require_sudo
 
-  local cred_file current_site
+  local cred_file current_site contract_ok=1
   cred_file="$(credentials_file_path)"
   current_site="$(credentials_display_site)"
 
   ui_box_start "Frappe Site Login"
   status_line "Username" "INFO" "Administrator"
   status_line "Site" "INFO" "$current_site"
-  if path_is_file "$cred_file"; then
+  if credentials_file_contract "$cred_file" validate; then
     status_line "Credentials file" "OK" "$cred_file"
   else
-    status_line "Credentials file" "WARN" "missing at $cred_file"
+    status_line "Credentials file" "WARN" "missing or unsafe at $cred_file"
+    contract_ok=0
   fi
   echo
   echo "Password"
@@ -2151,12 +2200,13 @@ show_credentials_info() {
   echo
   echo "The password command writes secrets only to the private terminal, not the toolkit log."
   ui_box_end
+  [[ "$contract_ok" -eq 1 ]]
 }
 
 show_credentials_file_status() {
   require_sudo
 
-  local cred_file owner group mode size modified status perm_status
+  local cred_file owner group mode size modified status perm_status metadata
   cred_file="$(credentials_file_path)"
 
   echo
@@ -2164,21 +2214,17 @@ show_credentials_file_status() {
   echo "Credentials File Status"
   echo "============================================================"
 
-  if ! path_is_file "$cred_file"; then
-    status_line "Credentials file" "WARN" "missing at $cred_file"
+  if ! metadata="$(credentials_file_contract "$cred_file" stat 2>/dev/null)"; then
+    status_line "Credentials file" "WARN" "missing or unsafe at $cred_file"
     echo
     echo "If you already saved the credentials in a password manager, this is acceptable."
     echo "If you still need access, reset the Administrator password with:"
     echo "  $(toolkit_cmd reset-admin-password)"
     echo "============================================================"
-    return 0
+    return 1
   fi
 
-  owner="$(stat -c '%U' "$cred_file" 2>/dev/null || echo unknown)"
-  group="$(stat -c '%G' "$cred_file" 2>/dev/null || echo unknown)"
-  mode="$(stat -c '%a' "$cred_file" 2>/dev/null || echo unknown)"
-  size="$(stat -c '%s' "$cred_file" 2>/dev/null || echo unknown)"
-  modified="$(stat -c '%y' "$cred_file" 2>/dev/null | cut -d'.' -f1 || echo unknown)"
+  IFS=$'\t' read -r owner group mode size modified <<<"$metadata"
 
   if [[ "$owner" == "root" && "$mode" == "600" ]]; then
     perm_status="OK"
@@ -2208,15 +2254,11 @@ credentials_secure() {
   local cred_file
   cred_file="$(credentials_file_path)"
 
-  if ! path_is_file "$cred_file"; then
-    warn "Credentials file is missing: $cred_file"
-    echo "Use $(toolkit_cmd reset-admin-password) if you need to set a new Administrator password."
-    return 0
+  if ! credentials_file_contract "$cred_file" validate; then
+    warn "Credentials file is missing or unsafe: $cred_file"
+    return 1
   fi
-
-  $SUDO chown root:root "$cred_file"
-  $SUDO chmod 600 "$cred_file"
-  ok "Credentials file secured with owner=root and mode=600"
+  ok "Credentials file already satisfies the root-owned mode-0600 inode contract"
   show_credentials_file_status
 }
 
@@ -2231,8 +2273,8 @@ credentials_show() {
   echo "Show Frappe Site Credentials"
   echo "============================================================"
 
-  if ! path_is_file "$cred_file"; then
-    status_line "Credentials file" "WARN" "missing at $cred_file"
+  if ! credentials_file_contract "$cred_file" validate; then
+    status_line "Credentials file" "WARN" "missing or unsafe at $cred_file"
     echo
     echo "If the file was deleted after handoff, reset the Administrator password with:"
     echo "  $(toolkit_cmd reset-admin-password)"
@@ -2267,7 +2309,7 @@ credentials_show() {
       echo "============================================================"
       echo "Frappe Site Credentials"
       echo "============================================================"
-      $SUDO awk '
+      credentials_file_contract "$cred_file" read | awk '
         /^Login:/ { section="login"; next }
         /^MariaDB (Bench Admin|Root):/ { section="db"; next }
         /^Start ERPNext:/ { exit }
@@ -2287,13 +2329,15 @@ credentials_show() {
         section == "login" && /^[[:space:]]+Password:/ { sub(/^[[:space:]]+/, ""); print "ERPNext " $0; next }
         section == "db" && /^[[:space:]]+User:/ { sub(/^[[:space:]]+/, ""); print "MariaDB " $0; next }
         section == "db" && /^[[:space:]]+Password:/ { sub(/^[[:space:]]+/, ""); print "MariaDB " $0; next }
-      ' "$cred_file"
+      '
       echo "============================================================"
     } >/dev/tty
   else
     warn "No private terminal (/dev/tty) available; not writing secrets to the logged output stream."
-    echo "Read the file directly on a private console instead:"
-    echo "  sudo cat ${cred_file}"
+    echo "Run the protected credential reader from a private console instead:"
+    echo "  sudo erpnext-dev credentials-show"
+    echo "============================================================"
+    return 1
   fi
   echo
   echo "After saving these credentials in a password manager, production systems should run:"
@@ -2312,11 +2356,12 @@ credentials_delete() {
   echo "Delete Local Credentials File"
   echo "============================================================"
 
-  if ! path_is_file "$cred_file"; then
+  if [[ ! -e "$cred_file" && ! -L "$cred_file" ]]; then
     status_line "Credentials file" "INFO" "already missing at $cred_file"
     echo "============================================================"
     return 0
   fi
+  credentials_file_contract "$cred_file" validate || { warn "Credentials file is unsafe; refusing deletion."; return 1; }
 
   warn "This removes the local plaintext credentials file from the VM."
   echo "Only continue after saving credentials in a password manager or completing handoff."
@@ -2335,7 +2380,7 @@ credentials_delete() {
     return 1
   fi
 
-  $SUDO rm -f "$cred_file"
+  credentials_file_contract "$cred_file" delete || { warn "Credential inode changed; refusing deletion."; return 1; }
   ok "Deleted local credentials file: $cred_file"
   echo "If access is needed later, run: $(toolkit_cmd reset-admin-password)"
   echo "============================================================"
@@ -2400,12 +2445,12 @@ reset_admin_password() {
   echo
   echo "Save the new password in a password manager."
   if credentials_engine_is_docker; then
-    if path_is_file "$(credentials_file_path)"; then
+    if credentials_file_contract "$(credentials_file_path)" validate; then
       echo "The Docker credentials record was refreshed with the new Administrator password."
     else
       echo "No local Docker credentials file is present."
     fi
-  elif path_is_file "$(credentials_file_path)"; then
+  elif credentials_file_contract "$(credentials_file_path)" validate; then
     echo "The generated native credentials file still contains the old password; remove it with:"
     echo "  $(toolkit_cmd credentials-delete)"
   fi

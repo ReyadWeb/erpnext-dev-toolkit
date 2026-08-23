@@ -212,12 +212,92 @@ failure records `recovery-required`, preserves the site and backup evidence, and
 directs the operator to inspect the record and repair the recorded checkpoint;
 there is no broad automatic cleanup or unsafe resume.
 
-Immediately after site creation, the installer creates and safely checks a
-baseline backup. Failure blocks all curated-app acquisition. Advanced schema-2
+Every Native advanced toolchain, Bench, site, backup, application, migration,
+asset, inventory, and managed-start command runs from a controlled Frappe-owned
+directory with `HOME` fixed to the configured Frappe home. The command runtime
+resets inherited XDG, npm, Yarn, Python, uv, and Git configuration, uses private
+Frappe-owned cache/config paths, sources the verified `nvm.sh`, and selects the
+pinned Node version. `USER` and `LOGNAME` are reset to the configured Frappe
+identity; inherited Node options and every npm/Yarn/Python/uv/Git configuration
+variable are removed before the controlled values are established. Toolchain
+completion is verified in a new noninteractive Frappe shell before Bench
+creation starts. UV uses its supported `UV_NO_CONFIG=1` mode; the installer does
+not point `UV_CONFIG_FILE` at a file that may not exist. NVM v0.40.3 is fetched
+as an exact tag ref and its reviewed commit is verified before `nvm.sh` is
+sourced. The reviewed production coordinates are Node 24, Yarn 1.22.22, uv
+0.11.28, Python 3.14.6, pip 25.3 or newer within that series, and
+frappe-bench 5.31.0.
+
+The Phase 7.4 reviewed application set is immutable for an attempt: Frappe,
+CRM, Telephony, and Helpdesk each have an official repository, approved history
+branch, and exact 40-character commit in the trusted catalog. The installer
+fetches the approved branch into an isolated Git repository, proves the reviewed
+commit is an ancestor of that branch, and checks out the reviewed commit before
+Bench can install dependencies or execute application-controlled code. A normal
+branch advance therefore does not invalidate the pin. Rewritten history,
+unrelated or unavailable commits, and conflicting repositories fail closed.
+Only the snapshotted repository/ref/commit coordinates are used throughout the
+attempt, and final verification requires the exact official origin and commit.
+Telephony is acquired and installed before Helpdesk.
+
+`bench init` must return zero and produce a safe Bench directory, Frappe app,
+Python environment, `sites/apps.txt`, common site configuration, Procfile, and
+working Bench commands. A failed or incomplete initialization remains at the
+`bench-created` checkpoint, records `partial-bench`, exits with mutation failure
+(31), and does not proceed to site, backup, app acquisition, or configuration
+promotion. The partial Bench is preserved; another attempt requires reverting
+the disposable VM to its clean snapshot or a separately authorized recovery.
+
+Immediately after verified site creation, the installer atomically persists the
+Administrator and non-root MariaDB administration credentials to the canonical
+`${FRAPPE_HOME}/erpnext-dev-credentials.txt` contract. The final file must be a
+root-owned, non-symlink regular file with mode `0600`; only its path and the
+`credentials-show` retrieval command are printed. A write failure is
+`recovery-required`, preserves the site and any verified credential artifact,
+and blocks backup and all later work. The installer then creates and safely
+checks a baseline backup. Failure blocks all curated-app acquisition. Advanced schema-2
 intent is staged privately, but active primary and compatibility configuration
 remain unchanged until readiness and exact inventory/source/ref verification
-pass. Promotion is atomic and refuses concurrent configuration changes. A second
-configuration/inventory reconciliation is required before `completed`.
+pass. Promotion uses protected temp-file replacement for each configuration
+output, records the attempt before changing either output, and refuses concurrent
+configuration changes. A second configuration, exact-inventory, source/ref, and
+readiness reconciliation is required before `completed`.
+
+#### Native advanced checkpoint matrix
+
+All Frappe-side rows below use `native_advanced_frappe_bash`: configured
+`HOME`, `USER`, and `LOGNAME`; a Frappe-owned working directory; a fixed system
+plus `$HOME/.local/bin` `PATH`; private XDG/npm/Yarn/Python/uv paths; disabled
+system/global Git configuration; verified `$HOME/.nvm/nvm.sh`; and the pinned
+Node selection. Each isolated script uses `set -Eeuo pipefail`, while the
+transaction functions also propagate command status explicitly so a partial
+postcondition cannot replace a failed command result.
+
+| Boundary | Exact execution and required success proof | Ledger on mutation | Failure record and retry |
+| --- | --- | --- | --- |
+| Plan/preflight | Pure catalog resolution; Native engine; validated site; supported Frappe major and exact official commits; exact absence fingerprints for config, Bench, and protected records | None | No attempt record; planner input/unsupported/conflict exit. No later command. Retry only after resolving the reported preflight condition. |
+| Time/APT/resources | Host read-only OS, network, system/RTC/provider consistency, APT metadata, approved repository/ref/pin ancestry, and resource probes | None | Exit 31, `failed/prerequisites/failed`, backup `none`. Exact retry is allowed only by the protected artifact-free prerequisite rule below. |
+| Toolkit/packages/runtime/sysctl | Host commands, only after every read-only readiness gate returns zero; MariaDB 11.8, Redis 6+, responsive enabled services, compiler/headers/pkg-config/fonts/cron are verified | `toolkit-reuse`, `system-packages`, `pdf-capability:STATUS`, `redis-sysctl` before or after the represented check | Exit 31 at `prerequisites`; nonempty ledger prohibits automatic retry and blocks user/Bench/site work. |
+| Frappe user/database identity | Host `useradd`/ownership and MariaDB administrative setup with explicit status checks | `frappe-user`, then `mariadb-admin`, before mutation | Exit 31 at `frappe-user`; retry prohibited. Toolchain and all later rows are skipped. |
+| Isolated toolchain | Frappe home bootstrap with `UV_NO_CONFIG=1`; exact NVM commit, Node/Yarn, uv/Python/Bench install; a separate new isolated shell runs all six version commands and checks paths, ownership, executability, and pinned versions | `frappe-toolchain` before bootstrap | Exit 31 at `frappe-environment`; retry prohibited. Bench is not invoked. |
+| Bench creation | A Frappe-owned isolated Git stage is fetched from the official origin, proves pin ancestry, and checks out the pin before exact `bench init --frappe-path STAGE`; then safe Bench/Frappe/env/sites/config/Procfile, Python 3.14.6/pip 25.3, working Bench commands, official final origin, and exact Frappe commit | `source-stage-attempt:frappe`, `source-stage:frappe@COMMIT`, then `bench` and `source:frappe@COMMIT` only after proof; `partial-bench` on failed/incomplete output | Exit 31 at `bench-created`; retry prohibited. Site, backup, apps, and config are skipped. |
+| Site creation | Verified Bench directory; exact `bench new-site` status; safe exact site/config and successful `show-config`, then default-site commands | `site` after exact proof; `partial-site` for failed/incomplete output | Exit 31 before a verified site, otherwise 33 `recovery-required`, at `site-created`. All later rows are skipped. |
+| Credential persistence | Root writes a mode-0600 same-directory temporary file with tracing disabled, verifies type/owner/mode/content contract, and atomically replaces the canonical credentials path. Every later info, status, show, secure, restore, and delete operation opens the final component with `O_NOFOLLOW`, validates the opened inode is the same root-owned regular mode-0600 inode, and reads or deletes only through that validated descriptor. | `credentials-file-attempt` before writing; `credentials-file` only after proof; cleanup/partial markers on failure | Exit 33 `recovery-required` at `credentials-persisted`; site and protected evidence remain, active config is absent, and backup/apps are skipped. Retry prohibited. Unsafe, replaced, or symlinked credential paths fail closed. |
+| Baseline backup | Bench directory; exact `bench backup --with-files`; newly created complete set newer than operation start; nonempty gzip, both tar archives, and JSON parse | `baseline-backup` only after full proof | Exit 33 at `baseline-backup`, backup remains `none` unless verified. No staging or app acquisition. Retry prohibited. |
+| Private config staging | Protected operation directory; unchanged config snapshot; new mode-0600 staged schema-2 file | `staged-config` after proof; `partial-staged-config` on incomplete output | Exit 33 at `configuration-staging`; active config unchanged. Retry prohibited. |
+| Dependency-ordered acquisition | Each official approved branch is fetched into an isolated Frappe-owned stage, pin ancestry is proven, and the pin is checked out before `bench get-app --branch REF APP STAGE`; final origin is replaced with the official repository and HEAD must equal the immutable plan | `source-stage-attempt:APP`, `source-stage:APP@COMMIT`, then `code:APP` and `source:APP@COMMIT` after proof; `partial-code:APP` if failed or mismatched output exists | Exit 33 at `get-app:APP`; no later acquisition/install/migration. Retry prohibited. |
+| Dependency-ordered installation | One isolated exact-site `bench install-app APP`; separate exact-site `list-apps` confirms membership | `site-app:APP` after proof; `partial-site-app:APP` on command failure | Exit 33 at `install-app:APP`; no later install/migration. Retry prohibited. |
+| Migration/assets | Exact-site `bench migrate`; then isolated `bench build` plus exact-site cache clears | `migration-attempt`, `assets-attempt` before mutation | Exit 33 at `migration` or `assets`; services and promotion are skipped. Retry prohibited. |
+| Service/readiness | Isolated start helper, managed unit/autostart/start, then HTTP and stable asset readiness | `services-attempt` before mutation | Exit 33 at `services` or `readiness`; inventory and promotion are skipped. Retry prohibited. |
+| Exact inventory | Exact installed set equality (no missing, duplicate, or extra app), safe app directories, and catalog source/ref equality for Frappe and every resolved app | No new artifact | Exit 33 at `inventory`; configuration is not promoted. Retry prohibited. |
+| Promotion/reconciliation | Unchanged config snapshot; protected per-file replacement; then schema/profile/request equality, exact inventory/source/ref, and readiness again | `configuration-promotion-attempt` before replacement; `active-config` only after both outputs | Exit 33 at `configuration-promotion` or `post-promotion-reconciliation`; evidence is retained for manual recovery. |
+| Reboot/readiness acceptance | Outside the installer transaction: reboot the disposable VM, then repeat service, HTTP/assets, exact inventory, source/ref, backup, and record checks | None | A failure is a VM acceptance blocker. Revert the snapshot; never reinterpret the completed record as reboot proof. |
+
+Every phase call returns immediately on failure. Hermetic fault injection asserts
+that the next boundary is absent from its command log and that active
+configuration is absent before promotion. Only the first, exact, protected,
+empty-ledger `failed/prerequisites` case is retryable; every later or uncertain
+state is fail-closed.
 
 This status differs from `backup-status`, which observes metadata;
 `backup-verify`, which performs deeper archive validation; restore preflight,
@@ -233,6 +313,23 @@ The operator must first create the root-owned marker
 must confirm that no Toolkit configuration, Bench directory, site, or database
 exists. Never create this marker on a workstation or reusable host.
 
+Before each attempt, verify UTC and the active synchronization provider with
+`date -u`, `timedatectl status`, and (when Chrony is active) `chronyc tracking`.
+If synchronization cannot be proven or APT reports that Release metadata is
+“not valid yet,” the advanced transaction must stop at `prerequisites` with exit
+31, an empty artifact ledger, and no baseline backup. Correct the VM clock or
+repository access and rerun the exact same `install --profile advanced` request.
+Never use `first-run` to recover an advanced transaction.
+
+That exact retry is safe only when every preserved Native advanced record is a
+protected, terminal `failed/prerequisites` record for the identical site,
+requested applications, and resolved closure; its ledger is empty and backup is
+`none`; and no configuration, Bench, site, acquired application, staged intent,
+active transaction, or recovery-required state exists. Previous records remain
+immutable evidence and the retry creates a new attempt record. If any condition
+cannot be proven, revert the disposable VM to its clean snapshot instead of
+editing records, deleting partial state, or forcing a retry.
+
 On that marked VM, record a snapshot, then run these acceptance cases manually:
 
 1. Install an ERPNext-free catalog set with the canonical advanced command;
@@ -245,10 +342,45 @@ On that marked VM, record a snapshot, then run these acceptance cases manually:
    run the same install, and verify a non-success exit, unchanged active config,
    preserved site/baseline evidence, and `recovery-required` guidance.
 4. Destroy the VM after exporting only sanitized assertion results. Do not reuse
-   it and do not connect the procedure to any existing deployment.
+it and do not connect the procedure to any existing deployment.
+
+Site creation uses the exact pinned Frappe prompt order: MariaDB administration
+password first, then the site Administrator password. Python's `getpass` opens
+`/dev/tty` before falling back to standard input, so an ordinary anonymous pipe
+is insufficient when the installer itself has a controlling terminal. Phase
+7.4 therefore runs the exact `bench new-site` command in a bounded new session
+with no controlling terminal and supplies both generated credentials over a
+private anonymous descriptor. Neither credential is placed in argv or the
+exported environment. The supervising shell forwards termination to the whole
+detached process group, waits for it, and returns Bench's exact exit status.
+This behavior is pinned-source evidence, not a prompt-order assumption:
+`frappe/database/mariadb/setup_db.py::get_root_connection` calls `getpass` for
+the missing database password before connecting, while
+`frappe/utils/install.py::get_admin_password` calls it later during database
+bootstrap. Both files are verified at the reviewed Frappe commit recorded in
+the operation plan. Python's standard-library `getpass` implementation attempts
+the controlling terminal independently of redirected stdin; removing the child
+session's controlling terminal is therefore the required isolation boundary.
 
 The marker is authorization to follow this procedure, not a bypass in the
-installer. Hermetic CI never creates it and never runs these live cases.
+installer. Hermetic CI never creates it. The required pull-request integration
+job instead runs the exact production advanced entry point on a fresh ephemeral
+Ubuntu 26.04 hosted runner, performs the real Bench/site/backup/app/migration/
+asset/service/readiness/promotion path, and emits only a sanitized checkpoint
+summary. Hermetic command stubs remain fault-injection evidence and are not
+described as real installation coverage.
+
+#### PDF capability on Ubuntu 26.04
+
+Frappe requires wkhtmltopdf 0.12.6 with patched Qt for supported PDF output.
+Phase 7.4 does not download an unverified third-party binary. After package
+installation it executes `wkhtmltopdf --version` and records
+`PDF_CAPABILITY=available` only when both `0.12.6` and `patched qt` are proven.
+Otherwise installation remains safe but explicitly records
+`PDF_CAPABILITY=unavailable`; PDF generation is not a claimed capability. Use a
+distribution or vendor package only after its origin, checksum, Ubuntu 26.04
+compatibility, and patched-Qt build are independently reviewed, then rerun the
+capability check. Do not substitute an arbitrary binary from a mirror.
 
 ### Existing installation management (existing)
 

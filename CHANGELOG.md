@@ -53,6 +53,25 @@
 
 ## Unreleased
 
+- Hardened every credential consumer to reject symlink replacement and operate
+  only on the same opened root-owned mode-0600 inode; made the Native advanced
+  dispatcher regression deterministic for root and non-root callers; and
+  strengthened real CI to compare protected credential retrieval, deeply verify
+  backups, and assert the exact application set after a clean systemd restart.
+
+- Phase 7.4 Native advanced now atomically persists the verified site credentials
+  through the canonical root-only credentials contract, stages reviewed upstream
+  commits before Bench can execute application code while accepting normal branch
+  advancement, and validates real-install checkout identity across pull-request,
+  push, and reusable-workflow events. Real CI also authenticates Administrator
+  from the protected file and exercises a clean systemd stop/start cycle.
+
+- Corrected Native advanced interactive site creation: pinned Frappe uses
+  Python `getpass`, which prefers `/dev/tty` and could bypass a credential stdin
+  pipe. Site creation now runs without a controlling terminal, keeps generated
+  credentials out of argv/environment, and supervises the detached process
+  group with exact status and signal propagation.
+
 - Corrected shared lifecycle semantics so Frappe owns site readiness, service,
   access, HTTPS, and Administrator workflows while ERPNext remains an optional
   profile-managed application; added early clock/APT readiness and LVM lock-fd
@@ -73,6 +92,24 @@
 
 ### Fixed
 
+- Stabilized the complete Phase 7.4 Native advanced path with supported UV
+  no-config isolation, exact NVM/runtime/application commits, separate-shell
+  tool verification, MariaDB/Redis runtime acceptance, fresh complete baseline
+  backups, exact source/commit inventory, clock-source consistency checks, and a
+  required real Ubuntu 26.04 CRM/Telephony/Helpdesk installation gate.
+- Corrected Native advanced clock/APT prerequisite recovery so it prints the
+  exact validated advanced request instead of `first-run`, keeps readiness ahead
+  of Toolkit/package mutation, and permits only protected, matching,
+  artifact-free prerequisite failures to create a separate retry attempt.
+- Closed the full Native advanced checkpoint audit: every mutation boundary now
+  propagates status explicitly and records partial/attempted artifacts, runtime
+  coordinates and catalog refs fail closed, exact inventory includes Frappe and
+  rejects extras, and readiness is re-proven after configuration promotion.
+- Isolated every Phase 7.4 Native advanced Frappe command from the invoking
+  user's HOME, working directory, XDG, npm, Yarn, Python, uv, and Git settings;
+  new shells now activate pinned NVM Node before using Yarn or Bench. Bench and
+  site checkpoints now require exact command success and complete verified
+  postconditions, while partial artifacts remain recorded for recovery.
 - Corrected Phase 7.4 advanced preview dispatch so an explicit Native site uses
   the executable installation plan and exit class without mutation, while
   site-less schema-1 previews remain compatible and Native advanced status is

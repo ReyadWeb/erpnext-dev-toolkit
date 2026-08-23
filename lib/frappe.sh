@@ -76,7 +76,6 @@ erpnext_vm_context_detected() {
 
   [[ -f "$(erpnext_service_path)" ]] && return 0
   [[ -x "${FRAPPE_HOME}/start-erpnext-dev.sh" ]] && return 0
-  [[ -f "${FRAPPE_HOME}/erpnext-dev-credentials.txt" ]] && return 0
 
   # Docker installations intentionally have no host Bench directory or native
   # systemd service. Treat a provisioned toolkit-owned Docker stack as a valid
@@ -115,7 +114,7 @@ show_environment_check() {
   status_line "Site source" "INFO" "$SITE_NAME_SOURCE"
   status_line "Config file" "INFO" "$CONFIG_FILE"
   status_line "Expected bench" "INFO" "$BENCH_DIR"
-  if [[ "$detected_bench" == "missing" ]] && { service_exists || path_is_file "${FRAPPE_HOME}/erpnext-dev-credentials.txt" || path_is_executable "${FRAPPE_HOME}/start-erpnext-dev.sh"; }; then
+  if [[ "$detected_bench" == "missing" ]] && { service_exists || credentials_file_contract "${FRAPPE_HOME}/erpnext-dev-credentials.txt" validate || path_is_executable "${FRAPPE_HOME}/start-erpnext-dev.sh"; }; then
     detected_bench="${BENCH_DIR} (expected; run doctor for sudo-confirmed status)"
   fi
   status_line "Detected bench" "INFO" "$detected_bench"
@@ -491,4 +490,3 @@ site_app_installed() {
 
   run_as_frappe "cd '${bench_dir}' && bench --site '${SITE_NAME}' list-apps" 2>/dev/null | awk '{print $1}' | grep -qx "$app"
 }
-
