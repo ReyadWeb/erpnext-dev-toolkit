@@ -88,6 +88,24 @@ assert_contains "$CONFIG_FILE" "INSTALLATION_PROFILE=frappe-only" "Frappe-only p
 assert_contains "$tmp/installer" "native:frappe-only" "native installer did not receive Frappe-only"
 pass "fresh Local VM Advanced Native Frappe-only"
 
+reset_case
+printf 'advanced.test\n1\n2\n3\n1\ny\n' | run_local_dev_quickstart >"$tmp/local-native-advanced.out"
+assert_contains "$tmp/local-native-advanced.out" "Advanced — Native only" "Native Advanced choice missing"
+assert_contains "$tmp/installer" "native:advanced" "Native Advanced did not reach installer"
+pass "fresh Local VM Native Advanced reaches supported path"
+
+reset_case
+printf 'deferred.test\n1\n2\n4\n' | run_local_dev_quickstart >"$tmp/existing-choice.out"
+assert_contains "$tmp/existing-choice.out" "read-only/deferred" "Existing installation explanation missing"
+[[ ! -e "$CONFIG_FILE" && ! -e "$tmp/installer" ]] || fail "Existing installation choice mutated state"
+pass "Existing installation remains informational and non-mutating"
+
+reset_case
+printf 'docker-advanced.test\n1\n2\n3\n2\n' | run_local_dev_quickstart >"$tmp/docker-advanced.out" 2>&1 || true
+assert_contains "$tmp/docker-advanced.out" "Docker Advanced is deferred" "Docker Advanced rejection missing"
+[[ ! -e "$CONFIG_FILE" && ! -e "$tmp/installer" && ! -e "$tmp/mutations" ]] || fail "Docker Advanced rejection mutated state"
+pass "Docker Advanced rejects before configuration or platform mutation"
+
 for profile_choice in 1 2; do
   reset_case
   printf 'docker.test\n1\n2\n%s\n2\ny\n' "$profile_choice" | run_local_dev_quickstart >"$tmp/local-docker-${profile_choice}.out"

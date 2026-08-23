@@ -1163,10 +1163,29 @@ run_install() {
     native_advanced_install
     return $?
   fi
+  if [[ "$(effective_installation_profile)" == advanced ]] \
+    && [[ "$(effective_deployment_engine 2>/dev/null || printf native)" == docker ]]; then
+    err "Advanced installation is currently supported on Native only; Docker Advanced is deferred beyond v1.21."
+    echo "Choose Native Advanced, Docker Recommended, Docker Frappe-only, Back, or Quit." >&2
+    return 23
+  fi
+  if [[ "$(effective_installation_profile)" == existing ]]; then
+    show_existing_installation_information
+    return 0
+  fi
   require_sudo
-  prepare_direct_installation_selection || return 0
-  validate_platform_profile_combination \
-    || fail "Invalid platform/profile selection; installation stopped before mutation."
+  local selection_rc=0
+  prepare_direct_installation_selection || selection_rc=$?
+  [[ "$selection_rc" -eq 0 ]] || {
+    [[ "$selection_rc" -eq 23 ]] && return 23
+    return 0
+  }
+  local combination_rc=0
+  validate_platform_profile_combination || combination_rc=$?
+  if [[ "$combination_rc" -ne 0 ]]; then
+    [[ "$combination_rc" -eq 23 ]] && return 23
+    fail "Invalid platform/profile selection; installation stopped before mutation."
+  fi
 
   # Choose the deployment engine once (native VM or Docker). Native keeps the
   # exact behavior below; Docker hands off to the frappe_docker-backed engine.
@@ -1610,7 +1629,7 @@ choose_installation_profile_for_setup() {
   echo
   echo "Choose Installation Profile"
   echo
-  echo "1) Recommended (Frappe + ERPNext)"
+  echo "1) Recommended (Frappe + ERPNext) [default]"
   echo "   Installs the Frappe framework and ERPNext."
   echo "   Best for most users."
   echo
@@ -1618,16 +1637,24 @@ choose_installation_profile_for_setup() {
   echo "   Installs the Frappe framework without ERPNext."
   echo "   ERPNext can be installed later through App Management."
   echo
+  echo "3) Advanced — Native only"
+  echo "   Choose supported applications explicitly; Docker Advanced is deferred beyond v1.21."
+  echo
+  echo "4) Existing installation — read-only/deferred"
+  echo "   Information only; discovery, adoption, connection, and management are deferred."
+  echo
   echo "B) Back"
   echo "Q) Quit"
   while true; do
-    read -r -p "Installation profile [1-2, default: Recommended]: " reply || return 1
+    read -r -p "Installation profile [1-4, default: Recommended]: " reply || return 1
     case "${reply,,}" in
       "" | 1 | recommended) resolved="recommended" ;;
       2 | frappe | frappe-only) resolved="frappe-only" ;;
+      3 | advanced) resolved="advanced" ;;
+      4 | existing) resolved="existing" ;;
       b | back) return 10 ;;
       q | quit) return 11 ;;
-      *) echo "Please choose 1, 2, B, or Q."; continue ;;
+      *) echo "Please choose 1, 2, 3, 4, B, or Q."; continue ;;
     esac
     break
   done
@@ -1734,6 +1761,16 @@ confirm_fresh_installation_setup() {
   done
 }
 
+show_existing_installation_information() {
+  ui_box_start "Existing installation (read-only/deferred)"
+  echo "This selection does not install, adopt, connect to, or manage an existing deployment."
+  echo "Discovery and adoption remain deferred beyond v1.21."
+  ui_box_end
+  echo "Optional read-only commands:"
+  echo "  $(toolkit_cmd status)"
+  echo "  $(toolkit_cmd doctor --plain)"
+}
+
 prepare_direct_installation_selection() {
   if setup_has_existing_deployment \
     || [[ "${INSTALLATION_PROFILE_SESSION_CHOSEN:-0}" -eq 1 ]] \
@@ -1743,6 +1780,16 @@ prepare_direct_installation_selection() {
 
   prompt_for_site_name_if_needed
   choose_installation_mode_for_setup || return 1
+  if [[ "$(effective_installation_profile)" == existing ]]; then
+    show_existing_installation_information
+    return 10
+  fi
+  if [[ "$(effective_installation_profile)" == advanced ]] \
+    && [[ "$(effective_deployment_engine 2>/dev/null || printf native)" == docker ]]; then
+    err "Advanced installation is currently supported on Native only; Docker Advanced is deferred beyond v1.21."
+    echo "Choose Native Advanced, Docker Recommended, Docker Frappe-only, Back, or Quit." >&2
+    return 23
+  fi
   if [[ "${DEPLOYMENT_MODE:-development}" == "public-vm" ]]; then
     DOCKER_MODE="production"
     confirm_fresh_installation_setup "Public VM" || return 1
