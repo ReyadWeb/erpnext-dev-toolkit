@@ -453,7 +453,11 @@ sudo erpnext-dev install --profile advanced --apps crm,helpdesk --site dev.examp
 It refuses existing deployments, creates and checks a baseline backup after site
 creation, verifies runtime and exact application inventory, and promotes schema-2
 intent only after verification. Existing-installation remains preview-only and
-Docker advanced mutation remains deferred.
+Docker advanced mutation remains deferred beyond v1.21. The two bounded
+feasibility harness attempts were inconclusive because the temporary harnesses
+failed before producing the required evidence; this is not proof of an
+architectural impossibility. Docker Recommended and Docker Frappe-only remain
+supported.
 
 The preview validates canonical catalog IDs, resolves dependencies, fingerprints
 read-only inventory, and reports reconciliation and Native/Docker capability.

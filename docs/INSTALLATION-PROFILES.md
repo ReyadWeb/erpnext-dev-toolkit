@@ -626,6 +626,13 @@ required applications make the aggregate application health degraded.
 
 ### PR 7.5 — Docker advanced immutable-image vertical slice
 
+**Disposition for v1.21:** deferred beyond v1.21. Two bounded feasibility
+harness attempts were inconclusive because the temporary laboratory harness
+failed before producing the required evidence (first on runner portability,
+then on an exited harmless test container). This is not evidence that Docker
+Advanced is architecturally impossible. No Docker Advanced implementation is
+part of v1.21; Docker Recommended and Docker Frappe-only remain supported.
+
 - **Scope:** consume the same advanced plan in Docker development and production;
   repair remaining Frappe-only core-ref/base-image assumptions.
 - **Expected files:** `lib/docker.sh`, `lib/planner.sh`, `lib/profile.sh`, Docker

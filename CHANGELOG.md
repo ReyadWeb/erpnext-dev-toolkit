@@ -3139,6 +3139,13 @@ integration CI leg to a hard release gate.
 
 # Changelog
 
+## Unreleased
+
+- Phase 7.6: clarified the setup wizard's Recommended, Frappe-only, Native
+  Advanced, and read-only Existing installation choices. Docker Advanced is
+  formally deferred beyond v1.21; Docker Recommended and Frappe-only remain
+  supported.
+
 ## v1.1.71 - Verify installed toolkit integrity
 
 ### Added
