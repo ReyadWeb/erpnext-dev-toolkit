@@ -647,8 +647,9 @@ run_entrypoint_without_privilege() {
   set +e
   if [[ "$EUID" -eq 0 ]]; then
     command -v setpriv >/dev/null || fail 'root test execution requires setpriv for the non-root privilege case'
+    mkdir -p "$ENTRY_WORK/lock"
     chmod 0755 "$WORK" "$ENTRY_WORK"
-    chmod 0777 "$ENTRY_WORK/log"
+    chmod 0777 "$ENTRY_WORK/log" "$ENTRY_WORK/lock"
     # A root-owned checkout can sit below a non-traversable home directory.
     # Exercise the exact entrypoint/module bytes from a bounded readable fixture
     # instead of making assumptions about the caller's repository parents.
