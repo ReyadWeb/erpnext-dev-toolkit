@@ -134,7 +134,44 @@ installation_profile_asset_policy() {
 }
 
 installation_profile_health_pair() {
-  local app missing=()
+  local app missing=() desired observed
+  if [[ "$(effective_installation_profile)" == existing ]]; then
+    printf 'INFO|Existing installation readiness is deferred; no managed claim is made\n'
+    return 0
+  fi
+  # Operational surfaces may provide a planner reconciliation snapshot. When
+  # present it is authoritative: profile metadata or an installed marker alone
+  # must never turn incomplete or conflicting evidence into ready.
+  if [[ -n "${PROFILE_CONTEXT_RECONCILIATION:-}" ]]; then
+    case "$PROFILE_CONTEXT_RECONCILIATION" in
+      consistent)
+        printf 'OK|desired applications match observed inventory: %s\n' "${PROFILE_CONTEXT_DESIRED_APPS:-none}"
+        return 0
+        ;;
+      drift-extra)
+        printf 'INFO|additional observed applications are preserved: %s\n' "${PROFILE_CONTEXT_OBSERVED_APPS:-none}"
+        return 0
+        ;;
+      drift-missing)
+        desired="${PROFILE_CONTEXT_DESIRED_APPS:-}"
+        observed="${PROFILE_CONTEXT_OBSERVED_APPS:-}"
+        while IFS= read -r app; do
+          [[ -n "$app" ]] || continue
+          case ",${observed}," in *",${app},"*) ;; *) missing+=("$app") ;; esac
+        done < <(printf '%s\n' "$desired" | tr ',' '\n')
+        printf 'WARN|desired applications missing or unproven: %s\n' "$(IFS=,; printf '%s' "${missing[*]:-unknown}")"
+        return 0
+        ;;
+      ambiguous)
+        printf 'WARN|profile reconciliation is ambiguous; application requirements are not fully proven\n'
+        return 0
+        ;;
+      incompatible)
+        printf 'FAIL|profile reconciliation is incompatible\n'
+        return 0
+        ;;
+    esac
+  fi
   if deployment_engine_is_docker 2>/dev/null; then
     if [[ "$(install_state 2>/dev/null || true)" == "Installed" ]]; then
       printf 'OK|required apps supplied by the %s Docker profile image\n' "$(effective_installation_profile)"

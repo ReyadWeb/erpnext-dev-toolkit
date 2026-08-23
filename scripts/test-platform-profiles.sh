@@ -59,6 +59,24 @@ bench_apps[erpnext]=1
 site_apps[erpnext]=1
 assert_eq "recommended health complete" "OK|required apps present: frappe,erpnext" "$(installation_profile_health_pair)"
 
+# Readiness must consume validated reconciliation evidence rather than trusting
+# profile metadata or Docker's installed marker alone.
+PROFILE_CONTEXT_RECONCILIATION=drift-missing
+INSTALLATION_PROFILE=advanced
+PROFILE_CONTEXT_DESIRED_APPS=frappe,crm
+PROFILE_CONTEXT_OBSERVED_APPS=frappe
+assert_eq "advanced readiness rejects missing resolved app" \
+  "WARN|desired applications missing or unproven: crm" "$(installation_profile_health_pair)"
+PROFILE_CONTEXT_RECONCILIATION=consistent
+PROFILE_CONTEXT_DESIRED_APPS=frappe,crm
+PROFILE_CONTEXT_OBSERVED_APPS=frappe,crm
+assert_eq "advanced readiness accepts exact resolved inventory" \
+  "OK|desired applications match observed inventory: frappe,crm" "$(installation_profile_health_pair)"
+INSTALLATION_PROFILE=existing
+assert_eq "existing readiness remains informational" \
+  "INFO|Existing installation readiness is deferred; no managed claim is made" "$(installation_profile_health_pair)"
+unset PROFILE_CONTEXT_RECONCILIATION PROFILE_CONTEXT_DESIRED_APPS PROFILE_CONTEXT_OBSERVED_APPS
+
 tmp="$(mktemp -d "${ROOT_DIR}/.erpnext-dev-profile-test.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 set +e
