@@ -641,15 +641,14 @@ run_entrypoint() {
   set -e
 }
 run_entrypoint_without_privilege() {
-  local output_file="$1" env_bin bash_bin entrypoint_root="$ROOT_DIR"
+  local output_file="$1" env_bin bash_bin entrypoint_root="$ROOT_DIR" unprivileged_lock=""
   local unprivileged_uid="${SUDO_UID:-65534}" unprivileged_gid="${SUDO_GID:-65534}"
   shift
   set +e
   if [[ "$EUID" -eq 0 ]]; then
     command -v setpriv >/dev/null || fail 'root test execution requires setpriv for the non-root privilege case'
-    mkdir -p "$ENTRY_WORK/lock"
     chmod 0755 "$WORK" "$ENTRY_WORK"
-    chmod 0777 "$ENTRY_WORK/log" "$ENTRY_WORK/lock"
+    chmod 0777 "$ENTRY_WORK/log"
     # A root-owned checkout can sit below a non-traversable home directory.
     # Exercise the exact entrypoint/module bytes from a bounded readable fixture
     # instead of making assumptions about the caller's repository parents.
@@ -657,6 +656,9 @@ run_entrypoint_without_privilege() {
     mkdir -p "$entrypoint_root"
     cp -a "$ROOT_DIR/erpnext-dev.sh" "$ROOT_DIR/VERSION" "$ROOT_DIR/lib" "$entrypoint_root/"
     chmod -R a+rX "$entrypoint_root"
+    unprivileged_lock="$ENTRY_WORK/unprivileged-lock"
+    mkdir -p "$unprivileged_lock"
+    chmod 0777 "$unprivileged_lock"
     env_bin="$(command -v env)"
     bash_bin="$(command -v bash)"
     [[ "$unprivileged_uid" =~ ^[0-9]+$ && "$unprivileged_gid" =~ ^[0-9]+$ && "$unprivileged_uid" -ne 0 ]] \
@@ -665,7 +667,8 @@ run_entrypoint_without_privilege() {
         unprivileged_gid=65534
       }
     setpriv --reuid="$unprivileged_uid" --regid="$unprivileged_gid" --clear-groups \
-      "$env_bin" "${ENTRY_ENV[@]}" "$bash_bin" "$entrypoint_root/erpnext-dev.sh" "$@" >"$output_file" 2>&1
+      "$env_bin" "${ENTRY_ENV[@]}" "LOCK_DIR=$unprivileged_lock" \
+      "$bash_bin" "$entrypoint_root/erpnext-dev.sh" "$@" >"$output_file" 2>&1
   else
     env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
   fi
