@@ -1438,7 +1438,7 @@ post_install_validation_summary() {
     status_line "Autostart" "WARN" "$autostart_status"
   fi
 
-  if path_is_file "${FRAPPE_HOME}/erpnext-dev-credentials.txt"; then
+  if credentials_file_contract "${FRAPPE_HOME}/erpnext-dev-credentials.txt" validate; then
     status_line "Credentials file" "OK" "${FRAPPE_HOME}/erpnext-dev-credentials.txt"
   else
     status_line "Credentials file" "WARN" "missing at ${FRAPPE_HOME}/erpnext-dev-credentials.txt"

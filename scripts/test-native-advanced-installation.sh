@@ -28,6 +28,7 @@ assert_lacks() {
 source "$ROOT_DIR/lib/apps.sh"
 source "$ROOT_DIR/lib/profile.sh"
 source "$ROOT_DIR/lib/install.sh"
+source "$ROOT_DIR/lib/access.sh"
 source "$ROOT_DIR/lib/native_advanced.sh"
 
 SUDO=""
@@ -317,8 +318,18 @@ native_advanced_credentials_persist >/dev/null 2>&1
 rc=$?
 set -e
 assert_eq 'unsafe credential target fails closed' "$rc" 1
+if credentials_file_contract "$credentials_path" validate >/dev/null 2>&1; then fail 'credential reader followed a symlink'; fi
+pass 'credential reader rejects a symlinked final component'
 assert_has 'credential write attempt is ledgered' "$NATIVE_ADVANCED_LEDGER" credentials-file-attempt
 rm -f "$credentials_path"
+credential_contract_body="$(sed -n '/^credentials_file_contract()/,/^}/p' "$ROOT_DIR/lib/access.sh")"
+credential_secure_body="$(sed -n '/^credentials_secure()/,/^}/p' "$ROOT_DIR/lib/access.sh")"
+credential_show_body="$(sed -n '/^credentials_show()/,/^}/p' "$ROOT_DIR/lib/access.sh")"
+assert_has 'credential contract opens final component without following symlinks' "$credential_contract_body" 'os.O_NOFOLLOW'
+assert_has 'credential contract compares opened and linked inode identity' "$credential_contract_body" '(opened.st_dev, opened.st_ino) != (linked.st_dev, linked.st_ino)'
+assert_lacks 'credentials-secure performs no privileged chown' "$credential_secure_body" 'chown'
+assert_lacks 'credentials-secure performs no privileged chmod' "$credential_secure_body" 'chmod'
+assert_has 'credentials-show reads only through validated opened descriptor' "$credential_show_body" 'credentials_file_contract "$cred_file" read'
 # shellcheck disable=SC2218
 native_advanced_get_app crm
 get_app_body="$(sed -n '/^native_advanced_get_app()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
@@ -621,6 +632,22 @@ run_entrypoint() {
   ENTRY_RC=$?
   set -e
 }
+run_entrypoint_without_privilege() {
+  local output_file="$1"
+  shift
+  set +e
+  if [[ "$EUID" -eq 0 ]]; then
+    command -v setpriv >/dev/null || fail 'root test execution requires setpriv for the non-root privilege case'
+    chmod 0755 "$WORK" "$ENTRY_WORK"
+    chmod 0777 "$ENTRY_WORK/log"
+    setpriv --reuid=65534 --regid=65534 --clear-groups \
+      env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
+  else
+    env "${ENTRY_ENV[@]}" "$ROOT_DIR/erpnext-dev.sh" "$@" >"$output_file" 2>&1
+  fi
+  ENTRY_RC=$?
+  set -e
+}
 
 run_entrypoint "$ENTRY_WORK/preview-1.out" install \
   --profile advanced \
@@ -672,10 +699,15 @@ assert_has 'interactive cancellation is explicit' "$(<"$ENTRY_WORK/cancel.out")"
   || fail 'entrypoint cancellation mutated state or invoked a platform command'
 pass 'entrypoint cancellation is mutation-free'
 
-run_entrypoint "$ENTRY_WORK/noninteractive.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
+run_entrypoint_without_privilege "$ENTRY_WORK/noninteractive.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
 assert_eq 'noninteractive dispatcher reaches sudo transaction gate' "$ENTRY_RC" 1
 assert_has 'noninteractive dispatcher reaches dedicated plan' "$(<"$ENTRY_WORK/noninteractive.out")" 'Native Advanced Installation Plan'
 assert_has 'noninteractive transaction requires privilege' "$(<"$ENTRY_WORK/noninteractive.out")" 'must be run with sudo'
+if [[ "$EUID" -eq 0 ]]; then
+  run_entrypoint "$ENTRY_WORK/root-transaction.out" install --profile advanced --apps crm,helpdesk --site erp.test --yes
+  assert_eq 'root dispatcher passes privilege gate and reaches bounded transaction failure' "$ENTRY_RC" 31
+  assert_lacks 'root dispatcher does not report a missing privilege' "$(<"$ENTRY_WORK/root-transaction.out")" 'must be run with sudo'
+fi
 
 for docker_mode in preview mutation; do
   docker_args=(install --profile advanced --apps 'crm,helpdesk' --site erp.test)
@@ -1060,6 +1092,10 @@ workflow="$(<"$ROOT_DIR/.github/workflows/ci.yml")"
 assert_lacks 'real jobs contain no unguarded PR-only checkout' "$workflow" 'ref: ${{ github.event.pull_request.head.sha }}'
 assert_has 'real jobs select PR head or triggering SHA' "$workflow" "EXPECTED_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
 assert_has 'real jobs reject an empty expected SHA' "$workflow" 'test -n "$EXPECTED_SHA"'
+assert_has 'real install compares credentials-show with protected record' "$workflow" 'assert f"ERPNext Password: {admin}" in shown'
+assert_has 'post-restart performs deep baseline backup verification' "$workflow" 'erpnext-dev.sh backup-verify'
+assert_has 'post-restart verifies exact installed application set' "$workflow" 'printf "%s\\n" crm frappe helpdesk telephony'
+assert_has 'CI exercises focused dispatcher regression as root' "$workflow" 'sudo --preserve-env=PATH scripts/test-native-advanced-installation.sh'
 
 service_source="$(<"$ROOT_DIR/lib/service.sh")"
 start_helper_source="$(sed -n '/^create_start_helper()/,/^}/p' "$ROOT_DIR/lib/install.sh")"

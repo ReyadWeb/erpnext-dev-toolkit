@@ -308,7 +308,7 @@ doctor_collect() {
     doctor_add_check "Start helper" "WARN" "missing or not executable at ${FRAPPE_HOME}/start-erpnext-dev.sh"
   fi
 
-  if path_is_file "${FRAPPE_HOME}/erpnext-dev-credentials.txt"; then
+  if credentials_file_contract "${FRAPPE_HOME}/erpnext-dev-credentials.txt" validate; then
     doctor_add_check "Credentials file" "OK" "present; content intentionally not displayed"
   else
     doctor_add_check "Credentials file" "WARN" "missing"

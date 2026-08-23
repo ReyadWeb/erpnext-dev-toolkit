@@ -53,6 +53,12 @@
 
 ## Unreleased
 
+- Hardened every credential consumer to reject symlink replacement and operate
+  only on the same opened root-owned mode-0600 inode; made the Native advanced
+  dispatcher regression deterministic for root and non-root callers; and
+  strengthened real CI to compare protected credential retrieval, deeply verify
+  backups, and assert the exact application set after a clean systemd restart.
+
 - Phase 7.4 Native advanced now atomically persists the verified site credentials
   through the canonical root-only credentials contract, stages reviewed upstream
   commits before Bench can execute application code while accepting normal branch

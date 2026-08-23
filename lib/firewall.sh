@@ -1224,7 +1224,7 @@ security_menu_credentials_state() {
 
   if [[ -z "$cred_file" ]]; then
     printf 'INFO'
-  elif path_is_file "$cred_file"; then
+  elif credentials_file_contract "$cred_file" validate; then
     # A plaintext credential record still present requires secure handoff.
     printf 'WARN'
   else

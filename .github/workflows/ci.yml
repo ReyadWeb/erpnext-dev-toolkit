@@ -89,6 +89,15 @@ jobs:
           private_output="$(mktemp)"
           chmod 0600 "$private_output"
           sudo script --quiet --return --command '/opt/erpnext-dev/erpnext-dev.sh credentials-show --yes' "$private_output" >/dev/null
+          sudo python3 - "$credentials" "$private_output" <<'PY'
+          import sys
+          stored = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          shown = open(sys.argv[2], encoding="utf-8", errors="strict").read()
+          admin = next(stored[i + 2].split(": ", 1)[1] for i, line in enumerate(stored) if line == "Login:")
+          database = next(stored[i + 2].split(": ", 1)[1] for i, line in enumerate(stored) if line == "MariaDB Bench Admin:")
+          assert f"ERPNext Password: {admin}" in shown
+          assert f"MariaDB Password: {database}" in shown
+          PY
           rm -f "$private_output"
           sudo python3 - "$credentials" <<'PY'
           import sys, urllib.parse, urllib.request
@@ -105,11 +114,15 @@ jobs:
           sudo /opt/erpnext-dev/erpnext-dev.sh wait-ready
           sudo /opt/erpnext-dev/erpnext-dev.sh verify-frontend-assets
           sudo /opt/erpnext-dev/erpnext-dev.sh credentials-info >/dev/null
-          sudo /opt/erpnext-dev/erpnext-dev.sh backup-status >/dev/null
-          sudo /opt/erpnext-dev/erpnext-dev.sh app list --site erp.test >/dev/null
+          sudo /opt/erpnext-dev/erpnext-dev.sh backup-verify >/dev/null
           sudo -H -u frappe env -i HOME=/home/frappe USER=frappe LOGNAME=frappe \
             PATH=/usr/local/bin:/usr/bin:/bin GIT_CONFIG_NOSYSTEM=1 \
             GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null bash --noprofile --norc -c '
+              export NVM_DIR="$HOME/.nvm"
+              source "$NVM_DIR/nvm.sh"
+              nvm use --silent 24 >/dev/null
+              cd /home/frappe/frappe/frappe-bench
+              test "$(bench --site erp.test list-apps | sed -E "s/[[:space:]].*$//; /^$/d" | sort)" = "$(printf "%s\\n" crm frappe helpdesk telephony | sort)"
               test "$(git -C /home/frappe/frappe/frappe-bench/apps/frappe rev-parse HEAD)" = 6a329d068416768ec47ccd3326b9cc95a8d7bf99
               test "$(git -C /home/frappe/frappe/frappe-bench/apps/crm rev-parse HEAD)" = 49d98d61e7d42c3bfc97ea65725c68d632c6b849
               test "$(git -C /home/frappe/frappe/frappe-bench/apps/telephony rev-parse HEAD)" = 039cf39f245d6818ead03cf94eea6ce7f9c1e1f7
@@ -293,6 +306,9 @@ jobs:
 
       - name: Run shellcheck
         run: scripts/run-shellcheck.sh
+
+      - name: Run Native advanced privilege regression as root
+        run: sudo --preserve-env=PATH scripts/test-native-advanced-installation.sh
 
       - name: Validate release tree
         # shellcheck already ran above; validate-release would otherwise re-run it.
