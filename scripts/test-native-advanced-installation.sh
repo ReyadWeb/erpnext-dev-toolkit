@@ -186,6 +186,14 @@ assert_has 'empty skeleton ownership and mode are verified' "$user_body" "stat -
 assert_has 'empty skeleton contents are verified' "$user_body" 'find "$empty_skel" -mindepth 1 -maxdepth 1'
 assert_lacks 'Native advanced user never imports the host skeleton' "$user_body" '/etc/skel'
 
+# Bench fault tests use command stubs; immutable Git staging is exercised with
+# real local repositories in a separate block below.
+native_advanced_stage_source() {
+  local stage="$FRAPPE_HOME/.local/state/erpnext-dev/sources/$1"
+  mkdir -p "$stage"
+  NATIVE_ADVANCED_SOURCE_STAGE="$stage"
+}
+
 BENCH_STUB_MODE=fail
 export BENCH_STUB_MODE
 set +e
@@ -245,6 +253,8 @@ assert_has 'partial site ledger recorded' "$NATIVE_ADVANCED_LEDGER" partial-site
 rm -rf "$BENCH_DIR/sites/$SITE_NAME"
 NATIVE_ADVANCED_LEDGER=bench BENCH_STUB_MODE=success
 export BENCH_STUB_MODE
+[[ ! -e "$FRAPPE_HOME/erpnext-dev-credentials.txt" ]] || fail 'credential file exists before verified site creation'
+pass 'no credential file before verified site creation'
 # shellcheck disable=SC2218
 native_advanced_site_create
 assert_has 'verified exact site accepted' "$NATIVE_ADVANCED_LEDGER" site
@@ -286,6 +296,29 @@ set -e
 assert_eq 'short site credential input fails exactly' "$rc" 63
 DB_ADMIN_PASSWORD="$saved_db_input" ADMIN_PASSWORD="$saved_admin_input" BENCH_STUB_MODE=success
 export DB_ADMIN_PASSWORD ADMIN_PASSWORD BENCH_STUB_MODE
+# shellcheck disable=SC2218
+native_advanced_credentials_persist
+credentials_path="$FRAPPE_HOME/erpnext-dev-credentials.txt"
+[[ -f "$credentials_path" && ! -L "$credentials_path" ]] || fail 'credentials artifact is not a safe regular file'
+assert_eq 'credentials file mode' "$(stat -c %a "$credentials_path")" 600
+assert_eq 'credentials file test owner' "$(stat -c %u "$credentials_path")" "$(id -u)"
+assert_has 'credentials success ledger' "$NATIVE_ADVANCED_LEDGER" credentials-file
+credentials_digest="$(sha256sum "$credentials_path" | awk '{print $1}')"
+BENCH_STUB_MODE=migrate-fail
+native_advanced_migrate >/dev/null 2>&1 || true
+assert_eq 'later failure preserves verified credentials' "$(sha256sum "$credentials_path" | awk '{print $1}')" "$credentials_digest"
+BENCH_STUB_MODE=success
+export BENCH_STUB_MODE
+rm -f "$credentials_path"
+ln -s "$WORK/unsafe-credential-target" "$credentials_path"
+set +e
+# shellcheck disable=SC2218
+native_advanced_credentials_persist >/dev/null 2>&1
+rc=$?
+set -e
+assert_eq 'unsafe credential target fails closed' "$rc" 1
+assert_has 'credential write attempt is ledgered' "$NATIVE_ADVANCED_LEDGER" credentials-file-attempt
+rm -f "$credentials_path"
 # shellcheck disable=SC2218
 native_advanced_get_app crm
 get_app_body="$(sed -n '/^native_advanced_get_app()/,/^}/p' "$ROOT_DIR/lib/native_advanced.sh")"
@@ -501,6 +534,10 @@ native_advanced_site_create() {
   mkdir -p "$BENCH_DIR/sites/$SITE_NAME"
   NATIVE_ADVANCED_SITE_CREATED=1
   native_advanced_ledger_add site
+}
+native_advanced_credentials_persist() {
+  phase_log credentials-persisted
+  native_advanced_ledger_add credentials-file
 }
 native_advanced_baseline_backup() {
   phase_log baseline-backup
@@ -795,7 +832,7 @@ for mutation in active later-checkpoint ledger recovery malformed unsafe-mode; d
   expect_retry_conflict "retry rejects $mutation record"
 done
 
-for artifact in bench site config application staged-config; do
+for artifact in bench site config application credentials staged-config; do
   create_safe_prerequisite_record
   case "$artifact" in
     bench) mkdir -p "$BENCH_DIR" ;;
@@ -805,6 +842,10 @@ for artifact in bench site config application staged-config; do
       printf 'CONFIG_SCHEMA=2\n' >"$CONFIG_FILE"
       ;;
     application) mkdir -p "$BENCH_DIR/apps/crm" ;;
+    credentials)
+      mkdir -p "$FRAPPE_HOME"
+      printf 'protected-existing-evidence\n' >"$FRAPPE_HOME/erpnext-dev-credentials.txt"
+      ;;
     staged-config) printf 'staged\n' >"$NATIVE_ADVANCED_STATE_DIR/native-advanced-stale.config" ;;
   esac
   expect_retry_conflict "retry rejects existing $artifact artifact"
@@ -851,7 +892,7 @@ assert_eq 'readiness is proven before and after promotion' "$(grep -c '^readines
 
 # Fault injection: every meaningful checkpoint, config unchanged until promotion,
 # and post-site failures preserve recovery evidence.
-checkpoints=(prerequisites frappe-user frappe-environment bench-created site-created baseline-backup configuration-staging get-app:crm install-app:crm migration assets services readiness inventory configuration-promotion post-promotion-reconciliation)
+checkpoints=(prerequisites frappe-user frappe-environment bench-created site-created credentials-persisted baseline-backup configuration-staging get-app:crm install-app:crm migration assets services readiness inventory configuration-promotion post-promotion-reconciliation)
 for checkpoint in "${checkpoints[@]}"; do
   reset_case
   NATIVE_ADVANCED_FAIL_AT="$checkpoint"
@@ -878,7 +919,7 @@ for checkpoint in "${checkpoints[@]}"; do
   fi
   case "$checkpoint" in
     prerequisites | frappe-user | frappe-environment | bench-created) assert_lacks "failure at $checkpoint blocks site" "$mutations" 'site-created' ;;
-    site-created) assert_lacks 'site failure blocks baseline backup' "$mutations" 'baseline-backup' ;;
+    site-created | credentials-persisted) assert_lacks 'site or credential failure blocks baseline backup' "$mutations" 'baseline-backup' ;;
     baseline-backup | configuration-staging | get-app:crm) assert_lacks "failure at $checkpoint blocks app installation" "$mutations" 'install-app:' ;;
     install-app:crm) assert_lacks 'app installation failure blocks migration' "$mutations" 'migration' ;;
     migration) assert_lacks 'migration failure blocks assets' "$mutations" 'assets' ;;
@@ -945,5 +986,90 @@ set -e
 assert_eq 'signal return' "$rc" 130
 assert_has 'signal recovery state' "$(<"$NATIVE_ADVANCED_OPERATION_FILE")" 'status=recovery-required'
 assert_has 'signal durable checkpoint' "$(<"$NATIVE_ADVANCED_OPERATION_FILE")" 'checkpoint=assets'
+
+# Immutable-source contract with real local Git history.
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null
+GIT_FIXTURE="$WORK/git-fixture"
+GIT_REMOTE="$WORK/approved.git"
+mkdir -p "$GIT_FIXTURE"
+git -C "$GIT_FIXTURE" init -q
+git -C "$GIT_FIXTURE" config user.name fixture
+git -C "$GIT_FIXTURE" config user.email fixture@example.invalid
+printf 'A\n' >"$GIT_FIXTURE/source.txt"
+git -C "$GIT_FIXTURE" add source.txt
+git -C "$GIT_FIXTURE" commit -qm A
+PIN_A="$(git -C "$GIT_FIXTURE" rev-parse HEAD)"
+git -C "$GIT_FIXTURE" branch -M main
+git clone -q --bare "$GIT_FIXTURE" "$GIT_REMOTE"
+TEST_SOURCE_REPO="$GIT_REMOTE" TEST_SOURCE_COMMIT="$PIN_A" TEST_SOURCE_HOME="$WORK/immutable/home/frappe"
+export TEST_SOURCE_REPO TEST_SOURCE_COMMIT TEST_SOURCE_HOME
+(
+  unset _ERPNEXT_DEV_NATIVE_ADVANCED_LOADED
+  # shellcheck source=../lib/native_advanced.sh
+  source "$ROOT_DIR/lib/native_advanced.sh"
+  FRAPPE_HOME="$TEST_SOURCE_HOME" FRAPPE_USER=frappe
+  mkdir -p "$FRAPPE_HOME"
+  load_validated_app_catalog_record() {
+    LIB_APP_ID=crm LIB_APP_REPO="$TEST_SOURCE_REPO" LIB_APP_BRANCH=main LIB_APP_COMMIT="$TEST_SOURCE_COMMIT"
+  }
+  native_advanced_frappe_bash() { bash --noprofile --norc; }
+  native_advanced_ledger_add() { :; }
+  native_advanced_remote_pin_matches crm
+  native_advanced_stage_source crm
+  staged="$NATIVE_ADVANCED_SOURCE_STAGE"
+  [[ "$(git -C "$staged" rev-parse HEAD)" == "$TEST_SOURCE_COMMIT" ]]
+)
+pass 'branch at pinned commit installs the exact immutable commit'
+printf 'B\n' >>"$GIT_FIXTURE/source.txt"
+git -C "$GIT_FIXTURE" commit -qam B
+git -C "$GIT_FIXTURE" push -q "$GIT_REMOTE" main
+assert_eq 'staged immutable checkout is unchanged after upstream movement' \
+  "$(git -C "$TEST_SOURCE_HOME/.local/state/erpnext-dev/sources/crm" rev-parse HEAD)" "$PIN_A"
+(
+  unset _ERPNEXT_DEV_NATIVE_ADVANCED_LOADED
+  source "$ROOT_DIR/lib/native_advanced.sh"
+  load_validated_app_catalog_record() {
+    LIB_APP_ID=crm LIB_APP_REPO="$TEST_SOURCE_REPO" LIB_APP_BRANCH=main LIB_APP_COMMIT="$TEST_SOURCE_COMMIT"
+  }
+  native_advanced_remote_pin_matches crm
+)
+pass 'normal branch advancement preserves the reviewed ancestor pin'
+git -C "$GIT_FIXTURE" checkout -q --orphan unrelated
+git -C "$GIT_FIXTURE" rm -q -rf .
+printf 'unrelated\n' >"$GIT_FIXTURE/unrelated.txt"
+git -C "$GIT_FIXTURE" add unrelated.txt
+git -C "$GIT_FIXTURE" commit -qm unrelated
+UNRELATED="$(git -C "$GIT_FIXTURE" rev-parse HEAD)"
+TEST_SOURCE_COMMIT="$UNRELATED"
+export TEST_SOURCE_COMMIT
+set +e
+(
+  unset _ERPNEXT_DEV_NATIVE_ADVANCED_LOADED
+  source "$ROOT_DIR/lib/native_advanced.sh"
+  load_validated_app_catalog_record() {
+    LIB_APP_ID=crm LIB_APP_REPO="$TEST_SOURCE_REPO" LIB_APP_BRANCH=main LIB_APP_COMMIT="$TEST_SOURCE_COMMIT"
+  }
+  native_advanced_remote_pin_matches crm
+)
+rc=$?
+set -e
+assert_eq 'unrelated pin is rejected before mutation' "$rc" 1
+
+workflow="$(<"$ROOT_DIR/.github/workflows/ci.yml")"
+assert_lacks 'real jobs contain no unguarded PR-only checkout' "$workflow" 'ref: ${{ github.event.pull_request.head.sha }}'
+assert_has 'real jobs select PR head or triggering SHA' "$workflow" "EXPECTED_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+assert_has 'real jobs reject an empty expected SHA' "$workflow" 'test -n "$EXPECTED_SHA"'
+
+service_source="$(<"$ROOT_DIR/lib/service.sh")"
+start_helper_source="$(sed -n '/^create_start_helper()/,/^}/p' "$ROOT_DIR/lib/install.sh")"
+assert_has 'service orders after database and Redis' "$service_source" 'After=network-online.target mariadb.service redis-server.service'
+assert_has 'service pulls database and Redis dependencies' "$service_source" 'Wants=network-online.target mariadb.service redis-server.service'
+assert_has 'service has bounded restart delay' "$service_source" 'RestartSec=10'
+assert_has 'service only restarts on failure' "$service_source" 'Restart=on-failure'
+assert_has 'service kills the complete control group' "$service_source" 'KillMode=control-group'
+assert_has 'fresh service process activates pinned NVM runtime' "$start_helper_source" 'nvm use --silent "${NODE_VERSION}"'
+assert_has 'fresh service process isolates Git system configuration' "$start_helper_source" 'export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null'
+assert_has 'fresh service process uses exact Bench working directory' "$start_helper_source" 'cd "${bench_dir}"'
 
 printf 'test-native-advanced-installation: %s assertions passed\n' "$ASSERTIONS"

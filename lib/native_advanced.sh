@@ -20,6 +20,8 @@ NATIVE_ADVANCED_STAGED_CONFIG=""
 NATIVE_ADVANCED_RECORDS_BASE=""
 NATIVE_ADVANCED_PDF_CAPABILITY="unknown"
 NATIVE_ADVANCED_STARTED_EPOCH=0
+NATIVE_ADVANCED_CREDENTIALS_FILE=""
+NATIVE_ADVANCED_SOURCE_STAGE=""
 
 # Run every Phase 7.4 Frappe command in one bounded environment. The caller
 # supplies only a trusted working directory and a script on stdin. "bootstrap"
@@ -219,6 +221,7 @@ native_advanced_retry_records_validate() {
   [[ "$found" -eq 1 ]] || return 0
   [[ ! -e "$CONFIG_FILE" && ! -L "$CONFIG_FILE" && ! -e "$LEGACY_CONFIG_FILE" && ! -L "$LEGACY_CONFIG_FILE" ]] || return 1
   [[ ! -e "$BENCH_PARENT" && ! -L "$BENCH_PARENT" && ! -e "$BENCH_DIR" && ! -L "$BENCH_DIR" ]] || return 1
+  [[ ! -e "$FRAPPE_HOME/erpnext-dev-credentials.txt" && ! -L "$FRAPPE_HOME/erpnext-dev-credentials.txt" ]] || return 1
 }
 
 native_advanced_records_snapshot() {
@@ -314,6 +317,7 @@ native_advanced_absence_fingerprint() {
   config="$(native_advanced_config_digest "$CONFIG_FILE")" || return 1
   legacy="$(native_advanced_config_digest "$LEGACY_CONFIG_FILE")" || return 1
   [[ ! -e "$BENCH_PARENT" && ! -L "$BENCH_PARENT" && ! -e "$BENCH_DIR" && ! -L "$BENCH_DIR" ]] || return 1
+  [[ ! -e "$FRAPPE_HOME/erpnext-dev-credentials.txt" && ! -L "$FRAPPE_HOME/erpnext-dev-credentials.txt" ]] || return 1
   printf '%s' "native|$SITE_NAME|$BENCH_PARENT|$config|$legacy" | sha256sum | awk '{print $1}'
 }
 
@@ -323,6 +327,7 @@ native_advanced_preflight() {
   [[ "$SITE_NAME" == "$QUICK_INSTALL_SITE" ]] || return 20
   native_advanced_retry_records_validate || return 34
   [[ ! -e "$BENCH_PARENT" && ! -L "$BENCH_PARENT" ]] || return 21
+  [[ ! -e "$FRAPPE_HOME/erpnext-dev-credentials.txt" && ! -L "$FRAPPE_HOME/erpnext-dev-credentials.txt" ]] || return 21
   [[ ! -e "$CONFIG_FILE" && ! -L "$CONFIG_FILE" && ! -e "$LEGACY_CONFIG_FILE" && ! -L "$LEGACY_CONFIG_FILE" ]] || return 21
   NATIVE_ADVANCED_RECORDS_BASE="$(native_advanced_records_snapshot)" || return 34
   NATIVE_ADVANCED_PREFLIGHT="$(native_advanced_absence_fingerprint)" || return 21
@@ -353,12 +358,51 @@ native_advanced_catalog_validate_runtime() {
 }
 
 native_advanced_remote_pin_matches() {
-  local app="$1" remote
+  local app="$1" remote_dir
   load_validated_app_catalog_record "$app" || return 1
-  remote="$(env -i HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent PATH=/usr/local/bin:/usr/bin:/bin \
+  remote_dir="$(mktemp -d)" || return 1
+  if env -i HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent PATH=/usr/local/bin:/usr/bin:/bin \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null \
-    git ls-remote "$LIB_APP_REPO" "refs/heads/$LIB_APP_BRANCH" 2>/dev/null | awk 'NR == 1 { print $1 }')" || return 1
-  [[ "$remote" == "$LIB_APP_COMMIT" ]]
+    git -C "$remote_dir" init --quiet \
+    && env -i HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent PATH=/usr/local/bin:/usr/bin:/bin \
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null \
+      git -C "$remote_dir" fetch --quiet --no-tags --filter=blob:none "$LIB_APP_REPO" \
+      "+refs/heads/$LIB_APP_BRANCH:refs/remotes/approved/$LIB_APP_BRANCH" \
+    && env -i HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent PATH=/usr/local/bin:/usr/bin:/bin \
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null \
+      git -C "$remote_dir" cat-file -e "$LIB_APP_COMMIT^{commit}" \
+    && env -i HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent PATH=/usr/local/bin:/usr/bin:/bin \
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null \
+      git -C "$remote_dir" merge-base --is-ancestor "$LIB_APP_COMMIT" "refs/remotes/approved/$LIB_APP_BRANCH"; then
+    rm -rf "$remote_dir"
+    return 0
+  fi
+  rm -rf "$remote_dir"
+  return 1
+}
+
+native_advanced_stage_source() {
+  local app="$1" repo branch commit stage_parent stage
+  load_validated_app_catalog_record "$app" || return 1
+  repo="${LIB_APP_REPO%/}"; branch="$LIB_APP_BRANCH"; commit="$LIB_APP_COMMIT"
+  stage_parent="$FRAPPE_HOME/.local/state/erpnext-dev/sources"
+  stage="$stage_parent/$app"
+  NATIVE_ADVANCED_SOURCE_STAGE=""
+  native_advanced_ledger_add "source-stage-attempt:$app"
+  native_advanced_frappe_bash "$FRAPPE_HOME" <<EOF_NATIVE_ADVANCED_SOURCE_STAGE || return 1
+mkdir -p "${stage_parent}"
+[[ ! -e "${stage}" && ! -L "${stage}" ]]
+git init --quiet "${stage}"
+git -C "${stage}" remote add origin "${repo}"
+git -C "${stage}" fetch --quiet --no-tags --filter=blob:none origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+git -C "${stage}" cat-file -e "${commit}^{commit}"
+git -C "${stage}" merge-base --is-ancestor "${commit}" "refs/remotes/origin/${branch}"
+git -C "${stage}" checkout --quiet -B "${branch}" "${commit}"
+[[ "\$(git -C "${stage}" rev-parse HEAD)" == "${commit}" ]]
+[[ "\$(git -C "${stage}" remote get-url origin)" == "${repo}" || "\$(git -C "${stage}" remote get-url origin)" == "${repo}.git" ]]
+EOF_NATIVE_ADVANCED_SOURCE_STAGE
+  native_advanced_ledger_add "source-stage:$app@$commit"
+  NATIVE_ADVANCED_SOURCE_STAGE="$stage"
 }
 
 native_advanced_verify_upstream_pins() {
@@ -395,7 +439,7 @@ native_advanced_plan() {
   printf 'Application installation order: %s\n' "$NATIVE_ADVANCED_RESOLVED"
   printf 'Catalog acquisition records:\n'
   while IFS='|' read -r app repo branch commit; do printf '  %s repository=%s ref=%s commit=%s\n' "$app" "$repo" "$branch" "$commit"; done < <(native_advanced_catalog_rows)
-  printf 'Checkpoints: preflight,prerequisites,frappe-user,bench-created,site-created,baseline-backup,app-acquisition,app-installation,migration,assets,services,readiness,inventory,configuration-promotion,post-promotion-reconciliation\n'
+  printf 'Checkpoints: preflight,prerequisites,frappe-user,bench-created,site-created,credentials-persisted,baseline-backup,app-acquisition,app-installation,migration,assets,services,readiness,inventory,configuration-promotion,post-promotion-reconciliation\n'
   printf 'Creates: Frappe user/home, Bench, exact site, curated app code, Native service, private operation record, promoted configuration\n'
   printf 'Baseline backup: after site creation and before any application acquisition; creation and verification are mandatory\n'
   printf 'Configuration promotion: only after exact runtime, source, branch, and inventory verification\n'
@@ -591,11 +635,13 @@ EOF_NATIVE_ADVANCED_TOOLCHAIN_VERIFY
 }
 
 native_advanced_bench_create() {
-  local rc=0 frappe_repo
+  local rc=0 frappe_repo frappe_stage
+  native_advanced_stage_source frappe || return 1
+  frappe_stage="$NATIVE_ADVANCED_SOURCE_STAGE"
   if native_advanced_frappe_bash "$FRAPPE_HOME" <<EOF_NATIVE_ADVANCED_BENCH
 mkdir -p "${BENCH_PARENT}"
 cd "${BENCH_PARENT}"
-bench init "${BENCH_NAME}" --frappe-branch "${FRAPPE_BRANCH}"
+bench init "${BENCH_NAME}" --frappe-path "${frappe_stage}" --frappe-branch "${FRAPPE_BRANCH}"
 EOF_NATIVE_ADVANCED_BENCH
   then
     :
@@ -627,15 +673,12 @@ EOF_NATIVE_ADVANCED_BENCH_VERIFY
 git -C apps/frappe rev-parse HEAD
 EOF_NATIVE_ADVANCED_FRAPPE_HEAD
   )" == "$LIB_APP_COMMIT" ]] || { native_advanced_ledger_add partial-bench; return 1; }
-  native_advanced_remote_pin_matches frappe || { native_advanced_ledger_add partial-bench; return 1; }
   frappe_repo="${LIB_APP_REPO%/}"
   native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_FRAPPE_ORIGIN || { native_advanced_ledger_add partial-bench; return 1; }
-if git -C apps/frappe remote get-url origin >/dev/null 2>&1; then
-  [[ "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}" || "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}.git" ]]
-else
-  git -C apps/frappe remote add origin "${frappe_repo}"
-fi
+for remote in \$(git -C apps/frappe remote); do git -C apps/frappe remote remove "\$remote"; done
+git -C apps/frappe remote add origin "${frappe_repo}"
 [[ "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}" || "\$(git -C apps/frappe remote get-url origin)" == "${frappe_repo}.git" ]]
+[[ "\$(git -C apps/frappe rev-parse HEAD)" == "${LIB_APP_COMMIT}" ]]
 EOF_NATIVE_ADVANCED_FRAPPE_ORIGIN
   native_advanced_ledger_add bench
   native_advanced_ledger_add "source:frappe@$LIB_APP_COMMIT"
@@ -699,6 +742,79 @@ EOF_NATIVE_ADVANCED_SITE_CONFIG
   ((old_xtrace == 0)) || set -x
 }
 
+native_advanced_credentials_persist() {
+  local credentials_file temp_file expected_owner old_xtrace=0
+  credentials_file="$FRAPPE_HOME/erpnext-dev-credentials.txt"
+  NATIVE_ADVANCED_CREDENTIALS_FILE="$credentials_file"
+  native_advanced_ledger_add credentials-file-attempt
+  [[ "$NATIVE_ADVANCED_SITE_CREATED" -eq 1 ]] || return 1
+  [[ -d "$FRAPPE_HOME" && ! -L "$FRAPPE_HOME" ]] || return 1
+  [[ ! -e "$credentials_file" && ! -L "$credentials_file" ]] || return 1
+  [[ $- == *x* ]] && old_xtrace=1 && set +x
+  umask 077
+  temp_file="$(${SUDO:-} mktemp "$FRAPPE_HOME/.erpnext-dev-credentials.tmp.XXXXXX")" || { ((old_xtrace == 0)) || set -x; return 1; }
+  cleanup_credentials_temp() {
+    if [[ -n "${temp_file:-}" && ( -e "$temp_file" || -L "$temp_file" ) ]]; then
+      ${SUDO:-} rm -f -- "$temp_file" || true
+      native_advanced_ledger_add credentials-file-cleanup-attempted
+    fi
+  }
+  trap cleanup_credentials_temp RETURN
+  if ! ${SUDO:-} tee "$temp_file" >/dev/null <<EOF_NATIVE_ADVANCED_CREDENTIALS
+Frappe Developer Environment
+
+Installation profile:
+  Native advanced
+
+Site:
+  ${SITE_NAME}
+
+Bench:
+  ${BENCH_DIR}
+
+Login:
+  Username: Administrator
+  Password: ${ADMIN_PASSWORD}
+
+MariaDB Bench Admin:
+  User: ${DB_ADMIN_USER}
+  Password: ${DB_ADMIN_PASSWORD}
+
+Start ERPNext:
+  sudo /opt/erpnext-dev/erpnext-dev.sh start
+EOF_NATIVE_ADVANCED_CREDENTIALS
+  then
+    ((old_xtrace == 0)) || set -x
+    return 1
+  fi
+  ${SUDO:-} chown root:root "$temp_file" 2>/dev/null || [[ "${ERPNEXT_DEV_NATIVE_ADVANCED_TEST:-0}" == 1 ]] || return 1
+  ${SUDO:-} chmod 0600 "$temp_file" || return 1
+  [[ -f "$temp_file" && ! -L "$temp_file" ]] || return 1
+  ${SUDO:-} mv -T "$temp_file" "$credentials_file" || return 1
+  temp_file=""
+  if [[ ! -f "$credentials_file" || -L "$credentials_file" ]] \
+    || [[ "$(${SUDO:-} stat -c '%a' "$credentials_file")" != 600 ]]; then
+    native_advanced_ledger_add partial-credentials-file
+    return 1
+  fi
+  expected_owner=0
+  [[ "${ERPNEXT_DEV_NATIVE_ADVANCED_TEST:-0}" != 1 ]] || expected_owner="$(id -u)"
+  if [[ "$(${SUDO:-} stat -c '%u' "$credentials_file")" != "$expected_owner" ]] \
+    || ! ${SUDO:-} awk -v site="$SITE_NAME" -v bench="$BENCH_DIR" -v db_user="$DB_ADMIN_USER" \
+    'BEGIN { site_ok=bench_ok=login_ok=db_ok=0 }
+     $0 == "  " site { site_ok=1 }
+     $0 == "  " bench { bench_ok=1 }
+     $0 == "  Username: Administrator" { login_ok=1 }
+     $0 == "  User: " db_user { db_ok=1 }
+     END { exit !(site_ok && bench_ok && login_ok && db_ok) }' "$credentials_file"; then
+    native_advanced_ledger_add partial-credentials-file
+    return 1
+  fi
+  native_advanced_ledger_add credentials-file
+  trap - RETURN
+  ((old_xtrace == 0)) || set -x
+}
+
 native_advanced_baseline_backup() {
   local latest prefix db_file public_file private_file config_file completeness backup_dir before_db_files
   backup_dir="$(site_backup_dir)" || return 1
@@ -734,18 +850,19 @@ EOF_NATIVE_ADVANCED_BACKUP_VERIFY
 }
 
 native_advanced_get_app() {
-  local app="$1" repo branch commit rc=0 actual_commit
+  local app="$1" repo branch commit rc=0 actual_commit source_stage
   load_validated_app_catalog_record "$app" || return 1
   [[ "$LIB_APP_ID" == "$app" && "$app" != frappe ]] || return 1
   repo="$LIB_APP_REPO"; branch="$LIB_APP_BRANCH"; commit="$LIB_APP_COMMIT"
-  native_advanced_remote_pin_matches "$app" || return 1
+  native_advanced_stage_source "$app" || return 1
+  source_stage="$NATIVE_ADVANCED_SOURCE_STAGE"
   if [[ -n "$branch" ]]; then
     native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET || rc=$?
-bench get-app --branch "${branch}" "${app}" "${repo}"
+bench get-app --branch "${branch}" "${app}" "${source_stage}"
 EOF_NATIVE_ADVANCED_GET
   else
     native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET_DEFAULT || rc=$?
-bench get-app "${app}" "${repo}"
+bench get-app "${app}" "${source_stage}"
 EOF_NATIVE_ADVANCED_GET_DEFAULT
   fi
   if [[ "$rc" -ne 0 ]]; then
@@ -758,15 +875,12 @@ git -C "apps/${app}" rev-parse HEAD
 EOF_NATIVE_ADVANCED_GET_HEAD
   )" || { native_advanced_ledger_add "partial-code:$app"; return 1; }
   [[ "$actual_commit" == "$commit" ]] || { native_advanced_ledger_add "partial-code:$app"; return 1; }
-  native_advanced_remote_pin_matches "$app" || { native_advanced_ledger_add "partial-code:$app"; return 1; }
   repo="${repo%/}"
   native_advanced_frappe_bash "$BENCH_DIR" <<EOF_NATIVE_ADVANCED_GET_ORIGIN || { native_advanced_ledger_add "partial-code:$app"; return 1; }
-if git -C "apps/${app}" remote get-url origin >/dev/null 2>&1; then
-  [[ "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}" || "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}.git" ]]
-else
-  git -C "apps/${app}" remote add origin "${repo}"
-fi
+for remote in \$(git -C "apps/${app}" remote); do git -C "apps/${app}" remote remove "\$remote"; done
+git -C "apps/${app}" remote add origin "${repo}"
 [[ "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}" || "\$(git -C "apps/${app}" remote get-url origin)" == "${repo}.git" ]]
+[[ "\$(git -C "apps/${app}" rev-parse HEAD)" == "${commit}" ]]
 EOF_NATIVE_ADVANCED_GET_ORIGIN
   native_advanced_ledger_add "code:$app"
   native_advanced_ledger_add "source:$app@$commit"
@@ -981,6 +1095,7 @@ native_advanced_install() {
   native_advanced_phase frappe-environment native_advanced_toolchain_setup || return $?
   native_advanced_phase bench-created native_advanced_bench_create || return $?
   native_advanced_phase site-created native_advanced_site_create || return $?
+  native_advanced_phase credentials-persisted native_advanced_credentials_persist || return $?
   native_advanced_phase baseline-backup native_advanced_baseline_backup || return $?
   native_advanced_phase configuration-staging native_advanced_stage_config || return $?
   for app in "${PROFILE_PLAN_DESIRED_APPS[@]}"; do
@@ -1003,6 +1118,8 @@ native_advanced_install() {
   native_advanced_record_write || { planner_exit_code recovery-required; return $?; }
   trap - INT TERM
   ok "Native advanced installation completed and reconciled."
+  printf 'Credentials file: %s\n' "$NATIVE_ADVANCED_CREDENTIALS_FILE"
+  printf 'Retrieve privately with: %s\n' "$(toolkit_cmd credentials-show)"
 }
 
 native_advanced_signal() {

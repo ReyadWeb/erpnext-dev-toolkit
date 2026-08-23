@@ -53,6 +53,13 @@
 
 ## Unreleased
 
+- Phase 7.4 Native advanced now atomically persists the verified site credentials
+  through the canonical root-only credentials contract, stages reviewed upstream
+  commits before Bench can execute application code while accepting normal branch
+  advancement, and validates real-install checkout identity across pull-request,
+  push, and reusable-workflow events. Real CI also authenticates Administrator
+  from the protected file and exercises a clean systemd stop/start cycle.
+
 - Corrected Native advanced interactive site creation: pinned Frappe uses
   Python `getpass`, which prefers `/dev/tty` and could bypass a credential stdin
   pipe. Site creation now runs without a controlling terminal, keeps generated

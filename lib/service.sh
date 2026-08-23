@@ -789,7 +789,7 @@ create_erpnext_service() {
 [Unit]
 Description=Managed Frappe Stack Service (${SITE_NAME})
 After=network-online.target mariadb.service redis-server.service
-Wants=network-online.target
+Wants=network-online.target mariadb.service redis-server.service
 
 [Service]
 Type=simple

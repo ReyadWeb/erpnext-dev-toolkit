@@ -24,17 +24,19 @@ jobs:
     timeout-minutes: 150
     env:
       DEBIAN_FRONTEND: noninteractive
+      EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ env.EXPECTED_SHA }}
 
       - name: Assert exact checkout and Ubuntu 26.04
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test -n "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           . /etc/os-release
           test "$VERSION_ID" = "26.04"
           sha256sum -c SHA256SUMS
@@ -51,11 +53,21 @@ jobs:
         timeout-minutes: 130
         run: |
           set -euo pipefail
+          transcript="$(mktemp)"
+          chmod 0600 "$transcript"
+          trap 'rm -f "$transcript"' EXIT INT TERM
           sudo ./erpnext-dev.sh install \
             --profile advanced \
             --apps crm,helpdesk \
             --site erp.test \
-            --yes
+            --yes >"$transcript" 2>&1
+          sudo python3 - /home/frappe/erpnext-dev-credentials.txt "$transcript" <<'PY'
+          import sys
+          credential_lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          secrets = [line.split(": ", 1)[1].encode() for line in credential_lines if line.startswith("  Password: ")]
+          transcript = open(sys.argv[2], "rb").read()
+          assert len(secrets) == 2 and all(secret not in transcript for secret in secrets)
+          PY
 
       - name: Verify promoted installation and exact inventory
         run: |
@@ -69,6 +81,51 @@ jobs:
           code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
             -H 'Host: erp.test' http://127.0.0.1:8000/api/method/ping)"
           case "$code" in 200|401|403) ;; *) exit 1 ;; esac
+          credentials=/home/frappe/erpnext-dev-credentials.txt
+          sudo test -f "$credentials"
+          sudo test ! -L "$credentials"
+          test "$(sudo stat -c '%U:%G:%a' "$credentials")" = root:root:600
+          sudo /opt/erpnext-dev/erpnext-dev.sh credentials-info >/dev/null
+          private_output="$(mktemp)"
+          chmod 0600 "$private_output"
+          sudo script --quiet --return --command '/opt/erpnext-dev/erpnext-dev.sh credentials-show --yes' "$private_output" >/dev/null
+          rm -f "$private_output"
+          sudo python3 - "$credentials" <<'PY'
+          import sys, urllib.parse, urllib.request
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          password = next(lines[i + 2].split(": ", 1)[1] for i, line in enumerate(lines) if line == "Login:")
+          body = urllib.parse.urlencode({"usr": "Administrator", "pwd": password}).encode()
+          request = urllib.request.Request("http://127.0.0.1:8000/api/method/login", data=body, headers={"Host": "erp.test"})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              assert response.status == 200
+          PY
+          sudo systemctl stop erpnext-dev.service
+          ! pgrep -u frappe -f '/home/frappe/frappe/frappe-bench|bench (start|serve|worker|schedule)' >/dev/null
+          sudo systemctl start erpnext-dev.service
+          sudo /opt/erpnext-dev/erpnext-dev.sh wait-ready
+          sudo /opt/erpnext-dev/erpnext-dev.sh verify-frontend-assets
+          sudo /opt/erpnext-dev/erpnext-dev.sh credentials-info >/dev/null
+          sudo /opt/erpnext-dev/erpnext-dev.sh backup-status >/dev/null
+          sudo /opt/erpnext-dev/erpnext-dev.sh app list --site erp.test >/dev/null
+          sudo -H -u frappe env -i HOME=/home/frappe USER=frappe LOGNAME=frappe \
+            PATH=/usr/local/bin:/usr/bin:/bin GIT_CONFIG_NOSYSTEM=1 \
+            GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null bash --noprofile --norc -c '
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/frappe rev-parse HEAD)" = 6a329d068416768ec47ccd3326b9cc95a8d7bf99
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/crm rev-parse HEAD)" = 49d98d61e7d42c3bfc97ea65725c68d632c6b849
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/telephony rev-parse HEAD)" = 039cf39f245d6818ead03cf94eea6ce7f9c1e1f7
+              test "$(git -C /home/frappe/frappe/frappe-bench/apps/helpdesk rev-parse HEAD)" = 480486287b2b7179dd42a09c2a62fca9cc89c26d
+            '
+          sudo python3 - "$credentials" <<'PY'
+          import sys, urllib.parse, urllib.request
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          password = next(lines[i + 2].split(": ", 1)[1] for i, line in enumerate(lines) if line == "Login:")
+          body = urllib.parse.urlencode({"usr": "Administrator", "pwd": password}).encode()
+          request = urllib.request.Request("http://127.0.0.1:8000/api/method/login", data=body, headers={"Host": "erp.test"})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              assert response.status == 200
+          PY
+          sudo systemctl is-enabled --quiet mariadb redis-server erpnext-dev.service
+          sudo systemctl is-active --quiet mariadb redis-server erpnext-dev.service
 
       - name: Emit sanitized checkpoint summary
         if: always()
@@ -97,17 +154,19 @@ jobs:
     timeout-minutes: 150
     env:
       DEBIAN_FRONTEND: noninteractive
+      EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ env.EXPECTED_SHA }}
 
       - name: Assert exact checkout and Ubuntu 26.04
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test -n "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           . /etc/os-release
           test "$VERSION_ID" = "26.04"
           sha256sum -c SHA256SUMS
@@ -157,6 +216,15 @@ jobs:
           ! grep -Eq -- '--(admin|db-root|mariadb-root)-password|ADMIN_PASSWORD=|DB_ADMIN_PASSWORD=' "$process_audit"
           test ! -s "$environment_audit"
           ! pgrep -u frappe -f 'bench new-site|frappe.*new-site' >/dev/null
+          sudo python3 - /home/frappe/erpnext-dev-credentials.txt "$transcript" "$process_audit" "$environment_audit" <<'PY'
+          import sys
+          credential_lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          secrets = [line.split(": ", 1)[1].encode() for line in credential_lines if line.startswith("  Password: ")]
+          assert len(secrets) == 2 and all(secrets)
+          for audit_path in sys.argv[2:]:
+              audit = open(audit_path, "rb").read()
+              assert all(secret not in audit for secret in secrets)
+          PY
 
       - name: Verify promoted installation and exact inventory
         run: |
@@ -170,6 +238,20 @@ jobs:
           code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
             -H 'Host: erp.test' http://127.0.0.1:8000/api/method/ping)"
           case "$code" in 200|401|403) ;; *) exit 1 ;; esac
+          credentials=/home/frappe/erpnext-dev-credentials.txt
+          sudo test -f "$credentials"
+          sudo test ! -L "$credentials"
+          test "$(sudo stat -c '%U:%G:%a' "$credentials")" = root:root:600
+          sudo /opt/erpnext-dev/erpnext-dev.sh credentials-info >/dev/null
+          sudo python3 - "$credentials" <<'PY'
+          import sys, urllib.parse, urllib.request
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          password = next(lines[i + 2].split(": ", 1)[1] for i, line in enumerate(lines) if line == "Login:")
+          body = urllib.parse.urlencode({"usr": "Administrator", "pwd": password}).encode()
+          request = urllib.request.Request("http://127.0.0.1:8000/api/method/login", data=body, headers={"Host": "erp.test"})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              assert response.status == 200
+          PY
 
       - name: Emit sanitized checkpoint summary
         if: always()
