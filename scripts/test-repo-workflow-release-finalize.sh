@@ -52,7 +52,8 @@ git remote add origin "$remote"
 
 mkdir -p scripts docs
 cp "$WORKFLOW_SOURCE" scripts/repo-workflow.sh
-chmod +x scripts/repo-workflow.sh
+cp "${ROOT_DIR}/scripts/release-manifest-files.sh" scripts/release-manifest-files.sh
+chmod +x scripts/repo-workflow.sh scripts/release-manifest-files.sh
 
 cat >VERSION <<'TXT'
 1.2.3

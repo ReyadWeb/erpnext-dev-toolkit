@@ -126,6 +126,7 @@ targets=(
   scripts/test-backup-restore-api.sh
   scripts/release-signing-policy.sh
   scripts/assert-github-release-assets.sh
+  scripts/test-historical-release-assets.sh
 )
 
 # Per-file timeout so a single hung analysis cannot block the release job forever.

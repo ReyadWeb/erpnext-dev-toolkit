@@ -74,6 +74,8 @@ pass() {
   || fail "scripts/bootstrap-verify.sh is missing or not executable"
 [[ -x scripts/test-release-asset-trust.sh ]] \
   || fail "scripts/test-release-asset-trust.sh is missing or not executable"
+[[ -x scripts/test-historical-release-assets.sh ]] \
+  || fail "scripts/test-historical-release-assets.sh is missing or not executable"
 [[ -x scripts/repo-workflow.sh ]] \
   || fail "scripts/repo-workflow.sh is missing or not executable"
 [[ -x scripts/test-repo-workflow.sh ]] \
@@ -169,6 +171,7 @@ bash -n scripts/test-release-bootstrap-guidance.sh
 bash -n scripts/release-asset-inventory.sh
 bash -n scripts/bootstrap-verify.sh
 bash -n scripts/test-release-asset-trust.sh
+bash -n scripts/test-historical-release-assets.sh
 bash -n scripts/repo-workflow.sh
 bash -n scripts/test-repo-workflow.sh
 bash -n scripts/test-repo-workflow-work.sh
@@ -222,7 +225,8 @@ chmod +x \
   scripts/test-release-bootstrap-guidance.sh \
   scripts/release-asset-inventory.sh \
   scripts/bootstrap-verify.sh \
-  scripts/test-release-asset-trust.sh
+  scripts/test-release-asset-trust.sh \
+  scripts/test-historical-release-assets.sh
 chmod +x scripts/repo-workflow.sh scripts/test-repo-workflow.sh scripts/test-repo-workflow-work.sh scripts/test-repo-workflow-pr.sh scripts/test-repo-workflow-release.sh scripts/test-repo-workflow-release-transaction.sh scripts/test-repo-workflow-release-finalize.sh scripts/test-repo-workflow-release-run.sh
 
 scripts/test-release-metadata.sh
@@ -242,6 +246,9 @@ pass "signed release bootstrap guidance tests passed"
 
 scripts/test-release-asset-trust.sh
 pass "pre-privilege release asset trust tests passed"
+
+scripts/test-historical-release-assets.sh
+pass "historical release asset-contract tests passed"
 
 scripts/test-repo-workflow.sh
 pass "repository workflow transaction tests passed"

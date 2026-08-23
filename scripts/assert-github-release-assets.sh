@@ -26,6 +26,46 @@ done
 [[ -n "$tag" ]] || { echo "Usage: $0 <tag> [--require-latest]" >&2; exit 2; }
 command -v gh >/dev/null 2>&1 || { echo "gh CLI is required" >&2; exit 1; }
 
+git rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "a Git checkout is required to validate the tagged release contract" >&2
+  exit 1
+}
+
+# The release contract is immutable: validate the annotated remote tag and read
+# its manifest from the peeled commit.  Never use the current checkout's
+# manifest, since that would retroactively change the contract of old releases.
+remote_tag_ref="$(git ls-remote origin "refs/tags/${tag}" 2>/dev/null | awk 'NR == 1 {print $1}')"
+remote_commit="$(git ls-remote origin "refs/tags/${tag}^{}" 2>/dev/null | awk 'NR == 1 {print $1}')"
+[[ -n "$remote_tag_ref" && -n "$remote_commit" ]] || {
+  echo "remote release tag is missing or not annotated: ${tag}" >&2
+  exit 1
+}
+git rev-parse -q --verify "refs/tags/${tag}" >/dev/null || {
+  echo "local annotated tag is unavailable: ${tag}" >&2
+  exit 1
+}
+[[ "$(git cat-file -t "refs/tags/${tag}")" == "tag" ]] || {
+  echo "local release tag is not annotated: ${tag}" >&2
+  exit 1
+}
+[[ "$(git rev-parse "refs/tags/${tag}^{commit}")" == "$remote_commit" ]] || {
+  echo "local and remote release tag commits differ: ${tag}" >&2
+  exit 1
+}
+
+tag_root="$(mktemp -d /tmp/erpnext-release-tag.XXXXXX)"
+tag_manifest="${tag_root}/RELEASE-MANIFEST.txt"
+cleanup_tag_root() { rm -rf "$tag_root"; }
+trap cleanup_tag_root EXIT
+git archive "refs/tags/${tag}^{commit}" | tar -x -C "$tag_root"
+git show "${tag}^{commit}:RELEASE-MANIFEST.txt" >"$tag_manifest" || {
+  echo "tagged release manifest is missing: ${tag}" >&2
+  exit 1
+}
+ERPNEXT_RELEASE_ROOT="$tag_root" \
+  ERPNEXT_RELEASE_MANIFEST="$tag_manifest" \
+  scripts/release-manifest-files.sh --include-checksum >/dev/null
+
 repo="${GITHUB_REPOSITORY:-ReyadWeb/erpnext-dev-toolkit}"
 stable=0
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && stable=1
@@ -52,8 +92,12 @@ required=(
   "RELEASE-ASSETS.sha256"
   "erpnext-dev-signing-key.asc"
   "bootstrap-verify.sh"
-  "install.sh"
 )
+if grep -Fxq "install.sh" <(ERPNEXT_RELEASE_ROOT="$tag_root" \
+  ERPNEXT_RELEASE_MANIFEST="$tag_manifest" \
+  scripts/release-manifest-files.sh --include-checksum); then
+  required+=("install.sh")
+fi
 if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[1-9][0-9]*)?$ ]]; then
   required+=("SHA256SUMS.asc" "RELEASE-ASSETS.sha256.asc")
 fi
@@ -78,8 +122,13 @@ if (( require_latest == 1 && stable == 1 )); then
   fi
 fi
 
-if [[ ! "$asset_count" =~ ^[0-9]+$ ]] || (( asset_count < ${#required[@]} )); then
-  note_fail "only ${asset_count:-0} custom asset(s); expected at least ${#required[@]}"
+if [[ ! "$asset_count" =~ ^[0-9]+$ ]] || (( asset_count != ${#required[@]} )); then
+  note_fail "${asset_count:-0} custom asset(s); expected exactly ${#required[@]} from tagged contract"
+else
+  expected_assets="$(printf '%s\n' "${required[@]}" | LC_ALL=C sort)"
+  if [[ "$assets" != "$expected_assets" ]]; then
+    note_fail "published asset set differs from tagged release contract"
+  fi
 fi
 
 if (( fail > 0 )); then
