@@ -2738,6 +2738,7 @@ release_verify_signature() {
 cmd_release_verify() {
   local supplied_tag="${1:-}" target_tag remote_commit run_id run_head conclusion
   local metadata meta_tag is_draft is_prerelease release_url verify_dir archive list_file root stable=0
+  local tagged_root tagged_manifest
   local channel prefix
   local -a asset_check_args
 
@@ -2807,6 +2808,17 @@ cmd_release_verify() {
 
   root="${verify_dir}/erpnext-dev-${target_tag}"
   [[ -d "$root" ]] || fail "release archive root is missing or misnamed"
+  tagged_root="$(mktemp -d /tmp/erpnext-release-tag.XXXXXX)"
+  git archive "refs/tags/${target_tag}^{commit}" | tar -x -C "$tagged_root"
+  tagged_manifest="${tagged_root}/RELEASE-MANIFEST.txt"
+  git show "${target_tag}^{commit}:RELEASE-MANIFEST.txt" >"$tagged_manifest" \
+    || fail "tagged release manifest is missing"
+  ERPNEXT_RELEASE_ROOT="$tagged_root" \
+    ERPNEXT_RELEASE_MANIFEST="$tagged_manifest" \
+    scripts/release-manifest-files.sh --include-checksum >/dev/null \
+    || fail "tagged release manifest is malformed or unsafe"
+  cmp -s "${verify_dir}/RELEASE-MANIFEST.txt" "$tagged_manifest" \
+    || fail "published release manifest differs from tagged manifest"
   cmp -s "${verify_dir}/SHA256SUMS" "${root}/SHA256SUMS" || fail "standalone and bundled SHA256SUMS differ"
   cmp -s "${verify_dir}/erpnext-dev.sh" "${root}/erpnext-dev.sh" || fail "standalone and bundled entrypoints differ"
   cmp -s "${verify_dir}/RELEASE-MANIFEST.txt" "${root}/RELEASE-MANIFEST.txt" || fail "standalone and bundled manifests differ"
@@ -2830,7 +2842,7 @@ cmd_release_verify() {
   ok "release bundle checksums verified"
   release_verify_signature "$root" "$target_tag"
 
-  rm -rf "$verify_dir"
+  rm -rf "$tagged_root" "$verify_dir"
   channel="$(scripts/release-version.sh channel-for-tag "$target_tag")"
   [[ "$channel" == "stable" ]] && prefix="stable" || prefix="beta"
   if release_state_matches_target "$target_tag"; then
