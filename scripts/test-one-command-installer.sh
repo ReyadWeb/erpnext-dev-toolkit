@@ -222,7 +222,7 @@ assert_has 'signal termination trap installed' "$(<"$ROOT_DIR/install.sh")" "tra
 set +e
 no_tty_output="$(PATH="$WORK/bin:$PATH" TEST_METADATA="$WORK/fixtures/metadata.json" \
   TEST_BOOTSTRAP="$WORK/fixtures/bootstrap-verify.sh" TEST_SUDO_LOG="$WORK/sudo.log" \
-  "$ROOT_DIR/install.sh" --yes 2>&1)"
+  setsid -w "$ROOT_DIR/install.sh" --yes </dev/null 2>&1)"
 no_tty_rc=$?
 set -e
 [[ "$no_tty_rc" != 0 ]] || fail 'missing TTY was accepted'
