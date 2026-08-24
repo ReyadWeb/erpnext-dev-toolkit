@@ -62,16 +62,15 @@ assert_rc no_color 0
 assert_empty "$work/no_color.err"
 
 # An unrelated action with a stable command word as data must use legacy parsing/logging.
-stable_version_lines=()
-mapfile -t stable_version_lines < <(sed -nE 's/^\*\*Latest published stable:\*\* v([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' "$root_dir/README.md")
-[[ "${#stable_version_lines[@]}" -eq 1 && "${stable_version_lines[0]}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+runtime_version="$(cd "$root_dir" && scripts/release-version.sh runtime)"
+[[ "$runtime_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+|-rc\.[0-9]+)?$ ]]
 set +e
 ERPNEXT_DEV_LOG_DIR="$work/legacy-logs" LOG_FILE="$work/legacy.log" \
   "$root_dir/erpnext-dev.sh" version api-version --json >"$work/legacy.out" 2>"$work/legacy.err"
 legacy_rc=$?
 set -e
 [[ "$legacy_rc" -eq 0 ]]
-grep -Fxq "ERPNext Developer Toolkit v${stable_version_lines[0]}" "$work/legacy.out"
+grep -Fxq "ERPNext Developer Toolkit v${runtime_version}" "$work/legacy.out"
 
 # Human discovery output is independent and human invalid arguments use stderr.
 run_cli human_version api-version
