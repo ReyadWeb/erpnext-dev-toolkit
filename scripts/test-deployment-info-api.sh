@@ -187,12 +187,14 @@ for args in "${argument_cases[@]}"; do
 done
 
 # A different first action remains legacy and is not reclassified.
+runtime_version="$(cd "$root_dir" && scripts/release-version.sh runtime)"
+[[ "$runtime_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+|-rc\.[0-9]+)?$ ]]
 set +e
 LOG_FILE="$work/legacy-command.log" "$root_dir/erpnext-dev.sh" version deployment-info --json >"$work/legacy-command.out" 2>"$work/legacy-command.err"
 legacy_rc=$?
 set -e
 [[ "$legacy_rc" -eq 0 ]]
-grep -Fxq 'ERPNext Developer Toolkit v1.20.4' "$work/legacy-command.out"
+grep -Fxq "ERPNext Developer Toolkit v${runtime_version}" "$work/legacy-command.out"
 
 # Human output is separate, concise and explicitly non-observational.
 run_case human deployment-info --no-color
