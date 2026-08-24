@@ -1,3 +1,13 @@
+## v1.21.0-beta.1 - ERPNext Developer Toolkit v1.21.0 Beta 1
+
+### Added
+
+- Release notes pending final review.
+
+### Validation
+
+- Release validation pending.
+
 ## v1.20.4 - ERPNext Developer Toolkit v1.20.4
 
 ### Added
