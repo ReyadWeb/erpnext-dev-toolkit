@@ -2,8 +2,10 @@
 
 **Current release:** v1.20.4
 **Current project version:** v1.20.4
-**Current work:** v1.20.4 — Menu status refresh and update safety
-**Next product milestone:** v1.20.5 — Transaction journal MVP
+**Current work:** v1.20.4 release baseline; v1.21.0 beta qualification
+**Next publication:** v1.21.0-beta.1
+**Latest published stable:** v1.20.4
+**Deferred:** Existing adoption/connection and Docker Advanced remain deferred
 **Public roadmap board:** https://github.com/users/ReyadWeb/projects/3
 
 The active roadmap contains current priorities and forward-looking commitments only. Completed plans and superseded sequencing are preserved in [Roadmap history](docs/ROADMAP-HISTORY.md), [CHANGELOG.md](CHANGELOG.md), and Git history.
