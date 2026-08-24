@@ -251,10 +251,21 @@ assert_contains "${tmp}/watch.out" "Protected Release Workflow Already Complete"
 assert_contains "${tmp}/watch.out" "release workflow completed successfully"
 assert_contains "${tmp}/watch.out" "release verify v1.2.3"
 
+# A completed published transaction may have lost its local state during a
+# checkout; successful verification must recreate the verified record safely.
+rm -f .git/erpnext-workflow/release-state
 scripts/repo-workflow.sh release verify v1.2.3 >"${tmp}/verify.out"
 assert_contains "${tmp}/verify.out" "published release v1.2.3 verified"
 assert_contains "${tmp}/verify.out" "maintainer signing-key fingerprint verified"
 assert_contains "${tmp}/verify.out" "release bundle checksums verified"
+[[ "$(sed -n 's/^phase=//p' .git/erpnext-workflow/release-state)" == stable-verified ]] \
+  || fail_test "successful verification did not persist stable-verified"
+[[ "$(sed -n 's/^workflow_run=//p' .git/erpnext-workflow/release-state)" == 77 ]] \
+  || fail_test "successful verification did not persist workflow run"
+[[ "$(sed -n 's/^verified_commit=//p' .git/erpnext-workflow/release-state)" == "$head_commit" ]] \
+  || fail_test "successful verification did not persist exact verified commit"
+[[ "$(stat -c '%a' .git/erpnext-workflow/release-state)" == 600 ]] \
+  || fail_test "verified release state is not mode 0600"
 
 scripts/repo-workflow.sh release verify v1.2.3 >"${tmp}/verify-again.out"
 assert_contains "${tmp}/verify-again.out" \

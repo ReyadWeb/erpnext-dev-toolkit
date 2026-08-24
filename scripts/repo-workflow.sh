@@ -307,6 +307,43 @@ release_state_matches_target() {
   "$(release_state_value target_tag)" == "$target_tag" ]]
 }
 
+release_state_prepare_verified() {
+  local target_tag="$1" remote_commit="$2" phase prefix key value
+  local -A seen=()
+
+  if [[ -f "$RELEASE_STATE_FILE" ]]; then
+    while IFS='=' read -r key value; do
+      [[ "$key" =~ ^[a-z_]+$ ]] \
+        || fail "saved release state is malformed; manual review required"
+      release_state_key_allowed "$key" \
+        || fail "saved release state contains an unsupported field; manual review required"
+      release_state_value_valid "$value" \
+        || fail "saved release state contains an unsafe value; manual review required"
+      [[ -z "${seen[$key]:-}" ]] \
+        || fail "saved release state contains a duplicate field; manual review required"
+      seen["$key"]=1
+    done <"$RELEASE_STATE_FILE"
+    [[ "$(release_state_value schema)" == "1" ]] \
+      || fail "saved release state has an unsupported schema; manual review required"
+    [[ "$(release_state_value target_tag)" == "$target_tag" ]] \
+      || fail "saved release transaction targets a different tag; refusing to overwrite it"
+    phase="$(release_state_value phase)"
+    case "$phase" in
+      beta-published | beta-verified | stable-published | stable-verified) ;;
+      *) fail "saved release transaction is unfinished at phase ${phase:-unknown}; refusing to overwrite it" ;;
+    esac
+  fi
+
+  [[ "$remote_commit" =~ ^[0-9a-f]{40}$ ]] \
+    || fail "verified release commit is malformed"
+  if [[ "$target_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    prefix=stable
+  else
+    prefix=beta
+  fi
+  printf '%s\n' "$prefix"
+}
+
 release_worktree_tag() {
   local version
   version="$(scripts/release-version.sh read)"
@@ -1441,9 +1478,10 @@ release_github_release_exists() {
 }
 
 release_resolve_phase() {
-  local saved="" prefix
+  local saved="" prefix tag_channel
   saved="$(release_saved_phase "$RELEASE_TAG" || true)"
-  if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
+  tag_channel="$(scripts/release-version.sh channel-for-tag "$RELEASE_TAG" 2>/dev/null || true)"
+  if [[ "$tag_channel" == "stable" ]]; then
     prefix="stable"
   else
     prefix="beta"
@@ -2844,13 +2882,14 @@ cmd_release_verify() {
 
   rm -rf "$tagged_root" "$verify_dir"
   channel="$(scripts/release-version.sh channel-for-tag "$target_tag")"
-  [[ "$channel" == "stable" ]] && prefix="stable" || prefix="beta"
-  if release_state_matches_target "$target_tag"; then
-    release_state_update \
-      phase "${prefix}-verified" \
-      workflow_run "$run_id" \
-      verified_commit "$remote_commit"
-  fi
+  prefix="$(release_state_prepare_verified "$target_tag" "$remote_commit")"
+  release_state_update \
+    phase "${prefix}-verified" \
+    channel "$channel" \
+    target_version "${target_tag#v}" \
+    target_tag "$target_tag" \
+    workflow_run "$run_id" \
+    verified_commit "$remote_commit"
   heading "Published Release Verified"
   info "Tag" "$target_tag"
   info "Commit" "$remote_commit"
