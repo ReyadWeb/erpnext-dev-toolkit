@@ -88,9 +88,11 @@ for forbidden in health_snapshot_write_compat_state health_monitor_after_snapsho
 done
 [[ ! -e "$work/log" && ! -e "$work/lock" ]] || fail 'stable execution created log or lock'
 
-python3 - "$work" <<'PY'
+runtime_version="$(cat VERSION)"
+python3 - "$work" "$runtime_version" <<'PY'
 import json,pathlib,re,sys
 work=pathlib.Path(sys.argv[1])
+runtime_version=sys.argv[2]
 for p in work.glob("ok_*.out"):
  d=json.loads(p.read_text()); assert d["api_version"]=="1.0" and d["error"] is None and d["success"] is True
  assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ",d["generated_at"])
@@ -98,7 +100,7 @@ for p in work.glob("ok_*.out"):
 for command in ("dashboard","health-snapshot"):
  candidates=[p for p in work.glob("ok_*.out") if json.loads(p.read_text())["command"]==command]
  d=json.loads(candidates[0].read_text())
- assert d["data"]["toolkit_version"]=="1.20.4"
+ assert d["data"]["toolkit_version"]==runtime_version
  assert set(d["data"])=={"toolkit_version","observed_at","deployment","overall_status","resources","application","runtime","protection","healing","checks","issues"}
 PY
 echo 'test-operations-api: all checks passed'
