@@ -13,7 +13,7 @@ health checks, diagnostics, signed updates, and rollback.
 > This is a community project and is not an official Frappe Technologies product.
 
 **Current release:** v1.20.4
-**Current project version:** v1.20.4
+**Current project version:** v1.21.0-beta.1
 **Current development programme:** v1.21.0 beta qualification.
 **Latest published stable:** v1.20.4
 **Active development/release target:** v1.21.0
@@ -29,7 +29,7 @@ health checks, diagnostics, signed updates, and rollback.
 | **Native hosts** | Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 |
 | **Main command** | `erpnext-dev` |
 | **Release protection** | Build identity, whole-tree checksums, signed releases, atomic updates, rollback slots |
-| **Current focus** | v1.20.4 release baseline; v1.21.0 beta qualification |
+| **Current focus** | v1.21.0 beta qualification |
 
 ## Choose your path
 
