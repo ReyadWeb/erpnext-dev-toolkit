@@ -111,9 +111,15 @@ run_case() {
   done
   : >"$WORK/sudo.log"
   set +e
-  output="$(PATH="$WORK/bin:$PATH" TEST_METADATA="$WORK/fixtures/metadata.json" \
-    TEST_BOOTSTRAP="$WORK/fixtures/bootstrap-verify.sh" TEST_SUDO_LOG="$WORK/sudo.log" \
-    env "${extra_env[@]}" "$ROOT_DIR/install.sh" --no-start "$@" 2>&1)"
+  if [[ "$name" == beta-confirm-required ]]; then
+    output="$(PATH="$WORK/bin:$PATH" TEST_METADATA="$WORK/fixtures/metadata.json" \
+      TEST_BOOTSTRAP="$WORK/fixtures/bootstrap-verify.sh" TEST_SUDO_LOG="$WORK/sudo.log" \
+      env "${extra_env[@]}" setsid -w "$ROOT_DIR/install.sh" --no-start "$@" </dev/null 2>&1)"
+  else
+    output="$(PATH="$WORK/bin:$PATH" TEST_METADATA="$WORK/fixtures/metadata.json" \
+      TEST_BOOTSTRAP="$WORK/fixtures/bootstrap-verify.sh" TEST_SUDO_LOG="$WORK/sudo.log" \
+      env "${extra_env[@]}" "$ROOT_DIR/install.sh" --no-start "$@" 2>&1)"
+  fi
   rc=$?
   set -e
   printf '%s' "$output" >"$WORK/$name.out"

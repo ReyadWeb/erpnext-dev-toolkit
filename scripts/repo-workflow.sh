@@ -9,6 +9,7 @@ PROGRAM="scripts/repo-workflow.sh"
 STATE_DIR="$(git rev-parse --git-path erpnext-workflow 2>/dev/null || true)"
 CACHE_DIR="${STATE_DIR}/cache"
 RELEASE_STATE_FILE="${STATE_DIR}/release-state"
+RELEASE_STATE_BACKUP_FILE="${STATE_DIR}/release-state.previous"
 
 CURRENT_ACTION=""
 CURRENT_MODE="auto"
@@ -299,6 +300,30 @@ release_state_update() {
 
 release_state_clear() {
   rm -f "$RELEASE_STATE_FILE"
+}
+
+release_state_snapshot_previous() {
+  mkdir -p "$STATE_DIR"
+  if [[ -e "$RELEASE_STATE_FILE" ]]; then
+    [[ ! -L "$RELEASE_STATE_FILE" && -f "$RELEASE_STATE_FILE" ]] \
+      || fail "saved release state is not a safe regular file"
+    cp -p "$RELEASE_STATE_FILE" "$RELEASE_STATE_BACKUP_FILE"
+    chmod 600 "$RELEASE_STATE_BACKUP_FILE"
+  else
+    rm -f "$RELEASE_STATE_BACKUP_FILE"
+  fi
+}
+
+release_state_restore_previous() {
+  if [[ -f "$RELEASE_STATE_BACKUP_FILE" ]]; then
+    mv -f "$RELEASE_STATE_BACKUP_FILE" "$RELEASE_STATE_FILE"
+  else
+    rm -f "$RELEASE_STATE_FILE"
+  fi
+}
+
+release_state_discard_previous() {
+  rm -f "$RELEASE_STATE_BACKUP_FILE"
 }
 
 release_state_matches_target() {
@@ -1462,8 +1487,13 @@ release_saved_phase() {
   if release_state_matches_target "$target_tag"; then
     phase="$(release_state_value phase)"
     case "$phase" in
-      beta-preparation | beta-pr | beta-pretag | beta-tagged | beta-published | beta-verified | \
-        stable-promotion | stable-pr | stable-pretag | stable-tagged | stable-published | stable-verified)
+      beta-preparation | stable-promotion)
+        [[ -n "$(release_state_value prepared_fingerprint)" ]] || return 1
+        printf '%s\n' "$phase"
+        return 0
+        ;;
+      beta-pr | beta-pretag | beta-tagged | beta-published | beta-verified | \
+        stable-pr | stable-pretag | stable-tagged | stable-published | stable-verified)
         printf '%s\n' "$phase"
         return 0
         ;;
@@ -1506,8 +1536,10 @@ release_resolve_phase() {
     else
       printf '%s\n' "stable-pretag"
     fi
+  elif [[ -n "$saved" ]]; then
+    printf '%s\n' "$saved"
   else
-    printf '%s\n' "beta-preparation"
+    printf '%s\n' "uninitialized"
   fi
 }
 
@@ -2085,10 +2117,7 @@ cmd_release_prepare_beta() {
   release_require_clean_transaction_tree
   release_clear_pretag_proof
   heading "Prepare Beta Metadata"
-  if ! scripts/release-prepare-beta.sh "$target_version" "$release_title"; then
-    release_state_clear
-    return 1
-  fi
+  release_state_snapshot_previous
   release_state_update \
     phase beta-preparation \
     channel beta \
@@ -2099,15 +2128,21 @@ cmd_release_prepare_beta() {
     release_branch "$branch" \
     title "$release_title" \
     commit_message "Release: prepare v${target_version}" \
+    prepared_fingerprint "" \
     review_confirmed 0 \
     publication_commit "" \
     pr_number "" \
     merge_commit "" \
     workflow_run "" \
     verified_commit ""
+  if ! scripts/release-prepare-beta.sh "$target_version" "$release_title"; then
+    release_state_restore_previous
+    return 1
+  fi
   release_run_with_context release_cache_validated_tree
   fingerprint="$(tree_fingerprint)"
   release_state_update prepared_fingerprint "$fingerprint"
+  release_state_discard_previous
   release_show_review_gate "$target_version" "Release: prepare v${target_version}"
 }
 
@@ -2148,10 +2183,7 @@ cmd_release_promote_stable() {
   [[ -n "$source_commit" ]] \
     || fail "source prerelease tag does not resolve to a commit: ${source_tag}"
   heading "Promote Stable Metadata"
-  if ! scripts/release-promote-stable.sh "$target_version" "$release_title"; then
-    release_state_clear
-    return 1
-  fi
+  release_state_snapshot_previous
   release_state_update \
     phase stable-promotion \
     channel stable \
@@ -2162,15 +2194,21 @@ cmd_release_promote_stable() {
     release_branch "$branch" \
     title "$release_title" \
     commit_message "Release: promote v${target_version} stable" \
+    prepared_fingerprint "" \
     review_confirmed 0 \
     publication_commit "" \
     pr_number "" \
     merge_commit "" \
     workflow_run "" \
     verified_commit ""
+  if ! scripts/release-promote-stable.sh "$target_version" "$release_title"; then
+    release_state_restore_previous
+    return 1
+  fi
   release_run_with_context release_cache_validated_tree
   fingerprint="$(tree_fingerprint)"
   release_state_update prepared_fingerprint "$fingerprint"
+  release_state_discard_previous
   release_show_review_gate "$target_version" "Release: promote v${target_version} stable"
 }
 
