@@ -56,8 +56,8 @@ chmod +x "${fixture}/scripts/"*.sh
 
 printf '%s\n' '1.19.22' >"${fixture}/VERSION"
 printf '%s\n' '#!/usr/bin/env bash' '# runtime derives VERSION in the real tree' >"${fixture}/erpnext-dev.sh"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' 'VERSION="v1.19.22"' >"${fixture}/README.md"
-printf '%s\n' '**Current release:** v1.19.22 (fixture)' '**Current project version:** v1.19.22' >"${fixture}/ROADMAP.md"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' '| **Current focus** | v1.19.22 release baseline |' 'VERSION="v1.19.22"' >"${fixture}/README.md"
+printf '%s\n' '**Current release:** v1.19.22 (fixture)' '**Current project version:** v1.19.22' '**Current work:** v1.19.22 release baseline' >"${fixture}/ROADMAP.md"
 printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' >"${fixture}/TESTING.md"
 printf '%s\n' '## v1.19.22 - Previous release' '' '- Previous.' >"${fixture}/CHANGELOG.md"
 printf '%s\n' '# ERPNext Developer Toolkit Release Manifest v1.19.22' 'VERSION' >"${fixture}/RELEASE-MANIFEST.txt"
@@ -95,6 +95,10 @@ done
 
 grep -qx 'VERSION="v1.19.22"' "${fixture}/README.md" \
   || fail "README stable exact pin changed during beta preparation"
+grep -Fqx '| **Current focus** | v1.20.0 beta qualification |' "${fixture}/README.md" \
+  || fail "README beta focus marker was not updated"
+grep -Fqx '**Current work:** v1.20.0 beta qualification' "${fixture}/ROADMAP.md" \
+  || fail "ROADMAP beta work marker was not updated"
 
 (
   cd "$fixture"

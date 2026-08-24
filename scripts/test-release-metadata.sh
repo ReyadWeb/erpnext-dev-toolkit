@@ -29,8 +29,8 @@ case "${1:-}" in
 esac
 EOF_ENTRY
 chmod +x "${fixture}/erpnext-dev.sh"
-printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' 'VERSION="v1.19.22"' >"${fixture}/README.md"
-printf '%s\n' '**Current release:** v1.19.22 (fixture)' '**Current project version:** v1.19.22' >"${fixture}/ROADMAP.md"
+printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' '| **Current focus** | v1.19.22 stable release |' 'VERSION="v1.19.22"' >"${fixture}/README.md"
+printf '%s\n' '**Current release:** v1.19.22 (fixture)' '**Current project version:** v1.19.22' '**Current work:** v1.19.22 stable release' >"${fixture}/ROADMAP.md"
 printf '%s\n' '**Current release:** v1.19.22 · fixture' '**Current project version:** v1.19.22' >"${fixture}/TESTING.md"
 printf '%s\n' '## v1.19.22 - Previous release' '' '- Previous.' >"${fixture}/CHANGELOG.md"
 printf '%s\n' '# ERPNext Developer Toolkit Release Manifest v1.19.22' 'VERSION' >"${fixture}/RELEASE-MANIFEST.txt"

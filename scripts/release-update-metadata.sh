@@ -66,10 +66,14 @@ is_prerelease = "-" in version
 
 
 def write(path: Path, text: str) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise SystemExit(f"{path}: release metadata must be a regular non-symlink file")
     path.write_text(text)
 
 
 def replace_one(path: Path, pattern: str, replacement: str, label: str) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise SystemExit(f"{path}: release metadata must be a regular non-symlink file")
     text = path.read_text()
     updated, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
     if count != 1:
@@ -95,6 +99,33 @@ for name in ("README.md", "ROADMAP.md", "TESTING.md"):
         r'^(\*\*Current project version:\*\*) v[0-9A-Za-z.-]+',
         rf'\1 {tag}',
         "Current project version",
+    )
+
+if is_prerelease:
+    replace_one(
+        root / "README.md",
+        r'^(\| \*\*Current focus\*\* \| )v[0-9A-Za-z.-]+.*$',
+        rf'\1{tag.split("-")[0]} beta qualification |',
+        "README release focus",
+    )
+    replace_one(
+        root / "ROADMAP.md",
+        r'^(\*\*Current work:\*\* )v[0-9A-Za-z.-]+.*$',
+        rf'\1{tag.split("-")[0]} beta qualification',
+        "ROADMAP release work",
+    )
+else:
+    replace_one(
+        root / "README.md",
+        r'^(\| \*\*Current focus\*\* \| )v[0-9A-Za-z.-]+.*$',
+        rf'\1{tag} stable release |',
+        "README release focus",
+    )
+    replace_one(
+        root / "ROADMAP.md",
+        r'^(\*\*Current work:\*\* )v[0-9A-Za-z.-]+.*$',
+        rf'\1{tag} stable release',
+        "ROADMAP release work",
     )
 
 replace_one(

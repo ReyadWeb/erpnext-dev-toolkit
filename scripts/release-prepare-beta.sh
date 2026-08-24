@@ -101,6 +101,7 @@ trap restore_metadata EXIT
 
 for file in "${tracked_files[@]}"; do
   [[ -f "$file" ]] || fail "required release file is missing: ${file}"
+  [[ ! -L "$file" ]] || fail "release file must not be a symbolic link: ${file}"
   mkdir -p "${backup_dir}/$(dirname "$file")"
   cp -a "$file" "${backup_dir}/${file}"
 done
